@@ -6,6 +6,16 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — Budget safety + idempotent write outbox — AIC-13
+Added `assertWithinBudget` (agreed budget is a hard ceiling; ≤0 or over-ceiling
+rejected; null/non-budget passes) and `meta_write_outbox` (migration 008): a
+durable queue with a unique idempotency key per intended change (repeat enqueue =
+no-op), `FOR UPDATE SKIP LOCKED` draining, backoff/retry to MAX_ATTEMPTS, and
+terminal succeeded rows. Only absolute-set idempotent ops (set_daily_budget,
+pause_ad) are enqueued, so a lost-response retry re-applies to the same end state.
+Verified: 4 budget unit tests + 3 DB integration tests (enqueue idempotency,
+exactly-once drain, backoff-then-succeed).
+
 ### 2026-08-03 — LLM explainer (plain-Hebrew, never decides) — AIC-10
 Added the explainer: `explain(rec)` renders each recommendation type + a weekly
 status as plain business Hebrew from a centralized copy table, injecting figures

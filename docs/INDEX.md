@@ -17,3 +17,4 @@ See also: [STATE.md](STATE.md) (dated changelog) · [features/_TEMPLATE.md](feat
 | Admin dogfood readout (screen + API) | [features/dogfood-readout.md](features/dogfood-readout.md) |
 | Recommendation engine — state machine, rules, staleness, explainer | [features/recommendation-engine.md](features/recommendation-engine.md) |
 | Rule thresholds + LLM boundary | [RULES.md](RULES.md) |
+| Approval & safe execution — budget safety, outbox, pipeline | [features/safe-execution.md](features/safe-execution.md) |
