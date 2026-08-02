@@ -14,3 +14,4 @@ See also: [STATE.md](STATE.md) (dated changelog) · [features/_TEMPLATE.md](feat
 | Meta connection, access-health, execution-halt safety rule | [features/meta-connection.md](features/meta-connection.md) |
 | Insights ingestion → insight_snapshot, scheduler | [features/insights-ingestion.md](features/insights-ingestion.md) |
 | Lead / CPL / metric definitions | [METRICS.md](METRICS.md) |
+| Admin dogfood readout (screen + API) | [features/dogfood-readout.md](features/dogfood-readout.md) |

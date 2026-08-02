@@ -6,6 +6,16 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — Dogfood readout (admin) — AIC-7
+Added the internal readout: `buildCampaignReadout` (status + current/previous
+7-day totals + per-creative rows + period deltas, read only from
+`insight_snapshot`), the `/api/admin` routes behind a `requireAdmin` guard, and
+the `/admin/readout` React screen (Hebrew, RTL; `formatShekel`, NULL CPL → "—").
+Verified: deltaPct unit test + DB/HTTP integration test, and rendered end-to-end
+against seeded Pisga snapshots on a local Postgres (status active, ₪734 spend
++8%, 18 leads +20%, CPL ₪40.78 −10%, 3-creative table). Reconciliation vs Ads
+Manager gated on real ingestion.
+
 ### 2026-08-03 — Insights ingestion → insight_snapshot — AIC-6
 Added the ingestion pipeline: `getInsights` on the Meta client (4 grains, creative
 derived from ad rows), pure metric functions (`extractLeads` — 7d-preferred, never

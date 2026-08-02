@@ -6,6 +6,22 @@ export const strings = {
     tagline:
       "מנהלים לכם את הפרסום במטא — בלי ריטיינר של אלפי שקלים. עוקבים, מנתחים וממליצים; כל שינוי בתקציב או בקמפיין מתבצע רק באישור שלכם.",
 
+    // Internal admin dogfood readout (AIC-7). The reference the customer Home
+    // (P0.5) later mirrors, so labels are already in Hebrew.
+    admin: {
+      readoutTitle: "ביצועי הקמפיין",
+      status: "סטטוס",
+      spend: "הוצאה",
+      leads: "פניות",
+      cpl: "עלות לפנייה",
+      vsPrevious: "מול התקופה הקודמת",
+      perCreative: "לפי מודעה",
+      creative: "מודעה",
+      noData: "—",
+      noCampaigns: "אין עדיין קמפיין מנוהל עם נתונים.",
+      loading: "טוען…",
+    },
+
     // Connection health (AIC-5). Every non-ok state shows the same plain-Hebrew
     // reconnect message — the customer never sees Meta jargon like "revoked",
     // "invalid token", or "OAuth". The server sends the access_health value; the

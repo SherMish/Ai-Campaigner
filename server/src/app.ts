@@ -1,5 +1,6 @@
 import cors from "cors";
 import express from "express";
+import { adminRouter } from "./routes/admin.js";
 
 // Builds the Express app. Exported separately from index.ts so tests can
 // exercise it without binding a port.
@@ -19,10 +20,10 @@ export function createApp() {
     });
   });
 
-  // API routers mount under /api as features land (AIC-16 onward). Kept under
-  // /api so single-origin Railway deploys line up with the web client's /api
-  // prefix (web/src/api.ts).
+  // API routers mount under /api so single-origin Railway deploys line up with
+  // the web client's /api prefix (web/src/api.ts).
   const api = express.Router();
+  api.use("/admin", adminRouter);
   app.use("/api", api);
 
   return app;
