@@ -45,5 +45,19 @@ Source: `server/src/services/campaign-review.js`. Tests:
 `campaign-review.integration.test.ts` (all three outcomes + no-activation-without-
 approval).
 
-## Not built yet
-- Manual billing ledger + weekly lead-quality capture (AIC-19)
+## Manual billing + weekly lead-quality (AIC-19)
+
+**Billing ledger** (no payment gateway): `updateBilling` edits the subscription
+(setup paid + date, status, next charge, monthly amount); `conversionSummary` reads
+setup→subscription conversion across real (non-test) customers. **Lead quality**
+(PRD §20, campaign-level weekly, no per-lead data): `upsertLeadQuality` (idempotent
+per campaign+week), `listLeadQuality`, `leadQualityResponseRate` (answered / active
+campaigns for a week). Routes: `PATCH /api/admin/customers/:id/billing`,
+`GET /api/admin/billing/conversion`, `GET/POST /api/admin/campaigns/:id/lead-quality`,
+`GET /api/admin/lead-quality/response-rate?week=`. Source:
+`server/src/services/billing.js`. Tests: `billing.integration.test.ts`.
+
+## Web ops console
+The operator surfaces above render in `web/src/admin/OpsConsole.tsx` at
+`/admin/ops` (customers list, needs-attention queue with triage, per-customer
+detail with the review form + billing + lead-quality).

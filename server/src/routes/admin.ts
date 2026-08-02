@@ -11,6 +11,7 @@ import { listCustomers, getCustomerDetail } from "../services/customers.js";
 import { OpsQueue } from "../services/ops-queue.js";
 import { consoleLogger } from "../services/logger.js";
 import { submitReview, recordCustomerDecision, getLatestReview } from "../services/campaign-review.js";
+import { updateBilling, conversionSummary, upsertLeadQuality, listLeadQuality, leadQualityResponseRate } from "../services/billing.js";
 
 // Internal admin surfaces. Reads only from our DB (insight_snapshots) — never a
 // live Meta call at render time (AIC-7).
@@ -105,6 +106,38 @@ adminRouter.post("/reviews/:id/customer-decision", async (req, res) => {
   const review = await recordCustomerDecision(pool, req.params.id, req.body?.approved === true);
   if (!review) { res.status(404).json({ error: "review not found" }); return; }
   res.json(review);
+});
+
+// Manual billing ledger (AIC-19).
+adminRouter.patch("/customers/:id/billing", async (req, res) => {
+  await updateBilling(pool, req.params.id, req.body ?? {});
+  res.json({ ok: true });
+});
+
+adminRouter.get("/billing/conversion", async (_req, res) => {
+  res.json(await conversionSummary(pool));
+});
+
+// Weekly lead-quality capture (AIC-19).
+adminRouter.get("/campaigns/:id/lead-quality", async (req, res) => {
+  res.json({ weeks: await listLeadQuality(pool, req.params.id) });
+});
+
+adminRouter.post("/campaigns/:id/lead-quality", async (req, res) => {
+  const { weekStart, leadsReported, relevantCount, customersWon } = req.body ?? {};
+  if (!weekStart) { res.status(400).json({ error: "weekStart required" }); return; }
+  await upsertLeadQuality(pool, {
+    campaignId: req.params.id, weekStart,
+    leadsReported: Number(leadsReported ?? 0), relevantCount: Number(relevantCount ?? 0),
+    customersWon: customersWon == null ? null : Number(customersWon),
+  });
+  res.json({ ok: true });
+});
+
+adminRouter.get("/lead-quality/response-rate", async (req, res) => {
+  const week = String(req.query.week ?? "");
+  if (!week) { res.status(400).json({ error: "week query param required" }); return; }
+  res.json(await leadQualityResponseRate(pool, week));
 });
 
 adminRouter.get("/campaigns/:id/readout", async (req, res) => {

@@ -6,6 +6,14 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — Ops console: manual billing + weekly lead-quality — AIC-19
+Added the manual billing ledger (`updateBilling` + `conversionSummary` for
+setup→subscription conversion, no payment gateway) and weekly campaign-level
+lead-quality capture (`upsertLeadQuality` idempotent per campaign+week,
+`listLeadQuality`, `leadQualityResponseRate`), routes under `/api/admin/*`.
+Verified: 2 DB integration tests (billing + conversion; lead-quality upsert +
+response rate).
+
 ### 2026-08-03 — Ops console: first-campaign review — AIC-18
 Added the review workflow (`campaign_reviews` table): `submitReview` records
 outcome + reviewer + timestamp + §11 checklist and moves status (approved →
