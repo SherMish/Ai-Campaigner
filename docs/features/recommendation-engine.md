@@ -54,6 +54,20 @@ Source: `server/src/recommendations/rules.ts`, `rule-evaluator.ts`. Tests:
 `rules.test.ts` (each rule fires when it should and, crucially, does **not** on
 thin evidence), `rule-evaluator.test.ts`.
 
+## Staleness / expiry (AIC-11)
+
+`refreshRecommendations` is the canonical evaluation tick. A `proposed` rec is
+valid **iff the same gated rules, run on current evidence, still produce an
+equivalent recommendation** (same type + target) — that is the "material
+divergence" test. If the weak creative recovered, CPL swung back, or delivery
+changed so the rules no longer call for the action, the rec is `expired` (and,
+where a different action is now warranted, a fresh rec replaces it). An expired rec
+is un-approvable by construction (the state machine). Rules are the single source
+of truth for both producing *and* invalidating a recommendation.
+
+Source: `server/src/recommendations/staleness.ts`. Tests: `staleness.test.ts`
+(evidence-holds → stays; evidence-diverged → expires; expired → un-approvable;
+replaced when a new action is warranted).
+
 ## Not built yet
-- Proactive staleness/expiry on a tick (AIC-11)
 - LLM explainer that renders a draft as plain Hebrew (AIC-10)

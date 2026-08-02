@@ -6,6 +6,14 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — Recommendation staleness + expiry — AIC-11
+Added `refreshRecommendations` as the canonical eval tick: a proposed rec is valid
+iff the same gated rules still produce an equivalent rec from current evidence;
+otherwise it's expired (and replaced when a different action is now warranted). An
+expired rec is un-approvable by construction (AIC-8 state machine). "Material
+divergence" is defined as rules-no-longer-yield-it. Verified: 4 tests
+(evidence-holds → stays; diverged → expires; expired → un-approvable; replaced).
+
 ### 2026-08-03 — Deterministic recommendation rules v1 — AIC-9
 Added the rules engine: `evaluateCampaign` runs five rule types
 (pause_weak_creative, replace_creative, decrease_budget, increase_budget,

@@ -57,7 +57,9 @@ are only *proposed* here; the agreed-budget safety clamp is enforced at executio
   target (no target-CPL field exists yet).
 
 ## Staleness
-A `proposed` recommendation is expired when its evidence materially diverges — see
+A `proposed` recommendation expires when its evidence **materially diverges**,
+defined precisely as: the same gated rules, run on current evidence, no longer
+produce an equivalent recommendation (same type + target). See
 [recommendation-engine.md](features/recommendation-engine.md) (AIC-11).
 
 ## LLM boundary (AIC-10)
