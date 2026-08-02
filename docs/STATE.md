@@ -6,6 +6,15 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — Meta setup runbook — AIC-3
+Added `docs/META_SETUP.md`: the one-time Meta-side configuration (Business
+Portfolio, app, System User + token scopes, partner-asset assignment, token
+storage/rotation posture) in the accurate access framing (partner access +
+System User, subject to Meta's required Marketing API tier; no customer OAuth in
+P0). Added `META_*` env placeholders to `server/.env.example`. The operator steps
+(mint token, assign Pisga's ad account) are executed in Meta's UI by a person and
+are checklisted in the doc; the app only consumes the resulting token + asset IDs.
+
 ### 2026-08-03 — Core data model: 10 P0 entities — AIC-4
 Added migrations `002`–`007` creating the ten P0 tables (customers,
 subscriptions, meta_connections, ad_accounts, managed_campaigns,
