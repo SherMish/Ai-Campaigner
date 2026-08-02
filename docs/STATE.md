@@ -6,6 +6,16 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — Safe-execute pipeline — AIC-12
+Added `SafeExecutor.execute`: the ordered pipeline for executing an approved
+recommendation — relevance → access-health hold → emergency-control hold → claim
+executing → external-change detection (cancel, never overwrite) → budget-safety
+block → execute → read-back verify (mismatch = failure) → log to action_history.
+Access-lost and automation-stop are holds (rec stays approved); external-change,
+over-budget, write-fail, and verify-mismatch are failures with an ops item + a
+plain-Hebrew customer message. A failed execution never looks succeeded.
+replace_creative escalates to ops as a human task. Verified: 10 scenario tests.
+
 ### 2026-08-03 — Budget safety + idempotent write outbox — AIC-13
 Added `assertWithinBudget` (agreed budget is a hard ceiling; ≤0 or over-ceiling
 rejected; null/non-budget passes) and `meta_write_outbox` (migration 008): a
