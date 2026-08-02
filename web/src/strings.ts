@@ -22,6 +22,29 @@ export const strings = {
       loading: "טוען…",
     },
 
+    // Ops console (P0.4)
+    ops: {
+      title: "קונסולת תפעול",
+      customers: "לקוחות",
+      queue: "דורש טיפול",
+      business: "עסק",
+      connection: "חיבור",
+      campaign: "קמפיין",
+      subscription: "מנוי",
+      budget: "תקציב",
+      openRecs: "המלצות פתוחות",
+      none: "אין",
+      claim: "לקיחה לטיפול",
+      resolve: "סגירה",
+      review: "בדיקת קמפיין ראשונה",
+      approve: "אישור",
+      requestChanges: "בקשת שינויים",
+      unsupported: "לא נתמך",
+      billing: "חיוב",
+      leadQuality: "איכות פניות",
+      empty: "הרשימה ריקה.",
+    },
+
     // Connection health (AIC-5). Every non-ok state shows the same plain-Hebrew
     // reconnect message — the customer never sees Meta jargon like "revoked",
     // "invalid token", or "OAuth". The server sends the access_health value; the

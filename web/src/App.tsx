@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import { strings } from "./strings";
 import { AdminReadout } from "./admin/Readout";
+import { OpsConsole } from "./admin/OpsConsole";
 
 // SPA shell. Real customer surfaces (onboarding, connect Meta, home dashboard,
 // recommendation, settings) land in AIC-21 onward. The internal admin dogfood
@@ -11,6 +12,7 @@ export function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/admin/readout" element={<AdminReadout />} />
+        <Route path="/admin/ops" element={<OpsConsole />} />
         <Route
           path="*"
           element={
