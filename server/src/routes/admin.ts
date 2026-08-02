@@ -10,6 +10,7 @@ import { listCampaignActionHistory, condense } from "../services/action-history.
 import { listCustomers, getCustomerDetail } from "../services/customers.js";
 import { OpsQueue } from "../services/ops-queue.js";
 import { consoleLogger } from "../services/logger.js";
+import { submitReview, recordCustomerDecision, getLatestReview } from "../services/campaign-review.js";
 
 // Internal admin surfaces. Reads only from our DB (insight_snapshots) — never a
 // live Meta call at render time (AIC-7).
@@ -84,6 +85,26 @@ adminRouter.post("/ops-queue/:id/resolve", async (req, res) => {
   const item = await opsQueue.resolve(req.params.id, req.body?.note ?? "");
   if (!item) { res.status(404).json({ error: "not found" }); return; }
   res.json(item);
+});
+
+// First-campaign review (AIC-18).
+adminRouter.get("/campaigns/:id/review", async (req, res) => {
+  res.json({ review: await getLatestReview(pool, req.params.id) });
+});
+
+adminRouter.post("/campaigns/:id/review", async (req, res) => {
+  const { reviewer, outcome, checklist, notes } = req.body ?? {};
+  if (!reviewer || !["approved", "changes_requested", "unsupported"].includes(outcome)) {
+    res.status(400).json({ error: "reviewer + valid outcome required" });
+    return;
+  }
+  res.json(await submitReview(pool, { campaignId: req.params.id, reviewer, outcome, checklist, notes }));
+});
+
+adminRouter.post("/reviews/:id/customer-decision", async (req, res) => {
+  const review = await recordCustomerDecision(pool, req.params.id, req.body?.approved === true);
+  if (!review) { res.status(404).json({ error: "review not found" }); return; }
+  res.json(review);
 });
 
 adminRouter.get("/campaigns/:id/readout", async (req, res) => {

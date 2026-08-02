@@ -31,6 +31,19 @@ ones for the alert hook (Telegram later). Operators triage: `claim` → in_progr
 `POST /ops-queue/:id/resolve`. Source: `server/src/services/ops-queue.js`. Tests:
 `ops-queue.integration.test.ts`.
 
+## First-campaign review (AIC-18)
+
+The mandatory human gate before a campaign becomes managed. `submitReview` records
+outcome + reviewer + timestamp + the §11 checklist and moves the campaign's status:
+`approved` → `active` (we manage + monitor; no Meta change), `unsupported` →
+`unmanaged`, `changes_requested` → **stays `under_review`**. The §11 hard rule is
+enforced in code: a `changes_requested` campaign is **not** activated/modified until
+`recordCustomerDecision(reviewId, true)` records the customer's explicit approval
+(which then flips it to `active`); a decline keeps it `under_review`. Routes:
+`GET/POST /api/admin/campaigns/:id/review`, `POST /api/admin/reviews/:id/customer-decision`.
+Source: `server/src/services/campaign-review.js`. Tests:
+`campaign-review.integration.test.ts` (all three outcomes + no-activation-without-
+approval).
+
 ## Not built yet
-- First-campaign review workflow (AIC-18)
 - Manual billing ledger + weekly lead-quality capture (AIC-19)

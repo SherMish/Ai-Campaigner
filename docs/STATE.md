@@ -6,6 +6,15 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — Ops console: first-campaign review — AIC-18
+Added the review workflow (`campaign_reviews` table): `submitReview` records
+outcome + reviewer + timestamp + §11 checklist and moves status (approved →
+active, unsupported → unmanaged, changes_requested → stays under_review). The §11
+hard rule is enforced — a changes_requested campaign is not activated until
+`recordCustomerDecision(true)` records explicit customer approval. Routes under
+`/api/admin/campaigns/:id/review` + `/reviews/:id/customer-decision`. Verified: 4
+DB integration tests (all outcomes + no-activation-without-approval).
+
 ### 2026-08-03 — Ops console: needs-attention queue — AIC-17
 Added `OpsQueue` over `ops_queue_item`: one prioritized worklist across all
 accounts (high severity first, then oldest; resolved fall away), a canonical
