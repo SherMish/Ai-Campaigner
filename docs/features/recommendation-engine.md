@@ -39,7 +39,21 @@ if the row is still in the expected `from` state; a lost race throws
 `action_history` (what / previous / new / why / who / human / when / result) — the
 one place a real change is logged.
 
+## Deterministic rules (AIC-9)
+
+A campaign is evaluated by pure rules over `insight_snapshot`-derived evidence,
+emitting exactly one `RecommendationDraft` per tick — an acting type or
+`no_action`. The minimum-evidence gates (below which nothing fires) are the hard
+part; thresholds and rule priority are documented in [../RULES.md](../RULES.md).
+`rule-evaluator.ts` assembles the evidence (current/previous window totals +
+per-creative rows), runs `evaluateCampaign`, and persists an acting draft as a
+`proposed` rec — **deduped** against existing proposed recs (same type+target) so
+repeat ticks don't pile up, and `no_action` is never stored as a row.
+
+Source: `server/src/recommendations/rules.ts`, `rule-evaluator.ts`. Tests:
+`rules.test.ts` (each rule fires when it should and, crucially, does **not** on
+thin evidence), `rule-evaluator.test.ts`.
+
 ## Not built yet
-- Deterministic rules that emit drafts (AIC-9) → `docs/RULES.md`
 - Proactive staleness/expiry on a tick (AIC-11)
 - LLM explainer that renders a draft as plain Hebrew (AIC-10)

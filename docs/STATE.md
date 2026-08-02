@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — Deterministic recommendation rules v1 — AIC-9
+Added the rules engine: `evaluateCampaign` runs five rule types
+(pause_weak_creative, replace_creative, decrease_budget, increase_budget,
+no_action) over per-campaign evidence, gated by named minimum-evidence thresholds
+(`RULE_THRESHOLDS`) — below the gate it emits `no_action`, never a forced change.
+Zero LLM involvement; output fully structured. `rule-evaluator.ts` assembles
+evidence from `insight_snapshot`, persists an acting draft as `proposed` (deduped;
+`no_action` not stored). Thresholds + priority documented in `docs/RULES.md`.
+Verified: 14 rule fixture tests (fires when it should, does NOT on thin evidence) +
+3 evaluator tests.
+
 ### 2026-08-03 — Recommendation state machine — AIC-8
 Added the recommendation lifecycle as an explicit state machine
 (`proposed→approved→executing→executed|failed`, plus `dismissed`/`expired`),

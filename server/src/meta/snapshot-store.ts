@@ -10,6 +10,16 @@ export interface PeriodAgg {
   cplAgorot: Agorot | null;
 }
 
+// A creative-grain row within a window (for the rules engine + readout).
+export interface CreativeStatRow {
+  metaObjectId: string;
+  creativeName: string | null;
+  spendAgorot: number;
+  leads: number;
+  cplAgorot: number | null;
+  deliveryStatus: string;
+}
+
 export interface SnapshotStore {
   // Idempotent per (campaign, grain, object, period): a re-run updates in place
   // rather than duplicating.
@@ -20,6 +30,12 @@ export interface SnapshotStore {
     start: string,
     end: string,
   ): Promise<PeriodAgg>;
+  // Creative-grain rows within [start, end], ordered by spend desc.
+  creativeStats(
+    campaignId: string,
+    start: string,
+    end: string,
+  ): Promise<CreativeStatRow[]>;
 }
 
 export class PgSnapshotStore implements SnapshotStore {
@@ -87,6 +103,36 @@ export class PgSnapshotStore implements SnapshotStore {
     const leads = Number(rows[0]?.leads ?? 0);
     return { spendAgorot, leads, cplAgorot: computeCpl(spendAgorot, leads) };
   }
+
+  async creativeStats(
+    campaignId: string,
+    start: string,
+    end: string,
+  ): Promise<CreativeStatRow[]> {
+    const { rows } = await this.pool.query<{
+      meta_object_id: string;
+      creative_name: string | null;
+      spend_agorot: number;
+      leads: number;
+      cpl_agorot: number | null;
+      delivery_status: string;
+    }>(
+      `SELECT meta_object_id, creative_name, spend_agorot, leads, cpl_agorot, delivery_status
+       FROM insight_snapshots
+       WHERE campaign_id = $1 AND grain = 'creative'
+         AND period_start >= $2 AND period_end <= $3
+       ORDER BY spend_agorot DESC`,
+      [campaignId, start, end],
+    );
+    return rows.map((r) => ({
+      metaObjectId: r.meta_object_id,
+      creativeName: r.creative_name,
+      spendAgorot: Number(r.spend_agorot),
+      leads: Number(r.leads),
+      cplAgorot: r.cpl_agorot === null ? null : Number(r.cpl_agorot),
+      deliveryStatus: r.delivery_status,
+    }));
+  }
 }
 
 // In-memory store for unit tests.
@@ -118,5 +164,29 @@ export class InMemorySnapshotStore implements SnapshotStore {
       }
     }
     return { spendAgorot, leads, cplAgorot: computeCpl(spendAgorot, leads) };
+  }
+
+  async creativeStats(
+    campaignId: string,
+    start: string,
+    end: string,
+  ): Promise<CreativeStatRow[]> {
+    return [...this.rows.values()]
+      .filter(
+        (r) =>
+          r.campaignId === campaignId &&
+          r.grain === "creative" &&
+          r.periodStart >= start &&
+          r.periodEnd <= end,
+      )
+      .map((r) => ({
+        metaObjectId: r.metaObjectId,
+        creativeName: r.creativeName,
+        spendAgorot: r.spendAgorot,
+        leads: r.leads,
+        cplAgorot: r.cplAgorot,
+        deliveryStatus: r.deliveryStatus,
+      }))
+      .sort((a, b) => b.spendAgorot - a.spendAgorot);
   }
 }
