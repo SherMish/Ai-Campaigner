@@ -11,3 +11,4 @@ See also: [STATE.md](STATE.md) (dated changelog) · [features/_TEMPLATE.md](feat
 | Repo scaffold, build, migration runner, CI/Railway wiring | [features/scaffold.md](features/scaffold.md) |
 | DB schema — the 10 P0 entities, migrations, enums, seed | [DATA_MODEL.md](DATA_MODEL.md) |
 | Meta-side setup — Business/app/System User, token, asset assignment | [META_SETUP.md](META_SETUP.md) |
+| Meta connection, access-health, execution-halt safety rule | [features/meta-connection.md](features/meta-connection.md) |

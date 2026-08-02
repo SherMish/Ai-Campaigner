@@ -6,6 +6,18 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — Meta connection + access-loss detection — AIC-5
+Added the Meta client abstraction (`GraphMetaClient` + `FakeMetaClient`), a Graph
+error → access-health classifier, the connection store (pg + in-memory), and
+`ConnectionService`: verify folds per-asset access into one health, persists
+transitions, and raises a single `meta_connection_failure` ops item on loss.
+`assertExecutable` throws `AccessHaltedError` unless health is `ok` — the P0.3
+execution-halt safety rule. Customer-facing reconnect copy added to `strings.ts`
+(plain Hebrew, no Meta jargon; `connectionMessage()` maps every non-ok state to
+one prompt). Verified: 8 service + 3 classifier unit tests, and a DB integration
+test proving persistence + ops item + halt end-to-end. Live-against-Pisga is
+gated on a real System User token (AIC-3 operator steps) and AIC-1.
+
 ### 2026-08-03 — Meta setup runbook — AIC-3
 Added `docs/META_SETUP.md`: the one-time Meta-side configuration (Business
 Portfolio, app, System User + token scopes, partner-asset assignment, token
