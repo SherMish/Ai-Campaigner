@@ -6,6 +6,13 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — Action history surface — AIC-15
+Added the per-campaign audit surface reading only from `action_history`:
+`listCampaignActionHistory` / `listCustomerActionHistory` (newest-first, full PRD
+§23 fields, automated-vs-human), and `condense()` — a jargon-free plain-Hebrew
+projection for customer reuse. Exposed at `GET /api/admin/campaigns/:id/history`
+(`?condensed=true`). Verified: DB + HTTP integration test. Completes P0.3.
+
 ### 2026-08-03 — Emergency controls + failure handling — AIC-14
 Added per-account kill-switches (disable/enable automation, freeze/unfreeze
 execution, mark unmanaged, pause management) as immediate DB flags (migration 009

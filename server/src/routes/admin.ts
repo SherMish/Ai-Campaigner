@@ -6,6 +6,7 @@ import {
   listCampaignsForAdmin,
 } from "../services/readout.js";
 import { ControlService, PgControlStore } from "../execution/control-service.js";
+import { listCampaignActionHistory, condense } from "../services/action-history.js";
 
 // Internal admin surfaces. Reads only from our DB (insight_snapshots) — never a
 // live Meta call at render time (AIC-7).
@@ -47,4 +48,14 @@ adminRouter.get("/campaigns/:id/readout", async (req, res) => {
     return;
   }
   res.json(readout);
+});
+
+// Per-campaign action history (AIC-15). ?condensed=true → jargon-free projection.
+adminRouter.get("/campaigns/:id/history", async (req, res) => {
+  const entries = await listCampaignActionHistory(pool, req.params.id);
+  if (req.query.condensed === "true") {
+    res.json({ entries: condense(entries) });
+    return;
+  }
+  res.json({ entries });
 });
