@@ -19,3 +19,4 @@ See also: [STATE.md](STATE.md) (dated changelog) · [features/_TEMPLATE.md](feat
 | Rule thresholds + LLM boundary | [RULES.md](RULES.md) |
 | Approval & safe execution — budget safety, outbox, pipeline | [features/safe-execution.md](features/safe-execution.md) |
 | Action history surface (audit trail + condensed projection) | [features/action-history.md](features/action-history.md) |
+| Ops console — customers, needs-attention, review, billing | [features/ops-console.md](features/ops-console.md) |

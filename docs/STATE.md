@@ -6,6 +6,13 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — Ops console: customers view — AIC-16
+Added `listCustomers` / `getCustomerDetail` assembling each account's info +
+subscription + connection health + campaign + agreed budget + outstanding
+recommendation + open ops-item count from the real tables, at
+`GET /api/admin/customers[/:id]`. Migration 010 adds ops-queue triage columns +
+the `campaign_reviews` table for the rest of P0.4. Verified: DB + HTTP integration.
+
 ### 2026-08-03 — Action history surface — AIC-15
 Added the per-campaign audit surface reading only from `action_history`:
 `listCampaignActionHistory` / `listCustomerActionHistory` (newest-first, full PRD

@@ -7,6 +7,7 @@ import {
 } from "../services/readout.js";
 import { ControlService, PgControlStore } from "../execution/control-service.js";
 import { listCampaignActionHistory, condense } from "../services/action-history.js";
+import { listCustomers, getCustomerDetail } from "../services/customers.js";
 
 // Internal admin surfaces. Reads only from our DB (insight_snapshots) — never a
 // live Meta call at render time (AIC-7).
@@ -39,6 +40,20 @@ adminRouter.post("/campaigns/:id/controls", async (req, res) => {
 adminRouter.get("/campaigns", async (_req, res) => {
   const campaigns = await listCampaignsForAdmin(pool);
   res.json({ campaigns });
+});
+
+// Customers view (AIC-16): operator home base.
+adminRouter.get("/customers", async (_req, res) => {
+  res.json({ customers: await listCustomers(pool) });
+});
+
+adminRouter.get("/customers/:id", async (req, res) => {
+  const detail = await getCustomerDetail(pool, req.params.id);
+  if (!detail) {
+    res.status(404).json({ error: "customer not found" });
+    return;
+  }
+  res.json(detail);
 });
 
 adminRouter.get("/campaigns/:id/readout", async (req, res) => {
