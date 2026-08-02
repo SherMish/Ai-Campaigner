@@ -63,5 +63,26 @@ scenarios (happy budget + pause, replace escalation, wrong-state, external-chang
 ×2, over-budget, read-back mismatch, access-lost hold, automation-stop hold) are
 covered by `safe-executor.test.ts`.
 
-## Not built yet
-- Emergency-control state + failure→ops surfacing (AIC-14 fills the control gate)
+## Emergency controls + failure handling (AIC-14)
+
+Per-account kill-switches, all effective immediately (DB flags, no deploy),
+exposed at `POST /api/admin/campaigns/:id/controls` `{action}`:
+- `disable_automation` / `enable_automation` — stop/resume generation + acting
+- `freeze_execution` / `unfreeze_execution` — freeze execution, keep monitoring
+- `mark_unmanaged` — status → unmanaged
+- `pause_management` — stop generation **and** execution, keep monitoring
+
+`ControlService.assertExecutable(campaignId)` is the control gate the SafeExecutor
+calls before any Meta write — flipping any switch halts execution on the next
+attempt (an in-flight rec stays `approved`, retryable). Generation respects
+`isAutomated` (already filtered in the ingestion tick's campaign list).
+
+**Failure handling** is enforced by the pipeline (AIC-12): every abort/failure
+records the cause, writes a `failed` `action_history` row, raises an
+`ops_queue_item`, and returns a plain-Hebrew customer message — a failure never
+looks succeeded. Source: `control-service.ts` (migration 009), executor `fail()`.
+Tests: `control-service.test.ts` (gate per flag; kill-switch halts a batch
+mid-way). Telegram alerting on failures and ops-console surfacing are wired with
+the ops console (P0.4, AIC-16/17); the logger seam is in place.
+
+Source: `server/src/execution/control-service.ts`. Migration `009_execution_controls.sql`.

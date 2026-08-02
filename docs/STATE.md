@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — Emergency controls + failure handling — AIC-14
+Added per-account kill-switches (disable/enable automation, freeze/unfreeze
+execution, mark unmanaged, pause management) as immediate DB flags (migration 009
+adds `execution_frozen`), exposed at `POST /api/admin/campaigns/:id/controls`.
+`ControlService.assertExecutable` is the control gate the SafeExecutor already
+calls — flipping any switch halts execution on the next attempt (rec stays
+approved). Failure handling (ops item + plain-Hebrew customer message + failed
+action_history, never a silent success) is enforced in the AIC-12 pipeline.
+Verified: 6 tests (gate per flag; kill-switch halts a batch mid-way). Telegram
+alerting + ops-console surfacing land with P0.4.
+
 ### 2026-08-03 — Safe-execute pipeline — AIC-12
 Added `SafeExecutor.execute`: the ordered pipeline for executing an approved
 recommendation — relevance → access-health hold → emergency-control hold → claim
