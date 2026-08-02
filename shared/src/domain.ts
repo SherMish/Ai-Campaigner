@@ -1,0 +1,94 @@
+// Domain enums. Stored as TEXT in Postgres (see migrations) and validated here
+// in application code — adding a value never needs a DDL migration. Each list is
+// the single source of truth for its column's allowed values.
+
+export const ONBOARDING_STATUS = [
+  "call_scheduled",
+  "meta_connection_required",
+  "campaign_under_review",
+  "ready",
+] as const;
+export type OnboardingStatus = (typeof ONBOARDING_STATUS)[number];
+
+export const SUBSCRIPTION_STATUS = [
+  "pending",
+  "active",
+  "lapsed",
+  "canceled",
+] as const;
+export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUS)[number];
+
+// Health of our access to a customer's Meta assets. Anything but `ok` halts
+// execution (safety rule, P0.3) and raises an ops-queue item.
+export const ACCESS_HEALTH = [
+  "ok",
+  "revoked",
+  "invalid",
+  "needs_reconnect",
+] as const;
+export type AccessHealth = (typeof ACCESS_HEALTH)[number];
+
+export const CAMPAIGN_STATUS = [
+  "under_review",
+  "active",
+  "paused",
+  "needs_attention",
+  "connection_problem",
+  "unmanaged",
+] as const;
+export type CampaignStatus = (typeof CAMPAIGN_STATUS)[number];
+
+export const BUDGET_PERIOD = ["daily", "monthly"] as const;
+export type BudgetPeriod = (typeof BUDGET_PERIOD)[number];
+
+export const INSIGHT_GRAIN = ["campaign", "adset", "ad", "creative"] as const;
+export type InsightGrain = (typeof INSIGHT_GRAIN)[number];
+
+export const RECOMMENDATION_TYPE = [
+  "pause_creative",
+  "increase_budget",
+  "decrease_budget",
+  "replace_creative",
+  "no_action",
+] as const;
+export type RecommendationType = (typeof RECOMMENDATION_TYPE)[number];
+
+// Recommendation lifecycle (refined in AIC-8):
+// proposed → approved → executing → executed | failed
+// proposed → dismissed | expired
+export const RECOMMENDATION_STATE = [
+  "proposed",
+  "approved",
+  "executing",
+  "executed",
+  "failed",
+  "dismissed",
+  "expired",
+] as const;
+export type RecommendationState = (typeof RECOMMENDATION_STATE)[number];
+
+export const OPS_QUEUE_TYPE = [
+  "meta_connection_failure",
+  "campaign_not_delivering",
+  "campaign_rejected",
+  "unusual_performance",
+  "recommendation_review",
+  "support_request",
+  "missing_creative",
+  "account_restriction",
+] as const;
+export type OpsQueueType = (typeof OPS_QUEUE_TYPE)[number];
+
+export const OPS_SEVERITY = ["low", "medium", "high"] as const;
+export type OpsSeverity = (typeof OPS_SEVERITY)[number];
+
+export const OPS_STATUS = ["open", "in_progress", "resolved"] as const;
+export type OpsStatus = (typeof OPS_STATUS)[number];
+
+/** Type guard usable to validate a stored TEXT value against its enum. */
+export function isOneOf<T extends readonly string[]>(
+  allowed: T,
+  value: unknown,
+): value is T[number] {
+  return typeof value === "string" && (allowed as readonly string[]).includes(value);
+}

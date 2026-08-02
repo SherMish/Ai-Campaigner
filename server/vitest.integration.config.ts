@@ -4,6 +4,9 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Integration tests hit a real Postgres via DATABASE_URL. Run locally against a
+// throwaway/dev database; they self-skip when DATABASE_URL is unset (so CI stays
+// green until a Neon dev-branch URL is wired in as a secret).
 export default defineConfig({
   resolve: {
     alias: {
@@ -12,7 +15,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    // Integration tests (real Postgres) run via test:integration, not the unit run.
-    exclude: ["**/node_modules/**", "**/dist/**", "**/*.integration.test.ts"],
+    include: ["src/**/*.integration.test.ts"],
+    hookTimeout: 30_000,
+    testTimeout: 30_000,
   },
 });

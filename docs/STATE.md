@@ -6,6 +6,18 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — Core data model: 10 P0 entities — AIC-4
+Added migrations `002`–`007` creating the ten P0 tables (customers,
+subscriptions, meta_connections, ad_accounts, managed_campaigns,
+insight_snapshots, recommendations, action_history, lead_quality_feedback,
+ops_queue_items) with FKs, indexes, and CHECK-enum columns mirrored in
+`shared/src/domain.ts`. Money is integer agorot; `action_history` is append-only;
+the snapshot idempotency key is `(campaign, grain, object, period)`. Added the
+Pisga dogfood seed (idempotent) and a DB integration test (self-skips without
+`DATABASE_URL`). RLS deliberately not adopted (Neon has no PostgREST surface;
+rationale in DATA_MODEL.md). Verified against a local Postgres: 7 migrations
+apply, seed idempotent, 4/4 integration tests green.
+
 ### 2026-08-03 — Stack scaffold (server / web / shared) — AIC-2
 Scaffolded the monorepo from Pisga's proven stack: npm workspaces
 (`shared` / `server` / `web`), TypeScript throughout, Neon Postgres via a
