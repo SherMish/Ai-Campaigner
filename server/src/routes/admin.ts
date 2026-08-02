@@ -8,6 +8,8 @@ import {
 import { ControlService, PgControlStore } from "../execution/control-service.js";
 import { listCampaignActionHistory, condense } from "../services/action-history.js";
 import { listCustomers, getCustomerDetail } from "../services/customers.js";
+import { OpsQueue } from "../services/ops-queue.js";
+import { consoleLogger } from "../services/logger.js";
 
 // Internal admin surfaces. Reads only from our DB (insight_snapshots) — never a
 // live Meta call at render time (AIC-7).
@@ -54,6 +56,34 @@ adminRouter.get("/customers/:id", async (req, res) => {
     return;
   }
   res.json(detail);
+});
+
+// Needs-attention queue (AIC-17).
+const opsQueue = new OpsQueue(pool, consoleLogger);
+
+adminRouter.get("/ops-queue", async (req, res) => {
+  res.json({ items: await opsQueue.list({ includeResolved: req.query.all === "true" }) });
+});
+
+adminRouter.post("/ops-queue", async (req, res) => {
+  const { customerId, campaignId, type, severity, detail } = req.body ?? {};
+  if (!type || !severity) {
+    res.status(400).json({ error: "type and severity required" });
+    return;
+  }
+  res.json(await opsQueue.create({ customerId: customerId ?? null, campaignId, type, severity, detail: detail ?? "" }));
+});
+
+adminRouter.post("/ops-queue/:id/claim", async (req, res) => {
+  const item = await opsQueue.claim(req.params.id, req.body?.operator ?? "operator");
+  if (!item) { res.status(404).json({ error: "not found or resolved" }); return; }
+  res.json(item);
+});
+
+adminRouter.post("/ops-queue/:id/resolve", async (req, res) => {
+  const item = await opsQueue.resolve(req.params.id, req.body?.note ?? "");
+  if (!item) { res.status(404).json({ error: "not found" }); return; }
+  res.json(item);
 });
 
 adminRouter.get("/campaigns/:id/readout", async (req, res) => {

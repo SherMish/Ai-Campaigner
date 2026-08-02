@@ -6,6 +6,13 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — Ops console: needs-attention queue — AIC-17
+Added `OpsQueue` over `ops_queue_item`: one prioritized worklist across all
+accounts (high severity first, then oldest; resolved fall away), a canonical
+`create` (high-sev logged for the alert hook), and triage (`claim` → in_progress +
+claimed_by; `resolve(note)`). Routes under `GET/POST /api/admin/ops-queue`.
+Verified: DB integration (severity sort, claim, resolve).
+
 ### 2026-08-03 — Ops console: customers view — AIC-16
 Added `listCustomers` / `getCustomerDetail` assembling each account's info +
 subscription + connection health + campaign + agreed budget + outstanding
