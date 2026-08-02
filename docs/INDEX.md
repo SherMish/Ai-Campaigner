@@ -8,4 +8,4 @@ See also: [STATE.md](STATE.md) (dated changelog) · [features/_TEMPLATE.md](feat
 
 | Code area | Owning doc |
 | --- | --- |
-| _(none yet — add rows as features land)_ | |
+| Repo scaffold, build, migration runner, CI/Railway wiring | [features/scaffold.md](features/scaffold.md) |

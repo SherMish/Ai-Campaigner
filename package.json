@@ -1,0 +1,29 @@
+{
+  "name": "ai-campaigner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Campaigner — affordable Meta campaign management for Israeli small businesses.",
+  "workspaces": [
+    "shared",
+    "server",
+    "web"
+  ],
+  "engines": {
+    "node": ">=22 <26"
+  },
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm --workspace server run dev",
+    "dev:web": "npm --workspace web run dev",
+    "dev:landing": "npx serve landing -l 5174",
+    "build": "npm --workspace shared run build && npm --workspace server run build && npm --workspace web run build",
+    "start": "npm --workspace server run start",
+    "release": "npm --workspace server run db:migrate:prod",
+    "db:migrate": "npm --workspace server run db:migrate",
+    "typecheck": "npm --workspace shared run typecheck && npm --workspace server run typecheck && npm --workspace web run typecheck",
+    "test:unit": "npm --workspace shared run test && npm --workspace server run test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
