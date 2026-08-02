@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — Insights ingestion → insight_snapshot — AIC-6
+Added the ingestion pipeline: `getInsights` on the Meta client (4 grains, creative
+derived from ad rows), pure metric functions (`extractLeads` — 7d-preferred, never
+double-counted; `computeCpl` — NULL at 0 leads; `normalizeRow` — spend→agorot), the
+snapshot store (idempotent upsert per (campaign, grain, object, period) + period
+totals), and `runIngestionTick` (per-campaign isolation: a Meta error is caught,
+logged, retried next tick, never crashes the run). Wired an inert-until-token
+scheduler into `index.ts`. Lead/CPL documented in `docs/METRICS.md`. Verified: 12
+new unit tests + 2 DB integration tests (idempotency, period totals). Live against
+Pisga gated on a real System User token + linked campaign.
+
 ### 2026-08-03 — Meta connection + access-loss detection — AIC-5
 Added the Meta client abstraction (`GraphMetaClient` + `FakeMetaClient`), a Graph
 error → access-health classifier, the connection store (pg + in-memory), and

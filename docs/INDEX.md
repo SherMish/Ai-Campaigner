@@ -12,3 +12,5 @@ See also: [STATE.md](STATE.md) (dated changelog) · [features/_TEMPLATE.md](feat
 | DB schema — the 10 P0 entities, migrations, enums, seed | [DATA_MODEL.md](DATA_MODEL.md) |
 | Meta-side setup — Business/app/System User, token, asset assignment | [META_SETUP.md](META_SETUP.md) |
 | Meta connection, access-health, execution-halt safety rule | [features/meta-connection.md](features/meta-connection.md) |
+| Insights ingestion → insight_snapshot, scheduler | [features/insights-ingestion.md](features/insights-ingestion.md) |
+| Lead / CPL / metric definitions | [METRICS.md](METRICS.md) |
