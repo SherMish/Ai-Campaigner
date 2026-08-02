@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — LLM explainer (plain-Hebrew, never decides) — AIC-10
+Added the explainer: `explain(rec)` renders each recommendation type + a weekly
+status as plain business Hebrew from a centralized copy table, injecting figures
+from the structured record by code (deterministic fallback, always works).
+`explainWithLlm` optionally rephrases but accepts the model's text only if every
+figure survives verbatim and no Ads Manager jargon appears — the "LLM explains,
+never decides" boundary, enforced structurally. Documented in `docs/RULES.md`.
+Verified: 10 tests (number-fidelity, jargon-absence, fallback, rejection of a
+number-changing or jargon-introducing rephrase). P0.2 recommendation engine
+complete.
+
 ### 2026-08-03 — Recommendation staleness + expiry — AIC-11
 Added `refreshRecommendations` as the canonical eval tick: a proposed rec is valid
 iff the same gated rules still produce an equivalent rec from current evidence;

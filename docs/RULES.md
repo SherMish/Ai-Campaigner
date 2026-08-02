@@ -63,5 +63,22 @@ produce an equivalent recommendation (same type + target). See
 [recommendation-engine.md](features/recommendation-engine.md) (AIC-11).
 
 ## LLM boundary (AIC-10)
-_To be documented when the explainer lands: the LLM explains, never decides; every
-figure is passed in and echoed verbatim._
+
+The LLM **explains; it never decides.** It never chooses or alters a budget, a Meta
+ID, whether an action is permitted, a campaign status, a spend limit, whether enough
+data exists, or any API call — all of those arrive already-decided from the
+deterministic engine.
+
+Enforced structurally (`server/src/recommendations/explainer.ts`):
+- The **template is the source of truth**. `explain(rec)` injects every figure from
+  the structured record by code (`formatShekel`, lead counts) and always renders —
+  the deterministic-safe fallback that needs no LLM.
+- `explainWithLlm(rec, llm)` may only **rephrase** the template. The result is
+  accepted **only if** every `requiredFigures(rec)` string survives verbatim **and**
+  no Ads Manager jargon appears; otherwise (or on empty output / throw / no LLM) it
+  returns the template. So a model can never invent or move a number that moves real
+  money, and can never leak jargon.
+
+Tests (`explainer.test.ts`): number-fidelity (rendered figures == structured input),
+jargon-absence, fallback path, and rejection of a rephrase that changed a number or
+introduced jargon.

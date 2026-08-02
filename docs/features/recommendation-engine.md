@@ -69,5 +69,13 @@ Source: `server/src/recommendations/staleness.ts`. Tests: `staleness.test.ts`
 (evidence-holds → stays; evidence-diverged → expires; expired → un-approvable;
 replaced when a new action is warranted).
 
-## Not built yet
-- LLM explainer that renders a draft as plain Hebrew (AIC-10)
+## LLM explainer (AIC-10)
+
+`explain(rec)` renders a recommendation as plain business Hebrew from a centralized
+copy table, injecting every figure from the structured record by code — the
+deterministic fallback that always works. `explainWithLlm(rec, llm)` optionally
+smooths phrasing but accepts the model's text **only if** every required figure
+survives verbatim and no Ads Manager jargon appears; otherwise it returns the
+template. The LLM explains, never decides. Full boundary in [../RULES.md](../RULES.md).
+
+Source: `server/src/recommendations/explainer.ts`. Tests: `explainer.test.ts`.
