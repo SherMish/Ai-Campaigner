@@ -15,3 +15,4 @@ See also: [STATE.md](STATE.md) (dated changelog) · [features/_TEMPLATE.md](feat
 | Insights ingestion → insight_snapshot, scheduler | [features/insights-ingestion.md](features/insights-ingestion.md) |
 | Lead / CPL / metric definitions | [METRICS.md](METRICS.md) |
 | Admin dogfood readout (screen + API) | [features/dogfood-readout.md](features/dogfood-readout.md) |
+| Recommendation engine — state machine, rules, staleness, explainer | [features/recommendation-engine.md](features/recommendation-engine.md) |

@@ -6,6 +6,15 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-03 — Recommendation state machine — AIC-8
+Added the recommendation lifecycle as an explicit state machine
+(`proposed→approved→executing→executed|failed`, plus `dismissed`/`expired`),
+illegal transitions rejected before any write. `RecommendationService` wraps every
+transition with the state-machine check + an optimistic store guard
+(`StaleRecommendationError` on a lost race); `completeExecution` writes the PRD §23
+audit row to `action_history`. `no_action` is a first-class type. pg + in-memory
+stores. Verified: 9 unit + 1 DB integration test.
+
 ### 2026-08-03 — Dogfood readout (admin) — AIC-7
 Added the internal readout: `buildCampaignReadout` (status + current/previous
 7-day totals + per-creative rows + period deltas, read only from
