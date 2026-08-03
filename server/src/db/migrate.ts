@@ -1,7 +1,7 @@
 // Minimal migration runner. Reads /migrations/*.sql in name order and runs any
 // that haven't been recorded in _migrations. The first migration must create
 // the _migrations ledger, so we try it unconditionally and only check after.
-import "dotenv/config";
+import "../load-env.js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

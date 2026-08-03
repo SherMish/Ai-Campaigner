@@ -1,7 +1,7 @@
 // Seed the single dogfood customer = Pisga. Idempotent: safe to run repeatedly.
 // This is the account AIC-5/6/7 exercise end-to-end (our own campaign) before
 // any external customer.
-import "dotenv/config";
+import "../load-env.js";
 import { pool } from "./pool.js";
 
 async function main() {

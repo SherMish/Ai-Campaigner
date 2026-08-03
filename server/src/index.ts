@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./load-env.js";
 import { createApp } from "./app.js";
 import { pool } from "./db/pool.js";
 import { buildIngestionTick } from "./meta/scheduled-ingestion.js";
