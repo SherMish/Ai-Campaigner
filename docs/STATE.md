@@ -6,6 +6,16 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-04 — Landing page (AdPilot design) — AIC-20
+Replaced the placeholder `landing/index.html` with the full AdPilot marketing page
+from the provided design directions: fluid responsive RTL Hebrew, brand palette
+(orange/cream/ink/green/indigo) + Rubik/IBM Plex Mono, and all sections — hero
+collage, dark ₪299-vs-₪1,200 comparison, how-it-works, dashboard mock, creative +
+lead-quality + support, pricing, 8-question FAQ (native accordion), final CTA,
+footer. CSS-only mockups (no external images). Verified: builds into
+`web/dist/index.html`, renders at desktop + 375px with no horizontal overflow.
+Contact CTAs + brand alignment (AdPilot vs AI Campaigner) flagged as open.
+
 ### 2026-08-03 — Ops console: manual billing + weekly lead-quality — AIC-19
 Added the manual billing ledger (`updateBilling` + `conversionSummary` for
 setup→subscription conversion, no payment gateway) and weekly campaign-level

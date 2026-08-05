@@ -3,43 +3,574 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Campaigner — ניהול קמפיינים לעסק קטן</title>
+    <title>AdPilot — ניהול קמפיינים לעסק קטן</title>
+    <meta
+      name="description"
+      content="ניהול קמפיינים בפייסבוק ובאינסטגרם לעסקים קטנים — בלי ריטיינר של אלפי שקלים. עוקבים, מנתחים וממליצים; כל שינוי בתקציב או בקמפיין מתבצע רק באישור שלכם. ₪299 לחודש."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
     <style>
-      :root { color-scheme: light dark; }
+      :root {
+        --cream: #f7f2ea;
+        --cream-2: #ede6da;
+        --page: #efe9de;
+        --ink: #171717;
+        --orange: #ff5a36;
+        --green: #2fa36b;
+        --indigo: #665cff;
+        --wa: #dcf8c6;
+        --line: rgba(23, 23, 23, 0.12);
+        --muted: rgba(23, 23, 23, 0.58);
+        --maxw: 1180px;
+        --mono: "IBM Plex Mono", ui-monospace, monospace;
+      }
       * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
       body {
         margin: 0;
-        font-family: system-ui, "Segoe UI", Arial, sans-serif;
+        font-family: Rubik, system-ui, "Segoe UI", Arial, sans-serif;
+        background: var(--page);
+        color: var(--ink);
         line-height: 1.6;
-        color: #14181f;
-        background: #fafafa;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden; /* the hero collage uses negative insets */
       }
-      main { max-width: 720px; margin: 0 auto; padding: 64px 24px; }
-      h1 { font-size: 2.2rem; margin: 0 0 16px; }
-      .sub { font-size: 1.15rem; color: #3c4655; margin: 0 0 32px; }
-      .price { font-weight: 600; margin: 0 0 8px; }
-      .cta {
-        display: inline-block; margin-top: 24px; padding: 12px 24px;
-        background: #1877f2; color: #fff; border-radius: 8px;
-        text-decoration: none; font-weight: 600;
+      a { color: inherit; text-decoration: none; }
+      .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+      section { padding: clamp(56px, 9vw, 120px) 0; }
+      .eyebrow {
+        font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.14em;
+        color: var(--orange); margin: 0 0 18px;
       }
-      footer { margin-top: 48px; font-size: 0.85rem; color: #6b7280; }
+      h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.02; margin: 0; }
+      h2 { font-size: clamp(1.8rem, 4.2vw, 3.1rem); font-weight: 800; }
+      p { margin: 0 0 1em; }
+      .lead { font-size: clamp(1.05rem, 1.6vw, 1.25rem); color: #2a2a2a; }
+      .strong { font-weight: 700; }
+      .muted { color: var(--muted); }
+
+      /* buttons */
+      .btn {
+        display: inline-flex; align-items: center; gap: 10px; cursor: pointer;
+        font: inherit; font-weight: 600; border: 0; border-radius: 999px;
+        padding: 14px 26px; transition: transform 0.15s ease, background 0.15s ease;
+        white-space: nowrap;
+      }
+      .btn:hover { transform: translateY(-1px); }
+      .btn-primary { background: var(--orange); color: #fff; }
+      .btn-primary:hover { background: #ff4a22; }
+      .btn-dark { background: var(--ink); color: var(--cream); }
+      .btn-ghost { background: transparent; color: var(--ink); padding: 14px 8px; }
+      .btn-ghost .arrow { transition: transform 0.15s ease; }
+      .btn-ghost:hover .arrow { transform: translateX(-6px); }
+
+      /* header */
+      header {
+        position: sticky; top: 0; z-index: 50;
+        background: color-mix(in srgb, var(--page) 88%, transparent);
+        backdrop-filter: blur(8px); border-bottom: 1px solid var(--line);
+      }
+      .nav { display: flex; align-items: center; justify-content: space-between; height: 74px; }
+      .brand { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.03em; direction: ltr; }
+      .brand .dot { color: var(--orange); }
+      .nav-links { display: flex; gap: 28px; font-weight: 500; }
+      .nav-links a:hover { color: var(--orange); }
+      .nav-right { display: flex; align-items: center; gap: 20px; }
+      .nav-login { font-weight: 500; }
+      .nav-login:hover { color: var(--orange); }
+
+      /* hero */
+      .hero-grid {
+        display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 56px; align-items: center;
+      }
+      .hero h1 { font-size: clamp(2.5rem, 6.6vw, 5rem); font-weight: 800; }
+      .hero h1 .ink2 { color: var(--indigo); }
+      .hl {
+        display: inline-block; background: var(--orange); color: var(--cream);
+        padding: 0 0.18em; border-radius: 10px; transform: rotate(-1.6deg);
+      }
+      .hero .lead { margin-top: 28px; max-width: 30em; }
+      .hero .promise { font-weight: 700; font-size: clamp(1.1rem, 1.7vw, 1.35rem); margin-top: 6px; }
+      .hero-cta { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-top: 32px; }
+      .price-tag { margin-top: 26px; font-family: var(--mono); }
+      .price-tag b { font-size: 1.15rem; font-weight: 700; font-family: Rubik; }
+      .price-tag .sub { color: var(--muted); font-size: 0.85rem; }
+
+      /* hero visual */
+      .stage { position: relative; min-height: 520px; }
+      .phone {
+        position: relative; width: min(300px, 78%); margin-inline: auto; aspect-ratio: 300 / 610;
+        background: var(--ink); border-radius: 40px; padding: 12px;
+        box-shadow: 0 30px 60px -24px rgba(23, 23, 23, 0.5);
+      }
+      .phone-screen {
+        height: 100%; border-radius: 30px; background: var(--cream-2);
+        display: flex; flex-direction: column; overflow: hidden; position: relative;
+      }
+      .creative {
+        flex: 1; display: flex; align-items: center; justify-content: center;
+        color: var(--muted); font-size: 0.9rem; text-align: center; padding: 20px;
+        background: repeating-linear-gradient(45deg, #e7e0d4 0 14px, #ece5d9 14px 28px);
+      }
+      .creative .ph { font-size: 2rem; opacity: 0.5; }
+      .ad-bar {
+        font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
+        padding: 12px 16px; background: var(--ink); color: var(--cream);
+        display: flex; justify-content: space-between;
+      }
+      .float {
+        position: absolute; background: #fff; border: 1px solid var(--line);
+        border-radius: 16px; box-shadow: 0 18px 40px -20px rgba(23, 23, 23, 0.4);
+      }
+      .pill {
+        position: absolute; display: inline-flex; align-items: center; gap: 8px;
+        background: var(--ink); color: var(--cream); font-weight: 600; font-size: 0.85rem;
+        padding: 9px 16px; border-radius: 999px;
+      }
+      .pill .led { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+      .tag-good {
+        position: absolute; background: var(--green); color: #fff; font-weight: 600;
+        font-size: 0.8rem; padding: 6px 14px; border-radius: 999px; transform: rotate(-3deg);
+      }
+      .stat { padding: 16px 22px; text-align: center; }
+      .stat b { font-size: 2rem; font-weight: 800; display: block; }
+      .stat span { font-size: 0.85rem; color: var(--muted); }
+      .rec { padding: 18px; width: 250px; }
+      .rec .k { font-family: var(--mono); font-size: 0.72rem; color: var(--orange); letter-spacing: 0.08em; }
+      .rec .t { font-weight: 700; margin: 8px 0 14px; line-height: 1.3; }
+      .rec .row { display: flex; align-items: center; gap: 12px; }
+      .rec .b1 { background: var(--ink); color: var(--cream); border-radius: 999px; padding: 8px 18px; font-size: 0.85rem; font-weight: 600; }
+      .rec .b2 { color: var(--muted); font-size: 0.85rem; }
+      .wa {
+        max-width: 240px; background: var(--wa); border: 0; border-radius: 16px 16px 16px 4px;
+        padding: 12px 14px; font-size: 0.9rem;
+      }
+      .wa .meta { font-family: var(--mono); font-size: 0.68rem; color: #4a6a45; margin-top: 6px; }
+
+      /* comparison (dark) */
+      .dark { background: var(--ink); color: var(--cream); }
+      .cmp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+      .cmp h2 { color: var(--cream); max-width: 12em; }
+      .cmp-big { font-size: clamp(4rem, 12vw, 9rem); font-weight: 900; letter-spacing: -0.04em; line-height: 0.9; }
+      .cmp-big small { font-size: 0.22em; font-weight: 600; color: rgba(247, 242, 234, 0.6); display: block; margin-top: 16px; letter-spacing: normal; line-height: 1.5; }
+      .cmp-rows { border-top: 1px solid rgba(247, 242, 234, 0.18); }
+      .cmp-row {
+        display: flex; justify-content: space-between; align-items: baseline;
+        padding: 22px 0; border-bottom: 1px solid rgba(247, 242, 234, 0.18);
+      }
+      .cmp-row .label { color: rgba(247, 242, 234, 0.7); }
+      .cmp-row .val { font-size: 1.6rem; font-weight: 800; }
+      .cmp-row.strike .val { color: var(--orange); text-decoration: line-through; text-decoration-color: #7a3326; }
+      .cmp-note { color: rgba(247, 242, 234, 0.6); font-size: 0.95rem; margin-top: 14px; }
+
+      /* band */
+      .band { text-align: center; }
+      .band h2 { max-width: 16em; margin: 0 auto; }
+      .band .accent { color: var(--orange); }
+
+      /* steps */
+      .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+      .step {
+        background: var(--cream); border: 1px solid var(--line); border-radius: 22px; padding: 30px;
+      }
+      .step .n { font-family: var(--mono); font-size: 0.9rem; color: var(--orange); }
+      .step h3 { font-size: 1.5rem; font-weight: 800; margin: 14px 0 12px; }
+      .step p { color: var(--muted); margin: 0 0 20px; }
+      .mini {
+        background: var(--cream-2); border-radius: 14px; padding: 14px 16px; font-size: 0.9rem;
+        display: flex; justify-content: space-between; align-items: center;
+      }
+      .mini b { font-weight: 700; }
+      .mini .up { color: var(--green); font-weight: 700; }
+
+      /* dashboard section */
+      .split { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+      .dash {
+        background: var(--cream); border: 1px solid var(--line); border-radius: 24px;
+        padding: 26px; box-shadow: 0 24px 50px -30px rgba(23, 23, 23, 0.4);
+      }
+      .dash .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
+      .dash .head .st { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.9rem; }
+      .dash .head .led { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+      .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+      .kpi { background: var(--cream-2); border-radius: 16px; padding: 16px; text-align: center; }
+      .kpi b { display: block; font-size: 1.7rem; font-weight: 800; }
+      .kpi span { font-size: 0.8rem; color: var(--muted); }
+      .ok-row { display: flex; align-items: center; gap: 10px; color: var(--green); font-weight: 600; }
+      .ok-row .c { width: 22px; height: 22px; border-radius: 50%; background: var(--green); color: #fff; display: grid; place-items: center; font-size: 0.8rem; }
+
+      /* lead quality */
+      .lq { background: var(--cream); border: 1px solid var(--line); border-radius: 24px; padding: 34px; text-align: center; max-width: 560px; margin: 30px auto 0; }
+      .lq .q { font-size: 1.3rem; font-weight: 700; margin-bottom: 22px; }
+      .stepper { display: inline-flex; align-items: center; gap: 20px; background: var(--cream-2); border-radius: 999px; padding: 8px 10px; margin-bottom: 22px; }
+      .stepper button { width: 42px; height: 42px; border-radius: 50%; border: 0; background: #fff; font-size: 1.4rem; cursor: pointer; font-family: inherit; }
+      .stepper .v { font-size: 2rem; font-weight: 800; min-width: 44px; }
+
+      /* support */
+      .support { text-align: center; }
+      .support .cta { display: inline-flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 30px; }
+
+      /* pricing */
+      .price-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+      .price-card { background: var(--ink); color: var(--cream); border-radius: 28px; padding: 40px; }
+      .price-card .amt { font-size: clamp(3rem, 8vw, 5rem); font-weight: 900; letter-spacing: -0.03em; }
+      .price-card .amt small { font-size: 0.24em; font-weight: 600; color: rgba(247, 242, 234, 0.65); }
+      .price-card .setup { color: rgba(247, 242, 234, 0.6); font-family: var(--mono); font-size: 0.85rem; }
+      .feat { list-style: none; padding: 0; margin: 26px 0 0; display: grid; gap: 12px; }
+      .feat li { display: flex; align-items: center; gap: 12px; }
+      .feat .c { color: var(--green); font-weight: 800; }
+      .fit { background: var(--cream); border: 1px solid var(--line); border-radius: 28px; padding: 40px; }
+      .fit h3 { font-size: 1.4rem; font-weight: 800; margin-bottom: 20px; }
+      .fit ul { list-style: none; padding: 0; margin: 0 0 24px; display: grid; gap: 16px; }
+      .fit li { display: flex; gap: 12px; color: #2a2a2a; }
+      .fit li::before { content: "←"; color: var(--orange); font-weight: 800; }
+
+      /* faq */
+      .faq { max-width: 820px; margin: 0 auto; }
+      details { border-bottom: 1px solid var(--line); }
+      summary { list-style: none; cursor: pointer; padding: 22px 0; display: flex; justify-content: space-between; align-items: center; gap: 20px; font-weight: 600; font-size: 1.15rem; }
+      summary::-webkit-details-marker { display: none; }
+      summary .pm { font-size: 1.5rem; color: var(--orange); transition: transform 0.2s ease; flex: none; }
+      details[open] summary .pm { transform: rotate(45deg); }
+      details p { color: var(--muted); padding: 0 0 22px; margin: 0; max-width: 60ch; }
+
+      /* final cta */
+      .final { text-align: center; }
+      .final h2 { max-width: 14em; margin: 0 auto 10px; }
+      .final .sub { color: var(--muted); margin-bottom: 30px; }
+
+      /* footer */
+      footer { background: var(--ink); color: var(--cream); padding: 60px 0 40px; }
+      .foot { display: flex; justify-content: space-between; gap: 30px; flex-wrap: wrap; align-items: flex-start; }
+      .foot .brand { color: var(--cream); }
+      .foot .tag { color: rgba(247, 242, 234, 0.6); max-width: 22em; margin-top: 12px; }
+      .foot-links { display: flex; gap: 26px; flex-wrap: wrap; color: rgba(247, 242, 234, 0.8); }
+      .foot-links a:hover { color: var(--orange); }
+
+      /* responsive */
+      @media (max-width: 900px) {
+        .hero-grid, .cmp-grid, .split, .price-wrap { grid-template-columns: 1fr; gap: 40px; }
+        .steps { grid-template-columns: 1fr; }
+        .nav-links { display: none; }
+        .stage { min-height: 440px; }
+        .cmp .cmp-big { order: -1; }
+      }
+      @media (max-width: 560px) {
+        .kpis { grid-template-columns: 1fr; }
+        .hero-cta { gap: 12px; }
+        .btn { padding: 13px 22px; }
+      }
     </style>
   </head>
   <body>
-    <main>
-      <h1>ניהול קמפיינים לעסק קטן — בלי ריטיינר של אלפי שקלים</h1>
-      <p class="sub">
-        מחברים את חשבון הפרסום, ואנחנו עוקבים, מנתחים ומציעים שיפורים לקמפיין
-        שלכם. שינוי בתקציב או בקמפיין מתבצע רק באישור שלכם.
-      </p>
-      <p class="price">299 ₪ הקמה חד־פעמית · 299 ₪ לחודש</p>
-      <p>לא כולל את תקציב הפרסום עצמו, שמשולם ישירות למטא.</p>
-      <a class="cta" href="#">לתאם שיחת התנעה</a>
-      <footer>
-        <!-- Placeholder landing page (AIC-20 owns the real value-prop page). -->
-        AI Campaigner
-      </footer>
+    <!-- NOTE: contact CTAs point to placeholders — replace with the real WhatsApp
+         number + booking link before going live. -->
+    <header>
+      <div class="wrap nav">
+        <div style="display:flex;align-items:center;gap:44px">
+          <a href="#top" class="brand">AdPilot<span class="dot">.</span></a>
+          <nav class="nav-links">
+            <a href="#how">איך זה עובד</a>
+            <a href="#what">מה מקבלים</a>
+            <a href="#price">מחיר</a>
+            <a href="#faq">שאלות</a>
+          </nav>
+        </div>
+        <div class="nav-right">
+          <a href="/login" class="nav-login">כניסה</a>
+          <a href="#contact" class="btn btn-dark">דברו איתנו</a>
+        </div>
+      </div>
+    </header>
+
+    <main id="top">
+      <!-- HERO -->
+      <section class="hero">
+        <div class="wrap hero-grid">
+          <div>
+            <p class="eyebrow">ניהול קמפיינים לעסקים קטנים</p>
+            <h1>
+              אתם מנהלים את העסק.<br />
+              <span class="ink2">אנחנו מנהלים</span> את <span class="hl">הקמפיין.</span>
+            </h1>
+            <p class="lead">
+              ניהול קמפיינים בפייסבוק ובאינסטגרם לעסקים קטנים — בלי לשלם ריטיינר
+              של אלפי שקלים למנהל קמפיינים.
+            </p>
+            <p class="promise">אנחנו עוקבים, מנתחים ומציעים שיפורים.<br />אתם מאשרים — ואנחנו מבצעים.</p>
+            <div class="hero-cta">
+              <a href="#contact" class="btn btn-primary">דברו איתנו</a>
+              <a href="#how" class="btn btn-ghost">איך זה עובד <span class="arrow">←</span></a>
+            </div>
+            <div class="price-tag">
+              <b>₪299 לחודש</b> &nbsp;·&nbsp; <span class="sub">₪299 הקמה חד־פעמית</span>
+            </div>
+          </div>
+
+          <div class="stage" aria-hidden="true">
+            <div class="phone">
+              <div class="phone-screen">
+                <div class="tag-good" style="top:14px;inset-inline-start:14px">עובדת מצוין</div>
+                <div class="creative">
+                  <div>
+                    <div class="ph">▦</div>
+                    קריאייטיב אנכי (Reels)<br />
+                    <span style="font-size:0.78rem">קוסמטיקאית / מאמנת</span>
+                  </div>
+                </div>
+                <div class="ad-bar"><span>AD 02 · REELS</span><span>●</span></div>
+              </div>
+            </div>
+            <div class="pill" style="bottom:64px;inset-inline-end:-8px">
+              <span class="led"></span> הקמפיין עובד כרגיל
+            </div>
+            <div class="float stat" style="top:0;inset-inline-start:0">
+              <b>14</b><span>פניות · השבוע</span>
+            </div>
+            <div class="float rec" style="bottom:-10px;inset-inline-start:-4px">
+              <div class="k">המלצה חדשה</div>
+              <div class="t">מודעה אחת נחלשה — מומלץ לעצור</div>
+              <div class="row"><span class="b1">אישור</span><span class="b2">לא עכשיו</span></div>
+            </div>
+            <div class="wa" style="position:absolute;bottom:120px;inset-inline-end:-10px">
+              היי, ראיתי את המודעה — אפשר לקבל מחיר?
+              <div class="meta">09:41 · WhatsApp</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- COMPARISON -->
+      <section class="dark cmp">
+        <div class="wrap cmp-grid">
+          <div>
+            <h2>למה לשלם כמעט כמו תקציב הפרסום רק כדי שמישהו ינהל אותו?</h2>
+            <div class="cmp-big" style="margin-top:30px">₪299<small>אצלנו: ₪299 לחודש. ניהול מלא של הקמפיין.</small></div>
+          </div>
+          <div>
+            <div class="cmp-rows" style="border-top:0">
+              <div class="cmp-row"><span class="label">תקציב פרסום</span><span class="val">₪3,000</span></div>
+              <div class="cmp-row strike"><span class="label">מנהל קמפיינים</span><span class="val">₪1,200</span></div>
+            </div>
+            <p class="cmp-note">עוד לפני שהגיעה פנייה אחת.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- BAND -->
+      <section class="band">
+        <div class="wrap">
+          <h2>אתם לא צריכים ללמוד לנהל קמפיינים.<br /><span class="accent">בשביל זה אנחנו כאן.</span></h2>
+        </div>
+      </section>
+
+      <!-- HOW IT WORKS -->
+      <section id="how">
+        <div class="wrap">
+          <p class="eyebrow">איך זה עובד</p>
+          <div class="steps">
+            <div class="step">
+              <div class="n">01</div>
+              <h3>מתחברים לקמפיין הקיים</h3>
+              <p>בשיחת ההקמה אנחנו מכירים את העסק, מתחברים לחשבון הפרסום ובודקים את הקמפיין הקיים.</p>
+              <div class="mini"><span>חשבון הפרסום מחובר</span><b>Meta · Business</b></div>
+            </div>
+            <div class="step">
+              <div class="n">02</div>
+              <h3>אנחנו עוקבים</h3>
+              <p>המערכת בודקת באופן שוטף מה קורה בקמפיין ומה דורש תשומת לב.</p>
+              <div class="mini"><span>₪38 לפנייה · הקמפיין פעיל</span><b class="up">14 פניות</b></div>
+            </div>
+            <div class="step">
+              <div class="n">03</div>
+              <h3>אתם מאשרים. אנחנו מבצעים.</h3>
+              <p>אם צריך לעצור מודעה או לשנות תקציב, נסביר למה ונבקש אישור.</p>
+              <div class="mini"><span>כדאי לעצור את המודעה הזאת</span><b>₪184 → פנייה אחת</b></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DASHBOARD / NO ADS MANAGER -->
+      <section id="what" class="dark">
+        <div class="wrap split">
+          <div>
+            <h2 style="color:var(--cream)">בלי לצלול ל־Ads Manager.</h2>
+            <p class="lead" style="color:rgba(247,242,234,0.75);margin-top:20px">
+              אתם לא צריכים לדעת מה זה CTR. <span style="color:var(--orange);font-weight:700">אנחנו כן.</span>
+            </p>
+          </div>
+          <div class="dash">
+            <div class="head">
+              <b>הקמפיין שלך</b>
+              <span class="st"><span class="led"></span> הכל עובד כרגיל</span>
+            </div>
+            <div class="kpis">
+              <div class="kpi"><b>₪734</b><span>הוצאה החודש</span></div>
+              <div class="kpi"><b>18</b><span>פניות</span></div>
+              <div class="kpi"><b>₪41</b><span>לפנייה</span></div>
+            </div>
+            <div class="ok-row"><span class="c">✓</span> אין כרגע צורך לעשות שום דבר.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CREATIVE -->
+      <section>
+        <div class="wrap split">
+          <div class="dash">
+            <div class="head"><b>המודעות שלכם</b><span class="st muted">7 ימים אחרונים</span></div>
+            <div class="mini" style="margin-bottom:12px"><span>וידאו — לפני/אחרי</span><b class="up">עובדת מצוין · ₪38</b></div>
+            <div class="mini"><span>תמונה — הצעה</span><b style="color:var(--orange)">נחלשה · מומלץ להחליף</b></div>
+          </div>
+          <div>
+            <h2>אנחנו לא רק מסתכלים על מספרים.<br />אנחנו מסתכלים על מה שאתם מפרסמים.</h2>
+            <p class="lead" style="margin-top:20px">
+              אנחנו משווים בין המודעות שרצות ומזהים כשקריאייטיב מפסיק להביא תוצאות.
+            </p>
+            <p class="promise">הקריאייטיב שלכם. הניהול עלינו.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- LEAD QUALITY -->
+      <section class="band">
+        <div class="wrap">
+          <h2>לא כל ליד שווה אותו דבר.</h2>
+          <div class="lq">
+            <div class="q">היו לך 12 פניות השבוע.<br />כמה מהן היו רלוונטיות?</div>
+            <div class="stepper"><button type="button" aria-label="פחות">–</button><span class="v">7</span><button type="button" aria-label="יותר">+</button></div>
+            <div><a href="#contact" class="btn btn-dark">שמירה</a></div>
+            <p class="muted" style="margin:22px 0 0;font-size:0.95rem">
+              אתם אומרים לנו אם הפניות היו טובות — ואנחנו משתמשים בזה כדי להבין טוב יותר מה באמת עובד לעסק.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SUPPORT + APPROVAL -->
+      <section id="contact" class="support">
+        <div class="wrap">
+          <h2>וכן. יש גם עם מי לדבר.</h2>
+          <p class="lead" style="max-width:34em;margin:20px auto 0">
+            מתחילים בשיחת הקמה עם בן אדם אמיתי. צריכים עזרה גם אחרי שעליתם לאוויר?
+            אפשר לדבר איתנו בוואטסאפ או לקבוע שיחה.
+          </p>
+          <div class="cta">
+            <!-- TODO: real WhatsApp number -->
+            <a href="https://wa.me/972500000000" class="btn btn-primary">דברו איתנו בוואטסאפ</a>
+            <a href="#contact" class="btn btn-dark">קבעו שיחה</a>
+          </div>
+          <p class="promise" style="margin-top:44px">שום שינוי בתקציב בלי האישור שלכם.</p>
+        </div>
+      </section>
+
+      <!-- PRICING -->
+      <section id="price">
+        <div class="wrap">
+          <p class="eyebrow">מחיר</p>
+          <h2 style="margin-bottom:40px">מחיר אחד. בלי אחוז מהמדיה.</h2>
+          <div class="price-wrap">
+            <div class="price-card">
+              <div class="amt">₪299 <small>לחודש</small></div>
+              <div class="setup">₪299 הקמה חד־פעמית</div>
+              <ul class="feat">
+                <li><span class="c">✓</span> ניהול קמפיין אחד</li>
+                <li><span class="c">✓</span> מעקב שוטף</li>
+                <li><span class="c">✓</span> המלצות ושינויים באישורכם</li>
+                <li><span class="c">✓</span> דשבורד פשוט</li>
+                <li><span class="c">✓</span> תמיכה בוואטסאפ</li>
+                <li><span class="c">✓</span> שיחות כשצריך</li>
+              </ul>
+              <p class="setup" style="margin-top:24px">תקציב הפרסום משולם ישירות למטא ואינו כלול במחיר.</p>
+              <a href="#contact" class="btn btn-primary" style="margin-top:14px">דברו איתנו</a>
+            </div>
+            <div class="fit">
+              <h3>מתאים במיוחד אם…</h3>
+              <ul>
+                <li>אתם כבר מפרסמים בפייסבוק או באינסטגרם.</li>
+                <li>המטרה שלכם היא לקבל פניות לעסק.</li>
+                <li>אתם רוצים שמישהו ינהל את הקמפיין — אבל ₪1,000+ בחודש מרגיש מוגזם.</li>
+                <li>יש לכם תקציב פרסום של כמה אלפי שקלים בחודש.</li>
+              </ul>
+              <p class="strong">נשמע כמוכם? בואו נדבר.</p>
+              <a href="#contact" class="btn btn-dark" style="margin-top:8px">דברו איתנו</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAQ -->
+      <section id="faq">
+        <div class="wrap faq">
+          <p class="eyebrow">שאלות</p>
+          <details>
+            <summary>מי בפועל מנהל את הקמפיין?<span class="pm">+</span></summary>
+            <p>שילוב של מערכת אוטומטית וצוות אנושי. המערכת עוקבת ומזהה הזדמנויות; אנחנו מסבירים כל המלצה בעברית פשוטה, וכל שינוי בפועל מתבצע רק אחרי אישור שלכם.</p>
+          </details>
+          <details>
+            <summary>אתם משנים דברים בלי אישור שלי?<span class="pm">+</span></summary>
+            <p>לא. מעקב וניתוח קורים אוטומטית, אבל כל שינוי בתקציב או בקמפיין מתבצע רק אחרי שאתם מאשרים. אף פעם לא בלי אישור.</p>
+          </details>
+          <details>
+            <summary>מה קורה עם מנהל הקמפיינים הנוכחי שלי?<span class="pm">+</span></summary>
+            <p>אפשר להיפרד ממנו ולחסוך את הריטיינר. אנחנו מתחברים לחשבון הפרסום הקיים וממשיכים מאיפה שהוא הפסיק.</p>
+          </details>
+          <details>
+            <summary>אני צריך לתת לכם סיסמה לפייסבוק?<span class="pm">+</span></summary>
+            <p>לא. אתם נותנים לנו הרשאת שותף לחשבון הפרסום דרך מטא — בלי למסור סיסמה, ואפשר לבטל את ההרשאה בכל רגע.</p>
+          </details>
+          <details>
+            <summary>מי מכין את התמונות והסרטונים?<span class="pm">+</span></summary>
+            <p>אתם מספקים את הקריאייטיב (3–5 מודעות). אנחנו מנהלים אותן, מזהים מה עובד, וממליצים מתי כדאי להחליף.</p>
+          </details>
+          <details>
+            <summary>מה כלול ב־₪299?<span class="pm">+</span></summary>
+            <p>ניהול קמפיין אחד: מעקב שוטף, המלצות ושינויים באישורכם, דשבורד פשוט, תמיכה בוואטסאפ ושיחות כשצריך. תקציב הפרסום עצמו משולם ישירות למטא.</p>
+          </details>
+          <details>
+            <summary>מה קורה אם הקמפיין לא עובד?<span class="pm">+</span></summary>
+            <p>אנחנו לא ממציאים פעילות. אם אין מספיק נתונים שמצדיקים שינוי — נגיד לכם בכנות ונמשיך לעקוב. אם משהו דורש תשומת לב, נסביר ונציע פתרון.</p>
+          </details>
+          <details>
+            <summary>אפשר לדבר עם בן אדם?<span class="pm">+</span></summary>
+            <p>תמיד. מתחילים בשיחת הקמה עם אדם אמיתי, ואפשר לדבר איתנו בוואטסאפ או לקבוע שיחה בכל שלב.</p>
+          </details>
+        </div>
+      </section>
+
+      <!-- FINAL CTA -->
+      <section class="final">
+        <div class="wrap">
+          <h2>העסק שלכם צריך את תשומת הלב שלכם.<br />הקמפיין לא.</h2>
+          <p class="sub">תנו לנו לבדוק אם אנחנו מתאימים לקמפיין שלכם.</p>
+          <a href="#contact" class="btn btn-primary">דברו איתנו</a>
+          <p class="muted" style="margin-top:18px;font-family:var(--mono);font-size:0.85rem">
+            ₪299 לחודש · חודשי, אפשר לבטל בכל עת
+          </p>
+        </div>
+      </section>
     </main>
+
+    <footer>
+      <div class="wrap foot">
+        <div>
+          <div class="brand">AdPilot<span class="dot">.</span></div>
+          <p class="tag">ניהול קמפיינים פשוט יותר לעסקים קטנים.</p>
+        </div>
+        <nav class="foot-links">
+          <a href="https://wa.me/972500000000">וואטסאפ</a>
+          <a href="#contact">צרו קשר</a>
+          <a href="#">תקנון</a>
+          <a href="#">פרטיות</a>
+          <a href="/login">כניסה</a>
+        </nav>
+      </div>
+    </footer>
   </body>
 </html>
