@@ -21,3 +21,4 @@ See also: [STATE.md](STATE.md) (dated changelog) · [features/_TEMPLATE.md](feat
 | Action history surface (audit trail + condensed projection) | [features/action-history.md](features/action-history.md) |
 | Ops console — customers, needs-attention, review, billing | [features/ops-console.md](features/ops-console.md) |
 | Landing page (static marketing, AdPilot brand) | [features/landing.md](features/landing.md) |
+| Customer app — auth, onboarding, connect, home, recommendations, settings (frontend) | [features/customer-app.md](features/customer-app.md) |

@@ -6,6 +6,19 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-04 — Customer app screens (frontend, AdPilot design) — AIC-21/22/23/24
+Built every customer-facing screen as frontend on mock data, from the AdPilot
+Product Phase 1/2 design directions: auth (signup/login/forgot/reset), checkout,
+onboarding (6 states + stepper), connect-Meta (4 outcomes), first-campaign review,
+home dashboard (5 states + weekly lead-quality + activity), recommendations list +
+detail (3 types × approve/dismiss/executed), settings & support. Added the AdPilot
+design system (`web/src/ui.css`), shared components (`web/src/app/components.tsx`),
+centralized copy (`strings.he.app`), and full routing (`App.tsx`). No backend yet —
+screens navigate/switch via in-component state; wiring lands per ticket. Verified:
+typecheck + build green; login/home/onboarding render faithfully. Owning doc:
+`features/customer-app.md`. Open decision: the design's self-serve **checkout**
+diverges from P0 manual billing — tracked separately.
+
 ### 2026-08-04 — Landing page (AdPilot design) — AIC-20
 Replaced the placeholder `landing/index.html` with the full AdPilot marketing page
 from the provided design directions: fluid responsive RTL Hebrew, brand palette

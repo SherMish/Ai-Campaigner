@@ -1,33 +1,45 @@
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
-import { strings } from "./strings";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AdminReadout } from "./admin/Readout";
 import { OpsConsole } from "./admin/OpsConsole";
+import { Signup, Login, Forgot, Reset } from "./app/Auth";
+import { Checkout } from "./app/Checkout";
+import { Onboarding } from "./app/Onboarding";
+import { Connect } from "./app/Connect";
+import { Review } from "./app/Review";
+import { Home } from "./app/Home";
+import { Recommendations, RecommendationDetail } from "./app/Recommendations";
+import { Settings } from "./app/Settings";
 
-// SPA shell. Real customer surfaces (onboarding, connect Meta, home dashboard,
-// recommendation, settings) land in AIC-21 onward. The internal admin dogfood
-// readout (AIC-7) lives at /admin/readout.
+// The React SPA. The marketing landing is the static landing/ page served at "/"
+// (single-origin); everything below is the app + internal admin. Screens are
+// frontend-only on mock data — backend wiring lands per Linear ticket (AIC-21…24).
 export function App() {
-  const t = strings.he;
   return (
     <BrowserRouter>
       <Routes>
+        {/* auth */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/forgot" element={<Forgot />} />
+        <Route path="/reset" element={<Reset />} />
+        <Route path="/checkout" element={<Checkout />} />
+
+        {/* onboarding + setup */}
+        <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/connect" element={<Connect />} />
+        <Route path="/review" element={<Review />} />
+
+        {/* the app */}
+        <Route path="/app" element={<Home />} />
+        <Route path="/app/recommendations" element={<Recommendations />} />
+        <Route path="/app/recommendations/:id" element={<RecommendationDetail />} />
+        <Route path="/app/settings" element={<Settings />} />
+
+        {/* internal admin */}
         <Route path="/admin/readout" element={<AdminReadout />} />
         <Route path="/admin/ops" element={<OpsConsole />} />
-        <Route
-          path="*"
-          element={
-            <main
-              dir="rtl"
-              style={{ fontFamily: "system-ui, sans-serif", padding: 24, lineHeight: 1.6 }}
-            >
-              <h1>{t.appName}</h1>
-              <p>{t.tagline}</p>
-              <p>
-                <Link to="/admin/readout">← {t.admin.readoutTitle}</Link>
-              </p>
-            </main>
-          }
-        />
+
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
   );
