@@ -19,6 +19,14 @@ if (process.env.META_PROBE) {
     .catch((e) => consoleLogger.error("[meta-probe] crashed", e));
 }
 
+// AIC-1 write half + AIC-12/13 live validation (temporary): a reversible no-op
+// budget set through the full safe-execute pipeline. Gated by META_WRITE_TEST.
+if (process.env.META_WRITE_TEST) {
+  import("./meta/write-test.js")
+    .then(({ runWriteTest }) => runWriteTest(consoleLogger))
+    .catch((e) => consoleLogger.error("[write-test] crashed", e));
+}
+
 // Insights ingestion + connection health check. buildIngestionTick returns null
 // when no Meta token is configured, leaving the scheduler off until Meta is wired
 // up (see docs/META_SETUP.md). Interval defaults to hourly.
