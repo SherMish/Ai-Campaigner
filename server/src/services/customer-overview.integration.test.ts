@@ -63,6 +63,7 @@ d("customer overview (DB + HTTP)", () => {
     process.env.JWT_SECRET ||= "test-secret-overview";
   });
   afterAll(async () => {
+    await pool.query(`DELETE FROM app_users WHERE email LIKE '__it_ov_%'`);
     await pool.query(`DELETE FROM customers WHERE business_name LIKE '__it_ov_%'`);
     await pool.end();
   });

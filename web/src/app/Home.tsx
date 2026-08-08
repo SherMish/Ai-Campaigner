@@ -95,7 +95,7 @@ export function Home() {
 
   return (
     <div>
-      <AppHeader recCount={0} userName={ov.account.name} />
+      <AppHeader recCount={ov.pendingRecommendations} userName={ov.account.name} />
       <div className="wrap page">
         <div className="row between" style={{ marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
           <h1>{h.title}</h1>
@@ -134,13 +134,21 @@ export function Home() {
 
         <div className="grid-2">
           <div className="stack gap24">
-            {/* no-action reassurance — only when nothing needs the customer */}
-            {(state === "ok" || state === "collecting") && (
+            {/* a pending recommendation outranks the reassurance card */}
+            {ov.pendingRecommendations > 0 ? (
+              <div className="rec">
+                <div className="k">{h.recWaitingTitle}</div>
+                <h3>{h.recWaiting}</h3>
+                <div className="actions">
+                  <Link className="btn btn-primary" to="/app/recommendations">{h.viewApprove}</Link>
+                </div>
+              </div>
+            ) : (state === "ok" || state === "collecting") ? (
               <div className="card">
                 <StatusPill variant="ok">{h.noActionTitle}</StatusPill>
                 <p className="muted" style={{ marginTop: 12 }}>{h.noAction}</p>
               </div>
-            )}
+            ) : null}
 
             {/* weekly feedback */}
             {ov.campaign && <WeeklyFeedback leadsReported={leads} />}

@@ -1,7 +1,11 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { strings } from "../strings";
-import { clearAuthToken } from "../api";
+import { clearAuthToken, getMe } from "../api";
+
+// Cached once per session so navigating between app screens doesn't refetch the
+// signed-in name. The header uses it when a screen doesn't pass userName.
+let cachedName: string | null = null;
 
 const a = strings.he.app;
 const WA = "https://wa.me/972500000000"; // TODO: real WhatsApp number
@@ -67,7 +71,16 @@ export function AppHeader({ recCount = 0, userName }: { recCount?: number; userN
   const nav = useNavigate();
   const active = (p: string) => (pathname === p || pathname.startsWith(p + "/") ? "active" : "");
   const logout = () => { clearAuthToken(); nav("/login"); };
-  const name = userName?.trim() ?? "";
+
+  // When the screen doesn't pass a name, fetch it once (cached) so the real name
+  // shows everywhere — a loader, never the mock, until it resolves.
+  const [fetched, setFetched] = useState<string | null>(cachedName);
+  useEffect(() => {
+    if (userName?.trim() || cachedName !== null) return;
+    getMe().then((u) => { cachedName = u.name ?? ""; setFetched(cachedName); }).catch(() => {});
+  }, [userName]);
+
+  const name = (userName?.trim() || fetched?.trim()) ?? "";
   const ready = name.length > 0;
   return (
     <header className="appbar">

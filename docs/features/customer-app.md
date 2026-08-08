@@ -52,7 +52,11 @@ every screen; responsive at ≤860px (grids collapse, nav hides).
   lead-quality all render from `GET /api/app/overview`, see
   [customer-overview.md](customer-overview.md). The dev state-switcher is gone;
   the headline `homeState` is derived from real rows.
-- **Recommendations** (AIC-23): wire to the explainer + safe-execute pipeline.
+- **Recommendations** (AIC-23): ✅ **now wired** — list + detail read
+  `GET /api/app/recommendations`; approve routes through the safe-execute
+  pipeline, dismiss transitions the rec. See
+  [customer-recommendations.md](customer-recommendations.md). The dev type-switcher
+  is gone.
 - **Settings** (AIC-24): ✅ **budget / Meta connection / billing / account now
   wired** from the overview endpoint. The budget-change request, "check
   connection", and change-password buttons are still stubs; the review screen is

@@ -46,6 +46,7 @@ export interface CustomerOverview {
   } | null;
   readout: CampaignReadout | null;
   recentActivity: CondensedEntry[];
+  pendingRecommendations: number;
   homeState: HomeState;
 }
 
@@ -98,6 +99,7 @@ export async function buildCustomerOverview(
       subscription: null,
       readout: null,
       recentActivity: [],
+      pendingRecommendations: 0,
       homeState: "no_campaign",
     };
   }
@@ -212,6 +214,17 @@ export async function buildCustomerOverview(
     await listCustomerActionHistory(pool, customerId),
   ).slice(0, 8);
 
+  const pendingRecommendations = campaign
+    ? Number(
+        (
+          await pool.query<{ n: number }>(
+            `SELECT count(*)::int AS n FROM recommendations WHERE campaign_id = $1 AND state = 'proposed'`,
+            [campaign.id],
+          )
+        ).rows[0].n,
+      )
+    : 0;
+
   return {
     account,
     customer,
@@ -220,6 +233,7 @@ export async function buildCustomerOverview(
     subscription,
     readout,
     recentActivity,
+    pendingRecommendations,
     homeState: deriveHomeState(campaign, connection, readout),
   };
 }

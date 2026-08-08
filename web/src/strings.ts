@@ -290,6 +290,20 @@ export const strings = {
         expiredSub: "מאז שיצרנו אותה, ביצועי הקמפיין השתנו. אם נראה שוב מקום לשינוי, נעדכן.",
         failedTitle: "לא הצלחנו לבצע את השינוי",
         failedSub: "לא בוצע שינוי בקמפיין. אנחנו בודקים מה קרה ונחזור אליכם.",
+        heldTitle: "השינוי לא בוצע כרגע",
+        heldSub: "לא בוצע שינוי בקמפיין. אפשר לנסות שוב מאוחר יותר או לדבר איתנו.",
+        unavailableSub: "השירות זמנית אינו זמין לביצוע שינויים. נסו שוב עוד מעט.",
+        // Titles + "what changes" keyed by recommendation type (live data path).
+        titles: {
+          pause_creative: "כדאי לעצור את המודעה הזאת",
+          increase_budget: "כדאי להגדיל מעט את התקציב",
+          decrease_budget: "כדאי להוריד זמנית את התקציב",
+          replace_creative: "כדאי להחליף את הקריאייטיב",
+          no_action: "אין כרגע שינוי מומלץ",
+        },
+        changesBudget: "השינוי מתבצע מיד לאחר האישור.",
+        changesReplace: "החלפת הקריאייטיב מתבצעת יחד עם הצוות שלנו — ניצור קשר להמשך.",
+        maxImpactPrefix: "תוספת מקסימלית של",
       },
       settings: {
         title: "עזרה והגדרות",

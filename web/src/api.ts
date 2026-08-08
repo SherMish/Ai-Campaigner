@@ -76,9 +76,42 @@ export interface CustomerOverview {
   recentActivity: Array<{
     when: string; summary: string; automated: boolean; result: "success" | "failed";
   }>;
+  pendingRecommendations: number;
   homeState: HomeState;
 }
 
+// ── Recommendations (AIC-23) ────────────────────────────────────────────────
+export type RecommendationType =
+  | "pause_creative" | "increase_budget" | "decrease_budget"
+  | "replace_creative" | "no_action";
+export interface CustomerRec {
+  id: string;
+  type: RecommendationType;
+  explanation: string;
+  currentBudgetAgorot: number | null;
+  proposedBudgetAgorot: number | null;
+  maxSpendImpactAgorot: number | null;
+  targetMetaId: string | null;
+}
+export interface CustomerRecList {
+  campaignId: string | null;
+  pending: CustomerRec[];
+  history: Array<{ when: string; summary: string; automated: boolean; result: "success" | "failed" }>;
+}
+export interface ApproveOutcome {
+  outcome: "executed" | "aborted" | "failed";
+  customerMessage: string | null;
+}
+
+export const listRecommendations = () => api<CustomerRecList>("/app/recommendations");
+export const getRecommendation = (id: string) => api<CustomerRec>(`/app/recommendations/${id}`);
+export const approveRecommendation = (id: string) =>
+  api<ApproveOutcome>(`/app/recommendations/${id}/approve`, { method: "POST" });
+export const dismissRecommendation = (id: string) =>
+  api<{ ok: true }>(`/app/recommendations/${id}/dismiss`, { method: "POST" });
+
+export const getMe = () =>
+  api<{ user: { name: string; email: string } }>("/auth/me").then((r) => r.user);
 export const getOverview = () => api<CustomerOverview>("/app/overview");
 export const postLeadQuality = (leadsReported: number, relevantCount: number) =>
   api<{ ok: true }>("/app/lead-quality", {

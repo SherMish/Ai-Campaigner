@@ -3,6 +3,12 @@ import { pool } from "../db/pool.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { buildCustomerOverview } from "../services/customer-overview.js";
 import { upsertLeadQuality } from "../services/billing.js";
+import {
+  listCustomerRecommendations,
+  getCustomerRecommendation,
+  approveCustomerRecommendation,
+  dismissCustomerRecommendation,
+} from "../services/customer-recommendations.js";
 
 // Customer-facing data API (AIC-22/24). Every route is scoped to the caller's
 // own customer via the JWT — the service only ever reads rows owned by req.userId.
@@ -56,6 +62,60 @@ appRouter.post("/lead-quality", requireAuth, async (req, res) => {
   } catch (e) {
     console.error("[app] lead-quality failed", e);
     res.status(500).json({ error: "failed to save feedback" });
+  }
+});
+
+// ── Recommendations (AIC-23) ───────────────────────────────────────────────
+appRouter.get("/recommendations", requireAuth, async (req, res) => {
+  try {
+    res.json(await listCustomerRecommendations(pool, (req as AuthedRequest).userId!));
+  } catch (e) {
+    console.error("[app] list recommendations failed", e);
+    res.status(500).json({ error: "failed to load recommendations" });
+  }
+});
+
+appRouter.get("/recommendations/:id", requireAuth, async (req, res) => {
+  try {
+    const rec = await getCustomerRecommendation(pool, (req as AuthedRequest).userId!, String(req.params.id));
+    if (!rec) {
+      res.status(404).json({ error: "recommendation not found" });
+      return;
+    }
+    res.json(rec);
+  } catch (e) {
+    console.error("[app] get recommendation failed", e);
+    res.status(500).json({ error: "failed to load recommendation" });
+  }
+});
+
+appRouter.post("/recommendations/:id/approve", requireAuth, async (req, res) => {
+  try {
+    const r = await approveCustomerRecommendation(pool, (req as AuthedRequest).userId!, String(req.params.id));
+    if (r.status === "not_found") { res.status(404).json({ error: "recommendation not found" }); return; }
+    if (r.status === "not_pending") { res.status(409).json({ error: "recommendation is no longer pending" }); return; }
+    if (r.status === "unavailable") { res.status(503).json({ error: "execution temporarily unavailable" }); return; }
+    // done: report the pipeline outcome (executed / aborted / failed) + any
+    // plain-Hebrew message — never the internal reason.
+    res.json({
+      outcome: r.result!.outcome,
+      customerMessage: r.result!.customerMessage ?? null,
+    });
+  } catch (e) {
+    console.error("[app] approve recommendation failed", e);
+    res.status(500).json({ error: "failed to approve recommendation" });
+  }
+});
+
+appRouter.post("/recommendations/:id/dismiss", requireAuth, async (req, res) => {
+  try {
+    const r = await dismissCustomerRecommendation(pool, (req as AuthedRequest).userId!, String(req.params.id));
+    if (r === "not_found") { res.status(404).json({ error: "recommendation not found" }); return; }
+    if (r === "not_pending") { res.status(409).json({ error: "recommendation is no longer pending" }); return; }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[app] dismiss recommendation failed", e);
+    res.status(500).json({ error: "failed to dismiss recommendation" });
   }
 });
 

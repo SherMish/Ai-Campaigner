@@ -6,6 +6,20 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-08 — Recommendation approve/dismiss wired over the pipeline — AIC-23
+The customer recommendation surface is live: `GET /api/app/recommendations`
+(+ `/:id`), `POST …/approve`, `POST …/dismiss` (`server/src/services/customer-recommendations.ts`),
+all JWT-scoped to the caller's campaign. Approve transitions proposed → approved
+and hands off to the AIC-12 `SafeExecutor` (no execution logic re-implemented);
+outcomes map to plain-Hebrew customer messages, and a missing Meta token yields a
+503 with the rec untouched. `Recommendations.tsx` list + detail render the
+deterministic `explain()` text, exact current→proposed budget, and max spend
+impact; the dev type-switcher is gone. `overview.pendingRecommendations` drives
+the Home badge + nudge. The app header now fetches the signed-in name once
+(`getMe`) so every screen shows it (loader, never the mock). New owning doc
+`features/customer-recommendations.md`; lock-in test
+`customer-recommendations.integration.test.ts`.
+
 ### 2026-08-08 — Home + Settings wired to live customer data — AIC-22/24
 New JWT-scoped `GET /api/app/overview` (+ `POST /api/app/lead-quality`) assembles
 the caller's account → customer → connection → campaign → subscription, the

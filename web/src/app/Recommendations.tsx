@@ -1,43 +1,87 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
 import { strings } from "../strings";
+import {
+  listRecommendations,
+  getRecommendation,
+  approveRecommendation,
+  dismissRecommendation,
+  shekels,
+  ApiError,
+  type CustomerRec,
+  type CustomerRecList,
+} from "../api";
 import { AppHeader, StatusPill, WA } from "./components";
 
 const a = strings.he.app;
 const rc = a.recs;
 const rd = a.recDetail;
+const L = a.home.live;
+
+const isBudget = (t: string) => t === "increase_budget" || t === "decrease_budget";
 
 export function Recommendations() {
+  const [data, setData] = useState<CustomerRecList | null>(null);
+  const [err, setErr] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  function load() {
+    setLoading(true); setErr(false);
+    listRecommendations().then(setData).catch(() => setErr(true)).finally(() => setLoading(false));
+  }
+  useEffect(load, []);
+
   return (
     <div>
-      <AppHeader recCount={1} />
+      <AppHeader recCount={data?.pending.length ?? 0} />
       <div className="wrap page" style={{ maxWidth: 820, marginInline: "auto" }}>
         <h1 style={{ marginBottom: 24 }}>{rc.title}</h1>
 
-        {/* waiting for approval */}
-        <div className="rec" style={{ marginBottom: 28 }}>
-          <div className="row between">
-            <StatusPill variant="warn">{rc.waiting}</StatusPill>
-            <span className="mono muted" style={{ fontSize: "0.75rem" }}>{rd.createdAgo}</span>
+        {loading ? (
+          <p className="muted">{a.loading}</p>
+        ) : err || !data ? (
+          <div className="card">
+            <p className="muted" style={{ marginBottom: 12 }}>{a.loadError}</p>
+            <button className="btn btn-outline btn-sm" onClick={load}>{a.retry}</button>
           </div>
-          <h3 style={{ marginTop: 12 }}>{rd.pauseTitle}</h3>
-          <p className="muted">{a.home.recWaitingReason}</p>
-          <div className="actions"><Link className="btn btn-primary" to="/app/recommendations/1">{rc.view}</Link></div>
-        </div>
-
-        {/* history */}
-        <h3 style={{ fontSize: "1.2rem", marginBottom: 8 }}>{rc.doneTitle}</h3>
-        <div className="card">
-          <div className="timeline">
-            {a.home.recent.map((it, i) => (
-              <div className="t-item" key={i}>
-                <span className="when">{it.d}</span>
-                <span className="grow">{it.t}</span>
-                <StatusPill variant="ok">✓</StatusPill>
+        ) : (
+          <>
+            {data.pending.length === 0 ? (
+              <div className="card" style={{ marginBottom: 28 }}>
+                <b style={{ fontSize: "1.1rem" }}>{rc.emptyTitle}</b>
+                <p className="muted" style={{ marginTop: 8 }}>{rc.empty}</p>
               </div>
-            ))}
-          </div>
-        </div>
+            ) : (
+              data.pending.map((r) => (
+                <div className="rec" style={{ marginBottom: 16 }} key={r.id}>
+                  <div className="row between">
+                    <StatusPill variant="warn">{rc.waiting}</StatusPill>
+                  </div>
+                  <h3 style={{ marginTop: 12 }}>{rd.titles[r.type]}</h3>
+                  <p className="muted">{r.explanation}</p>
+                  <div className="actions"><Link className="btn btn-primary" to={`/app/recommendations/${r.id}`}>{rc.view}</Link></div>
+                </div>
+              ))
+            )}
+
+            <h3 style={{ fontSize: "1.2rem", margin: "28px 0 8px" }}>{rc.doneTitle}</h3>
+            <div className="card">
+              {data.history.length === 0 ? (
+                <p className="muted">{L.noActivity}</p>
+              ) : (
+                <div className="timeline">
+                  {data.history.map((it, i) => (
+                    <div className="t-item" key={i}>
+                      <span className="when">{new Date(it.when).toLocaleDateString("he-IL", { day: "numeric", month: "short" })}</span>
+                      <span className="grow">{it.summary}</span>
+                      <StatusPill variant={it.result === "success" ? "ok" : "attn"}>{it.result === "success" ? "✓" : "!"}</StatusPill>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         <p className="center" style={{ marginTop: 24 }}>
           <span className="muted">{rc.notSure} </span><a className="link" href={WA}>{a.talk}</a>
@@ -47,73 +91,103 @@ export function Recommendations() {
   );
 }
 
-type Kind = "pause" | "increase" | "replace";
-type Phase = "idle" | "approved" | "executed" | "dismissed";
+type Phase = "idle" | "executing" | "executed" | "held" | "failed" | "dismissed";
 
 export function RecommendationDetail() {
-  const [kind, setKind] = useState<Kind>("pause");
+  const { id = "" } = useParams();
+  const [rec, setRec] = useState<CustomerRec | null>(null);
+  const [err, setErr] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [phase, setPhase] = useState<Phase>("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true); setErr(false);
+    getRecommendation(id).then(setRec).catch(() => setErr(true)).finally(() => setLoading(false));
+  }, [id]);
+
+  function approve() {
+    setPhase("executing");
+    approveRecommendation(id)
+      .then((r) => {
+        if (r.outcome === "executed") setPhase("executed");
+        else if (r.outcome === "aborted") { setMessage(r.customerMessage); setPhase("held"); }
+        else { setMessage(r.customerMessage); setPhase("failed"); }
+      })
+      .catch((e) => {
+        setMessage(e instanceof ApiError && e.status === 503 ? rd.unavailableSub : null);
+        setPhase(e instanceof ApiError && e.status === 503 ? "held" : "failed");
+      });
+  }
+  function dismiss() {
+    dismissRecommendation(id).then(() => setPhase("dismissed")).catch(() => setPhase("failed"));
+  }
 
   return (
     <div>
-      <AppHeader recCount={1} />
+      <AppHeader recCount={0} />
       <div className="wrap page" style={{ maxWidth: 720, marginInline: "auto" }}>
         <Link className="link" to="/app/recommendations">{rd.back}</Link>
 
-        {phase === "approved" && <Result title={rd.approvedTitle} sub={rd.approvedSub} variant="info" />}
-        {phase === "executed" && (
+        {loading ? (
+          <p className="muted" style={{ marginTop: 20 }}>{a.loading}</p>
+        ) : err || !rec ? (
+          <div className="card" style={{ marginTop: 20 }}>
+            <p className="muted">{a.loadError}</p>
+          </div>
+        ) : phase === "executing" ? (
+          <div className="card" style={{ marginTop: 20 }}>
+            <div className="row gap16"><div className="spinner" /><div><b>{rd.approvedTitle}</b><p className="muted" style={{ fontSize: "0.9rem" }}>{rd.approvedSub}</p></div></div>
+          </div>
+        ) : phase === "executed" ? (
           <div className="card center" style={{ marginTop: 20, padding: 44 }}>
             <StatusPill variant="ok">✓</StatusPill>
             <h1 style={{ margin: "14px 0 18px" }}>{rd.executedTitle}</h1>
-            <div className="summary-row"><span className="k">{rd.whatWeDid}</span><b>{title(kind)}</b></div>
-            <div className="summary-row"><span className="k">{rd.whenDone}</span><b>12 באוגוסט, 09:24</b></div>
+            <div className="summary-row"><span className="k">{rd.whatWeDid}</span><b>{rd.titles[rec.type]}</b></div>
             <Link className="btn btn-primary" style={{ marginTop: 20 }} to="/app/recommendations">{rd.backToRecs}</Link>
           </div>
-        )}
-        {phase === "dismissed" && <Result title={rd.dismissedTitle} sub={rd.dismissedSub} variant="neutral" />}
-
-        {phase === "idle" && (
+        ) : phase === "held" ? (
+          <Result title={rd.heldTitle} sub={message || rd.heldSub} variant="neutral" />
+        ) : phase === "failed" ? (
+          <Result title={rd.failedTitle} sub={message || rd.failedSub} variant="attn" />
+        ) : phase === "dismissed" ? (
+          <Result title={rd.dismissedTitle} sub={rd.dismissedSub} variant="neutral" />
+        ) : (
           <>
             <div className="row between" style={{ margin: "16px 0" }}>
               <StatusPill variant="warn">{rc.waiting}</StatusPill>
-              <span className="mono muted" style={{ fontSize: "0.75rem" }}>{rd.createdAgo}</span>
             </div>
-            <h1 style={{ marginBottom: 20 }}>{title(kind)}</h1>
+            <h1 style={{ marginBottom: 20 }}>{rd.titles[rec.type]}</h1>
 
             <div className="card" style={{ marginBottom: 16 }}>
               <b>{rd.whyTitle}</b>
-              <p className="muted" style={{ marginTop: 8 }}>{why(kind)}</p>
+              <p className="muted" style={{ marginTop: 8 }}>{rec.explanation}</p>
             </div>
 
-            {kind === "increase" && (
+            {isBudget(rec.type) && rec.currentBudgetAgorot != null && rec.proposedBudgetAgorot != null && (
               <div className="card" style={{ marginBottom: 16 }}>
                 <div className="row gap24" style={{ justifyContent: "center", padding: "6px 0" }}>
-                  <div className="center"><div className="muted">{rd.today}</div><b style={{ fontSize: "1.4rem" }}>{rd.incFrom}</b></div>
+                  <div className="center"><div className="muted">{rd.today}</div><b style={{ fontSize: "1.4rem" }}>{shekels(rec.currentBudgetAgorot)} {L.perDay}</b></div>
                   <div style={{ fontSize: "1.6rem" }}>←</div>
-                  <div className="center"><div className="muted">{rd.proposed}</div><b style={{ fontSize: "1.4rem", color: "var(--orange)" }}>{rd.incTo}</b></div>
+                  <div className="center"><div className="muted">{rd.proposed}</div><b style={{ fontSize: "1.4rem", color: "var(--orange)" }}>{shekels(rec.proposedBudgetAgorot)} {L.perDay}</b></div>
                 </div>
-                <p className="muted center" style={{ fontSize: "0.9rem" }}>{rd.maxImpact}</p>
+                {rec.maxSpendImpactAgorot != null && rec.maxSpendImpactAgorot > 0 && (
+                  <p className="muted center" style={{ fontSize: "0.9rem" }}>{rd.maxImpactPrefix} {shekels(rec.maxSpendImpactAgorot)} {L.perDay}.</p>
+                )}
               </div>
             )}
 
             <div className="card" style={{ marginBottom: 20 }}>
               <b>{rd.whatChangesTitle}</b>
-              {kind === "pause" && <ul className="muted" style={{ margin: "8px 0 0", paddingInlineStart: 18 }}>{rd.pauseChanges.map((x, i) => <li key={i}>{x}</li>)}</ul>}
-              {kind === "increase" && <p className="muted" style={{ marginTop: 8 }}>{rd.incChange}</p>}
-              {kind === "replace" && <p className="muted" style={{ marginTop: 8 }}>{rd.replaceNote}</p>}
+              {rec.type === "pause_creative" && <ul className="muted" style={{ margin: "8px 0 0", paddingInlineStart: 18 }}>{rd.pauseChanges.map((x, i) => <li key={i}>{x}</li>)}</ul>}
+              {isBudget(rec.type) && <p className="muted" style={{ marginTop: 8 }}>{rd.changesBudget}</p>}
+              {rec.type === "replace_creative" && <p className="muted" style={{ marginTop: 8 }}>{rd.changesReplace}</p>}
             </div>
 
             <div className="row gap12" style={{ flexWrap: "wrap" }}>
-              <button className="btn btn-primary" onClick={() => { setPhase("approved"); window.setTimeout(() => setPhase("executed"), 1600); }}>{a.approve}</button>
-              <button className="btn btn-outline" onClick={() => setPhase("dismissed")}>{a.notNow}</button>
+              <button className="btn btn-primary" onClick={approve}>{a.approve}</button>
+              <button className="btn btn-outline" onClick={dismiss}>{a.notNow}</button>
               <a className="btn btn-ghost" href={WA} style={{ marginInlineStart: "auto" }}>{rd.wantToTalk} {a.talk}</a>
-            </div>
-
-            {/* dev type switcher */}
-            <div className="row gap8" style={{ marginTop: 28, flexWrap: "wrap" }}>
-              {(["pause", "increase", "replace"] as Kind[]).map((k) => (
-                <button key={k} className={`btn btn-sm ${k === kind ? "btn-dark" : "btn-outline"}`} onClick={() => setKind(k)}>{k}</button>
-              ))}
             </div>
           </>
         )}
@@ -122,10 +196,7 @@ export function RecommendationDetail() {
   );
 }
 
-function title(k: Kind) { return k === "pause" ? rd.pauseTitle : k === "increase" ? rd.incTitle : rd.replaceTitle; }
-function why(k: Kind) { return k === "pause" ? rd.pauseWhy : k === "increase" ? rd.incWhy : rd.replaceWhy; }
-
-function Result({ title, sub, variant }: { title: string; sub: string; variant: "info" | "neutral" }) {
+function Result({ title, sub, variant }: { title: string; sub: string; variant: "info" | "neutral" | "attn" }) {
   return (
     <div className="card center" style={{ marginTop: 20, padding: 44 }}>
       <StatusPill variant={variant}>●</StatusPill>
