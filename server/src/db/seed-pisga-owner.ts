@@ -49,7 +49,7 @@ export async function seedPisgaOwner(log: Logger): Promise<void> {
          VALUES ('Pisga','education','Psychometric (PET) prep','Israel',
            'Self-directed PET applicants','AI-guided daily study plan','Pisga (dogfood)',$1,true,'ready')
          RETURNING id`,
-        [email],
+        [ownerRow.email],
       );
       customerId = c.rows[0].id;
       log.info(`[seed-pisga] created Pisga customer ${customerId}`);
