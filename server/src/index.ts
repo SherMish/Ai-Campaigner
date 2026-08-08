@@ -11,6 +11,14 @@ createApp().listen(PORT, () => {
   console.log(`[server] AI Campaigner API listening on :${PORT}`);
 });
 
+// AIC-1 live probe (temporary): when META_PROBE is set, run the read-only Meta
+// access check on boot and log the result. Remove META_PROBE after reading it.
+if (process.env.META_PROBE) {
+  import("./meta/probe.js")
+    .then(({ runMetaProbe }) => runMetaProbe(consoleLogger))
+    .catch((e) => consoleLogger.error("[meta-probe] crashed", e));
+}
+
 // Insights ingestion + connection health check. buildIngestionTick returns null
 // when no Meta token is configured, leaving the scheduler off until Meta is wired
 // up (see docs/META_SETUP.md). Interval defaults to hourly.
