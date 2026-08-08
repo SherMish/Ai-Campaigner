@@ -1,0 +1,67 @@
+# Customer overview API (AIC-22/24)
+
+**Status:** live. The logged-in customer's Home + Settings screens render from a
+single JWT-scoped endpoint that reads only the caller's own rows. No live Meta
+call at render time — performance figures come from `insight_snapshots` via the
+readout builder.
+
+**Source of truth:**
+- Service: `server/src/services/customer-overview.ts` — `buildCustomerOverview(pool, userId, ref?)`
+- Route: `server/src/routes/app.ts` — `GET /api/app/overview`, `POST /api/app/lead-quality` (both `requireAuth`)
+- Client: `web/src/api.ts` — `getOverview()`, `postLeadQuality()`, `shekels()`, `CustomerOverview` type
+- Screens: `web/src/app/Home.tsx`, `web/src/app/Settings.tsx`
+
+**Lock-in tests:** `server/src/services/customer-overview.integration.test.ts`
+(full-chain assembly; `homeState` = `ok` with data / `collecting` without;
+401 without a token; lead-quality write + validation).
+
+---
+
+## What it returns
+
+`buildCustomerOverview` joins the caller's `app_user` → `customer` →
+`meta_connection` (+ first `ad_account`) → `managed_campaign` → `subscription`,
+plus the snapshot-based `CampaignReadout` and condensed `action_history`. Money
+is integer agorot throughout; the client formats with `shekels()`.
+
+Every query filters by the customer id resolved from the JWT's user — a customer
+can only ever see their own data. An account with no linked `customer_id`
+returns `homeState: "no_campaign"` with null sections (the Home "setup" state).
+
+## homeState (the single Home headline)
+
+Derived server-side, highest-priority first:
+
+| state | condition |
+| --- | --- |
+| `no_campaign` | account has no linked customer/campaign yet |
+| `attention` | connection `access_health` ≠ `ok`, or campaign `needs_attention`/`connection_problem` |
+| `paused` | campaign `status = paused` |
+| `collecting` | campaign active but no snapshot data (no spend, no leads, no creatives) |
+| `ok` | active with data |
+
+The client maps each state to hero copy in `strings.he.app.home.states`; only
+states with a real destination carry a CTA (`attention` → `/connect`,
+`no_campaign` → `/onboarding`).
+
+## KPIs, deltas, sidebar
+
+CPL / leads / spend come from `readout.current`; the signed period-over-period
+deltas from `readout.delta` (null when there's no prior period — shown as no
+comparison, never a fake +100%). The sidebar shows the campaign name, agreed
+budget + period, active-creative count, and total leads. When collecting, values
+honestly render `—` / `0`, not placeholder numbers.
+
+## Weekly lead-quality feedback
+
+`POST /api/app/lead-quality { leadsReported, relevantCount }` upserts one
+`lead_quality_feedback` row for the current week (Monday-keyed), scoped to the
+caller's campaign. `relevantCount > leadsReported` → 400. On Home, `leadsReported`
+is this week's real lead count from the readout; the customer reports how many
+were relevant. Zero leads → the "no leads yet" copy instead of the form.
+
+## Recent activity
+
+`condense(listCustomerActionHistory(...))`, newest first, capped at 8. Empty
+until the safe-execute pipeline records real actions — the screen shows an honest
+"nothing changed yet" line rather than sample events.

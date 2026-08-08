@@ -34,6 +34,64 @@ export class ApiError extends Error {
   }
 }
 
+// ── Customer overview (AIC-22/24) ─────────────────────────────────────────
+// Mirrors server/src/services/customer-overview.ts. Money is integer agorot.
+export type AccessHealth = "ok" | "revoked" | "invalid" | "needs_reconnect";
+export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campaign";
+export type CampaignStatus =
+  | "under_review" | "active" | "paused" | "needs_attention"
+  | "connection_problem" | "unmanaged";
+
+export interface PeriodAgg {
+  spendAgorot: number;
+  leads: number;
+  cplAgorot: number | null;
+}
+export interface CustomerOverview {
+  account: { name: string; email: string };
+  customer: {
+    id: string; businessName: string; onboardingStatus: string;
+    contactName: string; contactEmail: string;
+  } | null;
+  connection: {
+    accessHealth: AccessHealth;
+    adAccount: { metaAdAccountId: string; name: string; currency: string } | null;
+    pageId: string | null;
+    instagramId: string | null;
+  } | null;
+  campaign: {
+    id: string; name: string; status: CampaignStatus; objective: string;
+    agreedBudgetAgorot: number; budgetPeriod: "daily" | "monthly";
+    automationEnabled: boolean;
+  } | null;
+  subscription: {
+    plan: string; status: string; setupPaid: boolean;
+    monthlyAmountAgorot: number; nextChargeDate: string | null;
+  } | null;
+  readout: {
+    current: PeriodAgg; previous: PeriodAgg;
+    delta: { spendPct: number | null; leadsPct: number | null; cplPct: number | null };
+    perCreative: Array<{ metaObjectId: string; creativeName: string | null; deliveryStatus: string }>;
+  } | null;
+  recentActivity: Array<{
+    when: string; summary: string; automated: boolean; result: "success" | "failed";
+  }>;
+  homeState: HomeState;
+}
+
+export const getOverview = () => api<CustomerOverview>("/app/overview");
+export const postLeadQuality = (leadsReported: number, relevantCount: number) =>
+  api<{ ok: true }>("/app/lead-quality", {
+    method: "POST",
+    body: JSON.stringify({ leadsReported, relevantCount }),
+  });
+
+// Integer agorot → "₪NN" (drops the decimals when whole, one place otherwise).
+export function shekels(agorot: number): string {
+  const v = agorot / 100;
+  return `₪${Number.isInteger(v) ? v : v.toFixed(1)}`;
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

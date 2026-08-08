@@ -1,9 +1,11 @@
 # Customer app (P0.5)
 
-**Status:** frontend built on **mock data** — every customer screen exists and
-renders in the AdPilot design; **no backend wiring yet** (auth, sessions, live
-data). Backend lands per ticket (AIC-21–24). Screens are demoable end-to-end via
-in-component state; dev-only state switchers preview each design state.
+**Status:** every customer screen exists in the AdPilot design. **Auth (AIC-21),
+Home (AIC-22), and Settings (AIC-24 data) are wired to the backend**; Home +
+Settings render live from `GET /api/app/overview` (see
+[customer-overview.md](customer-overview.md)). Onboarding/connect, the
+recommendations flow (AIC-23), and the review screen are still mock. Remaining
+mock screens keep their in-component state switchers; Home no longer has one.
 
 **Source of truth:**
 - Design system: `web/src/ui.css` (AdPilot tokens/components) + fonts in `web/index.html`
@@ -46,11 +48,15 @@ every screen; responsive at ≤860px (grids collapse, nav hides).
   see [customer-auth.md](customer-auth.md). Forgot/reset still frontend-only. `WA`
   contact links are placeholders (`wa.me/972500000000`).
 - **Onboarding/connect** (AIC-21): status + partner-access verification are mock.
-- **Home** (AIC-22): KPIs/state/feedback/activity are mock — wire to
-  `buildCampaignReadout` + lead-quality + campaign status.
+- **Home** (AIC-22): ✅ **now wired** — KPIs/state/sidebar/activity + weekly
+  lead-quality all render from `GET /api/app/overview`, see
+  [customer-overview.md](customer-overview.md). The dev state-switcher is gone;
+  the headline `homeState` is derived from real rows.
 - **Recommendations** (AIC-23): wire to the explainer + safe-execute pipeline.
-- **Settings/review** (AIC-24): budget-change request, billing display, review
-  decision wiring.
+- **Settings** (AIC-24): ✅ **budget / Meta connection / billing / account now
+  wired** from the overview endpoint. The budget-change request, "check
+  connection", and change-password buttons are still stubs; the review screen is
+  still mock.
 
 ## Open decision — checkout/payment
 The design includes a **self-serve card checkout** (`/checkout`, ₪598 = setup +

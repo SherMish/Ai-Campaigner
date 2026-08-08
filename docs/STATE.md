@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-08 — Home + Settings wired to live customer data — AIC-22/24
+New JWT-scoped `GET /api/app/overview` (+ `POST /api/app/lead-quality`) assembles
+the caller's account → customer → connection → campaign → subscription, the
+snapshot-based readout, and condensed action history — reading only the caller's
+own rows. `Home.tsx` and `Settings.tsx` now render from it (real KPIs, deltas,
+budget, Meta connection, billing, activity); the Home dev state-switcher is gone
+and the headline `homeState` is derived server-side. Honest empty states
+(`collecting`, `—`, "nothing changed yet") instead of sample numbers. New owning
+doc `features/customer-overview.md`. First real customer (sharon.mishayev@…, the
+Pisga dogfood account) now loads end-to-end.
+
 ### 2026-08-08 — Customer auth backend wired (email+password + JWT) — AIC-21
 Built the auth backend: `app_users` table (migration 011, case-insensitive unique
 email), bcrypt passwords, our own JWT sessions (`JWT_SECRET`), `/api/auth/signup|
