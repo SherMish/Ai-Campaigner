@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { strings } from "../strings";
+import { clearAuthToken } from "../api";
 
 const a = strings.he.app;
 const WA = "https://wa.me/972500000000"; // TODO: real WhatsApp number
@@ -57,7 +58,9 @@ export function StatusPill({
 // Logged-in app header.
 export function AppHeader({ recCount = 0 }: { recCount?: number }) {
   const { pathname } = useLocation();
+  const nav = useNavigate();
   const active = (p: string) => (pathname === p || pathname.startsWith(p + "/") ? "active" : "");
+  const logout = () => { clearAuthToken(); nav("/login"); };
   return (
     <header className="appbar">
       <div className="wrap inner">
@@ -78,6 +81,7 @@ export function AppHeader({ recCount = 0 }: { recCount?: number }) {
             <span className="av">{a.mock.userInitials}</span>
             {a.mock.userName}
           </span>
+          <button className="btn btn-outline btn-sm" onClick={logout}>{a.logout}</button>
         </div>
       </div>
     </header>

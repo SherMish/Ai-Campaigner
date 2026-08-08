@@ -6,6 +6,15 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-08 — Customer auth backend wired (email+password + JWT) — AIC-21
+Built the auth backend: `app_users` table (migration 011, case-insensitive unique
+email), bcrypt passwords, our own JWT sessions (`JWT_SECRET`), `/api/auth/signup|
+login|me` + `requireAuth`. Wired the frontend auth screens to the real endpoints
+(store JWT, redirect), added `AuthGate` on signed-in routes + logout. Google
+sign-in stays deferred (AIC-30); forgot/reset still frontend-only. Verified: 4 unit
++ 5 DB/HTTP integration tests; a real `app_users` row is created end-to-end. Owning
+doc: `features/customer-auth.md`.
+
 ### 2026-08-08 — AIC-1 spike PASS (live) + admin API auth + Railway live
 Live-verified the whole partner-access model on Pisga's real account: a read-only
 probe + a no-op budget write routed through the full AIC-12 safe-execute pipeline

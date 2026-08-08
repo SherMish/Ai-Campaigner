@@ -42,7 +42,8 @@ AdPilot palette (orange `#FF5A36`, cream `#F7F2EA`/`#EDE6DA`, ink `#171717`, gre
 every screen; responsive at ≤860px (grids collapse, nav hides).
 
 ## What's NOT wired (backend, per ticket)
-- **Auth** (AIC-21): no email+password/JWT yet — login/signup just navigate. `WA`
+- **Auth** (AIC-21): ✅ **now wired** — email+password signup/login + JWT sessions,
+  see [customer-auth.md](customer-auth.md). Forgot/reset still frontend-only. `WA`
   contact links are placeholders (`wa.me/972500000000`).
 - **Onboarding/connect** (AIC-21): status + partner-access verification are mock.
 - **Home** (AIC-22): KPIs/state/feedback/activity are mock — wire to

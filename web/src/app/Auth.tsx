@@ -2,21 +2,52 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { strings } from "../strings";
 import { AuthLayout, Field, WA } from "./components";
+import { api, ApiError, setAuthToken } from "../api";
 
 const a = strings.he.app;
 
+function ErrorNote({ msg }: { msg: string }) {
+  if (!msg) return null;
+  return <p style={{ color: "var(--orange)", fontSize: "0.9rem", margin: "4px 0 0" }}>{msg}</p>;
+}
+
 export function Signup() {
   const nav = useNavigate();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr("");
+    setBusy(true);
+    try {
+      const { token } = await api<{ token: string }>("/auth/signup", {
+        method: "POST",
+        body: JSON.stringify({ name, email, password }),
+      });
+      setAuthToken(token);
+      nav("/onboarding");
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "ההרשמה נכשלה, נסו שוב.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <AuthLayout>
       <h1 style={{ fontSize: "2rem", fontWeight: 800 }}>{a.auth.signupTitle}</h1>
       <p className="muted" style={{ margin: "10px 0 26px" }}>{a.auth.signupSub}</p>
-      <form className="stack gap16" onSubmit={(e) => { e.preventDefault(); nav("/checkout"); }}>
-        <Field label={a.auth.name} />
-        <Field label={a.auth.email} type="email" />
-        <Field label={a.auth.password} type="password" />
+      <form className="stack gap16" onSubmit={submit}>
+        <Field label={a.auth.name} value={name} onChange={setName} />
+        <Field label={a.auth.email} type="email" value={email} onChange={setEmail} />
+        <Field label={a.auth.password} type="password" value={password} onChange={setPassword} />
         <label className="check"><input type="checkbox" defaultChecked />{a.auth.terms}</label>
-        <button className="btn btn-primary block" type="submit">{a.auth.createAccount}</button>
+        <ErrorNote msg={err} />
+        <button className="btn btn-primary block" type="submit" disabled={busy}>{a.auth.createAccount}</button>
       </form>
       <p className="muted center" style={{ marginTop: 20 }}>
         {a.auth.haveAccount} <Link className="link" to="/login">{a.auth.login}</Link>
@@ -31,17 +62,41 @@ export function Signup() {
 
 export function Login() {
   const nav = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr("");
+    setBusy(true);
+    try {
+      const { token } = await api<{ token: string }>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+      setAuthToken(token);
+      nav("/app");
+    } catch (e) {
+      setErr(e instanceof ApiError && e.status === 401 ? "אימייל או סיסמה שגויים." : "הכניסה נכשלה, נסו שוב.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <AuthLayout>
       <h1 style={{ fontSize: "2rem", fontWeight: 800 }}>{a.auth.loginTitle}</h1>
       <p className="muted" style={{ margin: "10px 0 26px" }}>{a.auth.loginSub}</p>
-      <form className="stack gap16" onSubmit={(e) => { e.preventDefault(); nav("/app"); }}>
-        <Field label={a.auth.email} type="email" />
-        <Field label={a.auth.password} type="password" />
+      <form className="stack gap16" onSubmit={submit}>
+        <Field label={a.auth.email} type="email" value={email} onChange={setEmail} />
+        <Field label={a.auth.password} type="password" value={password} onChange={setPassword} />
         <div className="row between">
           <Link className="link" to="/forgot" style={{ fontSize: "0.9rem" }}>{a.auth.forgotLink}</Link>
         </div>
-        <button className="btn btn-primary block" type="submit">{a.auth.login}</button>
+        <ErrorNote msg={err} />
+        <button className="btn btn-primary block" type="submit" disabled={busy}>{a.auth.login}</button>
       </form>
       <p className="muted center" style={{ marginTop: 20 }}>
         {a.auth.noAccount} <Link className="link" to="/signup">{a.auth.signup}</Link>

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import cors from "cors";
 import express from "express";
 import { adminRouter } from "./routes/admin.js";
+import { authRouter } from "./routes/auth.js";
 
 // Locate the built web (web/dist with the landing at index.html). Robust to the
 // working directory: prod runs `npm --workspace server run start` (cwd = server/),
@@ -47,6 +48,7 @@ export function createApp() {
   // API routers mount under /api so single-origin deploys line up with the web
   // client's /api prefix (web/src/api.ts).
   const api = express.Router();
+  api.use("/auth", authRouter);
   api.use("/admin", adminRouter);
   app.use("/api", api);
 

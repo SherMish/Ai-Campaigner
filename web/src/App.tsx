@@ -10,6 +10,7 @@ import { Review } from "./app/Review";
 import { Home } from "./app/Home";
 import { Recommendations, RecommendationDetail } from "./app/Recommendations";
 import { Settings } from "./app/Settings";
+import { AuthGate } from "./app/AuthGate";
 
 // The React SPA. The marketing landing is the static landing/ page served at "/"
 // (single-origin); everything below is the app + internal admin. Screens are
@@ -23,18 +24,18 @@ export function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/forgot" element={<Forgot />} />
         <Route path="/reset" element={<Reset />} />
-        <Route path="/checkout" element={<Checkout />} />
+        <Route path="/checkout" element={<AuthGate><Checkout /></AuthGate>} />
 
-        {/* onboarding + setup */}
-        <Route path="/onboarding" element={<Onboarding />} />
-        <Route path="/connect" element={<Connect />} />
-        <Route path="/review" element={<Review />} />
+        {/* onboarding + setup (signed-in) */}
+        <Route path="/onboarding" element={<AuthGate><Onboarding /></AuthGate>} />
+        <Route path="/connect" element={<AuthGate><Connect /></AuthGate>} />
+        <Route path="/review" element={<AuthGate><Review /></AuthGate>} />
 
-        {/* the app */}
-        <Route path="/app" element={<Home />} />
-        <Route path="/app/recommendations" element={<Recommendations />} />
-        <Route path="/app/recommendations/:id" element={<RecommendationDetail />} />
-        <Route path="/app/settings" element={<Settings />} />
+        {/* the app (signed-in) */}
+        <Route path="/app" element={<AuthGate><Home /></AuthGate>} />
+        <Route path="/app/recommendations" element={<AuthGate><Recommendations /></AuthGate>} />
+        <Route path="/app/recommendations/:id" element={<AuthGate><RecommendationDetail /></AuthGate>} />
+        <Route path="/app/settings" element={<AuthGate><Settings /></AuthGate>} />
 
         {/* internal admin (token-gated) */}
         <Route path="/admin/readout" element={<AdminGate><AdminReadout /></AdminGate>} />
