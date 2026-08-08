@@ -67,8 +67,8 @@ export function AppHeader({ recCount = 0, userName }: { recCount?: number; userN
   const nav = useNavigate();
   const active = (p: string) => (pathname === p || pathname.startsWith(p + "/") ? "active" : "");
   const logout = () => { clearAuthToken(); nav("/login"); };
-  const name = userName?.trim() || a.mock.userName;
-  const initials = userName?.trim() ? initialsOf(userName) : a.mock.userInitials;
+  const name = userName?.trim() ?? "";
+  const ready = name.length > 0;
   return (
     <header className="appbar">
       <div className="wrap inner">
@@ -86,8 +86,17 @@ export function AppHeader({ recCount = 0, userName }: { recCount?: number; userN
         <div className="row gap16">
           <a className="link" href={WA}>{a.talk}</a>
           <span className="userpill">
-            <span className="av">{initials}</span>
-            {name}
+            {ready ? (
+              <>
+                <span className="av">{initialsOf(name)}</span>
+                {name}
+              </>
+            ) : (
+              <>
+                <span className="av sk" />
+                <span className="sk sk-line" />
+              </>
+            )}
           </span>
           <button className="btn btn-outline btn-sm" onClick={logout}>{a.logout}</button>
         </div>

@@ -175,6 +175,12 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--orange); animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Skeleton placeholder (e.g. the header user pill before the account loads). */
+.sk { background: var(--line); border-radius: 6px; animation: skpulse 1.3s ease-in-out infinite; }
+.userpill .av.sk { border-radius: 50%; }
+.userpill .sk-line { display: inline-block; width: 84px; height: 12px; }
+@keyframes skpulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.9; } }
+
 @media (max-width: 860px) {
   .auth { grid-template-columns: 1fr; }
   .auth .aside { display: none; }
