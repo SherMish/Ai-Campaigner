@@ -12,22 +12,27 @@ const AGREED_BUDGET_AGOROT = Number(process.env.META_SEED_BUDGET_AGOROT || "800"
 
 export async function seedPisgaOwner(log: Logger): Promise<void> {
   const email = process.env.META_SEED_OWNER_EMAIL;
-  if (!email) {
-    log.error("[seed-pisga] META_SEED_OWNER_EMAIL not set — aborting");
-    return;
-  }
-  log.info(`[seed-pisga] ── provisioning Pisga for owner ${email} ──`);
+  log.info(`[seed-pisga] ── provisioning Pisga ${email ? `for owner ${email}` : "(auto-selecting the app_user)"} ──`);
   try {
-    // 1) the owner account
-    const u = await pool.query<{ id: string; customer_id: string | null }>(
-      `SELECT id, customer_id FROM app_users WHERE lower(email) = lower($1) LIMIT 1`,
-      [email],
-    );
-    if (u.rows.length === 0) {
-      log.error(`[seed-pisga] no app_user with email ${email} — sign up first`);
-      return;
+    // 1) the owner account — by email, or the single app_user if unambiguous.
+    let ownerRow: { id: string; email: string; customer_id: string | null } | undefined;
+    if (email) {
+      ownerRow = (await pool.query<{ id: string; email: string; customer_id: string | null }>(
+        `SELECT id, email, customer_id FROM app_users WHERE lower(email) = lower($1) LIMIT 1`,
+        [email],
+      )).rows[0];
+      if (!ownerRow) { log.error(`[seed-pisga] no app_user with email ${email} — sign up first`); return; }
+    } else {
+      const all = await pool.query<{ id: string; email: string; customer_id: string | null }>(
+        `SELECT id, email, customer_id FROM app_users ORDER BY created_at DESC`,
+      );
+      if (all.rows.length === 0) { log.error("[seed-pisga] no app_users exist — sign up first"); return; }
+      if (all.rows.length > 1) { log.error(`[seed-pisga] ${all.rows.length} app_users exist — set META_SEED_OWNER_EMAIL to pick one`); return; }
+      ownerRow = all.rows[0];
+      log.info(`[seed-pisga] auto-selected the only app_user: ${ownerRow.email}`);
     }
-    const userId = u.rows[0].id;
+    const userId = ownerRow.id;
+    const u = { rows: [ownerRow] };
 
     // 2) Pisga customer (reuse the user's linked one, or an existing Pisga, else create)
     let customerId = u.rows[0].customer_id;
