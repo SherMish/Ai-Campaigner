@@ -27,6 +27,14 @@ if (process.env.META_WRITE_TEST) {
     .catch((e) => consoleLogger.error("[write-test] crashed", e));
 }
 
+// One-off: make META_SEED_OWNER_EMAIL the owner of a Pisga customer + wire the
+// dogfood connection/campaign. Gated by META_SEED_PISGA; remove after.
+if (process.env.META_SEED_PISGA) {
+  import("./db/seed-pisga-owner.js")
+    .then(({ seedPisgaOwner }) => seedPisgaOwner(consoleLogger))
+    .catch((e) => consoleLogger.error("[seed-pisga] crashed", e));
+}
+
 // Insights ingestion + connection health check. buildIngestionTick returns null
 // when no Meta token is configured, leaving the scheduler off until Meta is wired
 // up (see docs/META_SETUP.md). Interval defaults to hourly.
