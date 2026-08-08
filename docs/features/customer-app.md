@@ -47,7 +47,12 @@ every screen; responsive at ≤860px (grids collapse, nav hides).
 - **Auth** (AIC-21): ✅ **now wired** — email+password signup/login + JWT sessions,
   see [customer-auth.md](customer-auth.md). Forgot/reset still frontend-only. `WA`
   contact links are placeholders (`wa.me/972500000000`).
-- **Onboarding/connect** (AIC-21): status + partner-access verification are mock.
+- **Onboarding/connect** (AIC-21): ✅ **now wired** — Onboarding renders the real
+  `onboarding_status` (call_scheduled/meta_connection_required/campaign_under_review/ready
+  → the matching card + stepper) with the real name; Connect shows the real
+  connection state and "check connection" calls `POST /api/app/connection/recheck`
+  (live per-asset verify when a Meta token is set, else the stored health). The
+  business-portfolio-ID copybox is still a placeholder config value (AIC-33).
 - **Home** (AIC-22): ✅ **now wired** — KPIs/state/sidebar/activity + weekly
   lead-quality all render from `GET /api/app/overview`, see
   [customer-overview.md](customer-overview.md). The dev state-switcher is gone;
@@ -57,10 +62,12 @@ every screen; responsive at ≤860px (grids collapse, nav hides).
   pipeline, dismiss transitions the rec. See
   [customer-recommendations.md](customer-recommendations.md). The dev type-switcher
   is gone.
-- **Settings** (AIC-24): ✅ **budget / Meta connection / billing / account now
-  wired** from the overview endpoint. The budget-change request, "check
-  connection", and change-password buttons are still stubs; the review screen is
-  still mock.
+- **Settings** (AIC-24): ✅ **now wired** — budget / Meta connection / billing /
+  account read from the overview; the **budget-change request** posts
+  `POST /api/app/budget-request` (raises an ops item), **check connection** calls
+  the recheck endpoint, and **change password** posts `POST /api/auth/change-password`
+  (see [customer-auth.md](customer-auth.md)). The **campaign-review screen** is
+  still mock — its schema mismatch with the design is tracked in AIC-32.
 
 ## Open decision — checkout/payment
 The design includes a **self-serve card checkout** (`/checkout`, ₪598 = setup +

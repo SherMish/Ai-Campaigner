@@ -6,6 +6,21 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-08 — Onboarding/Connect + Settings actions wired — AIC-21/24
+Onboarding now renders the real `onboarding_status` (→ card + stepper) and the
+signed-in name; Connect shows the real connection state and "check connection"
+calls `POST /api/app/connection/recheck` (live per-asset verify with a Meta
+token, else the stored health). Settings gained three real actions: budget-change
+request (`POST /api/app/budget-request` → ops item, `server/src/services/customer-actions.ts`),
+check-connection (shared recheck), and change-password
+(`POST /api/auth/change-password` — verifies the current password, then
+`updatePassword`; new `findByIdWithHash`/`updatePassword` on the user store). The
+header self-fetches the name once (`getMe`) so every screen shows it. Deferred to
+tickets: the campaign-review screen (AIC-32, schema-vs-design mismatch) and the
+real connect config — business-portfolio ID + WhatsApp/booking links (AIC-33).
+Tests: `customer-actions.integration.test.ts`, change-password cases in
+`auth-service.test.ts`.
+
 ### 2026-08-08 — Recommendation approve/dismiss wired over the pipeline — AIC-23
 The customer recommendation surface is live: `GET /api/app/recommendations`
 (+ `/:id`), `POST …/approve`, `POST …/dismiss` (`server/src/services/customer-recommendations.ts`),

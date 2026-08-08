@@ -34,6 +34,15 @@ export class AuthService {
     }
   }
 
+  // Change the password of an already-authenticated user (AIC-24). Requires the
+  // current password to match — a wrong one is InvalidCredentialsError.
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+    const rec = await this.store.findByIdWithHash(userId);
+    if (!rec) throw new InvalidCredentialsError();
+    if (!(await verifyPassword(currentPassword, rec.passwordHash))) throw new InvalidCredentialsError();
+    await this.store.updatePassword(userId, await hashPassword(newPassword));
+  }
+
   async login(input: { email: string; password: string }): Promise<AuthResult> {
     const rec = await this.store.findByEmail(normalizeEmail(input.email));
     // Verify even on a miss would be ideal to avoid user enumeration by timing;

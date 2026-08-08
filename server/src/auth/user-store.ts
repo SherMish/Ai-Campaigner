@@ -29,7 +29,9 @@ export class DuplicateEmailError extends Error {
 export interface UserStore {
   findByEmail(email: string): Promise<AppUserWithHash | null>;
   findById(id: string): Promise<AppUser | null>;
+  findByIdWithHash(id: string): Promise<AppUserWithHash | null>;
   create(input: CreateUserInput): Promise<AppUser>;
+  updatePassword(id: string, passwordHash: string): Promise<void>;
 }
 
 function rowToUser(r: Record<string, unknown>): AppUser {
@@ -58,6 +60,11 @@ export class PgUserStore implements UserStore {
     return rows[0] ? rowToUser(rows[0]) : null;
   }
 
+  async findByIdWithHash(id: string): Promise<AppUserWithHash | null> {
+    const { rows } = await this.pool.query(`SELECT * FROM app_users WHERE id = $1`, [id]);
+    return rows[0] ? { ...rowToUser(rows[0]), passwordHash: rows[0].password_hash } : null;
+  }
+
   async create(input: CreateUserInput): Promise<AppUser> {
     try {
       const { rows } = await this.pool.query(
@@ -70,6 +77,10 @@ export class PgUserStore implements UserStore {
       throw e;
     }
   }
+
+  async updatePassword(id: string, passwordHash: string): Promise<void> {
+    await this.pool.query(`UPDATE app_users SET password_hash = $2 WHERE id = $1`, [id, passwordHash]);
+  }
 }
 
 export class InMemoryUserStore implements UserStore {
@@ -81,6 +92,9 @@ export class InMemoryUserStore implements UserStore {
     const u = this.users.find((x) => x.id === id);
     return u ? { ...u } : null;
   }
+  async findByIdWithHash(id: string): Promise<AppUserWithHash | null> {
+    return this.users.find((x) => x.id === id) ?? null;
+  }
   async create(input: CreateUserInput): Promise<AppUser> {
     if (await this.findByEmail(input.email)) throw new DuplicateEmailError();
     const user: AppUserWithHash = {
@@ -91,5 +105,9 @@ export class InMemoryUserStore implements UserStore {
     const { passwordHash, ...pub } = user;
     void passwordHash;
     return pub;
+  }
+  async updatePassword(id: string, passwordHash: string): Promise<void> {
+    const u = this.users.find((x) => x.id === id);
+    if (u) u.passwordHash = passwordHash;
   }
 }

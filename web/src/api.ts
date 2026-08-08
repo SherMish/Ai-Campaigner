@@ -110,6 +110,20 @@ export const approveRecommendation = (id: string) =>
 export const dismissRecommendation = (id: string) =>
   api<{ ok: true }>(`/app/recommendations/${id}/dismiss`, { method: "POST" });
 
+// ── Connection + budget + password actions (AIC-21 / AIC-24) ────────────────
+export const recheckConnection = () =>
+  api<{ accessHealth: AccessHealth }>("/app/connection/recheck", { method: "POST" });
+export const requestBudgetChange = (requestedAgorot?: number) =>
+  api<{ ok: true }>("/app/budget-request", {
+    method: "POST",
+    body: JSON.stringify(requestedAgorot != null ? { requestedAgorot } : {}),
+  });
+export const changePassword = (currentPassword: string, newPassword: string) =>
+  api<{ ok: true }>("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+
 export const getMe = () =>
   api<{ user: { name: string; email: string } }>("/auth/me").then((r) => r.user);
 export const getOverview = () => api<CustomerOverview>("/app/overview");

@@ -9,6 +9,10 @@ import {
   approveCustomerRecommendation,
   dismissCustomerRecommendation,
 } from "../services/customer-recommendations.js";
+import {
+  recheckCustomerConnection,
+  requestBudgetChange,
+} from "../services/customer-actions.js";
 
 // Customer-facing data API (AIC-22/24). Every route is scoped to the caller's
 // own customer via the JWT — the service only ever reads rows owned by req.userId.
@@ -116,6 +120,38 @@ appRouter.post("/recommendations/:id/dismiss", requireAuth, async (req, res) => 
   } catch (e) {
     console.error("[app] dismiss recommendation failed", e);
     res.status(500).json({ error: "failed to dismiss recommendation" });
+  }
+});
+
+// ── Connection + budget actions (AIC-21 / AIC-24) ──────────────────────────
+appRouter.post("/connection/recheck", requireAuth, async (req, res) => {
+  try {
+    const health = await recheckCustomerConnection(pool, (req as AuthedRequest).userId!);
+    if (health === null) {
+      res.status(404).json({ error: "no connection" });
+      return;
+    }
+    res.json({ accessHealth: health });
+  } catch (e) {
+    console.error("[app] connection recheck failed", e);
+    res.status(500).json({ error: "failed to check connection" });
+  }
+});
+
+appRouter.post("/budget-request", requireAuth, async (req, res) => {
+  try {
+    const { requestedAgorot } = req.body ?? {};
+    const amount =
+      Number.isInteger(requestedAgorot) && requestedAgorot > 0 ? requestedAgorot : null;
+    const ok = await requestBudgetChange(pool, (req as AuthedRequest).userId!, amount);
+    if (!ok) {
+      res.status(404).json({ error: "no customer" });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[app] budget request failed", e);
+    res.status(500).json({ error: "failed to submit request" });
   }
 });
 

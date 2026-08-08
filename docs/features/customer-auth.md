@@ -26,6 +26,9 @@ created. Google sign-in is deferred ([AIC-30]).
     email (case-insensitive); 400 invalid email / password < 8 chars.
   - `POST /login {email, password}` → 200 `{token, user}`; 401 bad credentials.
   - `GET /me` (Bearer) → `{user}`; 401 without a valid token.
+  - `POST /change-password {currentPassword, newPassword}` (Bearer) → 200 `{ok}`;
+    401 if the current password is wrong; 400 if the new one is < 8 chars. Verifies
+    the current password (`findByIdWithHash` + bcrypt) before `updatePassword`.
 - **`requireAuth`** middleware verifies the bearer JWT and sets `req.userId`.
 - **Frontend**: Signup/Login POST to the endpoints, store the JWT in localStorage
   (`aic_auth_token`), and `api()` attaches it as a bearer on non-admin `/api` calls.

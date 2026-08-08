@@ -54,6 +54,29 @@ authRouter.post("/login", async (req, res) => {
   }
 });
 
+authRouter.post("/change-password", requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body ?? {};
+    if (!currentPassword || typeof currentPassword !== "string") {
+      res.status(400).json({ error: "current password required" });
+      return;
+    }
+    if (!newPassword || typeof newPassword !== "string" || newPassword.length < MIN_PASSWORD) {
+      res.status(400).json({ error: `new password must be at least ${MIN_PASSWORD} characters` });
+      return;
+    }
+    await service.changePassword((req as AuthedRequest).userId!, currentPassword, newPassword);
+    res.json({ ok: true });
+  } catch (e) {
+    if (e instanceof InvalidCredentialsError) {
+      res.status(401).json({ error: "current password is incorrect" });
+      return;
+    }
+    console.error("[auth] change-password failed", e);
+    res.status(500).json({ error: "failed to change password" });
+  }
+});
+
 authRouter.get("/me", requireAuth, async (req, res) => {
   const user = await store.findById((req as AuthedRequest).userId!);
   if (!user) {

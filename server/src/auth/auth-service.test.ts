@@ -41,4 +41,20 @@ describe("AuthService", () => {
     await expect(s.login({ email: "e@f.co", password: "wrongpass" })).rejects.toBeInstanceOf(InvalidCredentialsError);
     await expect(s.login({ email: "nobody@x.co", password: "whatever1" })).rejects.toBeInstanceOf(InvalidCredentialsError);
   });
+
+  it("changePassword swaps the password when the current one matches", async () => {
+    const s = svc();
+    const { user } = await s.signup({ email: "g@h.co", password: "oldpass12" });
+    await s.changePassword(user.id, "oldpass12", "newpass34");
+    // old no longer works, new does
+    await expect(s.login({ email: "g@h.co", password: "oldpass12" })).rejects.toBeInstanceOf(InvalidCredentialsError);
+    const ok = await s.login({ email: "g@h.co", password: "newpass34" });
+    expect(ok.user.id).toBe(user.id);
+  });
+
+  it("changePassword rejects a wrong current password", async () => {
+    const s = svc();
+    const { user } = await s.signup({ email: "i@j.co", password: "oldpass12" });
+    await expect(s.changePassword(user.id, "wrongcurrent", "newpass34")).rejects.toBeInstanceOf(InvalidCredentialsError);
+  });
 });

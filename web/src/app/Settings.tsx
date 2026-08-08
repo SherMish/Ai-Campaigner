@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { strings, connectionMessage } from "../strings";
-import { getOverview, shekels, type CustomerOverview } from "../api";
+import {
+  getOverview, shekels, recheckConnection, requestBudgetChange, changePassword,
+  ApiError, type CustomerOverview, type AccessHealth,
+} from "../api";
 import { AppHeader, StatusPill, SupportCard, Field, WA } from "./components";
 
 const a = strings.he.app;
@@ -12,21 +15,33 @@ export function Settings() {
   const [err, setErr] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // action state
+  const [budgetSent, setBudgetSent] = useState(false);
+  const [connHealth, setConnHealth] = useState<AccessHealth | null>(null);
+  const [connChecking, setConnChecking] = useState(false);
+
   function load() {
-    setLoading(true);
-    setErr(false);
+    setLoading(true); setErr(false);
     getOverview().then(setOv).catch(() => setErr(true)).finally(() => setLoading(false));
   }
   useEffect(load, []);
 
   const period = ov?.campaign?.budgetPeriod === "monthly" ? L.perMonth : L.perDay;
   const conn = ov?.connection;
-  const health = conn ? connectionMessage(conn.accessHealth) : null;
+  const health = connectionMessage(connHealth ?? conn?.accessHealth ?? "needs_reconnect");
   const sub = ov?.subscription;
+
+  function checkConnection() {
+    setConnChecking(true);
+    recheckConnection()
+      .then((r) => setConnHealth(r.accessHealth))
+      .catch(() => {})
+      .finally(() => setConnChecking(false));
+  }
 
   return (
     <div>
-      <AppHeader recCount={0} userName={ov?.account.name} />
+      <AppHeader recCount={ov?.pendingRecommendations ?? 0} userName={ov?.account.name} />
       <div className="wrap page" style={{ maxWidth: 820, marginInline: "auto" }}>
         <h1 style={{ marginBottom: 24 }}>{s.title}</h1>
 
@@ -53,20 +68,23 @@ export function Settings() {
                     {ov.campaign ? shekels(ov.campaign.agreedBudgetAgorot) : L.none}{" "}
                     <span className="muted" style={{ fontSize: "0.9rem", fontWeight: 400 }}>{period}</span>
                   </b>
-                  <button className="btn btn-outline btn-sm">{s.budgetReq}</button>
+                  {budgetSent ? (
+                    <StatusPill variant="ok">✓</StatusPill>
+                  ) : (
+                    <button className="btn btn-outline btn-sm" onClick={() => requestBudgetChange().then(() => setBudgetSent(true)).catch(() => {})}>{s.budgetReq}</button>
+                  )}
                 </div>
               </div>
+              {budgetSent && <p className="muted" style={{ marginTop: 12 }}>{s.budgetReqSent}</p>}
             </div>
 
             {/* meta connection */}
             <div className="card">
               <div className="row between" style={{ marginBottom: 14 }}>
                 <b style={{ fontSize: "1.1rem" }}>{s.metaTitle}</b>
-                {health && (
-                  <StatusPill variant={health.healthy ? "ok" : "attn"}>
-                    {health.healthy ? a.connect.connected : a.connect.missing}
-                  </StatusPill>
-                )}
+                <StatusPill variant={health.healthy ? "ok" : "attn"}>
+                  {health.healthy ? a.connect.connected : a.connect.missing}
+                </StatusPill>
               </div>
               <div className="summary-row"><span className="k">{a.connect.adAccount}</span><b>{conn?.adAccount?.name || L.none}</b></div>
               <div className="summary-row"><span className="k">{a.connect.fbPage}</span><b>{conn?.pageId || L.none}</b></div>
@@ -77,7 +95,9 @@ export function Settings() {
                   {conn.pageId ? ` · ${conn.pageId}` : ""}{conn.instagramId ? ` · ${conn.instagramId}` : ""}
                 </p>
               )}
-              <button className="btn btn-outline btn-sm">{s.checkConn}</button>
+              <button className="btn btn-outline btn-sm" onClick={checkConnection} disabled={connChecking}>
+                {connChecking ? s.checking : s.checkConn}
+              </button>
             </div>
 
             {/* plan / billing */}
@@ -104,7 +124,7 @@ export function Settings() {
               <div className="stack gap16">
                 <Field label={s.nameLabel} value={ov.account.name || ov.customer?.contactName || L.none} />
                 <Field label={s.emailLabel} value={ov.account.email} type="email" />
-                <div><button className="btn btn-outline btn-sm">{s.changePw}</button></div>
+                <ChangePassword />
               </div>
               <hr />
               <p className="muted" style={{ fontSize: "0.9rem" }}>
@@ -113,6 +133,43 @@ export function Settings() {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ChangePassword() {
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (done) return <p className="muted" style={{ margin: 0 }}>✓ {s.pwDone}</p>;
+  if (!open) return <div><button className="btn btn-outline btn-sm" onClick={() => setOpen(true)}>{s.changePw}</button></div>;
+
+  function save() {
+    if (next.length < 8) { setError(s.pwTooShort); return; }
+    setSaving(true); setError(null);
+    changePassword(current, next)
+      .then(() => setDone(true))
+      .catch((e) => setError(e instanceof ApiError && e.status === 401 ? s.pwWrong : s.pwTooShort))
+      .finally(() => setSaving(false));
+  }
+
+  return (
+    <div className="stack gap12">
+      <div className="field"><label>{s.pwCurrent}</label>
+        <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} />
+      </div>
+      <div className="field"><label>{s.pwNew}</label>
+        <input type="password" value={next} onChange={(e) => setNext(e.target.value)} />
+      </div>
+      {error && <p className="muted" style={{ margin: 0 }}>{error}</p>}
+      <div className="row gap12">
+        <button className="btn btn-dark btn-sm" onClick={save} disabled={saving}>{s.pwSave}</button>
+        <button className="btn btn-outline btn-sm" onClick={() => setOpen(false)}>{s.pwCancel}</button>
       </div>
     </div>
   );
