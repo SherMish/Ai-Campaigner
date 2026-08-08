@@ -6,6 +6,19 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-08 — AIC-1 spike PASS (live) + admin API auth + Railway live
+Live-verified the whole partner-access model on Pisga's real account: a read-only
+probe + a no-op budget write routed through the full AIC-12 safe-execute pipeline
+both PASSED under **Standard Access** — reads and writes on a partner-owned ad
+account work without Advanced Access. AIC-1 Done; AIC-12/13 live-verified; AIC-25
+descoped to a scale concern. Added `GraphCampaignAdapter` (real MetaReader/
+ExecWriter) + gated probe/write-test tools. Closed the admin-API hole: `requireAdmin`
+now **fails closed in production** when `ADMIN_TOKEN` is unset and requires a bearer
+otherwise; web console gated via `AdminGate`. Also fixed two Railway deploy blockers
+(NODE_ENV skipping devDeps → `NPM_CONFIG_PRODUCTION=false`; cwd-relative web/dist →
+`resolveWebDist`); the app is **live** at aicserver-production.up.railway.app serving
+landing + SPA + API with Neon migrations applied.
+
 ### 2026-08-04 — Customer app screens (frontend, AdPilot design) — AIC-21/22/23/24
 Built every customer-facing screen as frontend on mock data, from the AdPilot
 Product Phase 1/2 design directions: auth (signup/login/forgot/reset), checkout,

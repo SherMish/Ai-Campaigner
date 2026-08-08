@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AdminReadout } from "./admin/Readout";
 import { OpsConsole } from "./admin/OpsConsole";
+import { AdminGate } from "./admin/AdminGate";
 import { Signup, Login, Forgot, Reset } from "./app/Auth";
 import { Checkout } from "./app/Checkout";
 import { Onboarding } from "./app/Onboarding";
@@ -35,9 +36,9 @@ export function App() {
         <Route path="/app/recommendations/:id" element={<RecommendationDetail />} />
         <Route path="/app/settings" element={<Settings />} />
 
-        {/* internal admin */}
-        <Route path="/admin/readout" element={<AdminReadout />} />
-        <Route path="/admin/ops" element={<OpsConsole />} />
+        {/* internal admin (token-gated) */}
+        <Route path="/admin/readout" element={<AdminGate><AdminReadout /></AdminGate>} />
+        <Route path="/admin/ops" element={<AdminGate><OpsConsole /></AdminGate>} />
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

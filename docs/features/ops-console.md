@@ -7,6 +7,15 @@ lead-quality (AIC-19) extend this doc.
 **Source of truth:** services under `server/src/services/` + routes in
 `server/src/routes/admin.ts` (all behind `requireAdmin`).
 
+## Auth (fail-closed)
+`requireAdmin` (`server/src/middleware/admin.ts`): with `ADMIN_TOKEN` set it
+requires a matching `Authorization: Bearer <token>` (constant-time compare); with
+it **unset in production it denies all** (503 — never open by omission, the PIS-26
+lesson); unset in non-production it allows (dev convenience). The web console gates
+on a token via `web/src/admin/AdminGate.tsx` (stored in localStorage, attached as a
+bearer by `api()` for `/admin/*`), with a "lock console" action. Set `ADMIN_TOKEN`
+on the server before exposing the console publicly. Tests: `admin.test.ts`.
+
 ---
 
 ## Customers view (AIC-16)
