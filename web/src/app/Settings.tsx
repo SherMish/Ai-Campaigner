@@ -26,7 +26,7 @@ export function Settings() {
 
   return (
     <div>
-      <AppHeader recCount={0} />
+      <AppHeader recCount={0} userName={ov?.account.name} />
       <div className="wrap page" style={{ maxWidth: 820, marginInline: "auto" }}>
         <h1 style={{ marginBottom: 24 }}>{s.title}</h1>
 

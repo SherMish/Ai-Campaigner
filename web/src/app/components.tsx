@@ -56,11 +56,19 @@ export function StatusPill({
 }
 
 // Logged-in app header.
-export function AppHeader({ recCount = 0 }: { recCount?: number }) {
+// Initials from a full name (first letters of the first two words).
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).map((p) => p[0]).join("") || a.mock.userInitials;
+}
+
+export function AppHeader({ recCount = 0, userName }: { recCount?: number; userName?: string }) {
   const { pathname } = useLocation();
   const nav = useNavigate();
   const active = (p: string) => (pathname === p || pathname.startsWith(p + "/") ? "active" : "");
   const logout = () => { clearAuthToken(); nav("/login"); };
+  const name = userName?.trim() || a.mock.userName;
+  const initials = userName?.trim() ? initialsOf(userName) : a.mock.userInitials;
   return (
     <header className="appbar">
       <div className="wrap inner">
@@ -78,8 +86,8 @@ export function AppHeader({ recCount = 0 }: { recCount?: number }) {
         <div className="row gap16">
           <a className="link" href={WA}>{a.talk}</a>
           <span className="userpill">
-            <span className="av">{a.mock.userInitials}</span>
-            {a.mock.userName}
+            <span className="av">{initials}</span>
+            {name}
           </span>
           <button className="btn btn-outline btn-sm" onClick={logout}>{a.logout}</button>
         </div>

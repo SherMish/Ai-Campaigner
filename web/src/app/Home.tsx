@@ -95,7 +95,7 @@ export function Home() {
 
   return (
     <div>
-      <AppHeader recCount={0} />
+      <AppHeader recCount={0} userName={ov.account.name} />
       <div className="wrap page">
         <div className="row between" style={{ marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
           <h1>{h.title}</h1>
