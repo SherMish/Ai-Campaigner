@@ -1,5 +1,5 @@
 import type { LiveCampaignState, MetaReader, ExecWriter } from "../execution/safe-executor.js";
-import { normalizeAdSet, type AdSetHealth, type DeliveryReader, type RawAdSetDelivery } from "./delivery-health.js";
+import { normalizeAdSet, isProblem, type AdSetHealth, type DeliveryReader, type RawAdSetDelivery } from "./delivery-health.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
 // Marketing API. Budgets are read/written in the account currency's MINOR unit,
@@ -96,7 +96,21 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // Insights (which just show near-zero spend).
   async getDeliveryHealth(metaCampaignId: string): Promise<AdSetHealth[]> {
     const body = await this.get(`${metaCampaignId}/adsets?fields=id,name,effective_status,issues_info&limit=100`);
-    const rows = (body.data as RawAdSetDelivery[]) ?? [];
-    return rows.map(normalizeAdSet);
+    const health = ((body.data as RawAdSetDelivery[]) ?? []).map(normalizeAdSet);
+    const byId = new Map(health.map((h) => [h.adSetId, h]));
+
+    // Roll AD-level issues up to their ad set: an errored/disapproved ad makes its
+    // ad set not-deliver, and the error often lives at the ad grain, not the ad set.
+    const ads = await this.get(`${metaCampaignId}/ads?fields=id,adset_id,effective_status,issues_info&limit=200`);
+    for (const adRow of (ads.data as Array<{ adset_id?: string } & RawAdSetDelivery>) ?? []) {
+      const parent = adRow.adset_id ? byId.get(String(adRow.adset_id)) : undefined;
+      if (!parent || isProblem(parent)) continue; // ad set already flagged
+      const adHealth = normalizeAdSet({ id: String(adRow.id), effective_status: adRow.effective_status, issues_info: adRow.issues_info });
+      if (isProblem(adHealth)) {
+        parent.state = adHealth.state;
+        parent.reason = adHealth.reason;
+      }
+    }
+    return health;
   }
 }

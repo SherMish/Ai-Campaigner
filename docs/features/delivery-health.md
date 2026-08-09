@@ -55,7 +55,13 @@ attention`. Home shows a distinct plain-Hebrew message ("חלק מהקמפיין
 so the engine keeps optimizing the healthy ad sets; the customer just sees the
 honest "needs attention."
 
+## Ad-level rollup
+
+`getDeliveryHealth` also reads the campaign's **ads** (`effective_status` +
+`issues_info`) and rolls any errored/disapproved ad up to its parent ad set — the
+"Ad errors / not delivering" reason often lives at the ad grain, not the ad set.
+So an ad set whose own status is ACTIVE is still flagged not-delivering when an ad
+under it is broken.
+
 ## Not yet
-- Ad-level (vs ad-set-level) `issues_info` — this reads ad-set grain, which covers
-  the "ad set not delivering" case; finer ad-level attribution is a later refinement.
 - A real Telegram/notification sink (currently the high-severity ops-log hook).
