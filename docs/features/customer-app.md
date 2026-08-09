@@ -51,6 +51,12 @@ button on the right. Shell CSS is `.ap-*` classes in `ui.css`. The old top
 `AppHeader` is retired from the app screens (onboarding/connect keep their own
 minimal header). `lucide-react` provides the icons.
 
+**Dashboard layout (AIC-41):** Home (`/app`) is a two-column **rail + main** grid
+(`.dash*` in `ui.css`) — left rail = the campaign at-a-glance card; main = status
+hero + KPI row + recommendation nudge + weekly feedback + activity. Tighter type +
+lifted cards; collapses to one column ≤1024px. The per-audience / per-creative
+(ad set / ad) drill-down is a separate ticket (AIC-37).
+
 ## Design system
 AdPilot palette (orange `#FF5A36`, cream `#F7F2EA`/`#EDE6DA`, ink `#171717`, green
 `#2FA36B`, indigo `#665CFF`, WhatsApp `#DCF8C6`), Rubik + IBM Plex Mono, RTL Hebrew.

@@ -89,90 +89,90 @@ export function Home() {
   const period = ov.campaign?.budgetPeriod === "monthly" ? L.perMonth : L.perDay;
 
   return (
-    <div className="wrap page">
-      <div className="row between" style={{ marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
-        <h1>{h.title}</h1>
-      </div>
+    <div className="wrap page dash">
+      <h1 className="dash-title">{h.title}</h1>
 
-        {/* status hero */}
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div className="row between" style={{ flexWrap: "wrap", gap: 16 }}>
-            <div>
-              <StatusPill variant={PILL[state]}>{hd.badge}</StatusPill>
-              <h2 style={{ fontSize: "2rem", margin: "14px 0 10px" }}>{hd.title}</h2>
-              <p className="muted" style={{ maxWidth: "40em" }}>{hd.body}</p>
-            </div>
-            {hd.cta && <Link className="btn btn-primary" to={hd.cta.to}>{hd.cta.label}</Link>}
-          </div>
-        </div>
-
-        {/* KPIs — the questions the customer actually asks */}
-        <div className="grid-3" style={{ marginBottom: 24 }}>
-          <div className="kpi">
-            <b>{cpl === null ? L.none : shekels(cpl)}</b>
-            <div className="lbl">{h.kpiCpl}</div>
-            <Delta pct={r?.delta.cplPct ?? null} goodDown />
-          </div>
-          <div className="kpi">
-            <b>{leads}</b>
-            <div className="lbl">{h.kpiLeads}</div>
-            <Delta pct={r?.delta.leadsPct ?? null} />
-          </div>
-          <div className="kpi">
-            <b>{shekels(spend)}</b>
-            <div className="lbl">{h.kpiSpend}</div>
-            <Delta pct={r?.delta.spendPct ?? null} />
-          </div>
-        </div>
-
-        <div className="grid-2">
-          <div className="stack gap24">
-            {/* a pending recommendation outranks the reassurance card */}
-            {ov.pendingRecommendations > 0 ? (
-              <div className="rec">
-                <div className="k">{h.recWaitingTitle}</div>
-                <h3>{h.recWaiting}</h3>
-                <div className="actions">
-                  <Link className="btn btn-primary" to="/app/recommendations">{h.viewApprove}</Link>
-                </div>
-              </div>
-            ) : (state === "ok" || state === "collecting") ? (
-              <div className="card">
-                <StatusPill variant="ok">{h.noActionTitle}</StatusPill>
-                <p className="muted" style={{ marginTop: 12 }}>{h.noAction}</p>
-              </div>
-            ) : null}
-
-            {/* weekly feedback */}
-            {ov.campaign && <WeeklyFeedback leadsReported={leads} />}
-
-            {/* recent activity — real action history (empty until we act) */}
-            <div className="card">
-              <div className="row between" style={{ marginBottom: 8 }}>
-                <b>{h.recentTitle}</b>
-                <Link className="link" to="/app/recommendations" style={{ fontSize: "0.9rem" }}>{h.recentAll}</Link>
-              </div>
-              {ov.recentActivity.length === 0 ? (
-                <p className="muted" style={{ marginTop: 4 }}>{L.noActivity}</p>
-              ) : (
-                <div className="timeline">
-                  {ov.recentActivity.map((it, i) => (
-                    <div className="t-item" key={i}>
-                      <span className="when">
-                        {new Date(it.when).toLocaleDateString("he-IL", { day: "numeric", month: "short" })}
-                      </span>
-                      <span>{it.summary} · <span className="muted">{it.automated ? L.automated : L.byUs}</span></span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* campaign summary sidebar */}
+      <div className="dash-grid">
+        {/* MAIN column */}
+        <div className="dash-main">
+          {/* status hero */}
           <div className="card">
-            <b style={{ fontSize: "1.05rem" }}>{ov.campaign?.name || h.summaryTitle}</b>
-            <div style={{ marginTop: 14 }}>
+            <div className="row between" style={{ flexWrap: "wrap", gap: 14 }}>
+              <div>
+                <StatusPill variant={PILL[state]}>{hd.badge}</StatusPill>
+                <h2 style={{ fontSize: "1.35rem", margin: "12px 0 8px" }}>{hd.title}</h2>
+                <p className="muted" style={{ maxWidth: "42em" }}>{hd.body}</p>
+              </div>
+              {hd.cta && <Link className="btn btn-primary btn-sm" to={hd.cta.to}>{hd.cta.label}</Link>}
+            </div>
+          </div>
+
+          {/* KPIs — the questions the customer actually asks */}
+          <div className="grid-3">
+            <div className="kpi">
+              <b>{cpl === null ? L.none : shekels(cpl)}</b>
+              <div className="lbl">{h.kpiCpl}</div>
+              <Delta pct={r?.delta.cplPct ?? null} goodDown />
+            </div>
+            <div className="kpi">
+              <b>{leads}</b>
+              <div className="lbl">{h.kpiLeads}</div>
+              <Delta pct={r?.delta.leadsPct ?? null} />
+            </div>
+            <div className="kpi">
+              <b>{shekels(spend)}</b>
+              <div className="lbl">{h.kpiSpend}</div>
+              <Delta pct={r?.delta.spendPct ?? null} />
+            </div>
+          </div>
+
+          {/* a pending recommendation outranks the reassurance card */}
+          {ov.pendingRecommendations > 0 ? (
+            <div className="rec">
+              <div className="k">{h.recWaitingTitle}</div>
+              <h3>{h.recWaiting}</h3>
+              <div className="actions">
+                <Link className="btn btn-primary btn-sm" to="/app/recommendations">{h.viewApprove}</Link>
+              </div>
+            </div>
+          ) : (state === "ok" || state === "collecting") ? (
+            <div className="card">
+              <StatusPill variant="ok">{h.noActionTitle}</StatusPill>
+              <p className="muted" style={{ marginTop: 12 }}>{h.noAction}</p>
+            </div>
+          ) : null}
+
+          {/* weekly feedback */}
+          {ov.campaign && <WeeklyFeedback leadsReported={leads} />}
+
+          {/* recent activity — real action history (empty until we act) */}
+          <div className="card">
+            <div className="row between" style={{ marginBottom: 8 }}>
+              <b>{h.recentTitle}</b>
+              <Link className="link" to="/app/recommendations" style={{ fontSize: "0.9rem" }}>{h.recentAll}</Link>
+            </div>
+            {ov.recentActivity.length === 0 ? (
+              <p className="muted" style={{ marginTop: 4 }}>{L.noActivity}</p>
+            ) : (
+              <div className="timeline">
+                {ov.recentActivity.map((it, i) => (
+                  <div className="t-item" key={i}>
+                    <span className="when">
+                      {new Date(it.when).toLocaleDateString("he-IL", { day: "numeric", month: "short" })}
+                    </span>
+                    <span>{it.summary} · <span className="muted">{it.automated ? L.automated : L.byUs}</span></span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* RAIL — campaign at a glance */}
+        <div className="dash-rail">
+          <div className="card">
+            <b style={{ fontSize: "0.98rem" }}>{ov.campaign?.name || h.summaryTitle}</b>
+            <div style={{ marginTop: 12 }}>
               <div className="summary-row"><span className="k">{h.sMode}</span><StatusPill variant={PILL[state]}>{hd.badge}</StatusPill></div>
               <div className="summary-row"><span className="k">{h.sBudget}</span><b>{ov.campaign ? `${shekels(ov.campaign.agreedBudgetAgorot)} ${period}` : L.none}</b></div>
               <div className="summary-row"><span className="k">{h.sAds}</span><b>{activeAds > 0 ? `${activeAds} ${L.adsActive}` : L.none}</b></div>
@@ -181,6 +181,7 @@ export function Home() {
           </div>
         </div>
       </div>
+    </div>
   );
 }
 

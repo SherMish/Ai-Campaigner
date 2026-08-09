@@ -244,3 +244,24 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
   .ap-fab { display: grid; place-items: center; position: fixed; top: 14px; right: 14px; z-index: 50; width: 44px; height: 44px; border-radius: 12px; background: var(--ink); color: var(--cream); border: none; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
   .ap-content .page { padding-top: 72px; }
 }
+
+/* ── Dashboard: two-column rail + main, tighter type (AIC-41) ────────────── */
+.dash { padding: 26px 0 64px; }
+.dash-title { font-size: 1.55rem; font-weight: 800; margin-bottom: 18px; }
+.dash-grid { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(228px, 1fr); gap: 18px; align-items: start; }
+.dash-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.dash-rail { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 20px; }
+@media (max-width: 1024px) { .dash-grid { grid-template-columns: 1fr; } .dash-rail { position: static; } }
+/* smaller, denser cards inside the dashboard — lifted off the page like Pisga */
+.dash .card, .dash .kpi, .dash .rec { box-shadow: 0 1px 2px rgba(23, 23, 23, 0.03), 0 6px 20px rgba(23, 23, 23, 0.05); }
+.dash .card { padding: 20px; border-radius: 16px; }
+.dash .card h2 { font-size: 1.3rem; }
+.dash .kpi { padding: 15px; border-radius: 14px; }
+.dash .kpi b { font-size: 1.55rem; }
+.dash .kpi .lbl { font-size: 0.8rem; }
+.dash .kpi .delta { font-size: 0.76rem; }
+.dash .grid-3 { gap: 12px; }
+.dash .rec { padding: 20px; }
+.dash .rec h3 { font-size: 1.15rem; }
+.dash .muted { font-size: 0.92rem; }
+.dash .summary-row { font-size: 0.9rem; }

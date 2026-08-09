@@ -6,6 +6,15 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-09 — Dashboard two-column layout (AIC-41)
+Restructured Home (`/app`) into a Pisga-style **rail + main** dashboard: left rail
+= the campaign at-a-glance card; main = hero (status) + KPI row + recommendation
+nudge + weekly feedback + activity. The status hero no longer spans full width.
+Tighter type (smaller title/hero/KPI) and lifted cards (soft shadow) via a new
+`.dash*` scope in `ui.css`; collapses to one column ≤1024px. Same `getOverview`
+data — no backend change. (Known follow-up for AIC-42: overview is fetched twice —
+Sidebar + Home — worth deduping via context.) Doc: customer-app.md.
+
 ### 2026-08-09 — App shell: right-side sidebar nav (AIC-40)
 Replaced the signed-in app's top header with a Pisga-style **right-side sidebar
 shell** in AdPilot's palette (ink sidebar, orange accent). New `AppShell.tsx`
