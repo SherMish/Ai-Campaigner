@@ -23,8 +23,15 @@ export function Onboarding() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getOverview().then(setOv).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+    getOverview()
+      .then((o) => {
+        // A customer who has finished onboarding has no reason to sit here.
+        if (o.customer?.onboardingStatus === "ready") { nav("/app", { replace: true }); return; }
+        setOv(o);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [nav]);
 
   const s: S = STATUS_STATE[ov?.customer?.onboardingStatus ?? ""] ?? "A";
   const name = ov?.account.name?.trim();

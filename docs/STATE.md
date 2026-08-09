@@ -6,6 +6,15 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-09 — Admin routing + entry-screen redirects (UX)
+Single admin dashboard: `/admin` now renders one `AdminDashboard` (queue +
+customers + a per-customer drill-down that folds in the campaign readout);
+the old `/admin/ops` and `/admin/readout` routes redirect to `/admin`
+(`OpsConsole.tsx`/`Readout.tsx` removed). Fixed bare `/admin` bouncing to `/login`.
+Authenticated visitors on `/login` `/signup` `/register` `/forgot` `/reset` now
+redirect to the dashboard (`/app`); `/onboarding` self-redirects to `/app` once
+`onboarding_status = ready`.
+
 ### 2026-08-09 — Ad-set delivery-health detection; audience rule now live (AIC-39)
 Detects not-delivering / disapproved ad sets (invisible in Insights) via a
 separate `effective_status` + `issues_info` read. New `meta/delivery-health.ts`

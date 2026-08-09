@@ -17,10 +17,14 @@ omission (the PIS-26 lesson). An optional `ADMIN_TOKEN` remains as a break-glass
 for machine/curl access (matching `Authorization: Bearer <token>`, constant-time);
 it's unset by default, so only admin users get in.
 
-The web console (`web/src/admin/AdminGate.tsx`) gates on the **signed-in user**:
-it calls `GET /auth/me` and renders only when `user.isAdmin` — otherwise it prompts
-to sign in with an admin account. `api()` sends the customer JWT for `/admin/*`
-(a break-glass admin token still wins if one was set). To grant admin:
+The web console is a **single dashboard** at **`/admin`** (`web/src/admin/AdminDashboard.tsx`)
+— the needs-attention queue + all customers, with a per-customer drill-down that
+folds in the campaign readout (AIC-7) and the first-campaign review action. (The
+old split `/admin/ops` + `/admin/readout` routes now redirect to `/admin`.)
+`AdminGate.tsx` gates on the **signed-in user**: it calls `GET /auth/me` and
+renders only when `user.isAdmin` — otherwise it prompts to sign in with an admin
+account. `api()` sends the customer JWT for `/admin/*` (a break-glass admin token
+still wins if one was set). To grant admin:
 `UPDATE app_users SET is_admin = true WHERE lower(email) = '…'`.
 
 Tests: `admin.test.ts` (unit — admin JWT allows, non-admin 403, missing 401,
