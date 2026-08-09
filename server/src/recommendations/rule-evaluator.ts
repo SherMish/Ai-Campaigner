@@ -21,6 +21,9 @@ export async function buildCampaignEvidence(
   // audience is never a "weak" one to pause — it's an error to fix. Its creatives
   // are dropped too, so the creative rule doesn't judge a stalled ad set either.
   excludeAdSetIds?: Set<string>,
+  // Human audience labels (AIC-37), adSetId → label, so an acting audience draft
+  // carries a real label ("18–35") instead of the raw Meta id.
+  adSetLabels?: Map<string, string>,
 ): Promise<CampaignEvidence> {
   const [curTotals, prevTotals, curCreatives, prevCreatives, curAdsets] = await Promise.all([
     store.campaignTotals(campaign.id, current.start, current.end),
@@ -38,7 +41,9 @@ export async function buildCampaignEvidence(
     previous: { ...prevTotals, days: periodDays(previous) },
     creatives: curCreatives.filter(keepCreative),
     creativesPrevious: prevCreatives.filter(keepCreative),
-    adsets: curAdsets.filter((a) => !excluded.has(a.adSetId)),
+    adsets: curAdsets
+      .filter((a) => !excluded.has(a.adSetId))
+      .map((a) => ({ ...a, label: adSetLabels?.get(a.adSetId) })),
     currentBudgetAgorot: campaign.currentBudgetAgorot,
     deliveryDays: curTotals.spendAgorot > 0 ? days : 0,
   };

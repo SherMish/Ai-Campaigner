@@ -233,6 +233,18 @@ export const strings = {
           automated: "בוצע אוטומטית",
           byUs: "בוצע על ידינו",
         },
+        // AIC-37: opt-in per-audience / per-creative details — collapsed by
+        // default, never the landing view.
+        details: {
+          show: "הצג פירוט",
+          hide: "הסתר פירוט",
+          empty: "עדיין אין מספיק נתונים לפירוט לפי קהל.",
+          audienceCol: "קהל",
+          spendCol: "הוצאה",
+          leadsCol: "פניות",
+          cplCol: "עלות לפנייה",
+          creativesCol: "מודעות",
+        },
         recWaitingTitle: "המלצה שמחכה לך",
         recWaiting: "כדאי לעצור את אחת המודעות",
         recWaitingReason: "היא הוציאה ₪184 והביאה פנייה אחת בלבד. שתי המודעות האחרות עובדות טוב יותר.",

@@ -119,6 +119,29 @@ export const requestBudgetChange = (requestedAgorot?: number) =>
     method: "POST",
     body: JSON.stringify(requestedAgorot != null ? { requestedAgorot } : {}),
   });
+// ── Opt-in audience details (AIC-37) ────────────────────────────────────────
+export interface AudienceCreativeRow {
+  metaObjectId: string;
+  creativeName: string | null;
+  spendAgorot: number;
+  leads: number;
+  cplAgorot: number | null;
+  deliveryStatus: string;
+}
+export interface AudienceRow {
+  adSetId: string;
+  label: string;
+  spendAgorot: number;
+  leads: number;
+  cplAgorot: number | null;
+  creatives: AudienceCreativeRow[];
+}
+export interface CampaignAudiences {
+  campaignId: string;
+  audiences: AudienceRow[];
+}
+export const getCampaignAudiences = () => api<CampaignAudiences>("/app/audiences");
+
 export const changePassword = (currentPassword: string, newPassword: string) =>
   api<{ ok: true }>("/auth/change-password", {
     method: "POST",

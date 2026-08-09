@@ -54,8 +54,27 @@ minimal header). `lucide-react` provides the icons.
 **Dashboard layout (AIC-41):** Home (`/app`) is a two-column **rail + main** grid
 (`.dash*` in `ui.css`) — left rail = the campaign at-a-glance card; main = status
 hero + KPI row + recommendation nudge + weekly feedback + activity. Tighter type +
-lifted cards; collapses to one column ≤1024px. The per-audience / per-creative
-(ad set / ad) drill-down is a separate ticket (AIC-37).
+lifted cards; collapses to one column ≤1024px. The active-creative count on the
+rail is **de-duplicated by creative name** — the same design running under two
+audiences is one "creative" to a non-technical owner, even though it's two Meta
+ad objects.
+
+**Opt-in audience details (AIC-37):** below the KPIs, a collapsed **"הצג פירוט"**
+expander — closed by default, never the landing view — reveals the campaign's
+**per-audience** breakdown (each ad set named by its human dimension: age, gender,
+or geo — never "ad set N" or a raw Meta name, via
+[`deriveAudienceLabels`](../../server/src/meta/audience-label.ts)), each
+expandable to its own **per-creative** rows (spend/leads/CPL only — no raw
+ad-jargon metrics). Fetched lazily on open (`GET /api/app/audiences`,
+`server/src/services/campaign-audiences.ts`), ownership-scoped, reading only
+cached data (`insight_snapshots` + `ad_set_meta`) — no live Meta call at render.
+The audience label is the same one the engine's audience rule uses in its
+customer-facing explanation (`RULES.md`). The ops console keeps its own full
+internal per-audience view regardless of this toggle (AIC-45).
+
+*Not built in this pass:* instrumenting the details-toggle open-rate as a product
+signal (AIC-37's AC) — deferred until the AIC-28 metrics layer exists; there's no
+event sink to write to yet.
 
 ## Design system
 AdPilot palette (orange `#FF5A36`, cream `#F7F2EA`/`#EDE6DA`, ink `#171717`, green

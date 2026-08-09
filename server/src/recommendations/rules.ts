@@ -35,6 +35,7 @@ export interface CreativeStat {
 // Ad-set (audience) aggregate for the audience rule.
 export interface AdsetStat {
   adSetId: string;
+  label?: string; // human audience label (AIC-37); falls back to adSetId if absent
   spendAgorot: number;
   leads: number;
   cplAgorot: number | null;
@@ -173,10 +174,12 @@ function pauseUnderperformingAudience(ev: CampaignEvidence): RecommendationDraft
     targetMetaId: worst.adSetId,
     evidence: {
       adSetId: worst.adSetId,
+      audienceLabel: worst.label ?? worst.adSetId,
       adSetCplAgorot: worst.cplAgorot,
       adSetSpendAgorot: worst.spendAgorot,
       adSetLeads: worst.leads,
       bestAdSetId: bestAdset.adSetId,
+      bestAudienceLabel: bestAdset.label ?? bestAdset.adSetId,
       bestAdSetCplAgorot: bestCpl,
     },
     currentBudgetAgorot: null,

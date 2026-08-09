@@ -4,15 +4,18 @@ import { strings } from "../strings";
 import {
   getOverview,
   postLeadQuality,
+  getCampaignAudiences,
   shekels,
   type CustomerOverview,
   type HomeState,
+  type CampaignAudiences,
 } from "../api";
 import { StatusPill } from "./components";
 
 const a = strings.he.app;
 const h = a.home;
 const L = h.live;
+const D = h.details;
 
 const PILL: Record<HomeState, "ok" | "info" | "neutral" | "attn"> = {
   ok: "ok", collecting: "neutral", paused: "neutral", attention: "attn", no_campaign: "neutral",
@@ -85,7 +88,10 @@ export function Home() {
   const leads = r?.current.leads ?? 0;
   const cpl = r?.current.cplAgorot ?? null;
   const spend = r?.current.spendAgorot ?? 0;
-  const activeAds = r?.perCreative.length ?? 0;
+  // De-duplicated by creative NAME (AIC-37): the same creative can run under
+  // multiple audiences (ad sets) as distinct Meta ad objects, but the customer
+  // thinks of it as one creative — the roll-up should count concepts, not rows.
+  const activeAds = new Set((r?.perCreative ?? []).map((c) => c.creativeName ?? c.metaObjectId)).size;
   const period = ov.campaign?.budgetPeriod === "monthly" ? L.perMonth : L.perDay;
 
   return (
@@ -125,6 +131,9 @@ export function Home() {
               <Delta pct={r?.delta.spendPct ?? null} />
             </div>
           </div>
+
+          {/* opt-in per-audience / per-creative details (AIC-37) — collapsed by default */}
+          {ov.campaign && <AudienceDetails />}
 
           {/* a pending recommendation outranks the reassurance card */}
           {ov.pendingRecommendations > 0 ? (
@@ -181,6 +190,82 @@ export function Home() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// The opt-in "details" door (AIC-37): collapsed by default, fetched lazily only
+// when the customer opens it. Per-audience rows, each expandable to its own
+// per-creative breakdown. Business-framed labels only (audience by its human
+// dimension, creative by design name) — no raw ad-jargon metrics.
+//
+// Instrumentation note: AIC-37 asks this toggle to feed the "do customers want
+// abstraction or detail" product question via the AIC-28 metrics layer. AIC-28
+// isn't built yet, so there's no event sink to write to — deferred until it
+// lands rather than half-building a bespoke one here.
+function AudienceDetails() {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<CampaignAudiences | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && !data) {
+      setLoading(true);
+      getCampaignAudiences().then(setData).catch(() => {}).finally(() => setLoading(false));
+    }
+  }
+
+  return (
+    <div className="card">
+      <button
+        className="row between"
+        style={{ width: "100%", background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "inherit" }}
+        onClick={toggle}
+        aria-expanded={open}
+      >
+        <b>{open ? D.hide : D.show}</b>
+        <span style={{ transform: open ? "rotate(180deg)" : undefined, transition: "transform .15s" }}>▾</span>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 14 }}>
+          {loading ? (
+            <p className="muted">{a.loading}</p>
+          ) : !data || data.audiences.length === 0 ? (
+            <p className="muted">{D.empty}</p>
+          ) : (
+            <div className="stack gap8">
+              {data.audiences.map((aud) => (
+                <div key={aud.adSetId} className="soft" style={{ borderRadius: 14, padding: 14 }}>
+                  <button
+                    className="row between"
+                    style={{ width: "100%", background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "inherit" }}
+                    onClick={() => setExpanded(expanded === aud.adSetId ? null : aud.adSetId)}
+                  >
+                    <b>{aud.label}</b>
+                    <span className="muted" style={{ fontSize: "0.85rem" }}>
+                      {shekels(aud.spendAgorot)} · {aud.leads} {D.leadsCol} · {aud.cplAgorot === null ? L.none : shekels(aud.cplAgorot)}
+                    </span>
+                  </button>
+                  {expanded === aud.adSetId && aud.creatives.length > 0 && (
+                    <div style={{ marginTop: 10 }}>
+                      {aud.creatives.map((c) => (
+                        <div key={c.metaObjectId} className="summary-row" style={{ fontSize: "0.85rem" }}>
+                          <span className="k">{c.creativeName ?? c.metaObjectId}</span>
+                          <b>{shekels(c.spendAgorot)} · {c.leads} {D.leadsCol}</b>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

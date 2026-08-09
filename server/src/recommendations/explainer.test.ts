@@ -21,6 +21,25 @@ function rec(over: Partial<RecommendationRecord>): RecommendationRecord {
 const PAUSE = rec({ type: "pause_creative", targetMetaId: "ad_3", evidence: { spendAgorot: 18000, leads: 1 } });
 const INCREASE = rec({ type: "increase_budget", currentBudgetAgorot: 7000, proposedBudgetAgorot: 8000 });
 
+describe("pause_adset — named by its human audience dimension (AIC-37)", () => {
+  it("names the audience when a label is present in evidence", () => {
+    const withLabel = rec({ type: "pause_adset", targetMetaId: "as_2", evidence: { audienceLabel: "35–45" } });
+    expect(explain(withLabel)).toContain("35–45");
+  });
+
+  it("falls back to generic phrasing when no label was derivable", () => {
+    const noLabel = rec({ type: "pause_adset", targetMetaId: "as_2", evidence: {} });
+    const text = explain(noLabel);
+    expect(text).not.toContain("null");
+    expect(text.length).toBeGreaterThan(0);
+  });
+
+  it("never says 'ad set' or 'ad-set N'", () => {
+    const withLabel = rec({ type: "pause_adset", targetMetaId: "as_2", evidence: { audienceLabel: "נשים" } });
+    expect(explain(withLabel).toLowerCase()).not.toContain("ad set");
+  });
+});
+
 describe("explainer number fidelity", () => {
   it("echoes the structured figures verbatim (pause)", () => {
     const text = explain(PAUSE);

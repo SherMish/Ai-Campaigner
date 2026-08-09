@@ -6,6 +6,24 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-09 — Opt-in per-audience/per-creative details view (AIC-37)
+Progressive disclosure for the multi-ad-set campaigns AIC-38 established as
+normal: Home stays the 4-number roll-up by default; a collapsed **"הצג פירוט"**
+expander reveals the per-audience breakdown, each expandable to its own
+per-creative rows. New `GET /api/app/audiences`
+(`server/src/services/campaign-audiences.ts`, ownership-scoped, DB-only). Audience
+labels are derived from what actually differs between a campaign's ad sets — age
+→ gender → geo, else the ad set's own name — never "ad set N"
+(`server/src/meta/audience-label.ts`, `deriveAudienceLabels`). Labels are fetched
++ cached (`ad_set_meta`, migration 015) by the engine tick (alongside delivery
+health) and threaded into `pause_underperforming_audience`'s evidence, so the
+explainer now names the audience by its human dimension instead of generic
+phrasing. Home's active-creative count is de-duplicated by creative name (the
+same design under two ad sets is one "creative," not two). QA'd live on GelNails:
+opened the details, saw "18–35" / "35–45" with the Almond creative under each.
+Deferred: instrumenting the toggle as a product signal (needs AIC-28, which
+doesn't exist yet). Docs: `RULES.md`, `customer-app.md`.
+
 ### 2026-08-09 — Dashboard two-column layout (AIC-41)
 Restructured Home (`/app`) into a Pisga-style **rail + main** dashboard: left rail
 = the campaign at-a-glance card; main = hero (status) + KPI row + recommendation

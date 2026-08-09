@@ -10,8 +10,14 @@ import { refreshRecommendations } from "./staleness.js";
 import { rollingPeriods } from "../meta/scheduled-ingestion.js";
 import { summarize, type DeliveryReader, type DeliverySummary } from "../meta/delivery-health.js";
 import { recordCampaignDelivery } from "../services/delivery-monitor.js";
+import { deriveAudienceLabels, type AdSetMeta } from "../meta/audience-label.js";
+import { upsertAdSetMeta } from "../services/audience-meta-cache.js";
 import { OpsQueue } from "../services/ops-queue.js";
 import { consoleLogger, type Logger } from "../services/logger.js";
+
+export interface AudienceMetaReader {
+  getAdSetMeta(metaCampaignId: string): Promise<AdSetMeta[]>;
+}
 
 // The scheduled recommendation evaluator (AIC-9). It closes the engine loop:
 // ingestion writes fresh snapshots, then this runs the deterministic rules over
@@ -65,6 +71,10 @@ export async function runGenerationTick(deps: {
   // evidence, so the audience rule never proposes pausing a broken ad set.
   deliveryReader?: DeliveryReader;
   recordDelivery?: (campaign: GenCampaign, summary: DeliverySummary) => Promise<void>;
+  // AIC-37: ad-set metadata (name + targeting), used to derive human audience
+  // labels and cache them (via recordAudienceMeta) for the customer surface.
+  audienceMetaReader?: AudienceMetaReader;
+  recordAudienceMeta?: (campaign: GenCampaign, adsets: AdSetMeta[]) => Promise<void>;
   ref?: Date;
   logger?: Logger;
 }): Promise<GenerationSummary> {
@@ -103,6 +113,19 @@ export async function runGenerationTick(deps: {
       }
     }
 
+    // Audience labels: fetch + cache ad-set metadata, derive labels. A read
+    // failure just means no label this tick (rules fall back to the raw id).
+    let adSetLabels: Map<string, string> | undefined;
+    if (deps.audienceMetaReader) {
+      try {
+        const adsets = await deps.audienceMetaReader.getAdSetMeta(campaign.metaCampaignId);
+        adSetLabels = deriveAudienceLabels(adsets);
+        await deps.recordAudienceMeta?.(campaign, adsets);
+      } catch (e) {
+        log?.error(`[generation] ${campaign.id}: audience-meta read failed — ${(e as Error).message}`);
+      }
+    }
+
     const result = await refreshRecommendations({
       snapshotStore,
       recommendationStore,
@@ -112,6 +135,7 @@ export async function runGenerationTick(deps: {
       previous,
       expiresAt: null,
       excludeAdSetIds,
+      adSetLabels,
     });
 
     summary.evaluated++;
@@ -144,6 +168,10 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
       deliveryReader: adapter,
       recordDelivery: async (campaign, del) => {
         await recordCampaignDelivery({ pool, ops, campaignId: campaign.id, customerId: campaign.customerId, summary: del });
+      },
+      audienceMetaReader: adapter,
+      recordAudienceMeta: async (campaign, adsets) => {
+        await upsertAdSetMeta(pool, campaign.id, adsets);
       },
       snapshotStore,
       recommendationStore,

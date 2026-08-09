@@ -13,6 +13,7 @@ import {
   recheckCustomerConnection,
   requestBudgetChange,
 } from "../services/customer-actions.js";
+import { buildCampaignAudiences } from "../services/campaign-audiences.js";
 
 // Customer-facing data API (AIC-22/24). Every route is scoped to the caller's
 // own customer via the JWT — the service only ever reads rows owned by req.userId.
@@ -152,6 +153,23 @@ appRouter.post("/budget-request", requireAuth, async (req, res) => {
   } catch (e) {
     console.error("[app] budget request failed", e);
     res.status(500).json({ error: "failed to submit request" });
+  }
+});
+
+// ── Opt-in audience details (AIC-37) ───────────────────────────────────────
+// The "details" expander: per-audience (ad set) + per-creative breakdown.
+// Collapsed by default on Home; this is the door, not the room.
+appRouter.get("/audiences", requireAuth, async (req, res) => {
+  try {
+    const result = await buildCampaignAudiences(pool, (req as AuthedRequest).userId!);
+    if (!result) {
+      res.status(404).json({ error: "no managed campaign" });
+      return;
+    }
+    res.json(result);
+  } catch (e) {
+    console.error("[app] audiences failed", e);
+    res.status(500).json({ error: "failed to load audience details" });
   }
 });
 

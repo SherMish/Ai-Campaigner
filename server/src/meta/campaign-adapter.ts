@@ -1,5 +1,6 @@
 import type { LiveCampaignState, MetaReader, ExecWriter } from "../execution/safe-executor.js";
 import { normalizeAdSet, isProblem, type AdSetHealth, type DeliveryReader, type RawAdSetDelivery } from "./delivery-health.js";
+import { normalizeAdSetMeta, type AdSetMeta, type RawAdSetMeta } from "./audience-label.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
 // Marketing API. Budgets are read/written in the account currency's MINOR unit,
@@ -112,5 +113,16 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       }
     }
     return health;
+  }
+
+  // Ad-set name + targeting (AIC-37) — the separate read that lets us derive a
+  // human audience label ("18–35" vs "35–45") instead of ever showing a raw
+  // ad-set name or "ad set N". Cached by the caller (ad_set_meta); not read at
+  // customer render time.
+  async getAdSetMeta(metaCampaignId: string): Promise<AdSetMeta[]> {
+    const body = await this.get(
+      `${metaCampaignId}/adsets?fields=id,name,targeting{age_min,age_max,genders,geo_locations}&limit=100`,
+    );
+    return ((body.data as RawAdSetMeta[]) ?? []).map(normalizeAdSetMeta);
   }
 }

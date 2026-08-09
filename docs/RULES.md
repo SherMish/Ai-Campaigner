@@ -73,6 +73,16 @@ ad set (and its creatives) from the evidence — so this rule only ever compares
 genuinely-delivering audiences and never proposes pausing a broken one. That
 exclusion is what made the rule safe to run live.
 
+**Named by its human dimension (AIC-37).** The explainer never says "ad set" or
+an ad-set id — `evidence.audienceLabel` carries a label like `"35–45"`, derived
+by [`deriveAudienceLabels`](../server/src/meta/audience-label.ts) from whatever
+actually differs between the campaign's ad sets (age → gender → geo, falling back
+to the ad set's own Meta name). Labels are fetched + cached (`ad_set_meta`,
+migration 015) by the same engine tick that reads delivery health, and threaded
+into the rule's evidence via `buildCampaignEvidence`'s `adSetLabels` param — never
+a live Meta call at render time. See [customer-app.md](features/customer-app.md)
+for the customer-facing opt-in details view this same label feeds.
+
 ### v1 approximations (documented, refined later)
 - Trend rules compare the **current window vs the previous window** (not daily
   granularity) — sufficient for v1; daily snapshots are a later refinement.
