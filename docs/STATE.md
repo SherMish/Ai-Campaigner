@@ -6,6 +6,26 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-09 — Full Meta data explorer (AIC-45)
+The operator's unrestricted deep view — the exact opposite of the customer's
+opt-in audience view (AIC-37): every node (campaign→ad-set→ad→creative) with
+every metric Meta gives us, including the ones hidden from customers per PRD
+§14 (CPM/CTR/CPC/reach/frequency/quality-engagement-conversion rankings),
+targeting, budgets + bid strategy, and delivery issues. New
+`server/src/meta/explorer.ts` (`GraphExplorerReader`, its own small read-only
+Graph client) + `services/campaign-explorer.ts` fetch live from Meta on every
+open/refresh — no new storage table, honest degradation via
+`unavailableReason` (`no_meta_campaign`/`no_token`/`meta_error`) instead of a
+500 or a fabricated tree. This is the one deliberate exception to "never a
+live Meta call at render time" (AIC-7's rule protects the normal navigation
+path; this is a gated, explicit operator action). Recognizes flexible/dynamic
+creatives (`asset_feed_spec`) instead of rendering them as broken. Web:
+`AdminMeta.tsx` at `/admin/meta` (nav item now live); `AdminCustomers.tsx`
+links straight in via `?campaign=<id>`. Tests: `explorer.test.ts` (pure
+normalizers incl. the flexible-creative shape),
+`campaign-explorer.integration.test.ts` (DB+HTTP, injected fake reader).
+Doc: `ops-console.md`.
+
 ### 2026-08-09 — Customer CRUD + admin audit log (AIC-44)
 The operator's actual daily onboarding/support tool: `AdminCustomers.tsx`
 gains create ("+ לקוח חדש"), an inline edit form (business fields; budget

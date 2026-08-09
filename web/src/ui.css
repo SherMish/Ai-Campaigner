@@ -267,6 +267,21 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 .op-audit-item:last-child { border-bottom: 0; }
 .op-audit-item .who { color: var(--muted); font-size: 0.78rem; }
 
+/* Full Meta data explorer (AIC-45): dense metric grid + ad-set/ad tree. */
+.op-metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; margin: 12px 0; }
+.op-metric { background: var(--cream-2); border-radius: 12px; padding: 10px 12px; }
+.op-metric b { display: block; font-size: 1rem; font-weight: 800; }
+.op-metric .lbl { font-size: 0.7rem; color: var(--muted); }
+.op-node { border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin-top: 12px; }
+.op-node.op-problem { border-color: #c0362c; background: #fdf3f2; }
+.op-node-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.op-issue { color: #c0362c; font-size: 0.82rem; font-weight: 600; }
+.op-ad-list { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.op-ad-card { display: flex; gap: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #fff; }
+.op-ad-card.op-problem { border-color: #c0362c; background: #fdf3f2; }
+.op-ad-thumb { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: var(--cream-2); }
+.op-ad-thumb.flex { display: grid; place-items: center; font-size: 0.65rem; text-align: center; color: var(--muted); padding: 4px; }
+
 @media (max-width: 860px) {
   .ap-shell { grid-template-columns: 1fr; }
   .ap-side { position: fixed; top: 0; bottom: 0; right: 0; width: 264px; z-index: 60; transform: translateX(100%); transition: transform .22s ease; }

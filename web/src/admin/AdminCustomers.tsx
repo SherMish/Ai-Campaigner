@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { formatShekel } from "@aic/shared";
 import {
   api,
@@ -416,6 +416,12 @@ export function AdminCustomers() {
               <button className="btn btn-outline btn-sm" style={{ marginInlineEnd: 6 }} onClick={() => review(selected.campaignId!, "changes_requested")}>{t.requestChanges}</button>
               <button className="btn btn-outline btn-sm" onClick={() => review(selected.campaignId!, "unsupported")}>{t.unsupported}</button>
             </div>
+          )}
+
+          {selected.campaignId && (
+            <p style={{ margin: "0 0 14px" }}>
+              <Link className="link" to={`/admin/meta?campaign=${selected.campaignId}`}>{t.openMetaExplorer}</Link>
+            </p>
           )}
 
           {readout ? (

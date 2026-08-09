@@ -178,6 +178,75 @@ export const deleteCustomer = (id: string, confirmText: string) =>
 export const getCustomerAudit = (id: string) =>
   api<{ entries: AuditEntry[] }>(`/admin/customers/${id}/audit`);
 
+// ── Admin: full Meta data explorer (AIC-45) ─────────────────────────────────
+export interface ExplorerMetrics {
+  spendAgorot: number;
+  impressions: number;
+  reach: number | null;
+  frequency: number | null;
+  cpmAgorot: number | null;
+  ctrPct: number | null;
+  cpcAgorot: number | null;
+  leads: number;
+  cplAgorot: number | null;
+  qualityRanking: string | null;
+  engagementRateRanking: string | null;
+  conversionRateRanking: string | null;
+}
+export interface ExplorerCreative {
+  id: string | null;
+  name: string | null;
+  title: string | null;
+  body: string | null;
+  callToActionType: string | null;
+  imageUrl: string | null;
+  videoId: string | null;
+  isFlexible: boolean;
+  flexibleAssetCounts: { images: number; videos: number; bodies: number; titles: number } | null;
+}
+export interface ExplorerAd {
+  id: string;
+  name: string | null;
+  effectiveStatus: string | null;
+  issues: string[];
+  creative: ExplorerCreative | null;
+  metrics: ExplorerMetrics;
+}
+export interface ExplorerAdSet {
+  id: string;
+  name: string | null;
+  effectiveStatus: string | null;
+  issues: string[];
+  dailyBudgetAgorot: number | null;
+  lifetimeBudgetAgorot: number | null;
+  bidStrategy: string | null;
+  targeting: { ageMin: number | null; ageMax: number | null; genders: string[]; geoCountries: string[]; interests: string[] };
+  metrics: ExplorerMetrics;
+  ads: ExplorerAd[];
+}
+export interface ExplorerCampaign {
+  id: string;
+  name: string | null;
+  effectiveStatus: string | null;
+  dailyBudgetAgorot: number | null;
+  lifetimeBudgetAgorot: number | null;
+  bidStrategy: string | null;
+  metrics: ExplorerMetrics;
+  adSets: ExplorerAdSet[];
+  period: { start: string; end: string };
+  fetchedAt: string;
+}
+export interface ExplorerResult {
+  campaignId: string;
+  name: string;
+  metaCampaignId: string | null;
+  tree: ExplorerCampaign | null;
+  unavailableReason: "no_meta_campaign" | "no_token" | "meta_error" | null;
+  errorDetail?: string;
+}
+export const getCampaignExplorer = (campaignId: string) =>
+  api<ExplorerResult>(`/admin/campaigns/${campaignId}/explorer`);
+
 export const changePassword = (currentPassword: string, newPassword: string) =>
   api<{ ok: true }>("/auth/change-password", {
     method: "POST",

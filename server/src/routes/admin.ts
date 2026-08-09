@@ -17,6 +17,7 @@ import { consoleLogger } from "../services/logger.js";
 import { submitReview, recordCustomerDecision, getLatestReview } from "../services/campaign-review.js";
 import { updateBilling, conversionSummary, upsertLeadQuality, listLeadQuality, leadQualityResponseRate } from "../services/billing.js";
 import { buildFleetOverview } from "../services/fleet-overview.js";
+import { buildCampaignExplorer } from "../services/campaign-explorer.js";
 
 // Internal admin surfaces. Reads only from our DB (insight_snapshots) — never a
 // live Meta call at render time (AIC-7).
@@ -213,6 +214,20 @@ adminRouter.get("/lead-quality/response-rate", async (req, res) => {
   const week = String(req.query.week ?? "");
   if (!week) { res.status(400).json({ error: "week query param required" }); return; }
   res.json(await leadQualityResponseRate(pool, week));
+});
+
+// Full Meta data explorer (AIC-45): the unrestricted internal deep view —
+// live from Meta on every open/refresh (the one deliberate exception to
+// "never a live Meta call at render time," see campaign-explorer.ts). Never a
+// write; a missing token or an unmanaged/unlinked campaign degrades honestly
+// via `unavailableReason` rather than a 500 or a fabricated tree.
+adminRouter.get("/campaigns/:id/explorer", async (req, res) => {
+  const result = await buildCampaignExplorer(pool, req.params.id);
+  if (!result) {
+    res.status(404).json({ error: "campaign not found" });
+    return;
+  }
+  res.json(result);
 });
 
 adminRouter.get("/campaigns/:id/readout", async (req, res) => {

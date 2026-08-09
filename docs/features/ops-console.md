@@ -2,8 +2,8 @@
 
 **Status:** in progress — the operator surfaces. AIC-16 (customers view) done;
 needs-attention queue (AIC-17), first-campaign review (AIC-18), billing +
-lead-quality (AIC-19), and customer CRUD + admin audit log (AIC-44) extend this
-doc.
+lead-quality (AIC-19), customer CRUD + admin audit log (AIC-44), and the full
+Meta data explorer (AIC-45) extend this doc.
 
 **Source of truth:** services under `server/src/services/` + routes in
 `server/src/routes/admin.ts` (all behind `requireAdmin`).
@@ -26,7 +26,7 @@ shell CSS, AIC-40) + `AdminSidebar.tsx`, wrapping the section routes:
 | --- | --- | --- |
 | `/admin` | `AdminOverview.tsx` — fleet snapshot + global search | live (AIC-43) |
 | `/admin/customers` | `AdminCustomers.tsx` — needs-attention queue + all customers + drill-down (readout + review) | live (carried over from the pre-shell single dashboard) |
-| נתוני Meta (Meta explorer) | full internal per-audience/per-ad data | disabled "בקרוב" — AIC-45 |
+| `/admin/meta` | `AdminMeta.tsx` — full Meta data explorer (see below) | live (AIC-45) |
 | המלצות (recommendations oversight) | all recs, all customers | disabled "בקרוב" — AIC-46 |
 | מפעילים (operators + audit) | operator accounts + admin action log | disabled "בקרוב" — AIC-47 |
 
@@ -147,6 +147,63 @@ intact; delete on a correct confirm-to-type cascades the related rows AND
 survives in the audit log with a `before_state` snapshot; a full HTTP round
 trip create→edit→deactivate→reactivate→audit→delete attributed to a real
 admin actor; 401 without an admin credential).
+
+## Full Meta data explorer (AIC-45)
+
+The unrestricted internal deep view — the exact opposite of the customer's
+opt-in audience view (AIC-37, which shows a human label and 3 numbers). Where
+AIC-37 hides CPM/CTR/CPC/reach/frequency/rankings (PRD §14), this shows all of
+them, for every node: campaign → ad set → ad → creative.
+
+`server/src/meta/explorer.ts` (`GraphExplorerReader`, its own small Graph API
+client — deliberately not grown onto `GraphCampaignAdapter`, the safe-execute
+reader/writer, since this asks for a much wider read-only field set and
+carries no write capability) fetches, in parallel: the campaign object
+(budget/bid strategy/effective status), all ad sets (targeting, budget, bid
+strategy, `issues_info`), all ads (creative, `issues_info`), and Insights at
+all three levels with the full field set (`spend, impressions, reach,
+frequency, cpm, ctr, cpc, actions, quality_ranking, engagement_rate_ranking,
+conversion_rate_ranking`). `server/src/services/campaign-explorer.ts`
+`buildCampaignExplorer(pool, campaignId, opts?)` resolves the managed
+campaign's `meta_campaign_id`, builds the reader from
+`META_SYSTEM_USER_TOKEN` (or takes an injected `ExplorerReader` — how the
+tests drive it without a live Meta call), and degrades **honestly** via
+`unavailableReason` rather than a 500 or a fabricated tree:
+`no_meta_campaign` (not linked yet), `no_token` (Meta not configured — the
+same honest-unavailable pattern as `buildCustomerExecutor`), `meta_error`
+(a real Graph API failure, with `errorDetail`).
+
+**Fetch-on-demand, not stored.** Every open of `/admin/meta` (or its
+"רענון מ-Meta" refresh button) is a fresh live read — nothing is cached at
+rest, no new table. This is the deliberate single exception to "never a live
+Meta call at render time" (the rule the rest of this doc follows, AIC-7):
+that rule protects the surfaces on the normal navigation path (customer app,
+fleet overview) from depending on Meta being up; this surface is the raw
+diagnostic view, gated behind an explicit operator action, at the scale of
+one operator on 1–2 accounts — "fine for few operators," the ticket's own
+framing. Read-only: any change still goes through the safe-execute pipeline
+(AIC-12), never from here.
+
+**Flexible/dynamic creatives.** A creative can be a fixed single image/video
+(`object_story_spec`) or a "flexible"/dynamic one (`asset_feed_spec`, several
+images/videos/bodies/titles Meta mixes per impression) — `normalizeCreative`
+recognizes the second shape and surfaces it as a labeled asset-count summary
+instead of rendering it as a broken/empty creative.
+
+Web: `web/src/admin/AdminMeta.tsx` at `/admin/meta` (nav item now live,
+`AdminSidebar.tsx`). A tab picker over customers with a managed campaign
+(hidden when there's only one); the selected campaign's full tree — budget/
+bid strategy/status header, a dense 12-metric grid at campaign level, then
+one card per ad set (targeting, budget, bid strategy, issues in red when
+present) each with its ads (creative preview or the flexible-asset summary,
+issues, the same 12-metric grid). `AdminCustomers.tsx`'s customer drill-down
+links straight in via `?campaign=<id>` ("נתוני Meta המלאים ←").
+
+Route: `GET /admin/campaigns/:id/explorer`. Tests: `explorer.test.ts` (pure
+normalizers — metrics/targeting/creative, including the flexible-creative
+shape), `campaign-explorer.integration.test.ts` (DB + HTTP: missing campaign,
+`no_meta_campaign`, `no_token`, a full tree via an injected fake reader with
+one healthy and one errored ad set, `meta_error`, auth).
 
 ## Needs-attention queue (AIC-17)
 
