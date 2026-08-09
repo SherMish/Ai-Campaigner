@@ -65,6 +65,16 @@ Source: `server/src/services/campaign-review.js`. Tests:
 `campaign-review.integration.test.ts` (all three outcomes + no-activation-without-
 approval).
 
+**Compatibility criteria (AIC-38).** The supported shape is **1 campaign → N ad
+sets → 3–5 creatives** (see [DATA_MODEL.md](../DATA_MODEL.md)). A legitimate
+multi-ad-set **audience split** (e.g. the GelNails campaign: two ad sets by age,
+same creatives) is `approved` and **managed as-is** — it is *not* a reason for
+`changes_requested`/"rebuild to one ad set" or `unsupported`. The single-ad-set
+ideal is an onboarding *recommendation*, never a compatibility bar. Reserve
+`changes_requested`/`unsupported` for genuinely unmanageable structures: wrong
+objective (not leads/WhatsApp), no WhatsApp destination, or an unwieldy sprawl of
+overlapping ad sets — not a clean 2–3 audience split.
+
 ## Manual billing + weekly lead-quality (AIC-19)
 
 **Billing ledger** (no payment gateway): `updateBilling` edits the subscription

@@ -34,7 +34,17 @@ function rowToReview(r: Record<string, unknown>): CampaignReview {
 // First-campaign review (AIC-18): the mandatory human gate before a campaign
 // becomes managed. Records the outcome + reviewer + timestamp, and moves the
 // campaign's status — but NEVER activates/rebuilds/modifies without recorded
-// customer approval (PRD §11 hard rule):
+// customer approval (PRD §11 hard rule).
+//
+// Compatibility (AIC-38): the supported shape is 1 campaign → N ad sets → 3–5
+// creatives. A legitimate multi-ad-set AUDIENCE SPLIT (e.g. two ad sets by age)
+// is `approved` and managed as-is — never `changes_requested`/rebuild or
+// `unsupported`. The single-ad-set ideal is an onboarding recommendation, not a
+// compatibility bar. Reserve the non-approved outcomes for genuinely
+// unmanageable structures (wrong objective, no WhatsApp destination, an unwieldy
+// sprawl of overlapping ad sets), not a clean 2–3 audience split.
+//
+// Status moves:
 //   approved            → status 'active' (we manage + monitor; no Meta change)
 //   unsupported         → status 'unmanaged'
 //   changes_requested   → status stays 'under_review' until the customer approves

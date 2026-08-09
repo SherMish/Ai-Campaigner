@@ -36,14 +36,25 @@ when `DATABASE_URL` is unset.
 | `subscriptions` | Manual billing: setup/monthly agorot, status, next charge | `customer_id` (1:1) |
 | `meta_connections` | Partner-access + System User linkage; `access_health` (ok/revoked/invalid/needs_reconnect); per-asset grants | `customer_id` (1:1) |
 | `ad_accounts` | Managed ad account under a connection | `connection_id` |
-| `managed_campaigns` | The one managed campaign per customer; status, agreed budget (agorot), `automation_enabled` brake | `customer_id` (1:1), `ad_account_id` |
+| `managed_campaigns` | The one managed campaign per customer; status, agreed budget (agorot), `automation_enabled` brake. Supported shape: **1 campaign → N ad sets → 3–5 creatives** (see note below) | `customer_id` (1:1), `ad_account_id` |
 | `insight_snapshots` | Normalized Insights at campaign/adset/ad/creative grain; spend, leads, CPL (agorot); internal impressions/clicks | `campaign_id`; UNIQUE `(campaign_id, grain, meta_object_id, period_start, period_end)` |
 | `recommendations` | Proposed action + type + evidence + state machine + expiry | `campaign_id` |
 | `action_history` | Append-only audit: what / previous / new / why / who / human / when | `campaign_id`, `recommendation_id` |
 | `lead_quality_feedback` | Weekly campaign-level: leads reported, relevant count, customers won | `campaign_id`; UNIQUE `(campaign_id, week_start)` |
 | `ops_queue_items` | Needs-attention worklist: type, severity, status | `customer_id`, `campaign_id` |
 
-## Lead & money definitions
+### Managed-campaign shape (AIC-38)
+
+The supported structure is **1 campaign → N ad sets → 3–5 creatives**. The
+single-ad-set ideal ("1 campaign → 1 ad set → 3–5 creatives") is a
+**recommendation to the customer during onboarding**, never an assumption the
+engine, dashboard, or review may rely on. Real customers' existing campaigns
+split by audience routinely (age/gender/geo), and P0 manages the *existing*
+campaign (PRD §7) — so multiple ad sets are **normal, not exceptional**. Budgets
+are read at the **campaign** level (CBO / Advantage+ distributes across ad sets);
+`insight_snapshots` carries the `adset` grain so per-audience performance is
+available to the rules and surfaces. See the audience-aware engine (AIC-36) and
+surfacing (AIC-37).
 
 - **lead** = `onsite_conversion.messaging_conversation_started` (Click-to-WhatsApp).
   See [METRICS.md](METRICS.md) when ingestion (AIC-6) lands.

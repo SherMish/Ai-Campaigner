@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-09 — Managed shape = 1 campaign → N ad sets (AIC-38)
+Definition/anchor for the multi-ad-set arc the GelNails dogfood surfaced (a real
+campaign with 2 ad sets split by age). Codified the supported shape — **1 campaign
+→ N ad sets → 3–5 creatives** — in `DATA_MODEL.md`; the single-ad-set ideal is an
+onboarding *recommendation*, not a system/engine/review assumption. First-campaign
+review criteria (`ops-console.md` + a `campaign-review.ts` comment): a legitimate
+multi-ad-set **audience split** is `approved`/managed-as-is, never
+`changes_requested`/"rebuild" or `unsupported` — those are reserved for genuinely
+unmanageable structures. Docs + comment only; no behavior change. Anchors AIC-36
+(audience-aware engine) and AIC-37 (surfacing).
+
 ### 2026-08-09 — Per-user admin role for the ops console
 Admin access is now an attribute of the account, not a shared token. New
 `app_users.is_admin` (migration 012); `requireAdmin` accepts a valid customer JWT
