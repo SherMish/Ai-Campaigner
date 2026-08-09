@@ -287,7 +287,39 @@ export const changePassword = (currentPassword: string, newPassword: string) =>
   });
 
 export const getMe = () =>
-  api<{ user: { name: string; email: string; isAdmin: boolean } }>("/auth/me").then((r) => r.user);
+  api<{ user: { name: string; email: string; isAdmin: boolean; adminRole: "full_admin" | "operator" } }>("/auth/me").then((r) => r.user);
+
+// ── Admin: operator accounts + full audit log (AIC-47) ──────────────────────
+export interface OperatorRow {
+  id: string;
+  email: string;
+  name: string;
+  adminRole: "full_admin" | "operator";
+  createdAt: string;
+}
+export const getOperators = () => api<{ operators: OperatorRow[] }>("/admin/operators");
+export const addOperator = (email: string, role: "full_admin" | "operator") =>
+  api<{ ok: true }>("/admin/operators", { method: "POST", body: JSON.stringify({ email, role }) });
+export const setOperatorRole = (id: string, role: "full_admin" | "operator") =>
+  api<{ ok: true }>(`/admin/operators/${id}/role`, { method: "POST", body: JSON.stringify({ role }) });
+export const removeOperator = (id: string) =>
+  api<{ ok: true }>(`/admin/operators/${id}`, { method: "DELETE", body: "{}" });
+
+export interface FullAuditEntry {
+  id: string;
+  createdAt: string;
+  actorUserId: string | null;
+  actorLabel: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  entityLabel: string;
+  detail: string;
+}
+export const getAuditLog = (filter: { actorUserId?: string; entityType?: string; entityId?: string } = {}) => {
+  const q = new URLSearchParams(Object.entries(filter).filter(([, v]) => v) as [string, string][]).toString();
+  return api<{ entries: FullAuditEntry[] }>(`/admin/audit${q ? `?${q}` : ""}`);
+};
 export const getOverview = () => api<CustomerOverview>("/app/overview");
 export const postLeadQuality = (leadsReported: number, relevantCount: number) =>
   api<{ ok: true }>("/app/lead-quality", {

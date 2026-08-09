@@ -59,20 +59,24 @@ export async function logAdminAction(pool: pg.Pool, entry: AuditLogInput): Promi
 
 export interface AuditFilter {
   entityId?: string;
+  entityType?: string;
   actorUserId?: string;
 }
 
-// AIC-44 needs enough of a read path to prove "delete is logged" and to show a
-// per-customer trail; AIC-47 builds the full cross-entity filterable console.
+// AIC-44 built enough of a read path to prove "delete is logged" and show a
+// per-customer trail (entityId filter); AIC-47 adds entityType (so "by
+// customer" can mean the whole entity class, not just one id) for the full
+// cross-entity filterable console.
 export async function listAuditLog(pool: pg.Pool, filter: AuditFilter = {}): Promise<AuditEntry[]> {
   const clauses: string[] = [];
   const params: unknown[] = [];
   if (filter.entityId) { params.push(filter.entityId); clauses.push(`entity_id = $${params.length}`); }
+  if (filter.entityType) { params.push(filter.entityType); clauses.push(`entity_type = $${params.length}`); }
   if (filter.actorUserId) { params.push(filter.actorUserId); clauses.push(`actor_user_id = $${params.length}`); }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
 
   const { rows } = await pool.query(
-    `SELECT * FROM admin_audit_log ${where} ORDER BY created_at DESC LIMIT 200`,
+    `SELECT * FROM admin_audit_log ${where} ORDER BY created_at DESC LIMIT 300`,
     params,
   );
   return rows.map((r) => ({

@@ -6,6 +6,33 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-09 — Operator accounts + full admin audit log (AIC-47)
+The last ops-console-v2 ticket — all five admin sections are now live. New
+`app_users.admin_role` (`full_admin`|`operator`, migration 018, backfilled
+from today's `is_admin` accounts) is the one deliberate role gate: every
+admin route still runs on `requireAdmin` alone, except operator-account
+management itself, which additionally requires `requireFullAdmin` — a
+general per-route RBAC overhaul was explicitly out of scope, only the
+concrete "only a full-admin can manage operators" AC. `services/
+operator-accounts.ts` add/promote/remove an operator (promotion of an
+existing signed-up account only — no invite-by-email, same P0 gap as
+password reset); both role-demotion and removal refuse to touch the last
+remaining full_admin. Removing revokes console access without deleting the
+login. The full filterable audit log reuses AIC-44's `admin_audit_log` table
+(no new table) — `listAuditLog` gained an `entityType` filter; new writers
+`operator.add/.role_change/.remove` and `campaign.control.<action>` (closed a
+real gap: emergency-control use was silently unlogged before this, despite
+being explicitly listed in the AIC-47 spec). Web: `AdminOperators.tsx` at
+`/admin/operators` (nav item now live — the console's last "בקרוב" row is
+gone). Live-verified end to end on prod Neon: added/promoted/removed a real
+test operator, the last-full-admin guard correctly blocked a demotion, and a
+real reversible emergency-control round trip on Pisga's campaign logged both
+actions truthfully — cleaned up afterward. Tests: `middleware/admin.test.ts`
+(requireFullAdmin), `operator-accounts.integration.test.ts` (10 tests). Also
+removed a stale doc section (`ops-console.md`'s "Web ops console") that still
+referenced the pre-shell `OpsConsole.tsx`/`/admin/ops`, deleted back in
+AIC-43 but left undocumented as gone.
+
 ### 2026-08-09 — Recommendations oversight (AIC-46)
 PRD §23's cross-account recommendations surface: every rec the engine has
 produced, any customer, filterable by state/type/customer, with its evidence

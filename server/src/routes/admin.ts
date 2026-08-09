@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
-import { requireAdmin } from "../middleware/admin.js";
+import { requireAdmin, requireFullAdmin } from "../middleware/admin.js";
 import type { AuthedRequest } from "../middleware/auth.js";
 import {
   buildCampaignReadout,
@@ -10,8 +10,9 @@ import { ControlService, PgControlStore } from "../execution/control-service.js"
 import { listCampaignActionHistory, condense } from "../services/action-history.js";
 import { listCustomers, getCustomerDetail } from "../services/customers.js";
 import { createCustomer, updateCustomer, deactivateCustomer, reactivateCustomer, deleteCustomer } from "../services/customer-admin.js";
-import { listAuditLog, type Actor } from "../services/admin-audit.js";
-import { PgUserStore } from "../auth/user-store.js";
+import { listAuditLog, logAdminAction, type Actor } from "../services/admin-audit.js";
+import { listOperators, addOperator, setOperatorRole, removeOperator } from "../services/operator-accounts.js";
+import { PgUserStore, type AdminRole } from "../auth/user-store.js";
 import { OpsQueue } from "../services/ops-queue.js";
 import { consoleLogger } from "../services/logger.js";
 import { submitReview, recordCustomerDecision, getLatestReview } from "../services/campaign-review.js";
@@ -57,6 +58,26 @@ adminRouter.post("/campaigns/:id/controls", async (req, res) => {
     return;
   }
   await CONTROL_ACTIONS[action](req.params.id);
+
+  // Emergency-control use is one of the console actions AIC-47's audit log is
+  // explicitly meant to capture — best-effort: the control already took
+  // effect, so a lookup/log failure here must never turn into a false error.
+  try {
+    const actor = await actorFor(req as AuthedRequest);
+    const camp = await pool.query<{ name: string; business_name: string }>(
+      `SELECT mc.name, c.business_name FROM managed_campaigns mc JOIN customers c ON c.id = mc.customer_id WHERE mc.id = $1`,
+      [req.params.id],
+    );
+    await logAdminAction(pool, {
+      actorUserId: actor.userId, actorLabel: actor.label,
+      action: `campaign.control.${action}`, entityType: "campaign", entityId: req.params.id,
+      entityLabel: camp.rows[0] ? `${camp.rows[0].business_name} — ${camp.rows[0].name}` : req.params.id,
+      detail: `Emergency control: ${action}`,
+    });
+  } catch (e) {
+    console.error("[admin] failed to log emergency-control action", e);
+  }
+
   res.json({ ok: true, action });
 });
 
@@ -277,4 +298,48 @@ adminRouter.get("/campaigns/:id/history", async (req, res) => {
     return;
   }
   res.json({ entries });
+});
+
+// Operator accounts (AIC-47). Any admin can see who else has console access
+// (transparency); only a full_admin can add/promote/remove — the one
+// deliberate role gate in this console (requireFullAdmin, not a general RBAC
+// system — see middleware/admin.ts).
+adminRouter.get("/operators", async (_req, res) => {
+  res.json({ operators: await listOperators(pool) });
+});
+
+adminRouter.post("/operators", requireFullAdmin, async (req, res) => {
+  const actor = await actorFor(req as AuthedRequest);
+  const email = String(req.body?.email ?? "").trim();
+  const role: AdminRole = req.body?.role === "full_admin" ? "full_admin" : "operator";
+  if (!email) { res.status(400).json({ error: "email required" }); return; }
+  const r = await addOperator(pool, actor, email, role);
+  if (!r.ok) { res.status(400).json({ error: r.error }); return; }
+  res.status(201).json({ ok: true });
+});
+
+adminRouter.post("/operators/:id/role", requireFullAdmin, async (req, res) => {
+  const actor = await actorFor(req as AuthedRequest);
+  const role: AdminRole = req.body?.role === "full_admin" ? "full_admin" : "operator";
+  const r = await setOperatorRole(pool, actor, String(req.params.id), role);
+  if (!r.ok) { res.status(r.error === "operator not found" ? 404 : 400).json({ error: r.error }); return; }
+  res.json({ ok: true });
+});
+
+adminRouter.delete("/operators/:id", requireFullAdmin, async (req, res) => {
+  const actor = await actorFor(req as AuthedRequest);
+  const r = await removeOperator(pool, actor, String(req.params.id));
+  if (!r.ok) { res.status(r.error === "operator not found" ? 404 : 400).json({ error: r.error }); return; }
+  res.json({ ok: true });
+});
+
+// Full cross-entity, filterable admin audit log (AIC-47) — every write
+// AIC-44/46/47 logs, queryable by operator and by entity type/id. Distinct
+// from the customer-facing/campaign action_history (Meta changes); this is
+// console actions. No current overlap to cross-link: AIC-46 deliberately
+// didn't build operator-initiated recommendation execute, the one case that
+// would have written to both logs.
+adminRouter.get("/audit", async (req, res) => {
+  const { actorUserId, entityType, entityId } = req.query as Record<string, string | undefined>;
+  res.json({ entries: await listAuditLog(pool, { actorUserId, entityType, entityId }) });
 });

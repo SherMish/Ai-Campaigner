@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import type { Request, Response } from "express";
-import { buildRequireAdmin } from "./admin.js";
+import { buildRequireAdmin, buildRequireFullAdmin } from "./admin.js";
 import { signAuthToken } from "../auth/tokens.js";
 
 // Set before snapshotting OLD so afterEach preserves it (CI has no JWT_SECRET).
@@ -55,5 +55,41 @@ describe("requireAdmin (per-user role)", () => {
   it("still 401s a wrong break-glass token", async () => {
     process.env.ADMIN_TOKEN = "s3cret";
     expect((await run("Bearer nope")).status()).toBe(401);
+  });
+});
+
+// requireFullAdmin (AIC-47): the one deliberate role gate, mounted after
+// requireAdmin so req.userId is already set (or absent, for break-glass).
+describe("requireFullAdmin (AIC-47 role gate)", () => {
+  const guard = buildRequireFullAdmin({ isFullAdmin: async (id) => id === "full-1" });
+
+  async function runRole(userId?: string) {
+    const req = { userId } as unknown as Request;
+    let statusCode = 0;
+    const res = {
+      status(c: number) { statusCode = c; return this; },
+      json() { return this; },
+    } as unknown as Response;
+    const next = vi.fn();
+    await guard(req, res, next);
+    return { status: () => statusCode, next };
+  }
+
+  it("allows a full_admin", async () => {
+    const { next, status } = await runRole("full-1");
+    expect(next).toHaveBeenCalledOnce();
+    expect(status()).toBe(0);
+  });
+
+  it("403s a plain operator (admin but not full_admin)", async () => {
+    const { next, status } = await runRole("operator-2");
+    expect(next).not.toHaveBeenCalled();
+    expect(status()).toBe(403);
+  });
+
+  it("403s when there's no userId (the break-glass path never qualifies)", async () => {
+    const { next, status } = await runRole(undefined);
+    expect(next).not.toHaveBeenCalled();
+    expect(status()).toBe(403);
   });
 });

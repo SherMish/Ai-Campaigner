@@ -195,6 +195,37 @@ export const strings = {
       } as Record<string, string>,
     },
 
+    // Operator accounts + admin action audit log (AIC-47).
+    operators: {
+      title: "מפעילים",
+      subtitle: "מי יכול לגשת לקונסולה, ומה נעשה בה.",
+      sectionOperators: "חשבונות מפעילים",
+      sectionAudit: "יומן פעולות מלא",
+      email: "אימייל",
+      name: "שם",
+      role: "תפקיד",
+      created: "נוצר",
+      roleFullAdmin: "מנהל מלא",
+      roleOperator: "מפעיל",
+      addOperator: "הוספת מפעיל",
+      addEmailPlaceholder: "אימייל של משתמש קיים…",
+      addNote: "אפשר להוסיף רק משתמש שכבר נרשם למערכת (אין עדיין שליחת הזמנות במייל).",
+      add: "הוספה",
+      addError: "ההוספה נכשלה — ודאו שהאימייל שייך למשתמש קיים ושאינו כבר מפעיל.",
+      remove: "הסרת גישה",
+      removeConfirm: "להסיר את הגישה לקונסולה? הכניסה של המשתמש למערכת עצמה לא נמחקת.",
+      removeError: "ההסרה נכשלה.",
+      roleChangeError: "שינוי התפקיד נכשל.",
+      onlyFullAdminNote: "רק מנהל מלא יכול להוסיף, להסיר או לשנות תפקיד של מפעילים.",
+      filterActor: "מפעיל",
+      filterEntityType: "סוג ישות",
+      all: "הכל",
+      noEntries: "אין רשומות התואמות את הסינון.",
+      entityTypeLabels: {
+        customer: "לקוח", recommendation: "המלצה", operator: "מפעיל", campaign: "קמפיין",
+      } as Record<string, string>,
+    },
+
     // Fleet-wide overview (AIC-43) — the operator's landing snapshot.
     fleet: {
       title: "סקירה כללית",

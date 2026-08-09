@@ -5,10 +5,9 @@ import { clearAuthToken } from "../api";
 
 const n = strings.he.adminShell;
 
-// Right-side nav for the internal admin console (AIC-43). Overview / Customers /
-// Meta explorer (AIC-45) / Recommendations oversight (AIC-46) are live;
-// Operators is the destination AIC-47 builds — shown as a disabled "coming
-// soon" row until then, same pattern Pisga uses for unbuilt sections.
+// Right-side nav for the internal admin console (AIC-43). All five sections
+// are now live: Overview (AIC-43), Customers (AIC-16/44), Meta explorer
+// (AIC-45), Recommendations oversight (AIC-46), Operators + audit (AIC-47).
 export function AdminSidebar() {
   const cls = ({ isActive }: { isActive: boolean }) => "ap-nav-item" + (isActive ? " active" : "");
   const logout = () => { clearAuthToken(); window.location.assign("/login"); };
@@ -31,10 +30,9 @@ export function AdminSidebar() {
         <NavLink to="/admin/recommendations" className={cls}>
           <span className="ic"><Sparkles size={18} /></span><span>{n.navRecs}</span>
         </NavLink>
-        <div className="ap-nav-item disabled" aria-disabled="true">
+        <NavLink to="/admin/operators" className={cls}>
           <span className="ic"><ShieldCheck size={18} /></span><span>{n.navOperators}</span>
-          <span className="ap-nav-badge">{n.comingSoon}</span>
-        </div>
+        </NavLink>
       </div>
 
       <div className="ap-spacer" />

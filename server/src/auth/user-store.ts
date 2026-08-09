@@ -1,12 +1,18 @@
 import { randomUUID } from "node:crypto";
 import type pg from "pg";
 
+// Operator role (AIC-47): meaningful only when isAdmin is true. full_admin can
+// manage other operators; operator has the same console access otherwise —
+// this is the one deliberate role gate, not a general RBAC system.
+export type AdminRole = "full_admin" | "operator";
+
 export interface AppUser {
   id: string;
   email: string;
   name: string;
   customerId: string | null;
   isAdmin: boolean;
+  adminRole: AdminRole;
   createdAt: Date;
 }
 export interface AppUserWithHash extends AppUser {
@@ -42,6 +48,7 @@ function rowToUser(r: Record<string, unknown>): AppUser {
     name: (r.name as string) ?? "",
     customerId: (r.customer_id as string) ?? null,
     isAdmin: (r.is_admin as boolean) ?? false,
+    adminRole: ((r.admin_role as AdminRole) ?? "operator"),
     createdAt: r.created_at as Date,
   };
 }
@@ -101,7 +108,7 @@ export class InMemoryUserStore implements UserStore {
     if (await this.findByEmail(input.email)) throw new DuplicateEmailError();
     const user: AppUserWithHash = {
       id: randomUUID(), email: input.email, name: input.name, customerId: null,
-      isAdmin: false, createdAt: new Date(), passwordHash: input.passwordHash,
+      isAdmin: false, adminRole: "operator", createdAt: new Date(), passwordHash: input.passwordHash,
     };
     this.users.push(user);
     const { passwordHash, ...pub } = user;

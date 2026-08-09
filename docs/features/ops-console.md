@@ -1,10 +1,10 @@
 # Ops console (internal)
 
-**Status:** in progress — the operator surfaces. AIC-16 (customers view) done;
-needs-attention queue (AIC-17), first-campaign review (AIC-18), billing +
-lead-quality (AIC-19), customer CRUD + admin audit log (AIC-44), the full Meta
-data explorer (AIC-45), and recommendations oversight (AIC-46) extend this
-doc.
+**Status:** done — all five console sections are live. AIC-16 (customers
+view), needs-attention queue (AIC-17), first-campaign review (AIC-18), billing
++ lead-quality (AIC-19), customer CRUD + admin audit log (AIC-44), the full
+Meta data explorer (AIC-45), recommendations oversight (AIC-46), and operator
+accounts + the full audit log (AIC-47).
 
 **Source of truth:** services under `server/src/services/` + routes in
 `server/src/routes/admin.ts` (all behind `requireAdmin`).
@@ -19,6 +19,19 @@ omission (the PIS-26 lesson). An optional `ADMIN_TOKEN` remains as a break-glass
 for machine/curl access (matching `Authorization: Bearer <token>`, constant-time);
 it's unset by default, so only admin users get in.
 
+**Role tier (AIC-47).** `app_users.admin_role` (migration 018) is `'full_admin'
+| 'operator'`, meaningful only when `is_admin = true`. This is **one deliberate
+gate, not a general RBAC system**: every admin route stays gated on
+`requireAdmin` alone (both roles have identical console access) EXCEPT
+operator-account management itself, which additionally requires
+`requireFullAdmin` — "only a full-admin can manage operators" was the concrete
+AC; building granular per-action permissions (a true "reviewer" read-only
+role) across every mutating route was out of scope. The migration backfills
+today's `is_admin = true` accounts to `full_admin`, so nobody loses the
+ability to manage operators the moment this ships. Both guards live in
+`middleware/admin.ts` (`buildRequireAdmin`/`buildRequireFullAdmin`, unit
+tested with a fake resolver — no DB in those tests).
+
 The web console is a **nav shell** (AIC-43) under **`/admin`** —
 `web/src/admin/AdminShell.tsx` (a right-side sidebar, reusing the customer app's
 shell CSS, AIC-40) + `AdminSidebar.tsx`, wrapping the section routes:
@@ -29,7 +42,7 @@ shell CSS, AIC-40) + `AdminSidebar.tsx`, wrapping the section routes:
 | `/admin/customers` | `AdminCustomers.tsx` — needs-attention queue + all customers + drill-down (readout + review) | live (carried over from the pre-shell single dashboard) |
 | `/admin/meta` | `AdminMeta.tsx` — full Meta data explorer (see below) | live (AIC-45) |
 | `/admin/recommendations` | `AdminRecommendations.tsx` — all recs, all customers (see below) | live (AIC-46) |
-| מפעילים (operators + audit) | operator accounts + admin action log | disabled "בקרוב" — AIC-47 |
+| `/admin/operators` | `AdminOperators.tsx` — operator accounts + the full admin action log (see below) | live (AIC-47) |
 
 (The old `/admin/ops` + `/admin/readout` routes now redirect to
 `/admin/customers`, where that content lives.) `AdminGate.tsx` gates on the
@@ -306,7 +319,60 @@ campaigns for a week). Routes: `PATCH /api/admin/customers/:id/billing`,
 `GET /api/admin/lead-quality/response-rate?week=`. Source:
 `server/src/services/billing.js`. Tests: `billing.integration.test.ts`.
 
-## Web ops console
-The operator surfaces above render in `web/src/admin/OpsConsole.tsx` at
-`/admin/ops` (customers list, needs-attention queue with triage, per-customer
-detail with the review form + billing + lead-quality).
+## Operator accounts + the full admin action log (AIC-47)
+
+Two governance pieces, one page: **who can access the console**, and **what
+they've done in it**.
+
+**Operator accounts** (`server/src/services/operator-accounts.ts`):
+`listOperators` (any admin — transparency), `addOperator` / `setOperatorRole` /
+`removeOperator` (`requireFullAdmin` only). Adding is a **promotion of an
+existing signed-up account** — P0 has no invite-by-email flow (no email sender
+yet, same limitation as password reset, AIC-33), so the person must already
+have a login; `addOperator` sets `is_admin = true` on their `app_users` row.
+Removing sets `is_admin = false` and resets the role — the account/login
+itself is never deleted (same convention as a hard-deleted customer's linked
+`app_user` surviving, AIC-44). Both role-demotion and removal refuse to touch
+the **last remaining `full_admin`** — live-verified: attempting to demote the
+sole full_admin correctly fails and the UI reverts to the real server state.
+Routes: `GET/POST /api/admin/operators`, `POST /api/admin/operators/:id/role`,
+`DELETE /api/admin/operators/:id`.
+
+**The full admin audit log** is the same `admin_audit_log` table AIC-44 built
+(migration 016) — AIC-47 adds no new table, only the read/filter surface on
+top, plus new writers: `operator.add` / `.role_change` / `.remove` (this
+ticket), and `campaign.control.<action>` for emergency-control use
+(`POST /campaigns/:id/controls` — disable/enable automation, freeze/unfreeze
+execution, mark unmanaged, pause management), which was silently unlogged
+before this ticket even though the AIC-47 spec explicitly lists it as one of
+the actions this log must capture — closed as part of this work, best-effort
+(a logging failure never turns a successful control into a reported error).
+`listAuditLog` (`admin-audit.ts`) gained an `entityType` filter alongside the
+existing `entityId`/`actorUserId` ones, so "by customer" can mean the whole
+entity class or one specific id. `GET /api/admin/audit?actorUserId=&entityType=&entityId=`.
+
+**No current cross-link to `action_history`** (Meta campaign changes, AIC-15):
+the one case that would populate both logs — an operator-initiated
+recommendation execute — was deliberately not built (AIC-46). If that ever
+changes, that's where the cross-link belongs.
+
+**RLS**: intentionally not added to `admin_audit_log` or `app_users.admin_role`
+— same Neon architecture decision as AIC-44 (API-layer authz via
+`requireAdmin`/`requireFullAdmin`, not Postgres RLS).
+
+Web: `web/src/admin/AdminOperators.tsx` at `/admin/operators` (nav item now
+live). Two sections: the operator roster (role dropdown + remove, both
+disabled — not hidden — for a non-full_admin, so the UI stays honest about
+what exists even when you can't act on it) with an add-operator form below it
+for full_admins; and the full audit log with actor/entity-type filters.
+
+Tests: `middleware/admin.test.ts` (unit — `requireFullAdmin`: full_admin
+allowed, plain operator 403, no userId 403), `operator-accounts.integration.
+test.ts` (add/promote/remove + audit logging, the last-full-admin guard on
+both demotion and removal, a full HTTP round trip proving only full_admin can
+manage operators, emergency-control use now writes an audit row, the full log
+filters by actor and entity type, auth). Live-verified end to end against
+prod Neon (add → promote → remove a real test operator, the last-full-admin
+guard correctly blocking a demotion, a real reversible emergency-control
+round trip on Pisga's own campaign logging both actions truthfully) — cleaned
+up afterward.
