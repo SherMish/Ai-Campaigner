@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-09 — Per-user admin role for the ops console
+Admin access is now an attribute of the account, not a shared token. New
+`app_users.is_admin` (migration 012); `requireAdmin` accepts a valid customer JWT
+whose user is admin (403 for a valid non-admin, 401 otherwise — fail-closed in
+every environment; the old "open in non-prod" convenience is gone). `ADMIN_TOKEN`
+stays as an optional break-glass. `GET /auth/me` now returns `isAdmin`; the web
+`AdminGate` renders the console only for a signed-in admin account and `api()`
+sends the user's JWT for `/admin/*`. sharon.mishayev@gmail.com set as the sole
+admin. Owning doc: `features/ops-console.md`. Tests: `admin.test.ts` (rewritten),
+`admin-auth.integration.test.ts`.
+
 ### 2026-08-09 — Scheduled recommendation evaluator — closes the engine loop (AIC-9)
 The rules engine was built + tested but nothing invoked it at runtime — the
 scheduler only ran ingestion, so no recommendation was ever produced. Added

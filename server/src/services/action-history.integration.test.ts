@@ -1,6 +1,6 @@
 // DB + HTTP integration for the action-history surface (AIC-15). Requires
 // DATABASE_URL; self-skips otherwise. Reads only from action_history.
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import request from "supertest";
 import { pool } from "../db/pool.js";
 import { createApp } from "../app.js";
@@ -18,7 +18,9 @@ async function makeCampaign(): Promise<{ campaignId: string; customerId: string 
   return { campaignId: camp.rows[0].id, customerId };
 }
 
+const ADMIN = "Bearer test-admin";
 d("action history surface (DB + HTTP)", () => {
+  beforeAll(() => { process.env.ADMIN_TOKEN = "test-admin"; });
   afterAll(async () => { await pool.end(); });
 
   it("lists newest-first, distinguishes automated vs human, condenses jargon-free", async () => {
@@ -49,10 +51,10 @@ d("action history surface (DB + HTTP)", () => {
     expect(condensed[0].summary).not.toMatch(/budget|8000|CTR/i);
 
     // Over HTTP.
-    const full = await request(createApp()).get(`/api/admin/campaigns/${campaignId}/history`);
+    const full = await request(createApp()).get(`/api/admin/campaigns/${campaignId}/history`).set("Authorization", ADMIN);
     expect(full.status).toBe(200);
     expect(full.body.entries).toHaveLength(2);
-    const cond = await request(createApp()).get(`/api/admin/campaigns/${campaignId}/history?condensed=true`);
+    const cond = await request(createApp()).get(`/api/admin/campaigns/${campaignId}/history?condensed=true`).set("Authorization", ADMIN);
     expect(cond.body.entries[0].summary).toBe("החלפת קריאייטיב");
 
     await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);

@@ -1,23 +1,30 @@
-import { useState, type ReactNode } from "react";
-import { getAdminToken, setAdminToken, clearAdminToken } from "../api";
+import { useEffect, useState, type ReactNode } from "react";
+import { getAuthToken, clearAuthToken, getMe } from "../api";
 
-// Minimal auth gate for the internal admin console. Requires an admin token
-// (matched server-side by requireAdmin against ADMIN_TOKEN). Stored in
-// localStorage and attached as a bearer on every /admin request. This is the
-// operator-console gate, not customer auth.
+// Gate for the internal ops console. Admin is a per-user role (server checks
+// app_users.is_admin): the operator signs in as a normal customer account, and
+// only an admin account may open the console. No shared token to hand around.
+type State = "checking" | "ok" | "denied" | "unauth";
+
 export function AdminGate({ children }: { children: ReactNode }) {
-  const [ok, setOk] = useState(() => !!getAdminToken());
-  const [value, setValue] = useState("");
+  const [state, setState] = useState<State>("checking");
 
-  if (ok) {
+  useEffect(() => {
+    if (!getAuthToken()) { setState("unauth"); return; }
+    getMe()
+      .then((u) => setState(u.isAdmin ? "ok" : "denied"))
+      .catch(() => setState("unauth"));
+  }, []);
+
+  if (state === "ok") {
     return (
       <div>
         <div style={{ position: "fixed", insetInlineEnd: 16, top: 12, zIndex: 100 }}>
           <button
             className="btn btn-outline btn-sm"
-            onClick={() => { clearAdminToken(); setOk(false); }}
+            onClick={() => { clearAuthToken(); window.location.href = "/login"; }}
           >
-            נעילת הקונסולה
+            יציאה
           </button>
         </div>
         {children}
@@ -27,18 +34,19 @@ export function AdminGate({ children }: { children: ReactNode }) {
 
   return (
     <main dir="rtl" style={{ minHeight: "100vh", display: "grid", placeItems: "center", fontFamily: "system-ui, sans-serif" }}>
-      <form
-        onSubmit={(e) => { e.preventDefault(); if (value.trim()) { setAdminToken(value.trim()); setOk(true); } }}
-        style={{ width: 340, maxWidth: "90vw" }}
-      >
+      <div style={{ width: 340, maxWidth: "90vw", textAlign: "center" }}>
         <h1 style={{ fontSize: "1.4rem", fontWeight: 800, marginBottom: 8 }}>קונסולת תפעול</h1>
-        <p className="muted" style={{ marginBottom: 18 }}>הזינו את מפתח הגישה (ADMIN_TOKEN).</p>
-        <div className="field">
-          <label>מפתח גישה</label>
-          <input type="password" value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
-        </div>
-        <button className="btn btn-primary block" type="submit" style={{ marginTop: 16 }}>כניסה</button>
-      </form>
+        {state === "checking" && <p className="muted">בודקים הרשאה…</p>}
+        {state === "unauth" && (
+          <>
+            <p className="muted" style={{ marginBottom: 16 }}>צריך להתחבר עם חשבון מנהל.</p>
+            <a className="btn btn-primary block" href="/login">כניסה</a>
+          </>
+        )}
+        {state === "denied" && (
+          <p className="muted">החשבון הזה אינו מורשה לקונסולת התפעול.</p>
+        )}
+      </div>
     </main>
   );
 }

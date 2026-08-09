@@ -125,7 +125,7 @@ export const changePassword = (currentPassword: string, newPassword: string) =>
   });
 
 export const getMe = () =>
-  api<{ user: { name: string; email: string } }>("/auth/me").then((r) => r.user);
+  api<{ user: { name: string; email: string; isAdmin: boolean } }>("/auth/me").then((r) => r.user);
 export const getOverview = () => api<CustomerOverview>("/app/overview");
 export const postLeadQuality = (leadsReported: number, relevantCount: number) =>
   api<{ ok: true }>("/app/lead-quality", {
@@ -144,8 +144,10 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     "Content-Type": "application/json",
     ...((init?.headers as Record<string, string>) ?? {}),
   };
-  // /admin/* uses the ops-console token; everything else uses the customer JWT.
-  const token = path.startsWith("/admin") ? getAdminToken() : getAuthToken();
+  // Admin is a per-user role: /admin/* uses the signed-in user's JWT (an
+  // optional break-glass admin token still wins if one was set). Everything
+  // else uses the customer JWT.
+  const token = path.startsWith("/admin") ? (getAdminToken() || getAuthToken()) : getAuthToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`/api${path}`, { ...init, headers });

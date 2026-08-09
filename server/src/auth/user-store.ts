@@ -6,6 +6,7 @@ export interface AppUser {
   email: string;
   name: string;
   customerId: string | null;
+  isAdmin: boolean;
   createdAt: Date;
 }
 export interface AppUserWithHash extends AppUser {
@@ -40,6 +41,7 @@ function rowToUser(r: Record<string, unknown>): AppUser {
     email: r.email as string,
     name: (r.name as string) ?? "",
     customerId: (r.customer_id as string) ?? null,
+    isAdmin: (r.is_admin as boolean) ?? false,
     createdAt: r.created_at as Date,
   };
 }
@@ -99,7 +101,7 @@ export class InMemoryUserStore implements UserStore {
     if (await this.findByEmail(input.email)) throw new DuplicateEmailError();
     const user: AppUserWithHash = {
       id: randomUUID(), email: input.email, name: input.name, customerId: null,
-      createdAt: new Date(), passwordHash: input.passwordHash,
+      isAdmin: false, createdAt: new Date(), passwordHash: input.passwordHash,
     };
     this.users.push(user);
     const { passwordHash, ...pub } = user;

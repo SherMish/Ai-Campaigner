@@ -1,7 +1,7 @@
 // DB + HTTP integration for the dogfood readout (AIC-7). Requires DATABASE_URL
 // with migrations applied; self-skips otherwise. Seeds snapshots and asserts both
 // the service output and the admin endpoint JSON.
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import request from "supertest";
 import { pool } from "../db/pool.js";
 import { createApp } from "../app.js";
@@ -37,7 +37,9 @@ function snap(campaignId: string, o: Partial<SnapshotUpsert>): SnapshotUpsert {
   };
 }
 
+const ADMIN = "Bearer test-admin";
 d("dogfood readout (DB + HTTP)", () => {
+  beforeAll(() => { process.env.ADMIN_TOKEN = "test-admin"; });
   afterAll(async () => {
     await pool.end();
   });
@@ -105,7 +107,7 @@ d("dogfood readout (DB + HTTP)", () => {
     // And over HTTP through the admin route.
     const res = await request(createApp()).get(
       `/api/admin/campaigns/${campaignId}/readout`,
-    );
+    ).set("Authorization", ADMIN);
     expect(res.status).toBe(200);
     expect(res.body.current.leads).toBe(6);
     expect(res.body.perCreative).toHaveLength(2);
@@ -116,7 +118,7 @@ d("dogfood readout (DB + HTTP)", () => {
   it("404s an unknown campaign", async () => {
     const res = await request(createApp()).get(
       `/api/admin/campaigns/00000000-0000-0000-0000-000000000000/readout`,
-    );
+    ).set("Authorization", ADMIN);
     expect(res.status).toBe(404);
   });
 });

@@ -1,13 +1,20 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeAll, vi } from "vitest";
 import type { Request, Response } from "express";
-import { requireAdmin } from "./admin.js";
+import { buildRequireAdmin } from "./admin.js";
+import { signAuthToken } from "../auth/tokens.js";
 
+beforeAll(() => {
+  process.env.JWT_SECRET ||= "test-secret-admin";
+});
 const OLD = { ...process.env };
 afterEach(() => {
   process.env = { ...OLD };
 });
 
-function run(authHeader?: string) {
+// isAdminUser resolver: only "admin-1" is an admin.
+const guard = buildRequireAdmin({ isAdminUser: async (id) => id === "admin-1" });
+
+async function run(authHeader?: string) {
   const req = {
     header: (h: string) => (h.toLowerCase() === "authorization" ? authHeader : undefined),
   } as unknown as Request;
@@ -17,37 +24,37 @@ function run(authHeader?: string) {
     json() { return this; },
   } as unknown as Response;
   const next = vi.fn();
-  requireAdmin(req, res, next);
+  await guard(req, res, next);
   return { status: () => statusCode, next };
 }
 
-describe("requireAdmin", () => {
-  it("allows a matching bearer token when ADMIN_TOKEN is set", () => {
-    process.env.ADMIN_TOKEN = "s3cret";
-    const { next, status } = run("Bearer s3cret");
+describe("requireAdmin (per-user role)", () => {
+  it("allows an admin user's JWT", async () => {
+    const { next, status } = await run(`Bearer ${signAuthToken("admin-1")}`);
     expect(next).toHaveBeenCalledOnce();
     expect(status()).toBe(0);
   });
 
-  it("401s a wrong or missing token when ADMIN_TOKEN is set", () => {
-    process.env.ADMIN_TOKEN = "s3cret";
-    expect(run("Bearer nope").status()).toBe(401);
-    expect(run(undefined).status()).toBe(401);
-    expect(run("Bearer nope").next).not.toHaveBeenCalled();
-  });
-
-  it("FAILS CLOSED in production when ADMIN_TOKEN is unset", () => {
-    delete process.env.ADMIN_TOKEN;
-    process.env.NODE_ENV = "production";
-    const { next, status } = run(undefined);
+  it("403s a valid but non-admin user's JWT", async () => {
+    const { next, status } = await run(`Bearer ${signAuthToken("user-2")}`);
     expect(next).not.toHaveBeenCalled();
-    expect(status()).toBe(503);
+    expect(status()).toBe(403);
   });
 
-  it("allows in non-production when ADMIN_TOKEN is unset (dev convenience)", () => {
-    delete process.env.ADMIN_TOKEN;
-    process.env.NODE_ENV = "test";
-    const { next } = run(undefined);
+  it("401s a missing or unverifiable token", async () => {
+    expect((await run(undefined)).status()).toBe(401);
+    expect((await run("Bearer not-a-jwt")).status()).toBe(401);
+  });
+
+  it("allows the break-glass ADMIN_TOKEN when set", async () => {
+    process.env.ADMIN_TOKEN = "s3cret";
+    const { next, status } = await run("Bearer s3cret");
     expect(next).toHaveBeenCalledOnce();
+    expect(status()).toBe(0);
+  });
+
+  it("still 401s a wrong break-glass token", async () => {
+    process.env.ADMIN_TOKEN = "s3cret";
+    expect((await run("Bearer nope")).status()).toBe(401);
   });
 });

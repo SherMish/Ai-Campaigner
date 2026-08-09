@@ -1,5 +1,5 @@
 // DB + HTTP integration for the customers view (AIC-16). Requires DATABASE_URL.
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import request from "supertest";
 import { pool } from "../db/pool.js";
 import { createApp } from "../app.js";
@@ -8,7 +8,9 @@ import { listCustomers, getCustomerDetail } from "./customers.js";
 const HAS_DB = !!process.env.DATABASE_URL;
 const d = HAS_DB ? describe : describe.skip;
 
+const ADMIN = "Bearer test-admin";
 d("customers view (DB + HTTP)", () => {
+  beforeAll(() => { process.env.ADMIN_TOKEN = "test-admin"; });
   afterAll(async () => { await pool.end(); });
 
   it("assembles list + detail from the real tables", async () => {
@@ -37,7 +39,7 @@ d("customers view (DB + HTTP)", () => {
     expect(detail?.outstandingRecommendation?.type).toBe("increase_budget");
     expect(detail?.openOpsItems).toBe(1);
 
-    const res = await request(createApp()).get(`/api/admin/customers/${customerId}`);
+    const res = await request(createApp()).get(`/api/admin/customers/${customerId}`).set("Authorization", ADMIN);
     expect(res.status).toBe(200);
     expect(res.body.businessName).toBe("__it_cust Co");
 
