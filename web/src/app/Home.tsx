@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { strings } from "../strings";
 import {
-  getOverview,
   postLeadQuality,
   getCampaignAudiences,
   shekels,
@@ -11,6 +10,7 @@ import {
   type CampaignAudiences,
 } from "../api";
 import { StatusPill } from "./components";
+import { useSharedOverview, invalidateOverview } from "./overview-store";
 
 const a = strings.he.app;
 const h = a.home;
@@ -55,21 +55,9 @@ function Delta({ pct, goodDown }: { pct: number | null; goodDown?: boolean }) {
 }
 
 export function Home() {
-  const [ov, setOv] = useState<CustomerOverview | null>(null);
-  const [err, setErr] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { data: ov, loading, error: err, reload } = useSharedOverview(); // shared with Sidebar/Settings (AIC-42)
 
-  function load() {
-    setLoading(true);
-    setErr(false);
-    getOverview()
-      .then(setOv)
-      .catch(() => setErr(true))
-      .finally(() => setLoading(false));
-  }
-  useEffect(load, []);
-
-  if (loading)
+  if (loading && !ov)
     return <div className="wrap page"><p className="muted">{a.loading}</p></div>;
 
   if (err || !ov)
@@ -77,7 +65,7 @@ export function Home() {
       <div className="wrap page">
         <div className="card">
           <p className="muted" style={{ marginBottom: 12 }}>{a.loadError}</p>
-          <button className="btn btn-outline btn-sm" onClick={load}>{a.retry}</button>
+          <button className="btn btn-outline btn-sm" onClick={reload}>{a.retry}</button>
         </div>
       </div>
     );

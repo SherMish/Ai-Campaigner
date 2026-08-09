@@ -33,8 +33,8 @@ export function Recommendations() {
 
   return (
     <div>
-      <div className="wrap page" style={{ maxWidth: 820, marginInline: "auto" }}>
-        <h1 style={{ marginBottom: 24 }}>{rc.title}</h1>
+      <div className="wrap page dash" style={{ maxWidth: 820, marginInline: "auto" }}>
+        <h1 className="dash-title">{rc.title}</h1>
 
         {loading ? (
           <p className="muted">{a.loading}</p>
@@ -124,7 +124,7 @@ export function RecommendationDetail() {
 
   return (
     <div>
-      <div className="wrap page" style={{ maxWidth: 720, marginInline: "auto" }}>
+      <div className="wrap page dash" style={{ maxWidth: 720, marginInline: "auto" }}>
         <Link className="link" to="/app/recommendations">{rd.back}</Link>
 
         {loading ? (
@@ -140,7 +140,7 @@ export function RecommendationDetail() {
         ) : phase === "executed" ? (
           <div className="card center" style={{ marginTop: 20, padding: 44 }}>
             <StatusPill variant="ok">✓</StatusPill>
-            <h1 style={{ margin: "14px 0 18px" }}>{rd.executedTitle}</h1>
+            <h1 className="dash-title" style={{ margin: "14px 0 18px" }}>{rd.executedTitle}</h1>
             <div className="summary-row"><span className="k">{rd.whatWeDid}</span><b>{rd.titles[rec.type]}</b></div>
             <Link className="btn btn-primary" style={{ marginTop: 20 }} to="/app/recommendations">{rd.backToRecs}</Link>
           </div>
@@ -155,7 +155,7 @@ export function RecommendationDetail() {
             <div className="row between" style={{ margin: "16px 0" }}>
               <StatusPill variant="warn">{rc.waiting}</StatusPill>
             </div>
-            <h1 style={{ marginBottom: 20 }}>{rd.titles[rec.type]}</h1>
+            <h1 className="dash-title" style={{ marginBottom: 20 }}>{rd.titles[rec.type]}</h1>
 
             <div className="card" style={{ marginBottom: 16 }}>
               <b>{rd.whyTitle}</b>
@@ -199,7 +199,7 @@ function Result({ title, sub, variant }: { title: string; sub: string; variant: 
   return (
     <div className="card center" style={{ marginTop: 20, padding: 44 }}>
       <StatusPill variant={variant}>●</StatusPill>
-      <h1 style={{ margin: "14px 0 10px" }}>{title}</h1>
+      <h1 className="dash-title" style={{ margin: "14px 0 10px" }}>{title}</h1>
       <p className="muted">{sub}</p>
     </div>
   );

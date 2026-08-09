@@ -235,6 +235,10 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 .ap-content { flex: 1; min-width: 0; }
 .ap-fab, .ap-overlay { display: none; }
 
+/* Visible focus rings for keyboard nav (AIC-42 a11y pass) */
+.ap-nav-item:focus-visible, .ap-cog:focus-visible, .ap-fab:focus-visible,
+.ap-acct button:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+
 @media (max-width: 860px) {
   .ap-shell { grid-template-columns: 1fr; }
   .ap-side { position: fixed; top: 0; bottom: 0; right: 0; width: 264px; z-index: 60; transform: translateX(100%); transition: transform .22s ease; }

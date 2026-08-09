@@ -76,6 +76,22 @@ internal per-audience view regardless of this toggle (AIC-45).
 signal (AIC-37's AC) — deferred until the AIC-28 metrics layer exists; there's no
 event sink to write to yet.
 
+**Design-system roll-out + polish (AIC-42):** Recommendations (list + detail) and
+Settings now share the dashboard's tighter type + lifted cards
+(`.dash`/`.dash-title` applied alongside their existing `.wrap.page`) instead of
+the earlier looser sizing — one visual system across every `/app*` screen.
+
+- **Shared overview fetch** (`web/src/app/overview-store.ts`): the sidebar, Home,
+  and Settings all read `GET /api/app/overview` through one `useSyncExternalStore`
+  cache instead of each firing their own request — confirmed one fetch per page
+  load (was up to 3).
+- **A11y pass**: the sidebar's account menu is keyboard-operable (opens with focus
+  on the first item, ↑/↓ cycle items, Escape closes and returns focus to the
+  gear); the mobile drawer closes on Escape; the active nav item gets
+  `aria-current="page"` (built into React Router's `NavLink`); visible
+  `:focus-visible` rings added for nav items, the account-menu gear, the mobile
+  FAB, and account-menu entries.
+
 ## Design system
 AdPilot palette (orange `#FF5A36`, cream `#F7F2EA`/`#EDE6DA`, ink `#171717`, green
 `#2FA36B`, indigo `#665CFF`, WhatsApp `#DCF8C6`), Rubik + IBM Plex Mono, RTL Hebrew.

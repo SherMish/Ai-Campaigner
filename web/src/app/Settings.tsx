@@ -1,30 +1,23 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { strings, connectionMessage } from "../strings";
 import {
-  getOverview, shekels, recheckConnection, requestBudgetChange, changePassword,
-  ApiError, type CustomerOverview, type AccessHealth,
+  shekels, recheckConnection, requestBudgetChange, changePassword,
+  ApiError, type AccessHealth,
 } from "../api";
 import { StatusPill, SupportCard, Field, WA } from "./components";
+import { useSharedOverview } from "./overview-store";
 
 const a = strings.he.app;
 const s = a.settings;
 const L = a.home.live;
 
 export function Settings() {
-  const [ov, setOv] = useState<CustomerOverview | null>(null);
-  const [err, setErr] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { data: ov, loading, error: err, reload } = useSharedOverview(); // shared with Sidebar/Home (AIC-42)
 
   // action state
   const [budgetSent, setBudgetSent] = useState(false);
   const [connHealth, setConnHealth] = useState<AccessHealth | null>(null);
   const [connChecking, setConnChecking] = useState(false);
-
-  function load() {
-    setLoading(true); setErr(false);
-    getOverview().then(setOv).catch(() => setErr(true)).finally(() => setLoading(false));
-  }
-  useEffect(load, []);
 
   const period = ov?.campaign?.budgetPeriod === "monthly" ? L.perMonth : L.perDay;
   const conn = ov?.connection;
@@ -41,15 +34,15 @@ export function Settings() {
 
   return (
     <div>
-      <div className="wrap page" style={{ maxWidth: 820, marginInline: "auto" }}>
-        <h1 style={{ marginBottom: 24 }}>{s.title}</h1>
+      <div className="wrap page dash" style={{ maxWidth: 820, marginInline: "auto" }}>
+        <h1 className="dash-title">{s.title}</h1>
 
-        {loading ? (
+        {loading && !ov ? (
           <p className="muted">{a.loading}</p>
         ) : err || !ov ? (
           <div className="card">
             <p className="muted" style={{ marginBottom: 12 }}>{a.loadError}</p>
-            <button className="btn btn-outline btn-sm" onClick={load}>{a.retry}</button>
+            <button className="btn btn-outline btn-sm" onClick={reload}>{a.retry}</button>
           </div>
         ) : (
           <div className="stack gap20" style={{ gap: 20 }}>

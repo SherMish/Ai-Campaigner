@@ -6,6 +6,19 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-09 — Design-system roll-out + shared overview fetch + a11y pass (AIC-42)
+Recommendations (list + detail) and Settings now use the same tighter type +
+lifted cards as the dashboard (`.dash`/`.dash-title`) — one visual system across
+`/app*`. New `web/src/app/overview-store.ts`: a single `useSyncExternalStore`
+cache for `GET /api/app/overview`, consumed by the sidebar, Home, and Settings —
+confirmed via the Performance API that a page load now fires exactly **one**
+overview request (was up to 3, one per component). A11y: the account menu opens
+with focus on its first item, ↑/↓ cycle entries, Escape closes and returns focus
+to the trigger; the mobile drawer closes on Escape; visible `:focus-visible`
+rings on nav items/gear/FAB/menu entries; `aria-current="page"` on the active nav
+item (via React Router's `NavLink`). Verified live: all three keyboard behaviors
+tested end-to-end in the browser. Doc: `customer-app.md`.
+
 ### 2026-08-09 — Opt-in per-audience/per-creative details view (AIC-37)
 Progressive disclosure for the multi-ad-set campaigns AIC-38 established as
 normal: Home stays the 4-number roll-up by default; a collapsed **"הצג פירוט"**

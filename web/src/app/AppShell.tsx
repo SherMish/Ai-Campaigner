@@ -13,6 +13,14 @@ export function AppShell() {
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [pathname]); // close the drawer on navigation
 
+  // Escape closes the mobile drawer (AIC-42 a11y pass).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
   return (
     <div className={`ap-shell${open ? " open" : ""}`} dir="rtl">
       <Sidebar />
