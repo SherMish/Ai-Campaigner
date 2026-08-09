@@ -5,6 +5,7 @@ import { AdminShell } from "./admin/AdminShell";
 import { AdminOverview } from "./admin/AdminOverview";
 import { AdminCustomers } from "./admin/AdminCustomers";
 import { AdminMeta } from "./admin/AdminMeta";
+import { AdminRecommendations } from "./admin/AdminRecommendations";
 import { AdminGate } from "./admin/AdminGate";
 import { AppShell } from "./app/AppShell";
 import { Signup, Login, Forgot, Reset } from "./app/Auth";
@@ -55,6 +56,7 @@ export function App() {
           <Route path="/admin" element={<AdminOverview />} />
           <Route path="/admin/customers" element={<AdminCustomers />} />
           <Route path="/admin/meta" element={<AdminMeta />} />
+          <Route path="/admin/recommendations" element={<AdminRecommendations />} />
         </Route>
         {/* back-compat: the old single-page dashboard routes fold into /admin/customers */}
         <Route path="/admin/ops" element={<Navigate to="/admin/customers" replace />} />

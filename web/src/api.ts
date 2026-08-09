@@ -247,6 +247,39 @@ export interface ExplorerResult {
 export const getCampaignExplorer = (campaignId: string) =>
   api<ExplorerResult>(`/admin/campaigns/${campaignId}/explorer`);
 
+// ── Admin: recommendations oversight (AIC-46) ───────────────────────────────
+export interface AdminRecRow {
+  id: string;
+  customerId: string;
+  businessName: string;
+  campaignId: string;
+  campaignName: string;
+  type: string;
+  state: string;
+  evidence: Record<string, unknown>;
+  currentBudgetAgorot: number | null;
+  proposedBudgetAgorot: number | null;
+  maxSpendImpactAgorot: number | null;
+  rationale: string;
+  createdAt: string;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  executedAt: string | null;
+  flaggedForReview: boolean;
+  flagNote: string | null;
+  flaggedAt: string | null;
+  actionHistoryId: string | null;
+  executionResult: "success" | "failed" | null;
+}
+export const getAdminRecommendations = (filter: { state?: string; type?: string; customerId?: string } = {}) => {
+  const q = new URLSearchParams(Object.entries(filter).filter(([, v]) => v) as [string, string][]).toString();
+  return api<{ recommendations: AdminRecRow[] }>(`/admin/recommendations${q ? `?${q}` : ""}`);
+};
+export const flagRecommendation = (id: string, note: string) =>
+  api<{ ok: true }>(`/admin/recommendations/${id}/flag`, { method: "POST", body: JSON.stringify({ note }) });
+export const unflagRecommendation = (id: string) =>
+  api<{ ok: true }>(`/admin/recommendations/${id}/unflag`, { method: "POST", body: "{}" });
+
 export const changePassword = (currentPassword: string, newPassword: string) =>
   api<{ ok: true }>("/auth/change-password", {
     method: "POST",

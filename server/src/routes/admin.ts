@@ -18,6 +18,8 @@ import { submitReview, recordCustomerDecision, getLatestReview } from "../servic
 import { updateBilling, conversionSummary, upsertLeadQuality, listLeadQuality, leadQualityResponseRate } from "../services/billing.js";
 import { buildFleetOverview } from "../services/fleet-overview.js";
 import { buildCampaignExplorer } from "../services/campaign-explorer.js";
+import { listRecommendationsForAdmin, flagRecommendation, unflagRecommendation } from "../services/recommendation-oversight.js";
+import { RECOMMENDATION_STATE, RECOMMENDATION_TYPE, type RecommendationState, type RecommendationType } from "@aic/shared";
 
 // Internal admin surfaces. Reads only from our DB (insight_snapshots) — never a
 // live Meta call at render time (AIC-7).
@@ -134,6 +136,34 @@ adminRouter.delete("/customers/:id", async (req, res) => {
 // Per-customer audit trail (full cross-entity filterable log is AIC-47).
 adminRouter.get("/customers/:id/audit", async (req, res) => {
   res.json({ entries: await listAuditLog(pool, { entityId: req.params.id }) });
+});
+
+// Recommendations oversight (AIC-46): every rec across every customer, its
+// evidence, and its lifecycle status. Read + flag only — no operator-
+// initiated execute here (see recommendation-oversight.ts for why).
+adminRouter.get("/recommendations", async (req, res) => {
+  const { state, type, customerId } = req.query as Record<string, string | undefined>;
+  const validState = RECOMMENDATION_STATE.includes(state as RecommendationState) ? (state as RecommendationState) : undefined;
+  const validType = RECOMMENDATION_TYPE.includes(type as RecommendationType) ? (type as RecommendationType) : undefined;
+  res.json({
+    recommendations: await listRecommendationsForAdmin(pool, {
+      state: validState, type: validType, customerId: customerId || undefined,
+    }),
+  });
+});
+
+adminRouter.post("/recommendations/:id/flag", async (req, res) => {
+  const actor = await actorFor(req as AuthedRequest);
+  const r = await flagRecommendation(pool, actor, req.params.id, String(req.body?.note ?? "").trim());
+  if (!r.ok) { res.status(404).json({ error: r.error }); return; }
+  res.json({ ok: true });
+});
+
+adminRouter.post("/recommendations/:id/unflag", async (req, res) => {
+  const actor = await actorFor(req as AuthedRequest);
+  const r = await unflagRecommendation(pool, actor, req.params.id);
+  if (!r.ok) { res.status(404).json({ error: r.error }); return; }
+  res.json({ ok: true });
 });
 
 // Needs-attention queue (AIC-17).

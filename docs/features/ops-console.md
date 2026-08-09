@@ -2,8 +2,9 @@
 
 **Status:** in progress — the operator surfaces. AIC-16 (customers view) done;
 needs-attention queue (AIC-17), first-campaign review (AIC-18), billing +
-lead-quality (AIC-19), customer CRUD + admin audit log (AIC-44), and the full
-Meta data explorer (AIC-45) extend this doc.
+lead-quality (AIC-19), customer CRUD + admin audit log (AIC-44), the full Meta
+data explorer (AIC-45), and recommendations oversight (AIC-46) extend this
+doc.
 
 **Source of truth:** services under `server/src/services/` + routes in
 `server/src/routes/admin.ts` (all behind `requireAdmin`).
@@ -27,7 +28,7 @@ shell CSS, AIC-40) + `AdminSidebar.tsx`, wrapping the section routes:
 | `/admin` | `AdminOverview.tsx` — fleet snapshot + global search | live (AIC-43) |
 | `/admin/customers` | `AdminCustomers.tsx` — needs-attention queue + all customers + drill-down (readout + review) | live (carried over from the pre-shell single dashboard) |
 | `/admin/meta` | `AdminMeta.tsx` — full Meta data explorer (see below) | live (AIC-45) |
-| המלצות (recommendations oversight) | all recs, all customers | disabled "בקרוב" — AIC-46 |
+| `/admin/recommendations` | `AdminRecommendations.tsx` — all recs, all customers (see below) | live (AIC-46) |
 | מפעילים (operators + audit) | operator accounts + admin action log | disabled "בקרוב" — AIC-47 |
 
 (The old `/admin/ops` + `/admin/readout` routes now redirect to
@@ -204,6 +205,58 @@ normalizers — metrics/targeting/creative, including the flexible-creative
 shape), `campaign-explorer.integration.test.ts` (DB + HTTP: missing campaign,
 `no_meta_campaign`, `no_token`, a full tree via an injected fake reader with
 one healthy and one errored ad set, `meta_error`, auth).
+
+## Recommendations oversight (AIC-46)
+
+PRD §23's "Recommendations" surface: every recommendation the engine (AIC-8/9)
+has produced, across every customer, with its evidence and full lifecycle
+status — the operator's window into whether the engine is trustworthy.
+
+`server/src/services/recommendation-oversight.ts` `listRecommendationsForAdmin
+(pool, filter)` joins `recommendations → managed_campaigns → customers` (+ a
+lateral join to the latest `action_history` row for that rec, so an executed
+rec carries its outcome and a link back), filterable by state/type/customer,
+newest-first, capped at 300 (a triage view, not a report). `GET
+/admin/recommendations?state=&type=&customerId=`.
+
+**Deliberately read + flag only — no operator-initiated approve/execute.**
+The ticket left this "optional, decide in build." The product's whole trust
+model is "every spend/delivery change requires customer approval"; a
+side-channel execute button for operators would undercut that for a P0
+feature the ticket itself marked optional. If a real support case ever needs
+an operator to act on a customer's behalf, that should be its own explicit,
+audited flow through the safe-execute pipeline (AIC-12) — not bolted onto
+this oversight list.
+
+**Flag for review** (`recommendations.flagged_for_review`/`flag_note`/
+`flagged_by`/`flagged_at`, migration 017): orthogonal to the AIC-8 state
+machine — a flagged rec still runs its normal customer-approval lifecycle
+untouched; the flag is the operator's own marker, not a gate. `POST
+/admin/recommendations/:id/flag` (body `{ note }`) / `.../unflag`, both
+logged to `admin_audit_log` (`recommendation.flag`/`.unflag`, AIC-44's table —
+`entity_type: 'recommendation'`).
+
+**Failed recs** surface via the state filter (`state=failed`) — consistent
+with the needs-attention queue below: a failure is never hidden.
+
+Web: `web/src/admin/AdminRecommendations.tsx` at `/admin/recommendations` (nav
+item now live). State/type/customer filter row; a table of matches; a
+drill-down per rec showing current→proposed budget, max spend impact,
+rationale, approval/execution status, the raw evidence as a key→value table
+(whatever shape the rule that fired put there — never reformatted/guessed),
+a link into the customer's action-history (`/admin/customers?focus=<id>`,
+AIC-44's drill-down, which already renders condensed action-history) when the
+rec was actually executed, and the flag/unflag control.
+
+Tests: `recommendation-oversight.integration.test.ts` (list + join
+correctness, state/type/customer filters, action-history linkage, failed recs
+surfaced, flag/unflag + audit logging, 404 on a missing rec, full HTTP round
+trip with a real admin actor, auth).
+
+**Note:** GelNails hasn't produced a real recommendation yet (thin data / the
+one ad set that's excluded from evidence by AIC-39's delivery-health check) —
+verified with realistic seeded-then-cleaned-up data on prod instead of real
+engine output. Re-verify with real recs once the engine actually proposes one.
 
 ## Needs-attention queue (AIC-17)
 

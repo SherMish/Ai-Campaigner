@@ -158,6 +158,43 @@ export const strings = {
       noAds: "אין מודעות.",
     },
 
+    // Recommendations oversight (AIC-46) — every rec, every customer.
+    recsOversight: {
+      title: "המלצות",
+      subtitle: "כל המלצה שהמנוע הפיק, בכל הלקוחות — הראיות והסטטוס המלא.",
+      filterState: "סטטוס",
+      filterType: "סוג",
+      filterCustomer: "לקוח",
+      all: "הכל",
+      noResults: "אין המלצות התואמות את הסינון.",
+      business: "לקוח",
+      type: "סוג",
+      state: "סטטוס",
+      impact: "השפעה מקסימלית",
+      created: "נוצרה",
+      flagged: "מסומנת",
+      evidence: "ראיות",
+      rationale: "נימוק",
+      currentBudget: "תקציב נוכחי",
+      proposedBudget: "תקציב מוצע",
+      approvedBy: "אושרה ע\"י",
+      executedAt: "בוצעה",
+      executionResult: "תוצאת ביצוע",
+      viewActionHistory: "→ צפייה בהיסטוריית הפעולות של הלקוח",
+      flagButton: "סימון לבדיקה",
+      unflagButton: "ביטול סימון",
+      flagNotePlaceholder: "למה זה נראה חשוד? (רשות)",
+      flagNoteLabel: "הערת סימון",
+      stateLabels: {
+        proposed: "הוצעה", approved: "אושרה", executing: "בביצוע", executed: "בוצעה",
+        failed: "נכשלה", dismissed: "נדחתה", expired: "פגה",
+      } as Record<string, string>,
+      typeLabels: {
+        pause_creative: "עצירת מודעה", pause_adset: "עצירת קהל", increase_budget: "העלאת תקציב",
+        decrease_budget: "הורדת תקציב", replace_creative: "החלפת קריאייטיב", no_action: "ללא פעולה",
+      } as Record<string, string>,
+    },
+
     // Fleet-wide overview (AIC-43) — the operator's landing snapshot.
     fleet: {
       title: "סקירה כללית",

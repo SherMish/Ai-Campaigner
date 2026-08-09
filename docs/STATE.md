@@ -6,6 +6,26 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-09 — Recommendations oversight (AIC-46)
+PRD §23's cross-account recommendations surface: every rec the engine has
+produced, any customer, filterable by state/type/customer, with its evidence
+and full lifecycle status. `services/recommendation-oversight.ts`
+`listRecommendationsForAdmin` joins recommendations→campaigns→customers +
+the latest linked `action_history` row (outcome + a link back). Deliberately
+**read + flag only** — no operator-initiated approve/execute: the product's
+core trust model is customer-approval-gated spend changes, and a side-channel
+execute button for operators would undercut that for a feature the ticket
+itself marked optional. New `flagged_for_review`/`flag_note` on
+`recommendations` (migration 017) lets an operator flag a rec for review,
+orthogonal to the AIC-8 state machine — logged to `admin_audit_log` (AIC-44's
+table, `entity_type: 'recommendation'`). Failed recs surface via the state
+filter, consistent with the needs-attention queue. Web: `AdminRecommendations.
+tsx` at `/admin/recommendations` (nav item now live). Verified with realistic
+seeded-then-cleaned-up data on prod — GelNails hasn't produced a real
+recommendation yet (thin data / the delivery-health exclusion), so this is
+honestly not yet re-verifiable against real engine output. Tests:
+`recommendation-oversight.integration.test.ts`. Doc: `ops-console.md`.
+
 ### 2026-08-09 — Full Meta data explorer (AIC-45)
 The operator's unrestricted deep view — the exact opposite of the customer's
 opt-in audience view (AIC-37): every node (campaign→ad-set→ad→creative) with
