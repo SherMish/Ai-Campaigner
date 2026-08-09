@@ -1,11 +1,10 @@
-import { describe, it, expect, afterEach, beforeAll, vi } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import type { Request, Response } from "express";
 import { buildRequireAdmin } from "./admin.js";
 import { signAuthToken } from "../auth/tokens.js";
 
-beforeAll(() => {
-  process.env.JWT_SECRET ||= "test-secret-admin";
-});
+// Set before snapshotting OLD so afterEach preserves it (CI has no JWT_SECRET).
+process.env.JWT_SECRET ||= "test-secret-admin";
 const OLD = { ...process.env };
 afterEach(() => {
   process.env = { ...OLD };
