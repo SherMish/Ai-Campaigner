@@ -27,6 +27,14 @@ if (process.env.META_WRITE_TEST) {
     .catch((e) => consoleLogger.error("[write-test] crashed", e));
 }
 
+// One-off READ-ONLY: find a Meta campaign by name across reachable ad accounts.
+// Gated by META_FIND_CAMPAIGN; remove after reading the logs.
+if (process.env.META_FIND_CAMPAIGN) {
+  import("./meta/find-campaign.js")
+    .then(({ findCampaign }) => findCampaign(consoleLogger))
+    .catch((e) => consoleLogger.error("[find-campaign] crashed", e));
+}
+
 // One-off: make META_SEED_OWNER_EMAIL the owner of a Pisga customer + wire the
 // dogfood connection/campaign. Gated by META_SEED_PISGA; remove after.
 if (process.env.META_SEED_PISGA) {
