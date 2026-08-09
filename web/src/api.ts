@@ -82,7 +82,7 @@ export interface CustomerOverview {
 
 // ── Recommendations (AIC-23) ────────────────────────────────────────────────
 export type RecommendationType =
-  | "pause_creative" | "increase_budget" | "decrease_budget"
+  | "pause_creative" | "pause_adset" | "increase_budget" | "decrease_budget"
   | "replace_creative" | "no_action";
 export interface CustomerRec {
   id: string;

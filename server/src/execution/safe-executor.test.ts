@@ -14,15 +14,29 @@ import {
 // read-back reflects them (unless noApply simulates a lost/ineffective write).
 class FakeMeta {
   public noApply = false;
-  constructor(public state: LiveCampaignState) {}
+  public state: LiveCampaignState;
+  constructor(state: {
+    dailyBudgetAgorot: number;
+    adStatuses: Record<string, "active" | "paused">;
+    adSetStatuses?: Record<string, "active" | "paused">;
+  }) {
+    this.state = { adSetStatuses: {}, ...state };
+  }
   async getCampaignState(): Promise<LiveCampaignState> {
-    return { dailyBudgetAgorot: this.state.dailyBudgetAgorot, adStatuses: { ...this.state.adStatuses } };
+    return {
+      dailyBudgetAgorot: this.state.dailyBudgetAgorot,
+      adStatuses: { ...this.state.adStatuses },
+      adSetStatuses: { ...this.state.adSetStatuses },
+    };
   }
   async setDailyBudget(_id: string, agorot: number): Promise<void> {
     if (!this.noApply) this.state.dailyBudgetAgorot = agorot;
   }
   async pauseAd(adId: string): Promise<void> {
     if (!this.noApply) this.state.adStatuses[adId] = "paused";
+  }
+  async pauseAdSet(adSetId: string): Promise<void> {
+    if (!this.noApply) this.state.adSetStatuses[adSetId] = "paused";
   }
 }
 
@@ -95,6 +109,27 @@ describe("SafeExecutor — happy paths", () => {
     const res = await executor.execute(rec.id);
     expect(res.outcome).toBe("executed");
     expect(meta.state.adStatuses.ad_3).toBe("paused");
+  });
+
+  it("executes a pause_adset and verifies the ad set is paused", async () => {
+    const meta = new FakeMeta({ dailyBudgetAgorot: 7000, adStatuses: {}, adSetStatuses: { as_2: "active" } });
+    const { service, store, executor } = setup({ meta });
+    const rec = await approvedRec(service, draft({ type: "pause_adset", targetMetaId: "as_2", currentBudgetAgorot: null, proposedBudgetAgorot: null, evidence: { adSetId: "as_2" } }));
+
+    const res = await executor.execute(rec.id);
+    expect(res.outcome).toBe("executed");
+    expect(meta.state.adSetStatuses.as_2).toBe("paused");
+    expect((await store.getById(rec.id))?.state).toBe("executed");
+  });
+
+  it("aborts a pause_adset when the ad set is no longer active (external change)", async () => {
+    const meta = new FakeMeta({ dailyBudgetAgorot: 7000, adStatuses: {}, adSetStatuses: { as_2: "paused" } });
+    const { service, store, executor } = setup({ meta });
+    const rec = await approvedRec(service, draft({ type: "pause_adset", targetMetaId: "as_2", currentBudgetAgorot: null, proposedBudgetAgorot: null }));
+
+    const res = await executor.execute(rec.id);
+    expect(res.outcome).toBe("failed");
+    expect((await store.getById(rec.id))?.state).toBe("failed");
   });
 
   it("escalates replace_creative to ops as a human task (no Meta write)", async () => {

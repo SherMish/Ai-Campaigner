@@ -41,10 +41,16 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter {
     let budgetObjId = metaCampaignId;
     let dailyBudgetAgorot = camp.daily_budget != null ? Number(camp.daily_budget) : NaN;
 
+    // Always read ad sets: for their statuses (the audience rule + pause_adset
+    // verify) and, when the campaign has no CBO budget, the ad-set-level budget.
+    const adsetsBody = await this.get(`${metaCampaignId}/adsets?fields=id,daily_budget,effective_status&limit=100`);
+    const adsets = (adsetsBody.data as Array<Record<string, unknown>>) ?? [];
+    const adSetStatuses: Record<string, "active" | "paused"> = {};
+    for (const a of adsets) {
+      adSetStatuses[String(a.id)] = a.effective_status === "ACTIVE" ? "active" : "paused";
+    }
     if (!(dailyBudgetAgorot > 0)) {
-      // Budget is at ad-set level; find the first ad set that carries one.
-      const adsets = await this.get(`${metaCampaignId}/adsets?fields=id,daily_budget,effective_status&limit=10`);
-      const withBudget = ((adsets.data as Array<Record<string, unknown>>) ?? []).find((a) => a.daily_budget != null);
+      const withBudget = adsets.find((a) => a.daily_budget != null);
       if (withBudget) {
         budgetObjId = String(withBudget.id);
         dailyBudgetAgorot = Number(withBudget.daily_budget);
@@ -57,7 +63,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter {
     for (const ad of (ads.data as Array<Record<string, unknown>>) ?? []) {
       adStatuses[String(ad.id)] = ad.effective_status === "ACTIVE" ? "active" : "paused";
     }
-    return { dailyBudgetAgorot: dailyBudgetAgorot > 0 ? dailyBudgetAgorot : 0, adStatuses };
+    return { dailyBudgetAgorot: dailyBudgetAgorot > 0 ? dailyBudgetAgorot : 0, adStatuses, adSetStatuses };
   }
 
   async setDailyBudget(metaCampaignId: string, agorot: number): Promise<void> {
@@ -67,6 +73,16 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter {
 
   async pauseAd(adId: string): Promise<void> {
     await this.post(adId, { status: "PAUSED" });
+  }
+
+  async pauseAdSet(adSetId: string): Promise<void> {
+    await this.setAdSetStatus(adSetId, "PAUSED");
+  }
+
+  // Set an ad set's status directly. Used by pauseAdSet and by the reversible
+  // dogfood (pause → verify → unpause) so a live test leaves zero net change.
+  async setAdSetStatus(adSetId: string, status: "ACTIVE" | "PAUSED"): Promise<void> {
+    await this.post(adSetId, { status });
   }
 
   // Which object carries the budget for a campaign (for logging/verification).

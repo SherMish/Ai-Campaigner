@@ -28,6 +28,14 @@ if (process.env.META_WRITE_TEST) {
     .catch((e) => consoleLogger.error("[write-test] crashed", e));
 }
 
+// AIC-36 live proof: reversible pause_adset round-trip on a live campaign
+// (pause → verify → un-pause). Gated by META_ADSET_WRITE_TEST; remove after.
+if (process.env.META_ADSET_WRITE_TEST) {
+  import("./meta/adset-write-test.js")
+    .then(({ runAdsetWriteTest }) => runAdsetWriteTest(consoleLogger))
+    .catch((e) => consoleLogger.error("[adset-write-test] crashed", e));
+}
+
 // One-off READ-ONLY: find a Meta campaign by name across reachable ad accounts.
 // Gated by META_FIND_CAMPAIGN; remove after reading the logs.
 if (process.env.META_FIND_CAMPAIGN) {

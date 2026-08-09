@@ -46,6 +46,7 @@ export type InsightGrain = (typeof INSIGHT_GRAIN)[number];
 
 export const RECOMMENDATION_TYPE = [
   "pause_creative",
+  "pause_adset", // pause an underperforming audience (ad set); CBO shifts budget to the winner
   "increase_budget",
   "decrease_budget",
   "replace_creative",

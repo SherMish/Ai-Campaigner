@@ -47,10 +47,14 @@ describe("ControlService.assertExecutable (the control gate)", () => {
 
 // A no-op Meta double for the executor.
 class FakeMeta {
-  constructor(public state: LiveCampaignState) {}
-  async getCampaignState() { return { dailyBudgetAgorot: this.state.dailyBudgetAgorot, adStatuses: { ...this.state.adStatuses } }; }
+  public state: LiveCampaignState;
+  constructor(state: { dailyBudgetAgorot: number; adStatuses: Record<string, "active" | "paused">; adSetStatuses?: Record<string, "active" | "paused"> }) {
+    this.state = { adSetStatuses: {}, ...state };
+  }
+  async getCampaignState(): Promise<LiveCampaignState> { return { dailyBudgetAgorot: this.state.dailyBudgetAgorot, adStatuses: { ...this.state.adStatuses }, adSetStatuses: { ...this.state.adSetStatuses } }; }
   async setDailyBudget(_id: string, agorot: number) { this.state.dailyBudgetAgorot = agorot; }
   async pauseAd(id: string) { this.state.adStatuses[id] = "paused"; }
+  async pauseAdSet(id: string) { this.state.adSetStatuses[id] = "paused"; }
 }
 const OK_GUARD: AccessGuard = { assertExecutable: async () => {} };
 const NOOP_OPS: OpsRaiser = { raise: async () => {} };

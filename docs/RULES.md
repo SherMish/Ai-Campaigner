@@ -35,6 +35,11 @@ Targeted creative fixes come before blunt budget moves; scaling comes last.
 1. **pause_weak_creative** — a creative spent ≥ `MIN_CREATIVE_SPEND_AGOROT` (₪150)
    yet its CPL is ≥ `PAUSE_WEAK_CPL_MULTIPLIER` (2×) the best peer's — or it spent
    that much for zero leads — while ≥ `PAUSE_MIN_PEERS` (2) creatives have data.
+   **Compared WITHIN an ad set (AIC-36):** the same creative running under two
+   audiences is never pitted against itself; creatives are grouped by `adSetId`
+   (from the snapshot's `parent_meta_id`) and the peer comparison runs per group.
+   Creatives with no known ad set fall into one group (single-ad-set campaigns
+   behave exactly as before).
 2. **replace_creative** — a creative's own CPL decayed ≥ `REPLACE_DECAY_MULTIPLIER`
    (1.5×) vs its previous window (distinct from "weak vs peers"). Needs previous-
    window per-creative data.
@@ -47,6 +52,26 @@ Targeted creative fixes come before blunt budget moves; scaling comes last.
 All thresholds are named constants in `RULE_THRESHOLDS` (one place). Budget changes
 are only *proposed* here; the agreed-budget safety clamp is enforced at execution
 (AIC-13), and every change needs customer approval.
+
+### Audience rule — `pause_underperforming_audience` (AIC-36; NOT yet live)
+
+A managed campaign can have **N ad sets** (audience splits). When one audience's
+CPL is ≥ `AUDIENCE_CPL_MULTIPLIER` (2×) the best audience's over enough data — both
+audiences spent ≥ `AUDIENCE_MIN_SPEND_AGOROT` (₪300, a **stricter** gate than the
+creative rule) and the winner has ≥ `AUDIENCE_MIN_LEADS` (5) — it proposes
+**pausing the worse ad set** (`pause_adset`). Under CBO the budget then shifts to
+the winner, so `maxSpendImpactAgorot = 0` (no new spend). It's a real
+delivery/spend change → approval-gated through AIC-23 → AIC-12, with a live
+`pauseAdSet` write (verified read-back on the ad set's status). Budget rules stay
+**campaign-level** — no per-ad-set budget writes (CBO owns the split).
+
+**Held out of the live pipeline until AIC-39.** Meta Insights can't distinguish an
+*errored / not-delivering* ad set (near-zero spend, 0 leads, ∞ CPL) from a
+genuinely weak one, so without delivery-health this rule could recommend pausing
+an **errored** audience — the wrong action (the fix is to resolve the error).
+AIC-39 fetches `effective_status` + `issues_info` and excludes errored ad sets;
+it re-inserts this rule into `RULES` once that lands. The rule is implemented and
+unit-tested today; the min-spend gate already excludes the near-zero-spend case.
 
 ### v1 approximations (documented, refined later)
 - Trend rules compare the **current window vs the previous window** (not daily

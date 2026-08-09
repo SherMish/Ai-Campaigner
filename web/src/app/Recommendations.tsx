@@ -180,6 +180,7 @@ export function RecommendationDetail() {
             <div className="card" style={{ marginBottom: 20 }}>
               <b>{rd.whatChangesTitle}</b>
               {rec.type === "pause_creative" && <ul className="muted" style={{ margin: "8px 0 0", paddingInlineStart: 18 }}>{rd.pauseChanges.map((x, i) => <li key={i}>{x}</li>)}</ul>}
+              {rec.type === "pause_adset" && <p className="muted" style={{ marginTop: 8 }}>{rd.changesAudience}</p>}
               {isBudget(rec.type) && <p className="muted" style={{ marginTop: 8 }}>{rd.changesBudget}</p>}
               {rec.type === "replace_creative" && <p className="muted" style={{ marginTop: 8 }}>{rd.changesReplace}</p>}
             </div>

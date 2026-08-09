@@ -6,6 +6,22 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-09 — Audience-aware rules + pauseAdSet write (AIC-36)
+The rules now reason at the audience (ad-set) grain. **Creative fix (live):**
+`pause_weak_creative` compares creatives WITHIN an ad set (grouped by
+`parent_meta_id`), so the same creative under two audiences is never pitted
+against itself. **Audience rule (implemented, NOT live):**
+`pause_underperforming_audience` proposes pausing the worse ad set when its CPL is
+≥2× the best over a stricter evidence gate; held out of the live `RULES` array
+until AIC-39 can exclude errored/not-delivering ad sets (else it would recommend
+pausing an errored audience). **New execution capability:** `pause_adset` rec type
+(migration 013 widens the type CHECK) + `ExecWriter.pauseAdSet` + adapter
+`pauseAdSet`/`setAdSetStatus`; the executor does external-change + read-back verify
+on the ad set's status. `getCampaignState` now returns `adSetStatuses`. Snapshot
+store gained `adsetStats` + `adSetId` on creatives. Budget rules stay
+campaign-level (CBO). Docs: `RULES.md`. Tests: `rules.adset.test.ts`,
+`safe-executor.test.ts` (pause_adset happy + external-change).
+
 ### 2026-08-09 — Managed shape = 1 campaign → N ad sets (AIC-38)
 Definition/anchor for the multi-ad-set arc the GelNails dogfood surfaced (a real
 campaign with 2 ad sets split by age). Codified the supported shape — **1 campaign

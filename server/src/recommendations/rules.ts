@@ -15,11 +15,26 @@ export const RULE_THRESHOLDS = {
   BUDGET_INCREASE_STEP: 0.15, // +15% when scaling
   BUDGET_DECREASE_STEP: 0.2, // −20% when pulling back
   REPLACE_DECAY_MULTIPLIER: 1.5, // creative CPL worsened ≥ 50% vs its own past
+  // Audience (ad-set) rule — deliberately STRICTER than the creative gate:
+  // pausing a whole audience is a bigger move than pausing one ad.
+  AUDIENCE_MIN_SPEND_AGOROT: 30000, // ₪300 per audience before comparing
+  AUDIENCE_MIN_LEADS: 5, // the winning audience must have real volume
+  AUDIENCE_CPL_MULTIPLIER: 2.0, // worse audience = CPL ≥ 2× the best audience
 } as const;
 
 export interface CreativeStat {
   metaObjectId: string;
+  adSetId?: string | null; // the parent ad set — compare creatives within it
   creativeName: string | null;
+  spendAgorot: number;
+  leads: number;
+  cplAgorot: number | null;
+  deliveryStatus: string;
+}
+
+// Ad-set (audience) aggregate for the audience rule.
+export interface AdsetStat {
+  adSetId: string;
   spendAgorot: number;
   leads: number;
   cplAgorot: number | null;
@@ -39,6 +54,7 @@ export interface CampaignEvidence {
   previous: WindowAgg;
   creatives: CreativeStat[]; // current window
   creativesPrevious?: CreativeStat[]; // previous window (decay detection)
+  adsets?: AdsetStat[]; // current-window per-audience (AIC-36)
   currentBudgetAgorot: number; // daily budget
   deliveryDays: number;
 }
@@ -72,30 +88,32 @@ function hasMinimumEvidence(ev: CampaignEvidence): boolean {
 
 // ── Rules (each returns a draft or null) ──────────────────────────────────────
 
-// Pause a creative that spent meaningfully more than peers for far fewer leads.
-function pauseWeakCreative(ev: CampaignEvidence): RecommendationDraft | null {
+// Within one ad set, find a creative that spent meaningfully more than its peers
+// for far fewer leads. Comparing WITHIN an ad set is the AIC-36 fix — the same
+// creative under two audiences must never be pitted against itself.
+function weakestInGroup(campaignId: string, creatives: CreativeStat[]): RecommendationDraft | null {
   const t = RULE_THRESHOLDS;
-  const withData = ev.creatives.filter((c) => c.spendAgorot >= t.MIN_CREATIVE_SPEND_AGOROT);
+  const withData = creatives.filter((c) => c.spendAgorot >= t.MIN_CREATIVE_SPEND_AGOROT);
   if (withData.length < t.PAUSE_MIN_PEERS) return null;
 
-  const performers = ev.creatives.filter((c) => c.leads > 0 && c.cplAgorot !== null);
+  const performers = creatives.filter((c) => c.leads > 0 && c.cplAgorot !== null);
   if (performers.length === 0) return null;
   const bestPeerCpl = Math.min(...performers.map((c) => c.cplAgorot as number));
 
   // Weakest = highest CPL (nulls = spent-with-no-leads treated as worst).
   const weak = withData
     .filter((c) => c.cplAgorot === null || (c.cplAgorot as number) >= bestPeerCpl * t.PAUSE_WEAK_CPL_MULTIPLIER)
-    // must not itself be the best performer
     .filter((c) => c.cplAgorot === null || (c.cplAgorot as number) > bestPeerCpl)
     .sort((a, b) => (b.cplAgorot ?? Infinity) - (a.cplAgorot ?? Infinity))[0];
   if (!weak) return null;
 
   return {
-    campaignId: ev.campaignId,
+    campaignId,
     type: "pause_creative",
     targetMetaId: weak.metaObjectId,
     evidence: {
       creativeName: weak.creativeName,
+      adSetId: weak.adSetId ?? null,
       spendAgorot: weak.spendAgorot,
       leads: weak.leads,
       cplAgorot: weak.cplAgorot,
@@ -105,6 +123,66 @@ function pauseWeakCreative(ev: CampaignEvidence): RecommendationDraft | null {
     proposedBudgetAgorot: null,
     maxSpendImpactAgorot: 0, // pausing only reduces spend
     rationale: `creative ${weak.metaObjectId} spent ${weak.spendAgorot} for ${weak.leads} lead(s); best peer CPL ${bestPeerCpl}`,
+  };
+}
+
+// Pause a weak creative — evaluated per ad set so creative quality is never
+// conflated with audience. Creatives with no known ad set fall into one group
+// (single-ad-set campaigns behave exactly as before).
+function pauseWeakCreative(ev: CampaignEvidence): RecommendationDraft | null {
+  const byAdSet = new Map<string, CreativeStat[]>();
+  for (const c of ev.creatives) {
+    const k = c.adSetId ?? "__none__";
+    const group = byAdSet.get(k);
+    if (group) group.push(c);
+    else byAdSet.set(k, [c]);
+  }
+  for (const group of byAdSet.values()) {
+    const draft = weakestInGroup(ev.campaignId, group);
+    if (draft) return draft;
+  }
+  return null;
+}
+
+// Pause an underperforming AUDIENCE (ad set): when one audience's cost-per-lead is
+// materially worse than the best over enough data, propose pausing it. Under CBO
+// the campaign budget then shifts to the winner — a real delivery change, so it's
+// approval-gated (AIC-23 → AIC-12). Stricter gate than the creative rule.
+function pauseUnderperformingAudience(ev: CampaignEvidence): RecommendationDraft | null {
+  const t = RULE_THRESHOLDS;
+  const adsets = ev.adsets ?? [];
+  const withData = adsets.filter((a) => a.spendAgorot >= t.AUDIENCE_MIN_SPEND_AGOROT);
+  if (withData.length < 2) return null; // need ≥ 2 audiences to compare
+
+  const performers = withData.filter((a) => a.leads > 0 && a.cplAgorot !== null);
+  if (performers.length === 0) return null;
+  const bestCpl = Math.min(...performers.map((a) => a.cplAgorot as number));
+  const bestAdset = performers.find((a) => (a.cplAgorot as number) === bestCpl)!;
+  // The winner must have real volume, so we're not scaling into a fluke.
+  if (bestAdset.leads < t.AUDIENCE_MIN_LEADS) return null;
+
+  const worst = withData
+    .filter((a) => a.cplAgorot === null || (a.cplAgorot as number) >= bestCpl * t.AUDIENCE_CPL_MULTIPLIER)
+    .filter((a) => a.cplAgorot === null || (a.cplAgorot as number) > bestCpl)
+    .sort((a, b) => (b.cplAgorot ?? Infinity) - (a.cplAgorot ?? Infinity))[0];
+  if (!worst) return null;
+
+  return {
+    campaignId: ev.campaignId,
+    type: "pause_adset",
+    targetMetaId: worst.adSetId,
+    evidence: {
+      adSetId: worst.adSetId,
+      adSetCplAgorot: worst.cplAgorot,
+      adSetSpendAgorot: worst.spendAgorot,
+      adSetLeads: worst.leads,
+      bestAdSetId: bestAdset.adSetId,
+      bestAdSetCplAgorot: bestCpl,
+    },
+    currentBudgetAgorot: null,
+    proposedBudgetAgorot: null,
+    maxSpendImpactAgorot: 0, // CBO shifts budget to the winner; no new spend
+    rationale: `ad set ${worst.adSetId} CPL ${worst.cplAgorot ?? "∅"} vs best audience ${bestCpl} (≥${t.AUDIENCE_CPL_MULTIPLIER}×)`,
   };
 }
 
@@ -184,7 +262,16 @@ function increaseBudget(ev: CampaignEvidence): RecommendationDraft | null {
   };
 }
 
-// Priority order: targeted creative fixes before blunt budget moves; scaling last.
+// Priority order: targeted creative fixes, then the audience (ad-set) fix, then
+// blunt budget moves; scaling last.
+//
+// NOTE: `pauseUnderperformingAudience` is implemented + unit-tested but is
+// deliberately NOT in the live pipeline yet. Insights can't distinguish an
+// *errored/not-delivering* ad set (0 leads / infinite CPL) from a genuinely weak
+// one, so without delivery-health it would recommend pausing an errored audience
+// — the wrong action. AIC-39 adds effective_status/issues_info + errored-ad-set
+// exclusion; it re-inserts this rule here once that lands. (When it does: put it
+// after replaceCreative, before decreaseBudget.)
 const RULES: Array<(ev: CampaignEvidence) => RecommendationDraft | null> = [
   pauseWeakCreative,
   replaceCreative,
@@ -208,6 +295,7 @@ export function evaluateCampaign(ev: CampaignEvidence): RecommendationDraft {
 export const __rulesForTest = {
   pauseWeakCreative,
   replaceCreative,
+  pauseUnderperformingAudience,
   decreaseBudget,
   increaseBudget,
   hasMinimumEvidence,

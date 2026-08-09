@@ -18,11 +18,12 @@ export async function buildCampaignEvidence(
   current: InsightsPeriod,
   previous: InsightsPeriod,
 ): Promise<CampaignEvidence> {
-  const [curTotals, prevTotals, curCreatives, prevCreatives] = await Promise.all([
+  const [curTotals, prevTotals, curCreatives, prevCreatives, curAdsets] = await Promise.all([
     store.campaignTotals(campaign.id, current.start, current.end),
     store.campaignTotals(campaign.id, previous.start, previous.end),
     store.creativeStats(campaign.id, current.start, current.end),
     store.creativeStats(campaign.id, previous.start, previous.end),
+    store.adsetStats(campaign.id, current.start, current.end),
   ]);
   const days = periodDays(current);
   return {
@@ -31,6 +32,7 @@ export async function buildCampaignEvidence(
     previous: { ...prevTotals, days: periodDays(previous) },
     creatives: curCreatives,
     creativesPrevious: prevCreatives,
+    adsets: curAdsets,
     currentBudgetAgorot: campaign.currentBudgetAgorot,
     deliveryDays: curTotals.spendAgorot > 0 ? days : 0,
   };

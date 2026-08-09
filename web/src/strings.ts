@@ -297,6 +297,7 @@ export const strings = {
         // Titles + "what changes" keyed by recommendation type (live data path).
         titles: {
           pause_creative: "כדאי לעצור את המודעה הזאת",
+          pause_adset: "כדאי לעצור קהל שמבזבז תקציב",
           increase_budget: "כדאי להגדיל מעט את התקציב",
           decrease_budget: "כדאי להוריד זמנית את התקציב",
           replace_creative: "כדאי להחליף את הקריאייטיב",
@@ -304,6 +305,7 @@ export const strings = {
         },
         changesBudget: "השינוי מתבצע מיד לאחר האישור.",
         changesReplace: "החלפת הקריאייטיב מתבצעת יחד עם הצוות שלנו — ניצור קשר להמשך.",
+        changesAudience: "הקהל הזה ייעצר; התקציב יופנה לקהל שמביא תוצאות טובות יותר. סך התקציב לא יגדל.",
         maxImpactPrefix: "תוספת מקסימלית של",
       },
       settings: {

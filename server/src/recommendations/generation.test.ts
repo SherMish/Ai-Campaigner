@@ -31,7 +31,7 @@ async function seedWeak(store: InMemorySnapshotStore) {
 }
 
 const okReader = (agorot = 7000): MetaReader => ({
-  getCampaignState: async () => ({ dailyBudgetAgorot: agorot, adStatuses: {} }),
+  getCampaignState: async () => ({ dailyBudgetAgorot: agorot, adStatuses: {}, adSetStatuses: {} }),
 });
 
 function tick(campaigns: GenCampaign[], reader: MetaReader, snapshots: InMemorySnapshotStore, recs: InMemoryRecommendationStore) {

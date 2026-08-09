@@ -8,6 +8,7 @@ import { EXEC_HE } from "./strings.he.js";
 export interface LiveCampaignState {
   dailyBudgetAgorot: number;
   adStatuses: Record<string, "active" | "paused">;
+  adSetStatuses: Record<string, "active" | "paused">;
 }
 
 export interface MetaReader {
@@ -17,6 +18,7 @@ export interface MetaReader {
 export interface ExecWriter {
   setDailyBudget(metaCampaignId: string, agorot: number): Promise<void>;
   pauseAd(adId: string): Promise<void>;
+  pauseAdSet(adSetId: string): Promise<void>;
 }
 
 // Throws when access is lost (AIC-5) / automation is stopped (AIC-14).
@@ -131,6 +133,9 @@ export class SafeExecutor {
     if (rec.type === "pause_creative" && before.adStatuses[rec.targetMetaId ?? ""] !== "active") {
       return this.fail(rec, campaign, `external change: ad ${rec.targetMetaId} is not active`, EXEC_HE.externalChange, "unusual_performance", { before });
     }
+    if (rec.type === "pause_adset" && before.adSetStatuses[rec.targetMetaId ?? ""] !== "active") {
+      return this.fail(rec, campaign, `external change: ad set ${rec.targetMetaId} is not active`, EXEC_HE.externalChange, "unusual_performance", { before });
+    }
 
     // 6. Budget safety (AIC-13): never exceed the agreed ceiling.
     try {
@@ -148,6 +153,8 @@ export class SafeExecutor {
         await this.d.writer.setDailyBudget(campaign.metaCampaignId, rec.proposedBudgetAgorot as number);
       } else if (rec.type === "pause_creative") {
         await this.d.writer.pauseAd(rec.targetMetaId as string);
+      } else if (rec.type === "pause_adset") {
+        await this.d.writer.pauseAdSet(rec.targetMetaId as string);
       }
     } catch (e) {
       return this.fail(rec, campaign, `write failed: ${(e as Error).message}`, EXEC_HE.genericFailure, "campaign_not_delivering", { before });
@@ -157,7 +164,9 @@ export class SafeExecutor {
     const after = await this.d.reader.getCampaignState(campaign.metaCampaignId);
     const landed = isBudgetRec(rec)
       ? after.dailyBudgetAgorot === rec.proposedBudgetAgorot
-      : after.adStatuses[rec.targetMetaId ?? ""] === "paused";
+      : rec.type === "pause_adset"
+        ? after.adSetStatuses[rec.targetMetaId ?? ""] === "paused"
+        : after.adStatuses[rec.targetMetaId ?? ""] === "paused";
     if (!landed) {
       return this.fail(rec, campaign, "read-back mismatch: change did not land", EXEC_HE.genericFailure, "campaign_not_delivering", { before, after });
     }
@@ -211,6 +220,8 @@ function describe(rec: RecommendationRecord): string {
       return `set daily budget ${rec.currentBudgetAgorot} → ${rec.proposedBudgetAgorot}`;
     case "pause_creative":
       return `pause ad ${rec.targetMetaId}`;
+    case "pause_adset":
+      return `pause ad set ${rec.targetMetaId}`;
     case "replace_creative":
       return `replace creative ${rec.targetMetaId}`;
     default:

@@ -13,6 +13,9 @@ export const EXPLAINER_HE = {
     `עלות הפנייה עלתה בתקופה האחרונה. אנחנו ממליצים להוריד זמנית את התקציב היומי מ־${from} ל־${to}.`,
   replaceCreative: () =>
     `הביצועים של אחת המודעות נחלשו משמעותית לעומת הביצועים הקודמים שלה. אנחנו ממליצים להחליף את הקריאייטיב.`,
+  // AIC-37 refines this to name the audience by its human dimension (e.g. "נשים 35–45").
+  pauseAudience: () =>
+    `אחד הקהלים בקמפיין מביא פניות בעלות גבוהה משמעותית מהקהל השני. אנחנו ממליצים לעצור אותו ולהפנות את התקציב לקהל שמביא תוצאות טובות יותר.`,
   stable: () => `הקמפיין יציב ואין כרגע שינוי שאנחנו ממליצים לבצע.`,
   insufficient: () => `אין כרגע מספיק מידע שמצדיק שינוי. נמשיך לעקוב.`,
   weeklyStable: (leads: string, avgCpl: string) =>
@@ -55,6 +58,8 @@ export function explain(rec: RecommendationRecord): string {
         formatShekel(n(rec.evidence.spendAgorot)),
         String(n(rec.evidence.leads)),
       );
+    case "pause_adset":
+      return EXPLAINER_HE.pauseAudience();
     case "increase_budget":
       return EXPLAINER_HE.increaseBudget(
         formatShekel(n(rec.currentBudgetAgorot)),
