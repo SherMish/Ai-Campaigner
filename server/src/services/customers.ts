@@ -7,6 +7,8 @@ export interface CustomerListRow {
   businessName: string;
   category: string;
   isTest: boolean;
+  isActive: boolean;
+  deactivatedAt: string | null;
   onboardingStatus: string;
   subscriptionStatus: SubscriptionStatus | null;
   setupPaid: boolean | null;
@@ -20,7 +22,7 @@ export interface CustomerListRow {
 
 export async function listCustomers(pool: pg.Pool): Promise<CustomerListRow[]> {
   const { rows } = await pool.query(
-    `SELECT c.id, c.business_name, c.category, c.is_test, c.onboarding_status,
+    `SELECT c.id, c.business_name, c.category, c.is_test, c.is_active, c.deactivated_at, c.onboarding_status,
             s.status AS subscription_status, s.setup_paid,
             conn.access_health,
             mc.id AS campaign_id, mc.name AS campaign_name, mc.status AS campaign_status, mc.agreed_budget_agorot,
@@ -40,6 +42,8 @@ export async function listCustomers(pool: pg.Pool): Promise<CustomerListRow[]> {
     businessName: r.business_name,
     category: r.category,
     isTest: r.is_test,
+    isActive: r.is_active,
+    deactivatedAt: r.deactivated_at ? new Date(r.deactivated_at).toISOString() : null,
     onboardingStatus: r.onboarding_status,
     subscriptionStatus: r.subscription_status ?? null,
     setupPaid: r.setup_paid ?? null,
@@ -124,6 +128,8 @@ export async function getCustomerDetail(
     businessName: c.business_name,
     category: c.category,
     isTest: c.is_test,
+    isActive: c.is_active,
+    deactivatedAt: c.deactivated_at ? new Date(c.deactivated_at).toISOString() : null,
     onboardingStatus: c.onboarding_status,
     subscriptionStatus: c.subscription_status ?? null,
     setupPaid: c.setup_paid ?? null,

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { requireAdmin } from "../middleware/admin.js";
+import type { AuthedRequest } from "../middleware/auth.js";
 import {
   buildCampaignReadout,
   listCampaignsForAdmin,
@@ -8,6 +9,9 @@ import {
 import { ControlService, PgControlStore } from "../execution/control-service.js";
 import { listCampaignActionHistory, condense } from "../services/action-history.js";
 import { listCustomers, getCustomerDetail } from "../services/customers.js";
+import { createCustomer, updateCustomer, deactivateCustomer, reactivateCustomer, deleteCustomer } from "../services/customer-admin.js";
+import { listAuditLog, type Actor } from "../services/admin-audit.js";
+import { PgUserStore } from "../auth/user-store.js";
 import { OpsQueue } from "../services/ops-queue.js";
 import { consoleLogger } from "../services/logger.js";
 import { submitReview, recordCustomerDecision, getLatestReview } from "../services/campaign-review.js";
@@ -21,6 +25,17 @@ export const adminRouter = Router();
 adminRouter.use(requireAdmin);
 
 const controls = new ControlService(new PgControlStore(pool));
+const userStore = new PgUserStore(pool);
+
+// Who's making this write, for the admin audit log (AIC-44/47). requireAdmin
+// sets req.userId for the per-user path; the break-glass token path has no
+// human behind it, so it's logged as such rather than guessed at.
+async function actorFor(req: AuthedRequest): Promise<Actor> {
+  const userId = req.userId ?? null;
+  if (!userId) return { userId: null, label: "break-glass token" };
+  const user = await userStore.findById(userId);
+  return { userId, label: user?.email ?? userId };
+}
 
 // Emergency controls (AIC-14): immediate per-account kill-switches, no deploy.
 const CONTROL_ACTIONS = {
@@ -70,6 +85,54 @@ adminRouter.get("/customers/:id", async (req, res) => {
     return;
   }
   res.json(detail);
+});
+
+// Customer CRUD (AIC-44): manual onboarding entry point + the operator's daily
+// edit/support tool. Every write logs an admin_audit_log row (AIC-47 reads it).
+adminRouter.post("/customers", async (req, res) => {
+  const actor = await actorFor(req as AuthedRequest);
+  try {
+    const { id } = await createCustomer(pool, actor, req.body ?? {});
+    res.status(201).json({ id });
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : "failed to create customer" });
+  }
+});
+
+adminRouter.patch("/customers/:id", async (req, res) => {
+  const actor = await actorFor(req as AuthedRequest);
+  const r = await updateCustomer(pool, actor, req.params.id, req.body ?? {});
+  if (!r.ok) { res.status(404).json({ error: r.error }); return; }
+  res.json({ ok: true });
+});
+
+adminRouter.post("/customers/:id/deactivate", async (req, res) => {
+  const actor = await actorFor(req as AuthedRequest);
+  const r = await deactivateCustomer(pool, actor, controls, req.params.id);
+  if (!r.ok) { res.status(404).json({ error: r.error }); return; }
+  res.json({ ok: true });
+});
+
+adminRouter.post("/customers/:id/reactivate", async (req, res) => {
+  const actor = await actorFor(req as AuthedRequest);
+  const r = await reactivateCustomer(pool, actor, req.params.id);
+  if (!r.ok) { res.status(404).json({ error: r.error }); return; }
+  res.json({ ok: true });
+});
+
+// Hard delete: gated server-side by the same confirm-to-type the UI enforces
+// (body.confirmText must equal the business name exactly). Never touches Meta.
+adminRouter.delete("/customers/:id", async (req, res) => {
+  const actor = await actorFor(req as AuthedRequest);
+  const confirmText = String(req.body?.confirmText ?? "");
+  const r = await deleteCustomer(pool, actor, req.params.id, confirmText);
+  if (!r.ok) { res.status(r.error === "customer not found" ? 404 : 400).json({ error: r.error }); return; }
+  res.json({ ok: true });
+});
+
+// Per-customer audit trail (full cross-entity filterable log is AIC-47).
+adminRouter.get("/customers/:id/audit", async (req, res) => {
+  res.json({ entries: await listAuditLog(pool, { entityId: req.params.id }) });
 });
 
 // Needs-attention queue (AIC-17).

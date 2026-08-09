@@ -1,8 +1,9 @@
 # Ops console (internal)
 
 **Status:** in progress — the operator surfaces. AIC-16 (customers view) done;
-needs-attention queue (AIC-17), first-campaign review (AIC-18), and billing +
-lead-quality (AIC-19) extend this doc.
+needs-attention queue (AIC-17), first-campaign review (AIC-18), billing +
+lead-quality (AIC-19), and customer CRUD + admin audit log (AIC-44) extend this
+doc.
 
 **Source of truth:** services under `server/src/services/` + routes in
 `server/src/routes/admin.ts` (all behind `requireAdmin`).
@@ -74,6 +75,78 @@ business info, contact, next-charge date, the outstanding proposed recommendatio
 and open ops-item count. Routes: `GET /api/admin/customers`,
 `GET /api/admin/customers/:id`. Reads only; role-gated. Source:
 `server/src/services/customers.js`. Tests: `customers.integration.test.ts`.
+
+## Customer CRUD + admin audit log (AIC-44)
+
+AIC-16 was read-only. `server/src/services/customer-admin.ts` adds the write
+side the operator actually needs for manual onboarding and support:
+
+- **Create** — `createCustomer(pool, actor, fields)`: business info only (no
+  subscription/connection/campaign — those are provisioned separately, once a
+  customer is onboarded).
+- **Edit** — `updateCustomer(...)`: any business field, plus an optional
+  `agreedBudgetAgorot` which (when a managed campaign exists) is written
+  straight to `managed_campaigns.agreed_budget_agorot` — the SAME column
+  `execution/budget.ts` reads live on every safety check, so a budget edit
+  propagates to the engine's spend limit immediately, no cache to invalidate.
+- **Deactivate / reactivate** (`customers.is_active`, `deactivated_at` —
+  migration 016) — the default, reversible path for a churned/paused account.
+  Deactivating ties into AIC-14's emergency controls: if a managed campaign
+  exists, it's marked `unmanaged`, which already excludes it from
+  `listEligibleForGeneration` (stops monitoring/generation) and makes
+  `ControlService.assertExecutable` throw (stops execution). Reactivating flips
+  `is_active` back but deliberately does **not** auto-resume the campaign —
+  resuming ad spend is a separate, explicit operator decision via the
+  campaign's own controls.
+- **Hard delete** — `deleteCustomer(...)`: the rare, deliberate exception.
+  Gated by a server-side confirm-to-type check (`confirmText` must equal the
+  business name exactly) — enforced in the service itself, not just the UI, so
+  a bypassed client can't skip it. A real `DELETE FROM customers`, which
+  cascades to subscriptions/meta_connections/managed_campaigns and everything
+  under them (migrations 002–015). **Never touches Meta** — we stop managing
+  the customer's assets, we do not delete them. `app_users.customer_id` is
+  `ON DELETE SET NULL`, so a deleted customer's login survives, just unlinked.
+
+**Admin audit log** (`admin_audit_log`, migration 016;
+`server/src/services/admin-audit.ts`): append-only, distinct from
+`action_history` (AIC-15, which logs *Meta* changes) — this logs *console*
+actions: who (`actor_user_id` + a snapshotted `actor_label` email, so the
+entry reads even if the admin account is later removed), what (`action`, e.g.
+`customer.create`/`.edit`/`.deactivate`/`.reactivate`/`.delete`), which entity
+(`entity_type`/`entity_id`/`entity_label`), before→after (`before_state`/
+`after_state` JSONB), when. `entity_id` is deliberately **not** a foreign key
+— a hard-deleted customer's audit trail is the one record that must survive
+the delete it's describing; `deleteCustomer` snapshots the full row (+
+subscription/connection/campaign) into `before_state` before deleting. AIC-44
+ships `logAdminAction`/`listAuditLog` and a per-customer read
+(`GET /admin/customers/:id/audit`, rendered as a trail in the customer detail
+panel); AIC-47 builds the operator-account management surface and the full
+cross-entity filterable audit UI on top of the same table.
+
+Routes: `POST /admin/customers`, `PATCH /admin/customers/:id`,
+`POST /admin/customers/:id/deactivate`, `POST /admin/customers/:id/reactivate`,
+`DELETE /admin/customers/:id` (body `{ confirmText }`),
+`GET /admin/customers/:id/audit`. Web: `AdminCustomers.tsx` — a "+ לקוח חדש"
+create form, an inline edit form on the selected customer (reusing the same
+field set), deactivate/reactivate + a destructive delete modal with the
+confirm-to-type input, a search box + active/deactivated filter over the
+roster (client-side, matching the Overview global search's pattern — fine at
+current scale), and the full record (business + contact + subscription +
+lead-quality + condensed action-history + the audit trail) in the drill-down.
+
+RLS was intentionally not added to `admin_audit_log`/the new `customers`
+columns: this is Neon, not Supabase — per the project's Key Decisions, authz
+here is API-layer (`requireAdmin`, fail-closed) the same as every other admin
+table, not Postgres RLS.
+
+Tests: `customer-admin.integration.test.ts` (create; edit + budget
+propagation to `managed_campaigns`; edit on a missing customer 404s;
+deactivate marks the campaign unmanaged and is reversible without
+auto-resuming it; delete rejects a mismatched confirm text and leaves the row
+intact; delete on a correct confirm-to-type cascades the related rows AND
+survives in the audit log with a `before_state` snapshot; a full HTTP round
+trip create→edit→deactivate→reactivate→audit→delete attributed to a real
+admin actor; 401 without an admin credential).
 
 ## Needs-attention queue (AIC-17)
 

@@ -142,6 +142,42 @@ export interface CampaignAudiences {
 }
 export const getCampaignAudiences = () => api<CampaignAudiences>("/app/audiences");
 
+// ── Admin: customer CRUD (AIC-44) ───────────────────────────────────────────
+export interface CustomerWriteFields {
+  businessName?: string;
+  category?: string;
+  mainService?: string;
+  geoArea?: string;
+  primaryCustomer?: string;
+  offer?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  isTest?: boolean;
+  onboardingStatus?: string;
+  agreedBudgetAgorot?: number;
+}
+export interface AuditEntry {
+  id: string;
+  createdAt: string;
+  actorLabel: string;
+  action: string;
+  entityLabel: string;
+  detail: string;
+}
+export const createCustomer = (fields: CustomerWriteFields & { businessName: string }) =>
+  api<{ id: string }>("/admin/customers", { method: "POST", body: JSON.stringify(fields) });
+export const updateCustomer = (id: string, fields: CustomerWriteFields) =>
+  api<{ ok: true }>(`/admin/customers/${id}`, { method: "PATCH", body: JSON.stringify(fields) });
+export const deactivateCustomer = (id: string) =>
+  api<{ ok: true }>(`/admin/customers/${id}/deactivate`, { method: "POST", body: "{}" });
+export const reactivateCustomer = (id: string) =>
+  api<{ ok: true }>(`/admin/customers/${id}/reactivate`, { method: "POST", body: "{}" });
+export const deleteCustomer = (id: string, confirmText: string) =>
+  api<{ ok: true }>(`/admin/customers/${id}`, { method: "DELETE", body: JSON.stringify({ confirmText }) });
+export const getCustomerAudit = (id: string) =>
+  api<{ entries: AuditEntry[] }>(`/admin/customers/${id}/audit`);
+
 export const changePassword = (currentPassword: string, newPassword: string) =>
   api<{ ok: true }>("/auth/change-password", {
     method: "POST",

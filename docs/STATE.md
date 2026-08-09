@@ -6,6 +6,27 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-09 — Customer CRUD + admin audit log (AIC-44)
+The operator's actual daily onboarding/support tool: `AdminCustomers.tsx`
+gains create ("+ לקוח חדש"), an inline edit form (business fields; budget
+edits write straight to `managed_campaigns.agreed_budget_agorot`, which the
+engine's safety check already reads live), deactivate/reactivate (reversible;
+deactivating marks the managed campaign `unmanaged` — stops both generation
+and execution via the existing AIC-14 controls, without touching Meta), and a
+gated hard-delete (confirm-to-type, enforced server-side too, cascades the
+customer's rows, never touches Meta assets). New `customers.is_active`/
+`deactivated_at` + append-only `admin_audit_log` (migration 016;
+`services/admin-audit.ts` + `services/customer-admin.ts`) — every write is
+logged (who/what/entity/before→after), with `entity_id` deliberately not a
+foreign key so a hard-deleted customer's own delete is still legible in its
+audit trail. Search + active/deactivated filter over the roster; the
+drill-down now shows the full record (business+contact+subscription) plus
+lead-quality and condensed action-history via existing endpoints, plus the new
+per-customer audit trail. QA'd live end-to-end against prod Neon (create →
+edit → deactivate → reactivate → delete, confirm-to-type rejected then
+accepted, audit trail survived the cascade) then cleaned up. Tests:
+`customer-admin.integration.test.ts`. Doc: `ops-console.md`.
+
 ### 2026-08-09 — Admin console nav shell + fleet overview (AIC-43)
 The admin console gets a proper multi-section frame — the base the rest of
 ops-console-v2 (AIC-44…47) hangs off. New `AdminShell.tsx` (right-side sidebar,
