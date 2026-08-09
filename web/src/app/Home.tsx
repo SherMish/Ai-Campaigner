@@ -8,7 +8,7 @@ import {
   type CustomerOverview,
   type HomeState,
 } from "../api";
-import { AppHeader, StatusPill } from "./components";
+import { StatusPill } from "./components";
 
 const a = strings.he.app;
 const h = a.home;
@@ -67,22 +67,14 @@ export function Home() {
   useEffect(load, []);
 
   if (loading)
-    return (
-      <div>
-        <AppHeader recCount={0} />
-        <div className="wrap page"><p className="muted">{a.loading}</p></div>
-      </div>
-    );
+    return <div className="wrap page"><p className="muted">{a.loading}</p></div>;
 
   if (err || !ov)
     return (
-      <div>
-        <AppHeader recCount={0} />
-        <div className="wrap page">
-          <div className="card">
-            <p className="muted" style={{ marginBottom: 12 }}>{a.loadError}</p>
-            <button className="btn btn-outline btn-sm" onClick={load}>{a.retry}</button>
-          </div>
+      <div className="wrap page">
+        <div className="card">
+          <p className="muted" style={{ marginBottom: 12 }}>{a.loadError}</p>
+          <button className="btn btn-outline btn-sm" onClick={load}>{a.retry}</button>
         </div>
       </div>
     );
@@ -97,12 +89,10 @@ export function Home() {
   const period = ov.campaign?.budgetPeriod === "monthly" ? L.perMonth : L.perDay;
 
   return (
-    <div>
-      <AppHeader recCount={ov.pendingRecommendations} userName={ov.account.name} />
-      <div className="wrap page">
-        <div className="row between" style={{ marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
-          <h1>{h.title}</h1>
-        </div>
+    <div className="wrap page">
+      <div className="row between" style={{ marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+        <h1>{h.title}</h1>
+      </div>
 
         {/* status hero */}
         <div className="card" style={{ marginBottom: 20 }}>
@@ -191,7 +181,6 @@ export function Home() {
           </div>
         </div>
       </div>
-    </div>
   );
 }
 

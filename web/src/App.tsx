@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { getAuthToken } from "./api";
 import { AdminDashboard } from "./admin/AdminDashboard";
 import { AdminGate } from "./admin/AdminGate";
+import { AppShell } from "./app/AppShell";
 import { Signup, Login, Forgot, Reset } from "./app/Auth";
 import { Checkout } from "./app/Checkout";
 import { Onboarding } from "./app/Onboarding";
@@ -38,11 +39,13 @@ export function App() {
         <Route path="/connect" element={<AuthGate><Connect /></AuthGate>} />
         <Route path="/review" element={<AuthGate><Review /></AuthGate>} />
 
-        {/* the app (signed-in) */}
-        <Route path="/app" element={<AuthGate><Home /></AuthGate>} />
-        <Route path="/app/recommendations" element={<AuthGate><Recommendations /></AuthGate>} />
-        <Route path="/app/recommendations/:id" element={<AuthGate><RecommendationDetail /></AuthGate>} />
-        <Route path="/app/settings" element={<AuthGate><Settings /></AuthGate>} />
+        {/* the app (signed-in) — one shell (right-side sidebar) wraps every screen */}
+        <Route element={<AuthGate><AppShell /></AuthGate>}>
+          <Route path="/app" element={<Home />} />
+          <Route path="/app/recommendations" element={<Recommendations />} />
+          <Route path="/app/recommendations/:id" element={<RecommendationDetail />} />
+          <Route path="/app/settings" element={<Settings />} />
+        </Route>
 
         {/* the single internal admin dashboard (per-user admin role) */}
         <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />

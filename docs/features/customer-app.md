@@ -37,6 +37,20 @@ Design fidelity verified (login, home, onboarding rendered against the comps). T
 marketing landing stays the static `landing/` page at `/`; this SPA owns everything
 else (single-origin).
 
+## App shell (AIC-40)
+
+The signed-in app (`/app*`) is wrapped by a **right-side sidebar shell** (Pisga-style
+`studentApp` chrome, restyled in AdPilot's palette — ink sidebar, orange accent):
+`web/src/app/AppShell.tsx` (a React Router **layout route** rendering `<Outlet/>`) +
+`web/src/app/Sidebar.tsx`. The sidebar has the AdPilot brand → nav sections
+(ניהול: ראשי `/app`, המלצות `/app/recommendations` + pending-recs badge · עזרה:
+עזרה והגדרות `/app/settings`) → spacer → a user card at the bottom (initials avatar +
+real name/email from `getOverview`, gear → account menu with settings + logout).
+Below 860px the sidebar becomes an off-canvas drawer opened by a floating menu
+button on the right. Shell CSS is `.ap-*` classes in `ui.css`. The old top
+`AppHeader` is retired from the app screens (onboarding/connect keep their own
+minimal header). `lucide-react` provides the icons.
+
 ## Design system
 AdPilot palette (orange `#FF5A36`, cream `#F7F2EA`/`#EDE6DA`, ink `#171717`, green
 `#2FA36B`, indigo `#665CFF`, WhatsApp `#DCF8C6`), Rubik + IBM Plex Mono, RTL Hebrew.

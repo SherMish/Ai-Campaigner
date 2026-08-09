@@ -6,6 +6,16 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-09 — App shell: right-side sidebar nav (AIC-40)
+Replaced the signed-in app's top header with a Pisga-style **right-side sidebar
+shell** in AdPilot's palette (ink sidebar, orange accent). New `AppShell.tsx`
+(React Router layout route) + `Sidebar.tsx`; `/app*` nested under it in `App.tsx`;
+per-screen `AppHeader` dropped from Home/Recommendations/Settings. Sidebar =
+brand → nav sections (ראשי / המלצות+badge / הגדרות) → user card (real name/email +
+account menu with logout). Off-canvas drawer + right-side FAB below 860px. Shell
+CSS = `.ap-*` in `ui.css`; icons via `lucide-react`. Chrome only — no backend/data
+changes. First of the 3-part /app redesign (AIC-40/41/42). Doc: customer-app.md.
+
 ### 2026-08-09 — Admin routing + entry-screen redirects (UX)
 Single admin dashboard: `/admin` now renders one `AdminDashboard` (queue +
 customers + a per-customer drill-down that folds in the campaign readout);

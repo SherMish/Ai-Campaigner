@@ -60,6 +60,7 @@ export const strings = {
       loading: "טוען…",
       loadError: "לא הצלחנו לטעון את הנתונים.",
       retry: "לניסיון חוזר",
+      nav: { sectionManage: "ניהול", sectionHelp: "עזרה", menu: "תפריט" },
       auth: {
         signupTitle: "פותחים חשבון ומתחילים",
         signupSub: "אחרי ההרשמה נקבע שיחת היכרות קצרה ונתחיל בהקמה.",

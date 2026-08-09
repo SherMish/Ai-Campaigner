@@ -11,7 +11,7 @@ import {
   type CustomerRec,
   type CustomerRecList,
 } from "../api";
-import { AppHeader, StatusPill, WA } from "./components";
+import { StatusPill, WA } from "./components";
 
 const a = strings.he.app;
 const rc = a.recs;
@@ -33,7 +33,6 @@ export function Recommendations() {
 
   return (
     <div>
-      <AppHeader recCount={data?.pending.length ?? 0} />
       <div className="wrap page" style={{ maxWidth: 820, marginInline: "auto" }}>
         <h1 style={{ marginBottom: 24 }}>{rc.title}</h1>
 
@@ -125,7 +124,6 @@ export function RecommendationDetail() {
 
   return (
     <div>
-      <AppHeader recCount={0} />
       <div className="wrap page" style={{ maxWidth: 720, marginInline: "auto" }}>
         <Link className="link" to="/app/recommendations">{rd.back}</Link>
 

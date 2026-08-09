@@ -4,7 +4,7 @@ import {
   getOverview, shekels, recheckConnection, requestBudgetChange, changePassword,
   ApiError, type CustomerOverview, type AccessHealth,
 } from "../api";
-import { AppHeader, StatusPill, SupportCard, Field, WA } from "./components";
+import { StatusPill, SupportCard, Field, WA } from "./components";
 
 const a = strings.he.app;
 const s = a.settings;
@@ -41,7 +41,6 @@ export function Settings() {
 
   return (
     <div>
-      <AppHeader recCount={ov?.pendingRecommendations ?? 0} userName={ov?.account.name} />
       <div className="wrap page" style={{ maxWidth: 820, marginInline: "auto" }}>
         <h1 style={{ marginBottom: 24 }}>{s.title}</h1>
 
