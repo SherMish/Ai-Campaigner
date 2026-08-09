@@ -265,16 +265,14 @@ function increaseBudget(ev: CampaignEvidence): RecommendationDraft | null {
 // Priority order: targeted creative fixes, then the audience (ad-set) fix, then
 // blunt budget moves; scaling last.
 //
-// NOTE: `pauseUnderperformingAudience` is implemented + unit-tested but is
-// deliberately NOT in the live pipeline yet. Insights can't distinguish an
-// *errored/not-delivering* ad set (0 leads / infinite CPL) from a genuinely weak
-// one, so without delivery-health it would recommend pausing an errored audience
-// — the wrong action. AIC-39 adds effective_status/issues_info + errored-ad-set
-// exclusion; it re-inserts this rule here once that lands. (When it does: put it
-// after replaceCreative, before decreaseBudget.)
+// `pauseUnderperformingAudience` is safe to run live now that AIC-39 excludes
+// errored/not-delivering ad sets from the evidence (buildCampaignEvidence's
+// excludeAdSetIds) — so the rule only ever compares genuinely-delivering
+// audiences and never proposes pausing a broken one.
 const RULES: Array<(ev: CampaignEvidence) => RecommendationDraft | null> = [
   pauseWeakCreative,
   replaceCreative,
+  pauseUnderperformingAudience,
   decreaseBudget,
   increaseBudget,
 ];

@@ -105,6 +105,15 @@ d("customer overview (DB + HTTP)", () => {
     expect(ov!.readout?.current.leads).toBe(0);
   });
 
+  it("surfaces a delivery problem as attention (kind = delivery) — AIC-39", async () => {
+    const { userId, campaignId } = await seedChain("delivery");
+    await pool.query(`UPDATE managed_campaigns SET delivery_ok = false, delivery_reason = 'not delivering' WHERE id = $1`, [campaignId]);
+    const ov = await buildCustomerOverview(pool, userId);
+    expect(ov!.homeState).toBe("attention");
+    expect(ov!.attentionKind).toBe("delivery");
+    expect(ov!.campaign?.deliveryOk).toBe(false);
+  });
+
   it("rejects the overview without a token", async () => {
     const res = await request(createApp()).get("/api/app/overview");
     expect(res.status).toBe(401);

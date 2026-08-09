@@ -36,6 +36,7 @@ export interface CustomerOverview {
     agreedBudgetAgorot: Agorot;
     budgetPeriod: "daily" | "monthly";
     automationEnabled: boolean;
+    deliveryOk: boolean;
   } | null;
   subscription: {
     plan: string;
@@ -47,6 +48,9 @@ export interface CustomerOverview {
   readout: CampaignReadout | null;
   recentActivity: CondensedEntry[];
   pendingRecommendations: number;
+  // Which kind of "needs attention" the customer sees, so Home shows the right
+  // message: a lost Meta connection vs a delivery problem (AIC-39).
+  attentionKind: "connection" | "delivery" | null;
   homeState: HomeState;
 }
 
@@ -60,6 +64,7 @@ function deriveHomeState(
 ): HomeState {
   if (!campaign) return "no_campaign";
   if (connection && connection.accessHealth !== "ok") return "attention";
+  if (!campaign.deliveryOk) return "attention"; // a not-delivering ad set (AIC-39)
   if (campaign.status === "paused") return "paused";
   if (campaign.status === "needs_attention" || campaign.status === "connection_problem")
     return "attention";
@@ -100,6 +105,7 @@ export async function buildCustomerOverview(
       readout: null,
       recentActivity: [],
       pendingRecommendations: 0,
+      attentionKind: null,
       homeState: "no_campaign",
     };
   }
@@ -141,8 +147,9 @@ export async function buildCustomerOverview(
       agreed_budget_agorot: number;
       budget_period: "daily" | "monthly";
       automation_enabled: boolean;
+      delivery_ok: boolean;
     }>(
-      `SELECT id, name, status, objective, agreed_budget_agorot, budget_period, automation_enabled
+      `SELECT id, name, status, objective, agreed_budget_agorot, budget_period, automation_enabled, delivery_ok
        FROM managed_campaigns WHERE customer_id = $1`,
       [customerId],
     ),
@@ -193,6 +200,7 @@ export async function buildCustomerOverview(
         agreedBudgetAgorot: Number(campRes.rows[0].agreed_budget_agorot),
         budgetPeriod: campRes.rows[0].budget_period,
         automationEnabled: campRes.rows[0].automation_enabled,
+        deliveryOk: campRes.rows[0].delivery_ok,
       }
     : null;
 
@@ -225,6 +233,13 @@ export async function buildCustomerOverview(
       )
     : 0;
 
+  const attentionKind: "connection" | "delivery" | null =
+    connection && connection.accessHealth !== "ok"
+      ? "connection"
+      : campaign && !campaign.deliveryOk
+        ? "delivery"
+        : null;
+
   return {
     account,
     customer,
@@ -234,6 +249,7 @@ export async function buildCustomerOverview(
     readout,
     recentActivity,
     pendingRecommendations,
+    attentionKind,
     homeState: deriveHomeState(campaign, connection, readout),
   };
 }

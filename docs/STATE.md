@@ -6,6 +6,21 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-09 — Ad-set delivery-health detection; audience rule now live (AIC-39)
+Detects not-delivering / disapproved ad sets (invisible in Insights) via a
+separate `effective_status` + `issues_info` read. New `meta/delivery-health.ts`
+(normalize/summarize) + adapter `getDeliveryHealth`; `services/delivery-monitor.ts`
+persists `managed_campaigns.delivery_ok`/`delivery_reason` (migration 014) and
+raises a `campaign_not_delivering` ops item on the ok→not-ok transition (deduped),
+recovering on heal. Wired into the engine tick: errored ad sets are recorded and
+**excluded** from the rules' evidence (ad sets + their creatives) — which lets
+**AIC-36's `pause_underperforming_audience` go live** (re-inserted into `RULES`).
+Customer surface: `overview.attentionKind = "delivery"` → Home shows a distinct
+plain-Hebrew "needs attention" message; campaign `status` stays `active` so the
+engine keeps optimizing the healthy ad sets. New owning doc
+`features/delivery-health.md`. Tests: delivery-health, delivery-monitor, generation
+exclusion, overview delivery-attention. 122 unit + 45 integration green.
+
 ### 2026-08-09 — Audience-aware rules + pauseAdSet write (AIC-36)
 The rules now reason at the audience (ad-set) grain. **Creative fix (live):**
 `pause_weak_creative` compares creatives WITHIN an ad set (grouped by

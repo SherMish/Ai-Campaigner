@@ -5,6 +5,7 @@ import { RecommendationService } from "./recommendation-service.js";
 import { runGenerationTick, type GenCampaign } from "./generation.js";
 import type { MetaReader } from "../execution/safe-executor.js";
 import type { SnapshotUpsert } from "../meta/insights.js";
+import type { DeliverySummary } from "../meta/delivery-health.js";
 
 // Align with rollingPeriods(ref="2026-08-02"): current 07-26..08-01, prev 07-19..07-25.
 const REF = new Date("2026-08-02T00:00:00.000Z");
@@ -45,7 +46,7 @@ function tick(campaigns: GenCampaign[], reader: MetaReader, snapshots: InMemoryS
   });
 }
 
-const CAMP: GenCampaign = { id: "camp-1", metaCampaignId: "meta-1" };
+const CAMP: GenCampaign = { id: "camp-1", metaCampaignId: "meta-1", customerId: "cust-1" };
 
 describe("runGenerationTick", () => {
   it("proposes a recommendation from snapshots, and dedupes on a repeat tick", async () => {
@@ -82,5 +83,54 @@ describe("runGenerationTick", () => {
     const res = await tick([CAMP], badReader, snapshots, recs);
     expect(res).toMatchObject({ evaluated: 0, created: 0, skipped: 1 });
     expect([...recs.records.values()]).toHaveLength(0);
+  });
+});
+
+// A clear A≫B audience split: A cheap, B ≥2× the CPL — the audience rule fires
+// on B unless B is excluded for a delivery problem (AIC-39).
+async function seedAudience(store: InMemorySnapshotStore) {
+  await store.upsert([
+    snap({ grain: "campaign", metaObjectId: "camp", spendAgorot: 80000, leads: 25, cplAgorot: 3200 }),
+    snap({ grain: "campaign", metaObjectId: "camp", periodStart: PREV.start, periodEnd: PREV.end, spendAgorot: 80000, leads: 25, cplAgorot: 3200 }),
+    snap({ grain: "adset", metaObjectId: "as_A", spendAgorot: 40000, leads: 20, cplAgorot: 2000 }),
+    snap({ grain: "adset", metaObjectId: "as_B", spendAgorot: 40000, leads: 5, cplAgorot: 8000 }),
+  ]);
+}
+
+describe("runGenerationTick — audience rule + AIC-39 delivery exclusion", () => {
+  it("proposes pause_adset on the worse audience when both deliver", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedAudience(snapshots);
+    const recs = new InMemoryRecommendationStore();
+    const res = await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+    });
+    expect(res.created).toBe(1);
+    const rec = [...recs.records.values()][0];
+    expect(rec.type).toBe("pause_adset");
+    expect(rec.targetMetaId).toBe("as_B");
+  });
+
+  it("does NOT propose pausing an ad set that is flagged not-delivering", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedAudience(snapshots);
+    const recs = new InMemoryRecommendationStore();
+    let recorded: DeliverySummary | null = null;
+    const res = await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      deliveryReader: { getDeliveryHealth: async () => [
+        { adSetId: "as_A", name: null, state: "delivering", reason: null },
+        { adSetId: "as_B", name: null, state: "not_delivering", reason: "Ad set not delivering" },
+      ] },
+      recordDelivery: async (_c, s) => { recorded = s; },
+    });
+    expect(res.deliveryProblems).toBe(1);
+    expect(recorded).toMatchObject({ ok: false, problemAdSetIds: ["as_B"] });
+    // as_B excluded → only one delivering audience → audience rule can't fire.
+    expect([...recs.records.values()].some((r) => r.type === "pause_adset")).toBe(false);
   });
 });

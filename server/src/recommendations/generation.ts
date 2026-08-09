@@ -8,6 +8,9 @@ import { PgRecommendationStore, type RecommendationStore } from "./recommendatio
 import { RecommendationService } from "./recommendation-service.js";
 import { refreshRecommendations } from "./staleness.js";
 import { rollingPeriods } from "../meta/scheduled-ingestion.js";
+import { summarize, type DeliveryReader, type DeliverySummary } from "../meta/delivery-health.js";
+import { recordCampaignDelivery } from "../services/delivery-monitor.js";
+import { OpsQueue } from "../services/ops-queue.js";
 import { consoleLogger, type Logger } from "../services/logger.js";
 
 // The scheduled recommendation evaluator (AIC-9). It closes the engine loop:
@@ -20,6 +23,7 @@ import { consoleLogger, type Logger } from "../services/logger.js";
 export interface GenCampaign {
   id: string;
   metaCampaignId: string;
+  customerId: string | null;
 }
 
 export interface GenerationSummary {
@@ -27,14 +31,15 @@ export interface GenerationSummary {
   created: number; // fresh recommendations proposed
   expired: number; // proposed recs the rules no longer support
   skipped: number; // eligible but couldn't read live budget
+  deliveryProblems: number; // campaigns with a not-delivering ad set (AIC-39)
 }
 
 // Campaigns eligible for generation: actively managed, automation on, linked to a
 // Meta campaign, and a healthy connection. Execution-frozen still generates
 // (freeze blocks execution, not proposals — PRD §23); unmanaged/paused/off do not.
 export async function listEligibleForGeneration(pool: pg.Pool): Promise<GenCampaign[]> {
-  const { rows } = await pool.query<{ id: string; meta_campaign_id: string }>(
-    `SELECT mc.id, mc.meta_campaign_id
+  const { rows } = await pool.query<{ id: string; meta_campaign_id: string; customer_id: string | null }>(
+    `SELECT mc.id, mc.meta_campaign_id, mc.customer_id
      FROM managed_campaigns mc
      JOIN meta_connections conn ON conn.customer_id = mc.customer_id
      WHERE mc.status = 'active'
@@ -42,7 +47,7 @@ export async function listEligibleForGeneration(pool: pg.Pool): Promise<GenCampa
        AND mc.meta_campaign_id IS NOT NULL
        AND conn.access_health = 'ok'`,
   );
-  return rows.map((r) => ({ id: r.id, metaCampaignId: r.meta_campaign_id }));
+  return rows.map((r) => ({ id: r.id, metaCampaignId: r.meta_campaign_id, customerId: r.customer_id }));
 }
 
 // Evaluate a fixed set of campaigns. Pure over its deps (the reader + stores are
@@ -55,6 +60,11 @@ export async function runGenerationTick(deps: {
   snapshotStore: SnapshotStore;
   recommendationStore: RecommendationStore;
   recommendationService: RecommendationService;
+  // AIC-39: per-campaign delivery health. When provided, errored/not-delivering
+  // ad sets are recorded (via `recordDelivery`) and excluded from the rules'
+  // evidence, so the audience rule never proposes pausing a broken ad set.
+  deliveryReader?: DeliveryReader;
+  recordDelivery?: (campaign: GenCampaign, summary: DeliverySummary) => Promise<void>;
   ref?: Date;
   logger?: Logger;
 }): Promise<GenerationSummary> {
@@ -63,7 +73,7 @@ export async function runGenerationTick(deps: {
     rollingPeriods(deps.ref);
   const log = deps.logger;
 
-  const summary: GenerationSummary = { evaluated: 0, created: 0, expired: 0, skipped: 0 };
+  const summary: GenerationSummary = { evaluated: 0, created: 0, expired: 0, skipped: 0, deliveryProblems: 0 };
 
   for (const campaign of campaigns) {
     let currentBudgetAgorot: number;
@@ -75,6 +85,24 @@ export async function runGenerationTick(deps: {
       continue;
     }
 
+    // Delivery health: record it + exclude any not-delivering ad set from the
+    // evidence. A health-read failure doesn't block generation (exclude nothing).
+    let excludeAdSetIds: Set<string> | undefined;
+    if (deps.deliveryReader) {
+      try {
+        const health = await deps.deliveryReader.getDeliveryHealth(campaign.metaCampaignId);
+        const del = summarize(health);
+        if (!del.ok) {
+          summary.deliveryProblems++;
+          excludeAdSetIds = new Set(del.problemAdSetIds);
+          log?.info(`[generation] ${campaign.id}: delivery problem — ${del.reason} [${del.problemAdSetIds.join(", ")}]`);
+        }
+        await deps.recordDelivery?.(campaign, del);
+      } catch (e) {
+        log?.error(`[generation] ${campaign.id}: delivery-health read failed — ${(e as Error).message}`);
+      }
+    }
+
     const result = await refreshRecommendations({
       snapshotStore,
       recommendationStore,
@@ -83,6 +111,7 @@ export async function runGenerationTick(deps: {
       current,
       previous,
       expiresAt: null,
+      excludeAdSetIds,
     });
 
     summary.evaluated++;
@@ -101,16 +130,21 @@ export async function runGenerationTick(deps: {
 export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSummary>) | null {
   const token = process.env.META_SYSTEM_USER_TOKEN;
   if (!token) return null;
-  const reader = new GraphCampaignAdapter(token, process.env.META_GRAPH_VERSION || "v21.0");
+  const adapter = new GraphCampaignAdapter(token, process.env.META_GRAPH_VERSION || "v21.0");
   const snapshotStore = new PgSnapshotStore(pool);
   const recommendationStore = new PgRecommendationStore(pool);
   const recommendationService = new RecommendationService(recommendationStore);
+  const ops = new OpsQueue(pool, consoleLogger);
 
   return async () => {
     const campaigns = await listEligibleForGeneration(pool);
     return runGenerationTick({
       campaigns,
-      reader,
+      reader: adapter,
+      deliveryReader: adapter,
+      recordDelivery: async (campaign, del) => {
+        await recordCampaignDelivery({ pool, ops, campaignId: campaign.id, customerId: campaign.customerId, summary: del });
+      },
       snapshotStore,
       recommendationStore,
       recommendationService,

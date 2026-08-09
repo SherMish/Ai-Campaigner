@@ -55,7 +55,7 @@ describe("pause_weak_creative — compared WITHIN an ad set (AIC-36)", () => {
   });
 });
 
-describe("pause_underperforming_audience (AIC-36) — held out of the live pipeline until AIC-39", () => {
+describe("pause_underperforming_audience (AIC-36; live since AIC-39)", () => {
   const rule = __rulesForTest.pauseUnderperformingAudience;
 
   it("fires when one audience's CPL is ≥2× the best, targeting the worse ad set", () => {
@@ -75,10 +75,9 @@ describe("pause_underperforming_audience (AIC-36) — held out of the live pipel
     expect(rule(base({ adsets: [ad("A", 40000, 20, 2000), ad("B", 100, 0, null)] }))).toBeNull();
   });
 
-  it("stays OUT of the live pipeline: evaluateCampaign never returns pause_adset", () => {
-    // Even with a clear A≫B split, the live engine must not emit an audience
-    // pause yet (needs AIC-39 delivery-health to exclude errored ad sets).
+  it("is LIVE: evaluateCampaign emits pause_adset for a clear A≫B split", () => {
     const d = evaluateCampaign(base({ adsets: [ad("A", 40000, 20, 2000), ad("B", 40000, 5, 8000)] }));
-    expect(d.type).not.toBe("pause_adset");
+    expect(d.type).toBe("pause_adset");
+    expect(d.targetMetaId).toBe("B");
   });
 });

@@ -37,10 +37,11 @@ export async function refreshRecommendations(deps: {
   current: InsightsPeriod;
   previous: InsightsPeriod;
   expiresAt?: Date | null;
+  excludeAdSetIds?: Set<string>; // errored/not-delivering ad sets (AIC-39)
 }): Promise<RefreshResult> {
   const { snapshotStore, recommendationStore, recommendationService, campaign } = deps;
 
-  const evidence = await buildCampaignEvidence(snapshotStore, campaign, deps.current, deps.previous);
+  const evidence = await buildCampaignEvidence(snapshotStore, campaign, deps.current, deps.previous, deps.excludeAdSetIds);
   const fresh = evaluateCampaign(evidence);
 
   const proposed = await recommendationStore.listProposed(campaign.id);

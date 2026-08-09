@@ -1,4 +1,5 @@
 import type { LiveCampaignState, MetaReader, ExecWriter } from "../execution/safe-executor.js";
+import { normalizeAdSet, type AdSetHealth, type DeliveryReader, type RawAdSetDelivery } from "./delivery-health.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
 // Marketing API. Budgets are read/written in the account currency's MINOR unit,
@@ -9,7 +10,7 @@ import type { LiveCampaignState, MetaReader, ExecWriter } from "../execution/saf
 // one, so setDailyBudget targets the right object.
 const BASE = "https://graph.facebook.com";
 
-export class GraphCampaignAdapter implements MetaReader, ExecWriter {
+export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader {
   private budgetObj = new Map<string, string>(); // campaignId → budget object id
 
   constructor(
@@ -88,5 +89,14 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter {
   // Which object carries the budget for a campaign (for logging/verification).
   budgetObjectOf(metaCampaignId: string): string | undefined {
     return this.budgetObj.get(metaCampaignId);
+  }
+
+  // Per-ad-set delivery health (AIC-39): effective_status + issues_info. This is
+  // the separate read that reveals "not delivering / disapproved" — invisible in
+  // Insights (which just show near-zero spend).
+  async getDeliveryHealth(metaCampaignId: string): Promise<AdSetHealth[]> {
+    const body = await this.get(`${metaCampaignId}/adsets?fields=id,name,effective_status,issues_info&limit=100`);
+    const rows = (body.data as RawAdSetDelivery[]) ?? [];
+    return rows.map(normalizeAdSet);
   }
 }

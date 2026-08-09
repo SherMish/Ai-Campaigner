@@ -62,7 +62,7 @@ export interface CustomerOverview {
   campaign: {
     id: string; name: string; status: CampaignStatus; objective: string;
     agreedBudgetAgorot: number; budgetPeriod: "daily" | "monthly";
-    automationEnabled: boolean;
+    automationEnabled: boolean; deliveryOk: boolean;
   } | null;
   subscription: {
     plan: string; status: string; setupPaid: boolean;
@@ -77,6 +77,7 @@ export interface CustomerOverview {
     when: string; summary: string; automated: boolean; result: "success" | "failed";
   }>;
   pendingRecommendations: number;
+  attentionKind: "connection" | "delivery" | null;
   homeState: HomeState;
 }
 

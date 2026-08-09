@@ -74,7 +74,7 @@ if (ingestTick || generationTick) {
       if (generationTick) {
         const g = await generationTick();
         consoleLogger.info(
-          `generation tick: ${g.evaluated} evaluated, ${g.created} proposed, ${g.expired} expired, ${g.skipped} skipped`,
+          `generation tick: ${g.evaluated} evaluated, ${g.created} proposed, ${g.expired} expired, ${g.skipped} skipped, ${g.deliveryProblems} delivery-problems`,
         );
       }
     },

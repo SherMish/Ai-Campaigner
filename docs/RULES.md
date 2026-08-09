@@ -53,7 +53,7 @@ All thresholds are named constants in `RULE_THRESHOLDS` (one place). Budget chan
 are only *proposed* here; the agreed-budget safety clamp is enforced at execution
 (AIC-13), and every change needs customer approval.
 
-### Audience rule — `pause_underperforming_audience` (AIC-36; NOT yet live)
+### Audience rule — `pause_underperforming_audience` (AIC-36; LIVE since AIC-39)
 
 A managed campaign can have **N ad sets** (audience splits). When one audience's
 CPL is ≥ `AUDIENCE_CPL_MULTIPLIER` (2×) the best audience's over enough data — both
@@ -65,13 +65,13 @@ delivery/spend change → approval-gated through AIC-23 → AIC-12, with a live
 `pauseAdSet` write (verified read-back on the ad set's status). Budget rules stay
 **campaign-level** — no per-ad-set budget writes (CBO owns the split).
 
-**Held out of the live pipeline until AIC-39.** Meta Insights can't distinguish an
+**Errored ad sets are excluded (AIC-39).** Meta Insights can't distinguish an
 *errored / not-delivering* ad set (near-zero spend, 0 leads, ∞ CPL) from a
-genuinely weak one, so without delivery-health this rule could recommend pausing
-an **errored** audience — the wrong action (the fix is to resolve the error).
-AIC-39 fetches `effective_status` + `issues_info` and excludes errored ad sets;
-it re-inserts this rule into `RULES` once that lands. The rule is implemented and
-unit-tested today; the min-spend gate already excludes the near-zero-spend case.
+genuinely weak one. AIC-39 fetches `effective_status` + `issues_info`
+([delivery-health.md](features/delivery-health.md)) and drops any not-delivering
+ad set (and its creatives) from the evidence — so this rule only ever compares
+genuinely-delivering audiences and never proposes pausing a broken one. That
+exclusion is what made the rule safe to run live.
 
 ### v1 approximations (documented, refined later)
 - Trend rules compare the **current window vs the previous window** (not daily

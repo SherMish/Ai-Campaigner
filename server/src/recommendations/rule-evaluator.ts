@@ -17,6 +17,10 @@ export async function buildCampaignEvidence(
   campaign: EvaluableCampaign,
   current: InsightsPeriod,
   previous: InsightsPeriod,
+  // Ad sets to drop from the evidence entirely (AIC-39): an errored/not-delivering
+  // audience is never a "weak" one to pause — it's an error to fix. Its creatives
+  // are dropped too, so the creative rule doesn't judge a stalled ad set either.
+  excludeAdSetIds?: Set<string>,
 ): Promise<CampaignEvidence> {
   const [curTotals, prevTotals, curCreatives, prevCreatives, curAdsets] = await Promise.all([
     store.campaignTotals(campaign.id, current.start, current.end),
@@ -25,14 +29,16 @@ export async function buildCampaignEvidence(
     store.creativeStats(campaign.id, previous.start, previous.end),
     store.adsetStats(campaign.id, current.start, current.end),
   ]);
+  const excluded = excludeAdSetIds ?? new Set<string>();
+  const keepCreative = (c: { adSetId?: string | null }) => !c.adSetId || !excluded.has(c.adSetId);
   const days = periodDays(current);
   return {
     campaignId: campaign.id,
     current: { ...curTotals, days },
     previous: { ...prevTotals, days: periodDays(previous) },
-    creatives: curCreatives,
-    creativesPrevious: prevCreatives,
-    adsets: curAdsets,
+    creatives: curCreatives.filter(keepCreative),
+    creativesPrevious: prevCreatives.filter(keepCreative),
+    adsets: curAdsets.filter((a) => !excluded.has(a.adSetId)),
     currentBudgetAgorot: campaign.currentBudgetAgorot,
     deliveryDays: curTotals.spendAgorot > 0 ? days : 0,
   };
