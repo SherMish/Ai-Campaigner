@@ -239,6 +239,17 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 .ap-nav-item:focus-visible, .ap-cog:focus-visible, .ap-fab:focus-visible,
 .ap-acct button:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
 
+/* Admin data tables (AIC-43) — plain, dense, inside a .card */
+.op-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.88rem; }
+.op-table th { text-align: start; padding: 8px 6px; font-size: 0.76rem; color: var(--muted); border-bottom: 1.5px solid var(--line); font-weight: 600; }
+.op-table td { padding: 9px 6px; border-bottom: 1px solid var(--line); }
+.op-table tbody tr { cursor: pointer; transition: background 0.1s; }
+.op-table tbody tr:hover { background: var(--cream-2); }
+.op-table tbody tr.selected { background: var(--cream-2); }
+.op-sev-high { color: #c0362c; font-weight: 700; }
+.op-sev-medium { color: #a05a12; font-weight: 700; }
+.op-sev-low { color: var(--muted); font-weight: 700; }
+
 @media (max-width: 860px) {
   .ap-shell { grid-template-columns: 1fr; }
   .ap-side { position: fixed; top: 0; bottom: 0; right: 0; width: 264px; z-index: 60; transform: translateX(100%); transition: transform .22s ease; }

@@ -45,6 +45,49 @@ export const strings = {
       empty: "הרשימה ריקה.",
     },
 
+    // Admin console shell + nav (AIC-43)
+    adminShell: {
+      brand: "AdPilot",
+      brandSub: "ניהול",
+      navOverview: "סקירה כללית",
+      navCustomers: "לקוחות",
+      navMeta: "נתוני Meta",
+      navRecs: "המלצות",
+      navOperators: "מפעילים",
+      comingSoon: "בקרוב",
+      logout: "יציאה",
+      searchPlaceholder: "חיפוש לקוח או קמפיין…",
+      searchNoResults: "לא נמצאו תוצאות.",
+    },
+
+    // Fleet-wide overview (AIC-43) — the operator's landing snapshot.
+    fleet: {
+      title: "סקירה כללית",
+      subtitle: "מצב כל התיק במבט אחד.",
+      campaignsByStatus: "קמפיינים לפי סטטוס",
+      delivering: "מתפרסמים",
+      needsAttention: "דורשים טיפול",
+      spendThisPeriod: "הוצאה בתקופה הנוכחית",
+      leadsThisPeriod: "פניות בתקופה הנוכחית",
+      openQueue: "פריטים פתוחים בתור",
+      viewQueue: "למעבר לתור",
+      billingTitle: "לקוחות משלמים",
+      realCustomers: "לקוחות אמיתיים",
+      setupPaid: "שילמו הקמה",
+      subscribed: "מנויים פעילים",
+      conversionRate: "שיעור המרה",
+      noRealCustomers: "אין עדיין לקוחות משלמים אמיתיים — התיק כרגע כולל רק חשבונות פנימיים/דוגמנות.",
+      viewCustomers: "לצפייה בלקוחות",
+      statusLabels: {
+        under_review: "בבדיקה",
+        active: "פעיל",
+        paused: "מושהה",
+        needs_attention: "דורש טיפול",
+        connection_problem: "בעיית חיבור",
+        unmanaged: "לא מנוהל",
+      },
+    },
+
     // Customer app (P0.5). All screen copy lives here — never hard-code Hebrew in
     // a component. Frontend built on mock data; backend wiring lands per ticket.
     app: {

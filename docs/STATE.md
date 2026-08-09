@@ -6,6 +6,25 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-09 — Admin console nav shell + fleet overview (AIC-43)
+The admin console gets a proper multi-section frame — the base the rest of
+ops-console-v2 (AIC-44…47) hangs off. New `AdminShell.tsx` (right-side sidebar,
+reusing the customer app's shell CSS) + `AdminSidebar.tsx`: **סקירה כללית**
+(Overview, `/admin`) and **לקוחות** (Customers, `/admin/customers`, the
+pre-shell single dashboard's queue+customers+drill-down content, moved and
+restyled to the `.dash`/`.card`/`op-table` system) are live; **נתוני Meta** /
+**המלצות** / **מפעילים** show as disabled "בקרוב" rows until AIC-45/46/47 land.
+New `GET /api/admin/overview` (`services/fleet-overview.ts`): campaigns-by-status,
+delivering-vs-needs-attention (AIC-39 `delivery_ok`), spend/leads for the
+managed fleet (all campaigns, incl. dogfood), open ops-queue depth, and
+billing/conversion (excludes test customers — honest "no real customers yet" at
+current scale). A client-side global search (business name + campaign name)
+jumps to `/admin/customers?focus=<id>`, which auto-selects that customer's
+drill-down. `CustomerListRow`/`CustomerDetail` gained `campaignName`. Old
+`/admin/ops`+`/admin/readout` now redirect to `/admin/customers`. QA'd live:
+real GelNails delivery-problem queue item, real fleet numbers, search→jump-to
+end-to-end. Tests: `fleet-overview.integration.test.ts`. Doc: `ops-console.md`.
+
 ### 2026-08-09 — Design-system roll-out + shared overview fetch + a11y pass (AIC-42)
 Recommendations (list + detail) and Settings now use the same tighter type +
 lifted cards as the dashboard (`.dash`/`.dash-title`) — one visual system across

@@ -12,6 +12,7 @@ export interface CustomerListRow {
   setupPaid: boolean | null;
   accessHealth: AccessHealth | null;
   campaignId: string | null;
+  campaignName: string | null;
   campaignStatus: CampaignStatus | null;
   agreedBudgetAgorot: number | null;
   openRecommendations: number;
@@ -22,7 +23,7 @@ export async function listCustomers(pool: pg.Pool): Promise<CustomerListRow[]> {
     `SELECT c.id, c.business_name, c.category, c.is_test, c.onboarding_status,
             s.status AS subscription_status, s.setup_paid,
             conn.access_health,
-            mc.id AS campaign_id, mc.status AS campaign_status, mc.agreed_budget_agorot,
+            mc.id AS campaign_id, mc.name AS campaign_name, mc.status AS campaign_status, mc.agreed_budget_agorot,
             COALESCE(r.open_recs, 0) AS open_recs
      FROM customers c
      LEFT JOIN subscriptions s      ON s.customer_id = c.id
@@ -44,6 +45,7 @@ export async function listCustomers(pool: pg.Pool): Promise<CustomerListRow[]> {
     setupPaid: r.setup_paid ?? null,
     accessHealth: r.access_health ?? null,
     campaignId: r.campaign_id ?? null,
+    campaignName: r.campaign_name ?? null,
     campaignStatus: r.campaign_status ?? null,
     agreedBudgetAgorot: r.agreed_budget_agorot ?? null,
     openRecommendations: Number(r.open_recs),
@@ -77,7 +79,7 @@ export async function getCustomerDetail(
   const list = await pool.query(
     `SELECT c.*, s.status AS subscription_status, s.setup_paid, s.next_charge_date,
             conn.access_health,
-            mc.id AS campaign_id, mc.status AS campaign_status, mc.agreed_budget_agorot
+            mc.id AS campaign_id, mc.name AS campaign_name, mc.status AS campaign_status, mc.agreed_budget_agorot
      FROM customers c
      LEFT JOIN subscriptions s       ON s.customer_id = c.id
      LEFT JOIN meta_connections conn ON conn.customer_id = c.id
@@ -127,6 +129,7 @@ export async function getCustomerDetail(
     setupPaid: c.setup_paid ?? null,
     accessHealth: c.access_health ?? null,
     campaignId: c.campaign_id ?? null,
+    campaignName: c.campaign_name ?? null,
     campaignStatus: c.campaign_status ?? null,
     agreedBudgetAgorot: c.agreed_budget_agorot ?? null,
     openRecommendations: openRecs,

@@ -12,6 +12,7 @@ import { OpsQueue } from "../services/ops-queue.js";
 import { consoleLogger } from "../services/logger.js";
 import { submitReview, recordCustomerDecision, getLatestReview } from "../services/campaign-review.js";
 import { updateBilling, conversionSummary, upsertLeadQuality, listLeadQuality, leadQualityResponseRate } from "../services/billing.js";
+import { buildFleetOverview } from "../services/fleet-overview.js";
 
 // Internal admin surfaces. Reads only from our DB (insight_snapshots) — never a
 // live Meta call at render time (AIC-7).
@@ -44,6 +45,17 @@ adminRouter.post("/campaigns/:id/controls", async (req, res) => {
 adminRouter.get("/campaigns", async (_req, res) => {
   const campaigns = await listCampaignsForAdmin(pool);
   res.json({ campaigns });
+});
+
+// Fleet-wide snapshot (AIC-43): the operator's landing view. Read-only, our DB
+// only.
+adminRouter.get("/overview", async (_req, res) => {
+  try {
+    res.json(await buildFleetOverview(pool));
+  } catch (e) {
+    console.error("[admin] overview failed", e);
+    res.status(500).json({ error: "failed to load overview" });
+  }
 });
 
 // Customers view (AIC-16): operator home base.

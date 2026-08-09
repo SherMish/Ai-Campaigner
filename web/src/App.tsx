@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { getAuthToken } from "./api";
-import { AdminDashboard } from "./admin/AdminDashboard";
+import { AdminShell } from "./admin/AdminShell";
+import { AdminOverview } from "./admin/AdminOverview";
+import { AdminCustomers } from "./admin/AdminCustomers";
 import { AdminGate } from "./admin/AdminGate";
 import { AppShell } from "./app/AppShell";
 import { Signup, Login, Forgot, Reset } from "./app/Auth";
@@ -47,11 +49,14 @@ export function App() {
           <Route path="/app/settings" element={<Settings />} />
         </Route>
 
-        {/* the single internal admin dashboard (per-user admin role) */}
-        <Route path="/admin" element={<AdminGate><AdminDashboard /></AdminGate>} />
-        {/* back-compat: the old split routes now fold into /admin */}
-        <Route path="/admin/ops" element={<Navigate to="/admin" replace />} />
-        <Route path="/admin/readout" element={<Navigate to="/admin" replace />} />
+        {/* the internal admin console (per-user admin role, AIC-43 nav shell) */}
+        <Route element={<AdminGate><AdminShell /></AdminGate>}>
+          <Route path="/admin" element={<AdminOverview />} />
+          <Route path="/admin/customers" element={<AdminCustomers />} />
+        </Route>
+        {/* back-compat: the old single-page dashboard routes fold into /admin/customers */}
+        <Route path="/admin/ops" element={<Navigate to="/admin/customers" replace />} />
+        <Route path="/admin/readout" element={<Navigate to="/admin/customers" replace />} />
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

@@ -17,19 +17,51 @@ omission (the PIS-26 lesson). An optional `ADMIN_TOKEN` remains as a break-glass
 for machine/curl access (matching `Authorization: Bearer <token>`, constant-time);
 it's unset by default, so only admin users get in.
 
-The web console is a **single dashboard** at **`/admin`** (`web/src/admin/AdminDashboard.tsx`)
-— the needs-attention queue + all customers, with a per-customer drill-down that
-folds in the campaign readout (AIC-7) and the first-campaign review action. (The
-old split `/admin/ops` + `/admin/readout` routes now redirect to `/admin`.)
-`AdminGate.tsx` gates on the **signed-in user**: it calls `GET /auth/me` and
-renders only when `user.isAdmin` — otherwise it prompts to sign in with an admin
-account. `api()` sends the customer JWT for `/admin/*` (a break-glass admin token
-still wins if one was set). To grant admin:
-`UPDATE app_users SET is_admin = true WHERE lower(email) = '…'`.
+The web console is a **nav shell** (AIC-43) under **`/admin`** —
+`web/src/admin/AdminShell.tsx` (a right-side sidebar, reusing the customer app's
+shell CSS, AIC-40) + `AdminSidebar.tsx`, wrapping the section routes:
+
+| Route | Screen | Status |
+| --- | --- | --- |
+| `/admin` | `AdminOverview.tsx` — fleet snapshot + global search | live (AIC-43) |
+| `/admin/customers` | `AdminCustomers.tsx` — needs-attention queue + all customers + drill-down (readout + review) | live (carried over from the pre-shell single dashboard) |
+| נתוני Meta (Meta explorer) | full internal per-audience/per-ad data | disabled "בקרוב" — AIC-45 |
+| המלצות (recommendations oversight) | all recs, all customers | disabled "בקרוב" — AIC-46 |
+| מפעילים (operators + audit) | operator accounts + admin action log | disabled "בקרוב" — AIC-47 |
+
+(The old `/admin/ops` + `/admin/readout` routes now redirect to
+`/admin/customers`, where that content lives.) `AdminGate.tsx` gates on the
+**signed-in user**: it calls `GET /auth/me` and renders only when
+`user.isAdmin` — otherwise it prompts to sign in with an admin account. `api()`
+sends the customer JWT for `/admin/*` (a break-glass admin token still wins if
+one was set). To grant admin: `UPDATE app_users SET is_admin = true WHERE
+lower(email) = '…'`.
 
 Tests: `admin.test.ts` (unit — admin JWT allows, non-admin 403, missing 401,
 break-glass), `admin-auth.integration.test.ts` (real route, admin vs non-admin vs
 no token).
+
+## Fleet overview (AIC-43)
+
+`server/src/services/fleet-overview.ts` `buildFleetOverview(pool)` →
+`GET /api/admin/overview`. Two honestly-separated halves:
+
+- **Operational** (campaigns-by-status, delivering vs needs-attention —
+  `managed_campaigns.delivery_ok`, AIC-39 — spend/leads for the current rolling
+  window, open ops-queue depth): covers **every** managed campaign, including
+  internal/dogfood ones — the operator watches those too.
+- **Billing/conversion** (via the existing `conversionSummary`, AIC-19):
+  excludes test customers, so MRR-adjacent numbers never count an account that
+  was never going to pay. At current scale (Pisga dogfood only) this correctly
+  renders "no real paying customers yet" rather than a fabricated number.
+
+**Global search**: a text input on the Overview filters the already-fetched
+customer list (business name + campaign name) client-side and links to
+`/admin/customers?focus=<id>`, which `AdminCustomers` reads on mount to
+auto-select and open that customer's drill-down.
+
+Tests: `fleet-overview.integration.test.ts` (aggregation across statuses/
+delivery/spend/queue; test-customer exclusion from conversion; auth).
 
 ---
 

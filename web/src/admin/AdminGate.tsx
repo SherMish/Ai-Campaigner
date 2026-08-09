@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { getAuthToken, clearAuthToken, getMe } from "../api";
+import { getAuthToken, getMe } from "../api";
 
 // Gate for the internal ops console. Admin is a per-user role (server checks
 // app_users.is_admin): the operator signs in as a normal customer account, and
@@ -16,21 +16,8 @@ export function AdminGate({ children }: { children: ReactNode }) {
       .catch(() => setState("unauth"));
   }, []);
 
-  if (state === "ok") {
-    return (
-      <div>
-        <div style={{ position: "fixed", insetInlineEnd: 16, top: 12, zIndex: 100 }}>
-          <button
-            className="btn btn-outline btn-sm"
-            onClick={() => { clearAuthToken(); window.location.href = "/login"; }}
-          >
-            יציאה
-          </button>
-        </div>
-        {children}
-      </div>
-    );
-  }
+  // Logout lives in the admin shell's sidebar (AIC-43) — not a floating button.
+  if (state === "ok") return <>{children}</>;
 
   return (
     <main dir="rtl" style={{ minHeight: "100vh", display: "grid", placeItems: "center", fontFamily: "system-ui, sans-serif" }}>
