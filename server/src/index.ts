@@ -2,6 +2,7 @@ import "./load-env.js";
 import { createApp } from "./app.js";
 import { pool } from "./db/pool.js";
 import { buildIngestionTick } from "./meta/scheduled-ingestion.js";
+import { buildGenerationTick } from "./recommendations/generation.js";
 import { startScheduler } from "./services/scheduler.js";
 import { consoleLogger } from "./services/logger.js";
 
@@ -43,20 +44,31 @@ if (process.env.META_SEED_PISGA) {
     .catch((e) => consoleLogger.error("[seed-pisga] crashed", e));
 }
 
-// Insights ingestion + connection health check. buildIngestionTick returns null
-// when no Meta token is configured, leaving the scheduler off until Meta is wired
-// up (see docs/META_SETUP.md). Interval defaults to hourly.
-const tick = buildIngestionTick(pool);
-if (tick) {
+// The engine loop: ingest fresh snapshots, then run the recommendation
+// evaluator over them (AIC-9). Both build to null when no Meta token is set,
+// leaving the scheduler off until Meta is wired up (see docs/META_SETUP.md).
+// Generation runs AFTER ingestion in the same tick so it sees the freshest data.
+// Interval defaults to hourly.
+const ingestTick = buildIngestionTick(pool);
+const generationTick = buildGenerationTick(pool);
+if (ingestTick || generationTick) {
   const intervalMs = Number(process.env.INGESTION_INTERVAL_MS) || 60 * 60 * 1000;
   startScheduler({
     intervalMs,
-    label: "ingestion",
+    label: "engine",
     tick: async () => {
-      const summary = await tick();
-      consoleLogger.info(
-        `ingestion tick: ${summary.ok} ok, ${summary.failed} failed, ${summary.snapshots} snapshots`,
-      );
+      if (ingestTick) {
+        const s = await ingestTick();
+        consoleLogger.info(
+          `ingestion tick: ${s.ok} ok, ${s.failed} failed, ${s.snapshots} snapshots`,
+        );
+      }
+      if (generationTick) {
+        const g = await generationTick();
+        consoleLogger.info(
+          `generation tick: ${g.evaluated} evaluated, ${g.created} proposed, ${g.expired} expired, ${g.skipped} skipped`,
+        );
+      }
     },
   });
 }

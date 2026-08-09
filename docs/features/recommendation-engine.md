@@ -1,16 +1,20 @@
 # Recommendation engine
 
-**Status:** in progress — AIC-8 (state machine) done. Rules (AIC-9), staleness
-(AIC-11), and the LLM explainer (AIC-10) extend this doc as they land.
+**Status:** live — state machine (AIC-8), rules (AIC-9), staleness (AIC-11), and
+the LLM explainer (AIC-10) are all in place, and the **scheduled evaluator** now
+runs them in the engine loop (ingest → generate) so recommendations are produced
+automatically for managed campaigns.
 
 **Source of truth:**
 - State machine: `server/src/recommendations/state-machine.ts`
 - Types: `server/src/recommendations/types.ts`
 - Store: `server/src/recommendations/recommendation-store.ts` (pg + in-memory)
 - Service: `server/src/recommendations/recommendation-service.ts`
+- Scheduled evaluator: `server/src/recommendations/generation.ts`, wired in `server/src/index.ts`
 
 **Lock-in tests:** `server/src/recommendations/state-machine.test.ts`,
-`recommendation-service.test.ts`, `recommendation-store.integration.test.ts`.
+`recommendation-service.test.ts`, `recommendation-store.integration.test.ts`,
+`generation.test.ts`, `generation.integration.test.ts`.
 
 ---
 
@@ -68,6 +72,40 @@ of truth for both producing *and* invalidating a recommendation.
 Source: `server/src/recommendations/staleness.ts`. Tests: `staleness.test.ts`
 (evidence-holds → stays; evidence-diverged → expires; expired → un-approvable;
 replaced when a new action is warranted).
+
+## Scheduled evaluator — the engine loop (AIC-9)
+
+`generation.ts` is the harness that actually runs the engine in production. It's
+wired into the same scheduler as ingestion (`index.ts`), and generation runs
+**after** ingestion in each tick so it evaluates the freshest snapshots:
+
+```
+engine tick → ingest snapshots (+ connection health) → generate recommendations
+```
+
+- `listEligibleForGeneration(pool)` selects campaigns that are `status = 'active'`,
+  `automation_enabled`, linked to a Meta campaign, and on an `access_health = 'ok'`
+  connection. Execution-frozen still generates (a freeze blocks *execution*, not
+  proposals); unmanaged / paused / automation-off / unhealthy do not.
+- `runGenerationTick(...)` reads each campaign's **live daily budget** from the Meta
+  reader (the rules propose relative to it) and calls `refreshRecommendations`
+  (the staleness tick above) — so one function both creates fresh proposals and
+  expires ones the rules no longer support. A campaign whose live budget can't be
+  read is **skipped, never guessed**. It returns a summary
+  (`evaluated / created / expired / skipped`) that the tick logs.
+- `buildGenerationTick(pool)` returns `null` when no System-User token is set, so
+  the loop stays inert until Meta is wired up — same contract as ingestion.
+- It only **proposes**. A recommendation becomes a real Meta change solely when the
+  customer approves it (customer-recommendations → the safe-execute pipeline). No
+  LLM here; generation is fully deterministic.
+
+The scheduler (`services/scheduler.ts`) runs one tick immediately on start (not
+after a full interval), so a fresh boot/deploy doesn't leave up to an hour with no
+ingestion or generation.
+
+Source: `server/src/recommendations/generation.ts`. Tests: `generation.test.ts`
+(proposes + dedupes on repeat, thin evidence → nothing, unreadable budget → skip),
+`generation.integration.test.ts` (the eligibility filter).
 
 ## LLM explainer (AIC-10)
 

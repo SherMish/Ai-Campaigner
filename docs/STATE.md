@@ -6,6 +6,22 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-09 — Scheduled recommendation evaluator — closes the engine loop (AIC-9)
+The rules engine was built + tested but nothing invoked it at runtime — the
+scheduler only ran ingestion, so no recommendation was ever produced. Added
+`server/src/recommendations/generation.ts`: `listEligibleForGeneration` (active +
+automation-on + linked + healthy-connection campaigns) and `runGenerationTick`
+(reads each campaign's live daily budget, then runs the canonical
+`refreshRecommendations` staleness tick to create/expire `proposed` recs).
+`buildGenerationTick` is inert without a Meta token. Wired into `index.ts` to run
+**after** ingestion in the same "engine" tick. Also fixed `startScheduler` to run
+one tick immediately on boot (was waiting a full hour after each deploy). It only
+proposes — nothing executes without a customer approval. Owning doc updated
+(`features/recommendation-engine.md`). Tests: `generation.test.ts`,
+`generation.integration.test.ts`. Sharon's customer was also repointed from the
+mis-seeded beta to the real **GelNails | Leads | WhatsApp | 2026-08** campaign
+(meta 120249004871310352, ₪10/day) so the loop dogfoods on live data.
+
 ### 2026-08-08 — Onboarding/Connect + Settings actions wired — AIC-21/24
 Onboarding now renders the real `onboarding_status` (→ card + stepper) and the
 signed-in name; Connect shows the real connection state and "check connection"
