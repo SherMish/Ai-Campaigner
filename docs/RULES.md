@@ -100,7 +100,8 @@ actually differs between the campaign's ad sets (age → gender → geo, falling
 to the ad set's own Meta name). Labels are fetched + cached (`ad_set_meta`,
 migration 015) by the same engine tick that reads delivery health, and threaded
 into the rule's evidence via `buildCampaignEvidence`'s `adSetLabels` param — never
-a live Meta call at render time. See [customer-app.md](features/customer-app.md)
+a live Meta call at render time. See
+[customer-overview.md](features/customer-overview.md#opt-in-audience-details-aic-37)
 for the customer-facing opt-in details view this same label feeds.
 
 ### v1 approximations (documented, refined later)

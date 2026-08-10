@@ -7,8 +7,10 @@ readout builder.
 
 **Source of truth:**
 - Service: `server/src/services/customer-overview.ts` — `buildCustomerOverview(pool, userId, ref?)`
-- Route: `server/src/routes/app.ts` — `GET /api/app/overview`, `POST /api/app/lead-quality` (both `requireAuth`)
-- Client: `web/src/api.ts` — `getOverview()`, `postLeadQuality()`, `shekels()`, `CustomerOverview` type
+- Audience details (AIC-37): `server/src/services/campaign-audiences.ts` — `buildCampaignAudiences(pool, userId, ref?)`
+- Route: `server/src/routes/app.ts` — `GET /api/app/overview`, `POST /api/app/lead-quality`,
+  `GET /api/app/audiences` (all `requireAuth`)
+- Client: `web/src/api.ts` — `getOverview()`, `postLeadQuality()`, `getCampaignAudiences()`, `shekels()`, `CustomerOverview` type
 - Screens: `web/src/app/Home.tsx`, `web/src/app/Settings.tsx`
 
 **Lock-in tests:** `server/src/services/customer-overview.integration.test.ts`
@@ -42,7 +44,26 @@ Derived server-side, highest-priority first:
 
 The client maps each state to hero copy in `strings.he.app.home.states`; only
 states with a real destination carry a CTA (`attention` → `/connect`,
-`no_campaign` → `/onboarding`).
+`no_campaign` → `/onboarding`). `attention` carries a second signal,
+`attentionKind: 'connection' | 'delivery' | null` (AIC-39) — a lost Meta
+connection and a not-delivering ad set are different problems with different
+copy (`h.states.attention` vs `h.states.delivery`); a delivery problem shows
+no CTA (there's nothing for the customer to click — we're already on it).
+
+## Opt-in audience details (AIC-37)
+
+Home defaults to the campaign roll-up only — no ad-set/audience detail ever
+shows unprompted (PRD §14's "not prominently," not a ban). A collapsed "הצג
+פירוט" toggle on Home (`AudienceDetails` in `Home.tsx`) lazily fetches
+`GET /api/app/audiences` only when opened, rendering one row per audience
+(spend/leads/CPL) labeled by its human dimension — never a raw ad-set id or
+"ad set N" (see [`deriveAudienceLabels`](../../server/src/meta/audience-label.ts)
+and [RULES.md](../RULES.md)'s audience-rule section) — each expandable to its
+own per-creative breakdown. Backed by `services/campaign-audiences.ts`
+`buildCampaignAudiences` (DB-only, ownership-scoped, no live Meta call).
+**Deferred AC:** instrumenting the toggle's open-rate needs the AIC-28 metrics
+layer, which doesn't exist yet — there's no event sink to write to, so this
+isn't half-built here.
 
 ## KPIs, deltas, sidebar
 

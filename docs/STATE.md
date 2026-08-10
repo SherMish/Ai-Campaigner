@@ -6,6 +6,34 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-10 — Thin approve surface verified + doc rot fixed (AIC-22/23/37)
+No app-code change — this closes out three tickets (AIC-22 Home, AIC-23
+recommendation approve/dismiss, AIC-37 audience opt-in details) that were
+built in an earlier session but never marked Done in Linear, with a full live
+QA pass against prod Neon: real hero states (incl. the AIC-39
+delivery-vs-connection distinction), real KPIs+deltas, the audience-details
+toggle (correctly falling back to the ad set's real Meta name since GelNails'
+actual targeting doesn't structurally differ by age despite the descriptive
+names), the weekly lead-quality stepper+submit, and — seeding two realistic
+recommendations since GelNails has none real yet — the full approve flow
+(hit the real 503 "Meta not configured locally" path, confirmed a clean
+Hebrew message with zero leaked technical detail, confirmed the DB never
+false-marked the rec as approved) and dismiss flow, both against the live
+API. Mobile viewport confirmed no horizontal overflow. All QA-seeded data
+(2 recommendations + one real-but-unwanted weekly-feedback row written via
+the actual UI flow) cleaned up afterward.
+
+Also fixed real doc rot found along the way: `customer-app.md`'s status line
+still said the recommendations flow, onboarding, and connect were "mock" —
+they've been live since AIC-21/23 (2026-08-08); only the review screen
+(AIC-32) still is. `customer-overview.md` never documented `attentionKind`
+(AIC-39) or the audience opt-in view (AIC-37) at all, and `RULES.md` linked
+to a doc section that didn't exist. AIC-23's one genuinely unbuilt AC
+("approval-rate instrumented for the metrics funnel") and AIC-37's ("toggle
+open-rate instrumented") both stay honestly deferred — blocked on AIC-28
+(metrics/activation-funnel instrumentation), which doesn't exist yet; no
+event sink to write to, so neither is half-built.
+
 ### 2026-08-10 — Audience-aware rules: flexible/Advantage+ creative exclusion (AIC-36)
 Closes out AIC-36 — the creative-vs-audience conflation fix, the audience rule,
 errored-ad-set exclusion, and the pauseAdSet write were already live from

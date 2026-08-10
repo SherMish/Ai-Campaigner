@@ -1,11 +1,13 @@
 # Customer app (P0.5)
 
-**Status:** every customer screen exists in the AdPilot design. **Auth (AIC-21),
-Home (AIC-22), and Settings (AIC-24 data) are wired to the backend**; Home +
-Settings render live from `GET /api/app/overview` (see
-[customer-overview.md](customer-overview.md)). Onboarding/connect, the
-recommendations flow (AIC-23), and the review screen are still mock. Remaining
-mock screens keep their in-component state switchers; Home no longer has one.
+**Status:** every customer screen exists in the AdPilot design and is wired to
+the backend — **Auth (AIC-21), Home (AIC-22), Settings (AIC-24), Onboarding +
+Connect (AIC-21), and the recommendations flow (AIC-23, approve/dismiss
+through the real safe-execute pipeline)**. Home + Settings render live from
+`GET /api/app/overview` (see [customer-overview.md](customer-overview.md)).
+The **review screen alone stays mock** (AIC-32, backlog — its design shows
+specific proposal-cards that don't yet match the `campaign_reviews` schema).
+No screen keeps an in-component mock-state switcher anymore except Review.
 
 **Source of truth:**
 - Design system: `web/src/ui.css` (AdPilot tokens/components) + fonts in `web/index.html`
