@@ -8,6 +8,7 @@
 export interface RawAdSetMeta {
   id: string;
   name?: string | null;
+  is_dynamic_creative?: boolean | null;
   targeting?: {
     age_min?: number;
     age_max?: number;
@@ -27,6 +28,10 @@ export interface AdSetMeta {
   ageMax: number | null;
   genders: "all" | "male" | "female";
   geoSummary: string; // short joined place names, "" if account-default/none
+  // Dynamic/Advantage+ creative (AIC-36): Meta mixes multiple assets per
+  // impression and doesn't expose reliable per-asset CPL — pause_weak_creative
+  // must skip these ad sets rather than compare unreliable "peers".
+  isDynamicCreative: boolean;
 }
 
 const GENDER_HE: Record<AdSetMeta["genders"], string> = {
@@ -52,6 +57,7 @@ export function normalizeAdSetMeta(row: RawAdSetMeta): AdSetMeta {
     ageMax: t.age_max ?? null,
     genders: gender,
     geoSummary: places.slice(0, 2).join(", "),
+    isDynamicCreative: row.is_dynamic_creative === true,
   };
 }
 

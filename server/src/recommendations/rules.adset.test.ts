@@ -55,6 +55,45 @@ describe("pause_weak_creative — compared WITHIN an ad set (AIC-36)", () => {
   });
 });
 
+describe("pause_weak_creative — skips ad sets running Dynamic/Advantage+ creative (AIC-36)", () => {
+  it("does NOT fire for a weak-looking creative inside a flexible-creative ad set", () => {
+    const d = evaluateCampaign(base({
+      creatives: [
+        cr("cr_f1", "F", 20000, 10, 2000),
+        cr("cr_f2", "F", 20000, 1, 20000), // would be flagged weak if F weren't flexible
+      ],
+      flexibleCreativeAdSetIds: new Set(["F"]),
+    }));
+    expect(d.type).not.toBe("pause_creative");
+  });
+
+  it("still fires normally for a genuinely weak creative in a NON-flexible ad set (the flag doesn't blanket-disable the rule)", () => {
+    const d = evaluateCampaign(base({
+      creatives: [
+        cr("cr_f1", "F", 20000, 10, 2000),
+        cr("cr_f2", "F", 20000, 9, 2222), // clean peers, nothing weak in F
+        cr("cr_n1", "N", 20000, 10, 2000),
+        cr("cr_n2", "N", 20000, 1, 20000), // weak within N
+      ],
+      flexibleCreativeAdSetIds: new Set(["F"]),
+    }));
+    expect(d.type).toBe("pause_creative");
+    expect(d.targetMetaId).toBe("cr_n2");
+    expect(d.evidence.adSetId).toBe("N");
+  });
+
+  it("with no flexibleCreativeAdSetIds set, behaves exactly as before (backward compatible)", () => {
+    const d = evaluateCampaign(base({
+      creatives: [
+        cr("cr_f1", "F", 20000, 10, 2000),
+        cr("cr_f2", "F", 20000, 1, 20000),
+      ],
+    }));
+    expect(d.type).toBe("pause_creative");
+    expect(d.targetMetaId).toBe("cr_f2");
+  });
+});
+
 describe("pause_underperforming_audience (AIC-36; live since AIC-39)", () => {
   const rule = __rulesForTest.pauseUnderperformingAudience;
 

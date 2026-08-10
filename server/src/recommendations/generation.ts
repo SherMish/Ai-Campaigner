@@ -113,13 +113,16 @@ export async function runGenerationTick(deps: {
       }
     }
 
-    // Audience labels: fetch + cache ad-set metadata, derive labels. A read
-    // failure just means no label this tick (rules fall back to the raw id).
+    // Audience labels + dynamic-creative flags: fetch + cache ad-set metadata,
+    // derive labels. A read failure just means no label this tick (rules fall
+    // back to the raw id) and no flexible-creative exclusion this tick.
     let adSetLabels: Map<string, string> | undefined;
+    let flexibleCreativeAdSetIds: Set<string> | undefined;
     if (deps.audienceMetaReader) {
       try {
         const adsets = await deps.audienceMetaReader.getAdSetMeta(campaign.metaCampaignId);
         adSetLabels = deriveAudienceLabels(adsets);
+        flexibleCreativeAdSetIds = new Set(adsets.filter((a) => a.isDynamicCreative).map((a) => a.adSetId));
         await deps.recordAudienceMeta?.(campaign, adsets);
       } catch (e) {
         log?.error(`[generation] ${campaign.id}: audience-meta read failed — ${(e as Error).message}`);
@@ -136,6 +139,7 @@ export async function runGenerationTick(deps: {
       expiresAt: null,
       excludeAdSetIds,
       adSetLabels,
+      flexibleCreativeAdSetIds,
     });
 
     summary.evaluated++;

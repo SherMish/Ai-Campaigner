@@ -56,6 +56,12 @@ export interface CampaignEvidence {
   creatives: CreativeStat[]; // current window
   creativesPrevious?: CreativeStat[]; // previous window (decay detection)
   adsets?: AdsetStat[]; // current-window per-audience (AIC-36)
+  // Ad sets running Meta's Dynamic/Advantage+ creative (AIC-36): Meta doesn't
+  // expose reliable per-asset CPL for these, so pause_weak_creative must never
+  // compare "peers" inside one — the audience rule is unaffected (the ad-set-
+  // level CPL these ad sets report is still real, only the per-creative
+  // breakdown within them isn't).
+  flexibleCreativeAdSetIds?: Set<string>;
   currentBudgetAgorot: number; // daily budget
   deliveryDays: number;
 }
@@ -129,11 +135,15 @@ function weakestInGroup(campaignId: string, creatives: CreativeStat[]): Recommen
 
 // Pause a weak creative — evaluated per ad set so creative quality is never
 // conflated with audience. Creatives with no known ad set fall into one group
-// (single-ad-set campaigns behave exactly as before).
+// (single-ad-set campaigns behave exactly as before). Ad sets running Dynamic/
+// Advantage+ creative are skipped entirely (AIC-36) — Meta's per-asset CPL for
+// those isn't reliable enough to pit "peers" against each other.
 function pauseWeakCreative(ev: CampaignEvidence): RecommendationDraft | null {
+  const flexible = ev.flexibleCreativeAdSetIds ?? new Set<string>();
   const byAdSet = new Map<string, CreativeStat[]>();
   for (const c of ev.creatives) {
     const k = c.adSetId ?? "__none__";
+    if (flexible.has(k)) continue;
     const group = byAdSet.get(k);
     if (group) group.push(c);
     else byAdSet.set(k, [c]);

@@ -6,6 +6,26 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-10 — Audience-aware rules: flexible/Advantage+ creative exclusion (AIC-36)
+Closes out AIC-36 — the creative-vs-audience conflation fix, the audience rule,
+errored-ad-set exclusion, and the pauseAdSet write were already live from
+earlier work; the one remaining AC was detecting Meta's Dynamic/Advantage+
+creative and skipping `pause_weak_creative`'s per-asset comparison for it
+(Meta doesn't expose reliable per-asset CPL for a dynamic-creative ad set —
+comparing its "peers" and pausing the apparent loser would be the engine's
+first live recommendation being wrong, on someone else's ad spend). New
+`is_dynamic_creative` fetched per ad set (`getAdSetMeta`, alongside the
+AIC-37 targeting fields), cached in `ad_set_meta` (migration 019).
+`CampaignEvidence` gained `flexibleCreativeAdSetIds`; `pause_weak_creative`
+skips those ad sets' groups entirely while every other rule (including
+`pause_underperforming_audience`, which reads `ev.adsets` not `ev.creatives`)
+is unaffected — the ad-set-level CPL is still real, only the per-asset
+breakdown inside a flexible ad set isn't. Threaded end-to-end through
+`runGenerationTick` → `refreshRecommendations` → `buildCampaignEvidence`.
+Tests: `rules.adset.test.ts` (+3, pure rule logic), `generation.test.ts` (+2,
+wiring through the real audienceMetaReader → cache → set-building path),
+`audience-label.test.ts` fixture updated. Doc: `RULES.md`.
+
 ### 2026-08-09 — Operator accounts + full admin audit log (AIC-47)
 The last ops-console-v2 ticket — all five admin sections are now live. New
 `app_users.admin_role` (`full_admin`|`operator`, migration 018, backfilled

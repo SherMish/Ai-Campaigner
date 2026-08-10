@@ -2,10 +2,11 @@ import { describe, it, expect } from "vitest";
 import { InMemorySnapshotStore } from "../meta/snapshot-store.js";
 import { InMemoryRecommendationStore } from "./recommendation-store.js";
 import { RecommendationService } from "./recommendation-service.js";
-import { runGenerationTick, type GenCampaign } from "./generation.js";
+import { runGenerationTick, type GenCampaign, type AudienceMetaReader } from "./generation.js";
 import type { MetaReader } from "../execution/safe-executor.js";
 import type { SnapshotUpsert } from "../meta/insights.js";
 import type { DeliverySummary } from "../meta/delivery-health.js";
+import type { AdSetMeta } from "../meta/audience-label.js";
 
 // Align with rollingPeriods(ref="2026-08-02"): current 07-26..08-01, prev 07-19..07-25.
 const REF = new Date("2026-08-02T00:00:00.000Z");
@@ -132,5 +133,63 @@ describe("runGenerationTick — audience rule + AIC-39 delivery exclusion", () =
     expect(recorded).toMatchObject({ ok: false, problemAdSetIds: ["as_B"] });
     // as_B excluded → only one delivering audience → audience rule can't fire.
     expect([...recs.records.values()].some((r) => r.type === "pause_adset")).toBe(false);
+  });
+});
+
+// A weak-looking creative that lives under an ad set Meta reports as running
+// Dynamic/Advantage+ creative (AIC-36) — the tick must fetch is_dynamic_creative
+// via the audienceMetaReader and thread it all the way into the rule so it never
+// proposes pausing "peers" Meta itself can't reliably attribute.
+async function seedFlexibleCreative(store: InMemorySnapshotStore) {
+  await store.upsert([
+    snap({ grain: "campaign", metaObjectId: "camp", spendAgorot: 68000, leads: 20, cplAgorot: 3400 }),
+    snap({ grain: "campaign", metaObjectId: "camp", periodStart: PREV.start, periodEnd: PREV.end, spendAgorot: 68000, leads: 20, cplAgorot: 3400 }),
+    snap({ grain: "creative", metaObjectId: "cr_a", parentMetaId: "as_flex", spendAgorot: 25000, leads: 10, cplAgorot: 2500 }),
+    snap({ grain: "creative", metaObjectId: "cr_weak", parentMetaId: "as_flex", spendAgorot: 18000, leads: 1, cplAgorot: 18000 }),
+  ]);
+}
+
+function adSetMeta(adSetId: string, isDynamicCreative: boolean): AdSetMeta {
+  return { adSetId, name: adSetId, ageMin: null, ageMax: null, genders: "all", geoSummary: "", isDynamicCreative };
+}
+
+describe("runGenerationTick — flexible/Advantage+ creative exclusion (AIC-36)", () => {
+  it("fetches is_dynamic_creative via the audienceMetaReader and skips pause_creative for that ad set", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedFlexibleCreative(snapshots);
+    const recs = new InMemoryRecommendationStore();
+    const audienceMetaReader: AudienceMetaReader = { getAdSetMeta: async () => [adSetMeta("as_flex", true)] };
+    let cached: AdSetMeta[] | null = null;
+
+    const res = await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      audienceMetaReader,
+      recordAudienceMeta: async (_c, adsets) => { cached = adsets; },
+    });
+
+    expect(res.created).toBe(0);
+    expect([...recs.records.values()].some((r) => r.type === "pause_creative")).toBe(false);
+    expect(cached).toEqual([adSetMeta("as_flex", true)]);
+  });
+
+  it("a genuinely weak creative in a NON-flexible ad set still fires (control)", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedFlexibleCreative(snapshots);
+    const recs = new InMemoryRecommendationStore();
+    const audienceMetaReader: AudienceMetaReader = { getAdSetMeta: async () => [adSetMeta("as_flex", false)] };
+
+    const res = await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      audienceMetaReader,
+    });
+
+    expect(res.created).toBe(1);
+    const rec = [...recs.records.values()][0];
+    expect(rec.type).toBe("pause_creative");
+    expect(rec.targetMetaId).toBe("cr_weak");
   });
 });

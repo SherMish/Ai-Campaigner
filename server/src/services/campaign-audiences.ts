@@ -64,6 +64,7 @@ export async function buildCampaignAudiences(
       ageMax: m?.ageMax ?? null,
       genders: m?.genders ?? "all",
       geoSummary: m?.geoSummary ?? "",
+      isDynamicCreative: m?.isDynamicCreative ?? false,
     };
   });
   const labels = deriveAudienceLabels(asMetaList);

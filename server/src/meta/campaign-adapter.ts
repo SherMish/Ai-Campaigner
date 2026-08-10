@@ -117,11 +117,13 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
 
   // Ad-set name + targeting (AIC-37) — the separate read that lets us derive a
   // human audience label ("18–35" vs "35–45") instead of ever showing a raw
-  // ad-set name or "ad set N". Cached by the caller (ad_set_meta); not read at
-  // customer render time.
+  // ad-set name or "ad set N". Also carries is_dynamic_creative (AIC-36), so
+  // the rules can skip the creative comparison for an ad set running Meta's
+  // Dynamic/Advantage+ creative. Cached by the caller (ad_set_meta); not read
+  // at customer render time.
   async getAdSetMeta(metaCampaignId: string): Promise<AdSetMeta[]> {
     const body = await this.get(
-      `${metaCampaignId}/adsets?fields=id,name,targeting{age_min,age_max,genders,geo_locations}&limit=100`,
+      `${metaCampaignId}/adsets?fields=id,name,is_dynamic_creative,targeting{age_min,age_max,genders,geo_locations}&limit=100`,
     );
     return ((body.data as RawAdSetMeta[]) ?? []).map(normalizeAdSetMeta);
   }

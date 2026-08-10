@@ -25,7 +25,7 @@ describe("normalizeAdSetMeta", () => {
 });
 
 function meta(o: Partial<AdSetMeta> & Pick<AdSetMeta, "adSetId">): AdSetMeta {
-  return { name: "", ageMin: null, ageMax: null, genders: "all", geoSummary: "", ...o };
+  return { name: "", ageMin: null, ageMax: null, genders: "all", geoSummary: "", isDynamicCreative: false, ...o };
 }
 
 describe("deriveAudienceLabels — never show a raw ad-set name or 'ad set N' when something structured differs", () => {

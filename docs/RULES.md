@@ -5,7 +5,8 @@ filled by AIC-10.
 
 **Source of truth:** `server/src/recommendations/rules.ts` (thresholds + rules),
 `server/src/recommendations/rule-evaluator.ts` (evidence assembly + persistence).
-**Lock-in tests:** `rules.test.ts`, `rule-evaluator.test.ts`.
+**Lock-in tests:** `rules.test.ts`, `rules.adset.test.ts`, `rule-evaluator.test.ts`,
+`generation.test.ts`, `audience-label.test.ts`.
 
 ---
 
@@ -39,7 +40,9 @@ Targeted creative fixes come before blunt budget moves; scaling comes last.
    audiences is never pitted against itself; creatives are grouped by `adSetId`
    (from the snapshot's `parent_meta_id`) and the peer comparison runs per group.
    Creatives with no known ad set fall into one group (single-ad-set campaigns
-   behave exactly as before).
+   behave exactly as before). **Skips ad sets running Meta's Dynamic/
+   Advantage+ creative** (see below) — their per-creative CPL isn't reliable
+   enough to compare as peers.
 2. **replace_creative** — a creative's own CPL decayed ≥ `REPLACE_DECAY_MULTIPLIER`
    (1.5×) vs its previous window (distinct from "weak vs peers"). Needs previous-
    window per-creative data.
@@ -72,6 +75,23 @@ genuinely weak one. AIC-39 fetches `effective_status` + `issues_info`
 ad set (and its creatives) from the evidence — so this rule only ever compares
 genuinely-delivering audiences and never proposes pausing a broken one. That
 exclusion is what made the rule safe to run live.
+
+**Dynamic/Advantage+ creative is skipped, never compared (AIC-36).** When an ad
+set mixes multiple images/videos/bodies/titles per impression (Meta's Dynamic
+Creative, aka "Advantage+ creative" — the account-level default for new ad
+sets, so real customers arrive with this constantly), Meta does not expose a
+reliable per-asset CPL. Treating that unreliable breakdown as independent
+"peers" and pausing the apparent loser would be a wrong recommendation on the
+engine's own first read of the data — the exact trust-killer the whole
+safe-execute design exists to prevent. `getAdSetMeta` fetches
+`is_dynamic_creative` per ad set (cached in `ad_set_meta`, migration 019,
+alongside the AIC-37 targeting fields, refreshed by the same engine tick);
+`runGenerationTick` builds a `flexibleCreativeAdSetIds` set from it and
+`pause_weak_creative` skips those ad sets' groups entirely — the campaign's
+other (non-flexible) ad sets are still compared normally, and the audience
+rule (`pause_underperforming_audience`, below — reads `ev.adsets`, not
+`ev.creatives`) is **unaffected**: the ad-set-level CPL a flexible ad set
+reports is still real, only the *per-asset* breakdown inside it isn't.
 
 **Named by its human dimension (AIC-37).** The explainer never says "ad set" or
 an ad-set id — `evidence.audienceLabel` carries a label like `"35–45"`, derived

@@ -24,6 +24,10 @@ export async function buildCampaignEvidence(
   // Human audience labels (AIC-37), adSetId → label, so an acting audience draft
   // carries a real label ("18–35") instead of the raw Meta id.
   adSetLabels?: Map<string, string>,
+  // Ad sets running Meta's Dynamic/Advantage+ creative (AIC-36) — passed through
+  // untouched to the rules; pause_weak_creative skips these, the audience rule
+  // (which reads ev.adsets, not ev.creatives) is unaffected.
+  flexibleCreativeAdSetIds?: Set<string>,
 ): Promise<CampaignEvidence> {
   const [curTotals, prevTotals, curCreatives, prevCreatives, curAdsets] = await Promise.all([
     store.campaignTotals(campaign.id, current.start, current.end),
@@ -44,6 +48,7 @@ export async function buildCampaignEvidence(
     adsets: curAdsets
       .filter((a) => !excluded.has(a.adSetId))
       .map((a) => ({ ...a, label: adSetLabels?.get(a.adSetId) })),
+    flexibleCreativeAdSetIds,
     currentBudgetAgorot: campaign.currentBudgetAgorot,
     deliveryDays: curTotals.spendAgorot > 0 ? days : 0,
   };

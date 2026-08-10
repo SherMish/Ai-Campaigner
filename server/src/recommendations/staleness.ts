@@ -39,10 +39,14 @@ export async function refreshRecommendations(deps: {
   expiresAt?: Date | null;
   excludeAdSetIds?: Set<string>; // errored/not-delivering ad sets (AIC-39)
   adSetLabels?: Map<string, string>; // human audience labels (AIC-37)
+  flexibleCreativeAdSetIds?: Set<string>; // Dynamic/Advantage+ creative ad sets (AIC-36)
 }): Promise<RefreshResult> {
   const { snapshotStore, recommendationStore, recommendationService, campaign } = deps;
 
-  const evidence = await buildCampaignEvidence(snapshotStore, campaign, deps.current, deps.previous, deps.excludeAdSetIds, deps.adSetLabels);
+  const evidence = await buildCampaignEvidence(
+    snapshotStore, campaign, deps.current, deps.previous,
+    deps.excludeAdSetIds, deps.adSetLabels, deps.flexibleCreativeAdSetIds,
+  );
   const fresh = evaluateCampaign(evidence);
 
   const proposed = await recommendationStore.listProposed(campaign.id);

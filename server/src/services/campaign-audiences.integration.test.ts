@@ -67,8 +67,8 @@ d("campaign audiences (DB + HTTP)", () => {
       snap(campaignId, { grain: "creative", metaObjectId: "cr_b1", parentMetaId: "as_b", creativeName: "Almond", spendAgorot: 20000, leads: 4, cplAgorot: 5000 }),
     ]);
     await upsertAdSetMeta(pool, campaignId, [
-      { adSetId: "as_a", name: "Set A", ageMin: 18, ageMax: 35, genders: "all", geoSummary: "" },
-      { adSetId: "as_b", name: "Set B", ageMin: 35, ageMax: 45, genders: "all", geoSummary: "" },
+      { adSetId: "as_a", name: "Set A", ageMin: 18, ageMax: 35, genders: "all", geoSummary: "", isDynamicCreative: false },
+      { adSetId: "as_b", name: "Set B", ageMin: 35, ageMax: 45, genders: "all", geoSummary: "", isDynamicCreative: false },
     ]);
 
     const result = await buildCampaignAudiences(pool, userId);
@@ -96,8 +96,8 @@ d("campaign audiences (DB + HTTP)", () => {
       snap(campaignId, { grain: "adset", metaObjectId: "as_y", spendAgorot: 5000, leads: 2, cplAgorot: 2500 }),
     ]);
     await upsertAdSetMeta(pool, campaignId, [
-      { adSetId: "as_x", name: "Winter Promo A", ageMin: 25, ageMax: 40, genders: "all", geoSummary: "" },
-      { adSetId: "as_y", name: "Winter Promo B", ageMin: 25, ageMax: 40, genders: "all", geoSummary: "" },
+      { adSetId: "as_x", name: "Winter Promo A", ageMin: 25, ageMax: 40, genders: "all", geoSummary: "", isDynamicCreative: false },
+      { adSetId: "as_y", name: "Winter Promo B", ageMin: 25, ageMax: 40, genders: "all", geoSummary: "", isDynamicCreative: false },
     ]);
     const result = await buildCampaignAudiences(pool, userId);
     const labels = result!.audiences.map((a) => a.label).sort();
