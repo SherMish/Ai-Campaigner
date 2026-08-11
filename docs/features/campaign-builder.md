@@ -1,15 +1,12 @@
 # Campaign builder (P1 — create campaigns)
 
 **Status:** in progress. AIC-49 (recommended-defaults spec), AIC-50 (Meta
-create-writes), and AIC-51 (creative handling) are **built and
-unit/integration-tested**; AIC-50's live dogfood verification (create a real
-paused campaign on an account we control, verify, clean up) is still
-pending, and AIC-51's WhatsApp-creative field shapes ride along with that
-same live test. AIC-52 (guided builder UI) and AIC-53 (launch gate) are
-**planned** — this doc's later sections fill in as each lands. AIC-52 is
-also where the HTTP route layer (file upload, list-posts, create-creative
-endpoints) gets built — no builder route exists yet, since nothing calls one
-until there's a UI to drive it.
+create-writes), AIC-51 (creative handling), and AIC-52 (guided builder UI)
+are **built and unit/integration-tested, live-verified in the browser**;
+AIC-50's live Meta dogfood test (create a real paused campaign on an account
+we control, verify, clean up) is still pending, and AIC-51's WhatsApp-
+creative field shapes ride along with that same live test. AIC-53 (launch
+gate) is **planned** — this doc's later section fills in once it lands.
 
 **Source of truth:**
 - Recommended-defaults spec: `shared/src/recommended-defaults.ts`
@@ -26,6 +23,13 @@ until there's a UI to drive it.
   (`GraphCampaignAdapter.uploadImage/uploadVideo/listPromotablePosts/createCreativeFromUpload/createCreativeFromExistingPost`)
 - Idempotency: `server/src/execution/write-outbox.ts` (`applyIdempotent`,
   `builderKey` — extends the AIC-13 outbox)
+- Builder session + HTTP routes: `server/src/builder/session.ts`
+  (`resolveBuilderContext`, `ownsLocalCampaign`, `buildBuilderWriter`),
+  `server/src/routes/builder.ts` (mounted at `/api/app/builder`)
+- Guided UI: `web/src/app/Builder.tsx` (the 8-step wizard shell + goal/
+  whatsapp/budget/specialCategory/audience/placements/review steps),
+  `web/src/app/BuilderCreatives.tsx` (the creatives step), `web/src/api.ts`
+  (builder client functions), `web/src/strings.ts`'s `builder` section
 
 **Lock-in tests:** `shared/src/recommended-defaults.test.ts`,
 `shared/src/creative-handling.test.ts`,
@@ -33,7 +37,9 @@ until there's a UI to drive it.
 upload/creative field shapes), `server/src/execution/write-outbox.integration.test.ts`
 (`applyIdempotent`), `server/src/builder/campaign-create.integration.test.ts`
 (the full campaign orchestration), `server/src/builder/creative-create.integration.test.ts`
-(the creative-create orchestration).
+(the creative-create orchestration), `server/src/routes/builder.integration.test.ts`
+(the full HTTP surface: context/start/upload/posts/creative/build, ownership
+checks, honest 409/503 degradation).
 
 ---
 
@@ -71,8 +77,10 @@ single-ad-set ideal, presented here as what it's always been: a
 customer can and does run more ad sets (audience splits are normal, not
 exceptional — see [DATA_MODEL.md](../DATA_MODEL.md)).
 
-**Placements** (`RECOMMENDED_PLACEMENTS`): Advantage+ (automatic), with the
-"narrowing raises cost" rationale carried alongside it.
+**Placements** (`RECOMMENDED_PLACEMENTS`): Advantage+ (automatic). The
+"narrowing raises cost" rationale is display copy, not spec data — it lives
+in `web/src/strings.ts`'s `builder.placements.rationale` (AIC-52 correction,
+see below).
 
 **Budget** (`RECOMMENDED_BUDGET_AGOROT_PER_DAY`): a ₪30–50/day range, ₪40
 recommended, framed honestly as a *starting point to gather data* — not a
@@ -83,9 +91,9 @@ claim precision we don't have).
 Meta's compliance mechanism for campaigns touching credit, employment,
 housing, or social issues/elections — restricted targeting is legally
 required for these. The recommended default is always `NONE`, and the
-builder must ask the question explicitly every time
-(`SPECIAL_AD_CATEGORY_QUESTION`) — this is never silently inferred from the
-business category. `SPECIAL_AD_CATEGORY_HINT` maps a handful of our known
+builder must ask the question explicitly every time (the question text is
+`web/src/strings.ts`'s `builder.specialCategory.question`) — this is never
+silently inferred from the business category. `SPECIAL_AD_CATEGORY_HINT` maps a handful of our known
 categories (currently just `real_estate` → `HOUSING`) to a likely category,
 but a hint only prompts a more careful honest answer; it never sets the
 declaration itself.
@@ -100,7 +108,10 @@ stays free text, set by the operator during manual onboarding (AIC-44) — it
 is **not** validated against this list at the DB layer, so
 `normalizeBusinessCategory` case/whitespace-normalizes and resolves anything
 unrecognized to `other`'s honest broad default rather than guessing or
-throwing. Each category default carries a one-line plain-Hebrew rationale.
+throwing. The one-line plain-Hebrew rationale per category lives in
+`web/src/strings.ts`'s `builder.audience.categoryRationale`, keyed to match
+(AIC-52 correction, see below) — `CATEGORY_AUDIENCE_DEFAULTS` itself carries
+only the numeric/structural defaults.
 
 ### Forward reference: first-campaign review (AIC-18/38)
 
@@ -247,13 +258,92 @@ Meta rejection and on video-processing failure/timeout),
 idempotent per clientKey, failure-then-resume, distinct creatives per
 clientKey).
 
-### Planned: AIC-52–53
+### The guided builder UI + HTTP routes (AIC-52)
 
-- **AIC-52 — Guided builder UI**: the step flow implementing "recommended +
-  why + expand to change" on every step, reading from this spec — and the
-  HTTP route layer (multer upload endpoint, list-posts, create-creative,
-  build-campaign) that the UI actually calls. Also where AIC-49's rationale
-  strings should move into `web/src/strings.ts` alongside AIC-51's.
-- **AIC-53 — Launch gate**: PAUSED → first-campaign review → customer
-  approval → activate, as an approved write through the safe-execute
-  pipeline (AIC-12) — no builder path may activate directly.
+The step flow: 8 steps (goal, WhatsApp, budget, special ad category,
+audience, placements, creatives, review), each showing its recommended
+default already filled in — "accept every default and click through" is a
+real, working path, not just a design intent. Every real choice is a live,
+editable control on the step itself (never a collapsed "we'll handle it"),
+with a green "מומלץ" badge (`StatusPill variant="ok"`, reusing the existing
+component rather than inventing a new one) marking the recommended option
+and a one-line rationale underneath, pulled from `shared/recommended-defaults.ts`'s
+structural values + `web/src/strings.ts`'s matching copy.
+
+**HTTP routes** (`server/src/routes/builder.ts`, mounted at
+`/api/app/builder`, `requireAuth` throughout): `GET /context` (resolves
+whether this customer can build — see below — and returns their business
+category to prefill the audience step), `POST /start` (idempotent — same
+`startBuilderCampaign` as AIC-50), `POST /upload` (`multer` memory storage,
+`limits.fileSize = MAX_VIDEO_BYTES`), `GET /posts`, `POST /creative`, `POST
+/build`. Every route resolves the caller's ad-account/Page/category fresh
+from their own JWT-scoped rows (`server/src/builder/session.ts`'s
+`resolveBuilderContext`) — nothing is trusted from the client, including
+`adAccountId`/`pageId` (a client-supplied `localCampaignId` is checked for
+ownership via `ownsLocalCampaign` before every write).
+
+**"Ready to build" is a real precondition, not just a UI nicety**:
+`resolveBuilderContext` returns `null` (→ 409) unless the customer has a
+healthy connection (`access_health = 'ok'`), a linked ad account, a Page,
+**and no managed campaign yet** — the builder is for a customer's *first*
+campaign only, matching `startBuilderCampaign`'s `UNIQUE(customer_id)`
+constraint on `managed_campaigns`. A real bug caught here during testing:
+the "already has a campaign" check initially matched the unlinked shell row
+`/start` itself creates, which meant calling `/start` twice (the normal
+resume case) 409'd on the *second* call — fixed by scoping the check to
+`meta_campaign_id IS NOT NULL` (a genuinely *linked* campaign), which is
+what `startBuilderCampaign`'s own resume logic already checked.
+
+**The builder always creates exactly ONE ad set** (AIC-38/49's recommended
+structure — there is no ad-set-count step). Each ad in the creatives step
+gets its own `clientKey`; the review step's "Create (paused)" button posts
+the full spec to `/build`, which resolves to a `BuildCampaignInput` with one
+`adSets` entry and calls `buildCampaignOnMeta` (AIC-50) exactly as designed.
+
+**Frontend**: `web/src/app/Builder.tsx` (the wizard shell + state machine +
+goal/whatsapp/budget/specialCategory/audience/placements/review step
+renders) and `web/src/app/BuilderCreatives.tsx` (the creatives step: per-ad
+upload-or-existing-post, headline/primary-text, calling `/upload` then
+`/creative` per ad). No client-side draft persistence — refreshing mid-wizard
+loses in-progress field values (the *created* Meta objects themselves are
+safe and resumable via the outbox; only the unsaved form state is not) — a
+deliberate P0 simplification, not an oversight.
+
+**Corrected an AIC-49 precedent while building this**: AIC-52's own AC says
+"all copy in the strings file." Building the actual UI made it obvious that
+`recommended-defaults.ts`'s rationale strings (budget, placements, the
+special-ad-category question, and every category's audience rationale) were
+exactly the copy this rule is about — so they moved into `web/src/strings.ts`'s
+`builder` section (`budget.rationale`, `placements.rationale`,
+`specialCategory.question`, `audience.categoryRationale`, keyed by
+`BusinessCategory`), and `shared/recommended-defaults.ts` is now genuinely
+copy-free (only numbers/structure/enums). This was flagged as deferred debt
+in AIC-51's doc entry and STATE.md; it's resolved now rather than deferred
+again.
+
+**Home CTA** (`web/src/app/Home.tsx`): the `no_campaign` state now branches —
+a customer with a healthy connection + ad account + Page sees "בואו ניצור את
+הקמפיין הראשון שלכם" → `/app/builder`; a customer still mid-onboarding sees
+the pre-existing "we're setting up your account" → `/onboarding` copy,
+unchanged. No permanent sidebar nav entry — reached only via the Home CTA,
+matching the existing `/onboarding` pattern.
+
+**Verification**: `server/src/routes/builder.integration.test.ts` (7 tests —
+full happy path with a mocked `fetch` exercising the real
+`GraphCampaignAdapter` through the real HTTP routes end to end, ownership
+checks, honest 409/503/400 responses, multipart upload). The wizard was also
+walked step-by-step in a real browser against a locally-seeded "beautician"
+customer, confirming the audience step correctly prefilled 18–45/female/8km
+with the beautician rationale text, and every step's validation gating
+worked (Next stays disabled until the step's real requirement is met).
+**Found and fixed during that pass**: a `server/.env` file (from earlier
+Meta-verification work) holds a real `META_SYSTEM_USER_TOKEN` that local dev
+picks up automatically — worth remembering before any local run of the
+builder routes, since `GET /posts` etc. will make a REAL Meta call rather
+than the intended honest 503 unless that var is explicitly unset first.
+
+### Planned: AIC-53
+
+- **Launch gate**: PAUSED → first-campaign review → customer approval →
+  activate, as an approved write through the safe-execute pipeline (AIC-12)
+  — no builder path may activate directly.

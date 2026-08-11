@@ -320,6 +320,82 @@ export const getAuditLog = (filter: { actorUserId?: string; entityType?: string;
   const q = new URLSearchParams(Object.entries(filter).filter(([, v]) => v) as [string, string][]).toString();
   return api<{ entries: FullAuditEntry[] }>(`/admin/audit${q ? `?${q}` : ""}`);
 };
+// ── Guided campaign builder (AIC-52) ────────────────────────────────────────
+export const getBuilderContext = () => api<{ category: string }>("/app/builder/context");
+export const startBuilder = () => api<{ localCampaignId: string }>("/app/builder/start", { method: "POST" });
+
+export interface PromotablePost { id: string; message: string | null; pictureUrl: string | null; createdAt: string; }
+export const getPromotablePosts = () => api<{ posts: PromotablePost[] }>("/app/builder/posts");
+
+export type UploadedMedia =
+  | { kind: "image"; imageHash: string }
+  | { kind: "video"; videoId: string; thumbnailUrl: string };
+
+// Bypasses the generic api() helper: it always sets Content-Type: application/json,
+// which would break the multipart boundary a FormData upload needs.
+export async function uploadCreativeFile(file: File): Promise<UploadedMedia> {
+  const form = new FormData();
+  form.append("file", file);
+  const token = getAuthToken();
+  const res = await fetch("/api/app/builder/upload", {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: form,
+  });
+  if (!res.ok) {
+    let msg = `upload failed: ${res.status}`;
+    try { const b = (await res.json()) as { error?: string }; if (b?.error) msg = b.error; } catch { /* non-JSON */ }
+    throw new ApiError(res.status, msg);
+  }
+  return ((await res.json()) as { media: UploadedMedia }).media;
+}
+
+export type CreativeErrorCode = "missing_media" | "missing_headline" | "headline_too_long" | "missing_primary_text" | "primary_text_too_long";
+// Thrown on a 400 from /builder/creative — carries the error CODES (see
+// shared/creative-handling.ts) so the caller can map them to display text.
+export class CreativeValidationError extends Error {
+  constructor(public readonly errors: CreativeErrorCode[]) {
+    super("creative validation failed");
+    this.name = "CreativeValidationError";
+  }
+}
+export type CreateCreativeBody =
+  | { localCampaignId: string; clientKey: string; name: string; headline: string; primaryText: string; whatsappNumber: string; media: UploadedMedia }
+  | { localCampaignId: string; clientKey: string; name: string; postId: string };
+
+// Bypasses api() too: a 400 here carries {errors: code[]}, not {error: string} —
+// needs its own parsing so CreativeValidationError keeps the codes, not a flattened message.
+export async function createCreative(body: CreateCreativeBody): Promise<{ creativeId: string }> {
+  const token = getAuthToken();
+  const res = await fetch("/api/app/builder/creative", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 400) {
+    const b = (await res.json().catch(() => ({}))) as { errors?: CreativeErrorCode[] };
+    throw new CreativeValidationError(b.errors ?? []);
+  }
+  if (!res.ok) throw new ApiError(res.status, `create creative failed: ${res.status}`);
+  return res.json() as Promise<{ creativeId: string }>;
+}
+
+export interface BuildCampaignBody {
+  localCampaignId: string;
+  name: string;
+  dailyBudgetAgorot: number;
+  specialAdCategories: string[];
+  whatsappDestination: string;
+  targeting: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[] };
+  ads: Array<{ clientKey: string; name: string; creativeId: string }>;
+}
+export interface BuildCampaignResult {
+  metaCampaignId: string;
+  adSets: Array<{ clientKey: string; metaAdSetId: string; ads: Array<{ clientKey: string; metaAdId: string }> }>;
+}
+export const buildCampaign = (body: BuildCampaignBody) =>
+  api<BuildCampaignResult>("/app/builder/build", { method: "POST", body: JSON.stringify(body) });
+
 export const getOverview = () => api<CustomerOverview>("/app/overview");
 export const postLeadQuality = (leadsReported: number, relevantCount: number) =>
   api<{ ok: true }>("/app/lead-quality", {

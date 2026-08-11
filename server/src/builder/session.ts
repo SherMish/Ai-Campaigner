@@ -1,0 +1,75 @@
+import type pg from "pg";
+import { GraphCampaignAdapter } from "../meta/campaign-adapter.js";
+import type { BuilderWriter } from "./types.js";
+import type { CreativeWriter } from "./creative-types.js";
+
+// What the guided builder (AIC-52) needs to know before it can do anything:
+// a healthy, connected Meta ad account + Page, and no campaign yet (the
+// builder is for a customer's FIRST campaign only — matches
+// startBuilderCampaign's UNIQUE(customer_id) constraint on managed_campaigns).
+export interface BuilderContext {
+  customerId: string;
+  category: string; // free text (AIC-44 manual onboarding), may be ''
+  adAccountUuid: string; // ad_accounts.id — the FK managed_campaigns.ad_account_id needs
+  metaAdAccountId: string; // "act_..." — what every real Meta API call needs
+  pageId: string;
+}
+
+// Returns null (never throws) when the customer isn't ready to build — no
+// connection, an unhealthy one, missing ad account/Page, or a campaign
+// already exists — so every route can respond with an honest 409 instead of
+// crashing partway through a build or silently creating on a broken account.
+export async function resolveBuilderContext(pool: pg.Pool, userId: string): Promise<BuilderContext | null> {
+  const { rows } = await pool.query<{
+    customer_id: string | null;
+    category: string | null;
+    already_has_campaign: boolean;
+    access_health: string | null;
+    ad_account_uuid: string | null;
+    meta_ad_account_id: string | null;
+    page_id: string | null;
+  }>(
+    `SELECT u.customer_id, c.category,
+            EXISTS(SELECT 1 FROM managed_campaigns mc WHERE mc.customer_id = u.customer_id AND mc.meta_campaign_id IS NOT NULL) AS already_has_campaign,
+            conn.access_health, aa.id AS ad_account_uuid, aa.meta_ad_account_id, conn.page_id
+     FROM app_users u
+     LEFT JOIN customers c ON c.id = u.customer_id
+     LEFT JOIN meta_connections conn ON conn.customer_id = u.customer_id
+     LEFT JOIN ad_accounts aa ON aa.connection_id = conn.id
+     WHERE u.id = $1
+     ORDER BY aa.created_at ASC
+     LIMIT 1`,
+    [userId],
+  );
+  const r = rows[0];
+  if (!r || !r.customer_id || r.already_has_campaign) return null;
+  if (r.access_health !== "ok" || !r.ad_account_uuid || !r.meta_ad_account_id || !r.page_id) return null;
+  return {
+    customerId: r.customer_id,
+    category: r.category ?? "",
+    adAccountUuid: r.ad_account_uuid,
+    metaAdAccountId: r.meta_ad_account_id,
+    pageId: r.page_id,
+  };
+}
+
+// A local shell row (managed_campaigns) belongs to the caller and only the
+// caller — every write route checks this before touching it.
+export async function ownsLocalCampaign(pool: pg.Pool, customerId: string, localCampaignId: string | undefined): Promise<boolean> {
+  if (!localCampaignId) return false;
+  const { rows } = await pool.query(
+    `SELECT 1 FROM managed_campaigns WHERE id = $1 AND customer_id = $2`,
+    [localCampaignId, customerId],
+  );
+  return rows.length > 0;
+}
+
+// Same token-gated factory pattern as buildCustomerExecutor
+// (customer-recommendations.ts): no META_SYSTEM_USER_TOKEN → null, so the
+// route can report an honest "temporarily unavailable" instead of pretending.
+export function buildBuilderWriter(): (BuilderWriter & CreativeWriter) | null {
+  const token = process.env.META_SYSTEM_USER_TOKEN;
+  if (!token) return null;
+  const ver = process.env.META_GRAPH_VERSION || "v21.0";
+  return new GraphCampaignAdapter(token, ver);
+}

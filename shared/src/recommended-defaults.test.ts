@@ -35,10 +35,9 @@ describe("resolveAudienceDefault", () => {
     expect(tutor.radiusKm).toBeGreaterThan(beautician.radiusKm);
   });
 
-  it("every known category has a real (non-empty) rationale", () => {
+  it("every known category has a sane age range and a positive radius", () => {
     for (const cat of BUSINESS_CATEGORY) {
       const d = CATEGORY_AUDIENCE_DEFAULTS[cat];
-      expect(d.rationale.length).toBeGreaterThan(10);
       expect(d.ageMin).toBeLessThan(d.ageMax);
       expect(d.radiusKm).toBeGreaterThan(0);
     }

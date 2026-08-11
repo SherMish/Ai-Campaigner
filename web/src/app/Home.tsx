@@ -23,7 +23,7 @@ const PILL: Record<HomeState, "ok" | "info" | "neutral" | "attn"> = {
 
 // Which status-hero copy + optional CTA each real state shows. Only CTAs that
 // point at a real screen are wired; paused/collecting/ok carry no button.
-function hero(state: HomeState, attentionKind: CustomerOverview["attentionKind"]): { badge: string; title: string; body: string; cta?: { to: string; label: string } } {
+function hero(state: HomeState, attentionKind: CustomerOverview["attentionKind"], readyToBuild: boolean): { badge: string; title: string; body: string; cta?: { to: string; label: string } } {
   switch (state) {
     case "attention":
       // A delivery problem (AIC-39) reads differently from a lost connection.
@@ -35,6 +35,9 @@ function hero(state: HomeState, attentionKind: CustomerOverview["attentionKind"]
     case "collecting":
       return h.states.collecting;
     case "no_campaign":
+      // Connected + ready → the guided builder (AIC-52); still onboarding/
+      // connecting → the existing setup-status copy, unchanged.
+      if (readyToBuild) return { ...h.states.createCampaign, cta: { to: "/app/builder", label: h.states.createCampaign.cta } };
       return { ...h.states.setup, cta: { to: "/onboarding", label: h.states.setup.cta } };
     default:
       return h.states.ok;
@@ -71,7 +74,8 @@ export function Home() {
     );
 
   const state = ov.homeState;
-  const hd = hero(state, ov.attentionKind);
+  const readyToBuild = ov.connection?.accessHealth === "ok" && !!ov.connection.adAccount && !!ov.connection.pageId;
+  const hd = hero(state, ov.attentionKind, readyToBuild);
   const r = ov.readout;
   const leads = r?.current.leads ?? 0;
   const cpl = r?.current.cplAgorot ?? null;

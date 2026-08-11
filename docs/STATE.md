@@ -6,6 +6,46 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-11 — Guided campaign builder UI + HTTP routes (AIC-52)
+The 8-step wizard (goal/WhatsApp/budget/special-ad-category/audience/
+placements/creatives/review) implementing "recommended default already
+filled in + why + every real choice visible" — `web/src/app/Builder.tsx` +
+`web/src/app/BuilderCreatives.tsx`. New HTTP surface `server/src/routes/builder.ts`
+(`/api/app/builder/{context,start,upload,posts,creative,build}`, `multer`
+for uploads) is a thin layer over AIC-50/51's already-built service code;
+`server/src/builder/session.ts`'s `resolveBuilderContext` is the real
+precondition gate (healthy connection + ad account + Page + no existing
+campaign), not just a UI nicety — every write route re-resolves it and
+checks `localCampaignId` ownership server-side.
+
+Bug caught by the route integration tests: the "customer already has a
+campaign" check originally matched the UNLINKED shell row `/start` itself
+creates, so calling `/start` a second time (the normal resume path) 409'd
+instead of resuming — fixed by requiring `meta_campaign_id IS NOT NULL`.
+
+Corrected an AIC-49 precedent flagged as debt in AIC-51's entry below:
+`recommended-defaults.ts`'s rationale strings (budget/placements/special-
+category-question/per-category audience rationale) moved into
+`web/src/strings.ts`'s `builder` section, since AIC-52's own AC requires
+"all copy in the strings file" and this ticket is what actually builds the
+UI that displays them. `shared/recommended-defaults.ts` is now genuinely
+copy-free.
+
+Home's `no_campaign` state now branches: ready-to-build → new CTA to
+`/app/builder`; still onboarding → the pre-existing `/onboarding` CTA,
+unchanged.
+
+Tests: `server/src/routes/builder.integration.test.ts` (7, mocked-fetch
+through the real adapter and real HTTP routes). Also walked the full wizard
+in a real browser against a locally-seeded customer — confirmed the
+audience step's category-based prefill and every step's validation gating
+work correctly. That pass also surfaced that `server/.env` carries a real
+`META_SYSTEM_USER_TOKEN` picked up automatically by local dev — one
+unintended real (read-only, nonsense-target) Meta call happened before this
+was caught; no writes occurred. AIC-50's live dogfood test (and AIC-51's
+WhatsApp-creative field-shape verification riding with it) is still the
+pending real-Meta-write checkpoint.
+
 ### 2026-08-11 — Creative handling: upload/existing-post → Meta ad creative (AIC-51)
 The builder's content step, split the same way as AIC-50: platform-
 independent spec in `shared/src/creative-handling.ts` (limits,

@@ -6,6 +6,7 @@ import express from "express";
 import { adminRouter } from "./routes/admin.js";
 import { appRouter } from "./routes/app.js";
 import { authRouter } from "./routes/auth.js";
+import { builderRouter } from "./routes/builder.js";
 
 // Locate the built web (web/dist with the landing at index.html). Robust to the
 // working directory: prod runs `npm --workspace server run start` (cwd = server/),
@@ -51,6 +52,7 @@ export function createApp() {
   const api = express.Router();
   api.use("/auth", authRouter);
   api.use("/app", appRouter);
+  api.use("/app/builder", builderRouter);
   api.use("/admin", adminRouter);
   app.use("/api", api);
 

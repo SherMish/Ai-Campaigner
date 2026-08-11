@@ -85,11 +85,14 @@ button { font-family: inherit; }
 /* form fields */
 .field { display: flex; flex-direction: column; gap: 7px; }
 .field label { font-size: 0.9rem; font-weight: 500; }
-.field input {
+.field input, .field select, .field textarea {
   font: inherit; padding: 14px 16px; border-radius: 14px; border: 1.5px solid var(--line);
   background: #fff; color: var(--ink); transition: border-color 0.15s;
 }
-.field input:focus { outline: none; border-color: var(--ink); }
+.field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--ink); }
+.field textarea { min-height: 84px; resize: vertical; }
+.field-row { display: flex; gap: 14px; }
+.field-row .field { flex: 1; }
 .check { display: flex; align-items: flex-start; gap: 10px; font-size: 0.9rem; color: var(--muted); }
 .check input { margin-top: 3px; accent-color: var(--orange); }
 

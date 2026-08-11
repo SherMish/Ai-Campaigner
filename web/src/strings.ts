@@ -428,6 +428,9 @@ export const strings = {
           paused: { badge: "מושהה", title: "הקמפיין כרגע מושהה", body: "הקמפיין מושהה ואינו מוציא תקציב או מביא פניות עד שנחזיר אותו לפעילות. לחידוש הפעילות דברו איתנו.", cta: "" },
           attention: { badge: "צריך טיפול", title: "איבדנו גישה לחשבון Meta", body: "הקמפיין עשוי להמשיך לרוץ, אבל לא נוכל לנהל אותו עד לחיבור מחדש.", cta: "חיבור מחדש" },
           setup: { badge: "בהקמה", title: "אנחנו מקימים את החשבון", body: "החשבון נפתח. אחרי שיחת ההיכרות וחיבור Meta נתחיל לנהל את הקמפיין ותוכלו לראות כאן נתונים.", cta: "לסטטוס ההקמה" },
+          // AIC-52: connected + ready, but the customer hasn't built their first
+          // campaign yet — distinct from "setup" (still onboarding/connecting).
+          createCampaign: { badge: "מוכן להתחיל", title: "בואו ניצור את הקמפיין הראשון שלכם", body: "כמה שאלות קצרות וממליצים לכם על ברירת מחדל בכל שלב — אפשר תמיד לשנות.", cta: "בניית הקמפיין" },
           // AIC-39: a not-delivering ad set — distinct from a lost Meta connection.
           delivery: { badge: "צריך טיפול", title: "חלק מהקמפיין לא מתפרסם כרגע", body: "אחת מקבוצות הפרסום נתקלה בבעיה ואינה מציגה מודעות. אנחנו כבר על זה — ניצור קשר אם נצטרך משהו מכם. שאר הקמפיין ממשיך לרוץ.", cta: "" },
         },
@@ -581,12 +584,127 @@ export const strings = {
       healthyStatus: "החיבור לחשבון הפרסום תקין",
     },
 
-    // Campaign builder — creative step (AIC-51). The server validates and
-    // returns error CODES only (see shared/creative-handling.ts); the actual
-    // Hebrew shown to the customer lives here, mapped via creativeValidationMessage.
+    // Guided campaign builder (AIC-52). The server validates and returns
+    // error CODES only (see shared/creative-handling.ts); the actual Hebrew
+    // shown to the customer lives here. Rationale text for each recommended
+    // default is NOT duplicated here — it comes straight from
+    // shared/recommended-defaults.ts (the single source of truth AIC-49 set
+    // up), read directly by the step components.
     builder: {
-      creativeResponsibilityNotice:
-        "התוכן שאתם מעלים (תמונות, טקסט, הבטחות) הוא באחריותכם — כולל דיוק ועמידה בדרישות החוק והמדיניות של מטא. אנחנו לא בודקים או עורכים את התוכן.",
+      eyebrow: "קמפיין חדש",
+      title: "בניית הקמפיין הראשון שלכם",
+      recommended: "מומלץ",
+      next: "הבא",
+      back: "חזרה",
+      stepNames: ["מטרה", "וואטסאפ", "תקציב", "קטגוריה מיוחדת", "קהל", "מיקומים", "מודעות", "סיכום"],
+      notReadyTitle: "עוד לא מוכנים להתחיל",
+      notReadyBody: "צריך קודם לחבר חשבון פרסום ועמוד פעילים ב-Meta, או שכבר יש לכם קמפיין מנוהל.",
+      backToAccount: "לדף הראשי",
+      unavailable: "יצירת קמפיינים לא זמינה כרגע. נסו שוב בעוד כמה דקות.",
+
+      goal: {
+        title: "המטרה של הקמפיין",
+        body: "נאסוף פניות דרך וואטסאפ — הדרך הכי טבעית ללקוחות בישראל ליצור איתכם קשר ישירות מהמודעה.",
+        objectiveLabel: "יעד הקמפיין",
+        objectiveValue: "פניות לוואטסאפ",
+        fixedNote: "הגדרות הרכש (Auction) קבועות בשלב הזה ולא מוצגות כבחירה.",
+      },
+      whatsapp: {
+        title: "מספר וואטסאפ",
+        body: "לקוחות שילחצו על המודעה ייצרו איתכם קשר במספר הזה.",
+        label: "מספר וואטסאפ, עם קידומת מדינה",
+        placeholder: "972501234567",
+        invalid: "מספר לא תקין — רק ספרות, כולל קידומת מדינה (למשל 972501234567).",
+      },
+      budget: {
+        title: "תקציב יומי",
+        label: "תקציב יומי (₪)",
+        invalid: "התקציב חייב להיות מספר חיובי.",
+        rationale:
+          "תקציב של כ־₪40 ליום נותן למנוע מספיק נתונים תוך כשבוע כדי להתחיל להשוות מודעות ולזהות מה מביא פניות בעלות טובה. אפשר להתחיל נמוך יותר ולהעלות בהמשך — זו נקודת פתיחה, לא מספר קבוע.",
+      },
+      specialCategory: {
+        title: "קטגוריה מיוחדת",
+        question: "האם העסק שלכם עוסק באשראי, תעסוקה/גיוס עובדים, נדל\"ן/דיור, או נושאים חברתיים/פוליטיים?",
+        options: {
+          NONE: "לא",
+          CREDIT: "אשראי",
+          EMPLOYMENT: "תעסוקה / גיוס עובדים",
+          HOUSING: "נדל\"ן / דיור",
+          ISSUES_ELECTIONS_POLITICS: "נושאים חברתיים / פוליטיים",
+        },
+      },
+      audience: {
+        title: "קהל היעד",
+        ageMinLabel: "גיל מינימום",
+        ageMaxLabel: "גיל מקסימום",
+        genderLabel: "מגדר",
+        genderOptions: { all: "הכל", male: "גברים", female: "נשים" },
+        radiusLabel: "רדיוס מהעסק (ק״מ, אינפורמטיבי)",
+        radiusNote: "הרדיוס משמש כהמלצה בלבד לשלב זה — הטירגוט בפועל הוא גיל+מגדר+ישראל.",
+        // Keyed by BusinessCategory (shared/recommended-defaults.ts) — every
+        // key there must have a match here, kept in sync manually since
+        // strings.ts stays free of a runtime dependency on @aic/shared.
+        categoryRationale: {
+          beautician: "עסקי יופי וטיפוח מתבססים על תנועה מקומית — רדיוס צר ונשים 18–45 בדרך כלל הקהל הרלוונטי ביותר.",
+          fitness: "אימונים וכושר תלויים בנוחות ההגעה — רדיוס מקומי, וקהל רחב משני המגדרים.",
+          tutor: "בהוראה פרטית ההורים (או התלמידים הבוגרים) הם מקבלי ההחלטה — קהל רחב יותר, כולל היכן שהם יהיו מוכנים לנסוע.",
+          restaurant: "מסעדות ובתי קפה מבוססים כמעט לגמרי על תנועה מקומית — רדיוס צר מאוד וקהל רחב.",
+          home_services: "בעלי מקצוע שמגיעים אל הלקוח (אינסטלציה, חשמל, ניקיון) יכולים לכסות רדיוס רחב יותר.",
+          retail: "חנות מקומית פונה לרוב לתנועה באזור — רדיוס בינוני וקהל רחב.",
+          health_wellness: "קליניקות וטיפולים בריאותיים מושכים קהל מקומי-אזורי רחב יחסית.",
+          professional_services: "שירותים מקצועיים (ייעוץ, ראיית חשבון וכו') — לקוחות מוכנים לנסוע יותר עבור מומחיות, רדיוס רחב.",
+          real_estate: "נדל\"ן פונה לאזור שלם ולא רק לשכונה — רדיוס רחב.",
+          other: "אין לנו עדיין המלצה ספציפית לתחום הזה — התחלה רחבה וניתנת לשינוי לפי מה שתדעו על הלקוחות שלכם.",
+        },
+      },
+      placements: {
+        title: "מיקומים",
+        body: "המיקומים האוטומטיים (Advantage+) קבועים בשלב הזה — מטא מחפשת את המיקום הזול ביותר לכל פנייה.",
+        rationale:
+          "השארת המיקומים אוטומטיים (Advantage+) נותנת למטא לחפש את המיקום הזול ביותר לכל ליד. צמצום מיקומים ידני בדרך כלל מעלה את העלות לפנייה בלי לשפר את האיכות.",
+      },
+      creatives: {
+        title: "מודעות",
+        body: "אפשר להעלות תוכן חדש או לבחור פוסט קיים מהעמוד המחובר. מומלץ 3–5 מודעות נפרדות כדי שנוכל להשוות מה עובד הכי טוב.",
+        responsibilityNotice:
+          "התוכן שאתם מעלים (תמונות, טקסט, הבטחות) הוא באחריותכם — כולל דיוק ועמידה בדרישות החוק והמדיניות של מטא. אנחנו לא בודקים או עורכים את התוכן.",
+        uploadTab: "העלאת תוכן",
+        postTab: "פוסט קיים",
+        adTitle: "מודעה",
+        addAd: "הוספת מודעה",
+        removeAd: "הסרה",
+        nameLabel: "שם פנימי למודעה",
+        headlineLabel: "כותרת",
+        headlinePlaceholder: "מבצע קיץ",
+        primaryTextLabel: "טקסט ראשי",
+        primaryTextPlaceholder: "20% הנחה על הטיפול הראשון",
+        chooseFile: "בחירת קובץ",
+        uploading: "מעלה…",
+        noPosts: "לא נמצאו פוסטים בעמוד המחובר.",
+        loadingPosts: "טוען פוסטים…",
+        createAdCta: "יצירת המודעה",
+        creatingAd: "יוצר…",
+        adCreated: "המודעה נוצרה",
+        countHint: "מומלץ 3–5 מודעות נפרדות",
+      },
+      review: {
+        title: "סיכום לפני יצירה",
+        body: "כל מה שנוצר עכשיו יהיה במצב מושהה — לא יוצא כסף עד שתאשרו את ההפעלה בנפרד.",
+        goalLine: "יעד",
+        whatsappLine: "וואטסאפ",
+        budgetLine: "תקציב יומי",
+        audienceLine: "קהל",
+        placementsLine: "מיקומים",
+        adsLine: "מודעות",
+        createCta: "יצירת הקמפיין (מושהה)",
+        creating: "יוצר…",
+        successTitle: "הקמפיין נוצר במצב מושהה",
+        successBody: "בשלב הבא נעביר אותו בבדיקה ותאשרו את ההפעלה מהדף הראשי.",
+        goHome: "למעבר לדף הראשי",
+        errorGeneric: "משהו השתבש ביצירת הקמפיין. אפשר לנסות שוב — מה שכבר נוצר לא ייווצר פעמיים.",
+      },
+
       creativeErrors: {
         missing_media: "צריך להעלות תמונה/וידאו או לבחור פוסט קיים לפני שממשיכים.",
         missing_headline: "חסרה כותרת למודעה.",
