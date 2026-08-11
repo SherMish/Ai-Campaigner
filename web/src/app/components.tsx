@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { strings } from "../strings";
 import { clearAuthToken, getMe } from "../api";
@@ -170,7 +170,15 @@ export function SupportCard({ dark = false }: { dark?: boolean }) {
 }
 
 // Onboarding progress stepper. steps in display order; currentIndex is the "now".
+// On a narrow viewport (see ui.css) this scrolls horizontally instead of
+// clipping later steps — auto-scrolling the current node into view is what
+// makes that discoverable rather than just technically possible.
 export function Stepper({ steps, currentIndex }: { steps: readonly string[]; currentIndex: number }) {
+  const nowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    nowRef.current?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+  }, [currentIndex]);
+
   return (
     <div className="stepper">
       {steps.map((name, i) => {
@@ -179,7 +187,7 @@ export function Stepper({ steps, currentIndex }: { steps: readonly string[]; cur
         return (
           <Fragment key={i}>
             {i > 0 && <div className="bar" />}
-            <div className={`node ${state}`}>
+            <div className={`node ${state}`} ref={state === "now" ? nowRef : undefined}>
               <div className="circle">{state === "done" ? "✓" : i + 1}</div>
               <div className="name">{name}</div>
               <div className="sub">{sub}</div>

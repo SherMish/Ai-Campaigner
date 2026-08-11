@@ -107,6 +107,17 @@ button { font-family: inherit; }
 /* stepper */
 .stepper { display: flex; align-items: flex-start; }
 .stepper .node { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; min-width: 90px; }
+/* A stepper with more than a handful of steps (the builder's 8) can outgrow a
+   phone width — scroll horizontally rather than silently clipping the later
+   steps with no way to reach them. Stepper auto-scrolls the current node into
+   view (see components.tsx) so this is discoverable, not just possible. */
+@media (max-width: 640px) {
+  .stepper { overflow-x: auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+  .stepper .node { min-width: 72px; }
+  .stepper .circle { width: 36px; height: 36px; }
+  .stepper .name { font-size: 0.78rem; }
+  .stepper .sub { font-size: 0.68rem; }
+}
 .stepper .circle { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; border: 1.5px solid var(--line); background: #fff; }
 .stepper .done .circle { background: var(--ink); color: var(--cream); border-color: var(--ink); }
 .stepper .now .circle { background: var(--orange); color: #fff; border-color: var(--orange); }

@@ -336,11 +336,19 @@ walked step-by-step in a real browser against a locally-seeded "beautician"
 customer, confirming the audience step correctly prefilled 18–45/female/8km
 with the beautician rationale text, and every step's validation gating
 worked (Next stays disabled until the step's real requirement is met).
-**Found and fixed during that pass**: a `server/.env` file (from earlier
+**Found and fixed during that pass**: (1) a `server/.env` file (from earlier
 Meta-verification work) holds a real `META_SYSTEM_USER_TOKEN` that local dev
 picks up automatically — worth remembering before any local run of the
 builder routes, since `GET /posts` etc. will make a REAL Meta call rather
-than the intended honest 503 unless that var is explicitly unset first.
+than the intended honest 503 unless that var is explicitly unset first; (2)
+at a phone width, the 8-step `Stepper` (`web/src/app/components.tsx`,
+shared with Onboarding's 4-step use) overflowed its card with no way to
+reach steps 5–8 — fixed with a `max-width: 640px` rule making `.stepper`
+horizontally scrollable (shrinking the circles/labels a bit) plus a
+`scrollIntoView` effect so the current step auto-scrolls into view, so
+"more steps exist" is discoverable rather than silently clipped. Re-checked
+the full wizard at 375px afterward — the two-up age-range `.field-row` and
+every other step render cleanly at that width.
 
 ### Planned: AIC-53
 
