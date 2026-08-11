@@ -26,3 +26,4 @@ See also: [STATE.md](STATE.md) (dated changelog) · [features/_TEMPLATE.md](feat
 | Customer auth — email+password, JWT sessions (backend) | [features/customer-auth.md](features/customer-auth.md) |
 | Customer overview — Home/Settings data API, homeState, lead-quality (backend) | [features/customer-overview.md](features/customer-overview.md) |
 | Customer recommendations — approve/dismiss over the safe-execute pipeline | [features/customer-recommendations.md](features/customer-recommendations.md) |
+| Campaign builder (P1) — recommended defaults, create-writes, guided UI, launch gate | [features/campaign-builder.md](features/campaign-builder.md) |

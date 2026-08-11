@@ -6,6 +6,28 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-10 — Recommended-defaults spec (AIC-49), P1 Campaign Builder begins
+Kicks off the new P1 phase: creating a customer's first campaign in-product
+instead of a founder walking them through Ads Manager by hand (what actually
+happened for GelNails). `shared/src/recommended-defaults.ts` is the single
+documented source of truth for what the future builder (AIC-52) recommends
+at every step: the 3 P0-fixed choices (objective/buying-type/destination —
+not presented as a choice), the AIC-38 single-ad-set structure recommendation,
+Advantage+ placements, a ₪30–50/day ("₪40 recommended") budget starting
+range framed honestly as a data-gathering point rather than a guaranteed
+number, Meta's Special Ad Category compliance question (always defaults to
+`NONE`, always asked explicitly, never silently inferred — a small
+category→hint map only prompts a more careful honest answer), and a
+business-category → audience-defaults map (age/gender/local-radius) for a
+curated set of common Israeli-SMB categories, each with a plain-Hebrew
+rationale. `customers.category` stays free text (set during AIC-44's manual
+onboarding); unrecognized categories resolve to an honest broad `other`
+default rather than guessing. New owning doc `campaign-builder.md` (added to
+INDEX.md) covers this ticket live and AIC-50–53 as planned. Tests:
+`recommended-defaults.test.ts` (9 tests).
+
+## Changelog
+
 ### 2026-08-10 — Thin approve surface verified + doc rot fixed (AIC-22/23/37)
 No app-code change — this closes out three tickets (AIC-22 Home, AIC-23
 recommendation approve/dismiss, AIC-37 audience opt-in details) that were

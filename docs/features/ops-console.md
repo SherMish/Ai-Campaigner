@@ -297,6 +297,11 @@ Source: `server/src/services/campaign-review.js`. Tests:
 `campaign-review.integration.test.ts` (all three outcomes + no-activation-without-
 approval).
 
+**"Rebuild to standard" language** (once the review UI grows past its current
+three outcome buttons) should pull its rationale from
+[campaign-builder.md](campaign-builder.md)'s recommended-defaults spec
+(AIC-49) rather than re-writing it — no concrete UI hook exists yet.
+
 **Compatibility criteria (AIC-38).** The supported shape is **1 campaign → N ad
 sets → 3–5 creatives** (see [DATA_MODEL.md](../DATA_MODEL.md)). A legitimate
 multi-ad-set **audience split** (e.g. the GelNails campaign: two ad sets by age,
