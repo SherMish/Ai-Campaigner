@@ -6,6 +6,38 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-11 — Builder honesty pass: business-type selector, fixed placements, no dead radius (AIC-52 follow-up)
+Three defects surfaced by dogfooding the builder against a seeded customer,
+all the same class ("a control/badge implying a choice the customer doesn't
+actually have"):
+
+1. **Audience business type was invisible.** The one input driving the whole
+   audience recommendation (age/gender) was read silently from
+   `customers.category` — an operator-only free-text field the customer never
+   sees or confirms, so a wrong/blank value confidently mis-targets with no
+   way to notice. Now the audience step leads with an editable business-type
+   `<select>` (pre-selected from the onboarding category via
+   `normalizeBusinessCategory`; changing it re-derives age/gender + rationale
+   live). "לפי מה שסיפרתם לנו. לא מדויק? אפשר לשנות כאן."
+2. **Placements pretended to be a recommendation.** `createAdSet` sends no
+   placement field (Meta uses automatic/Advantage+; no path to narrow), yet
+   the step had a מומלץ badge + "the tradeoff of narrowing" copy. Now
+   presented as fixed like the goal step; `RECOMMENDED_PLACEMENTS` →
+   `FIXED_PLACEMENTS`.
+3. **The radius input went nowhere.** It accepted a value that never left the
+   browser (targeting is age+gender+`countries=["IL"]`). Removed, replaced
+   with a plain "targets all of Israel; area/radius coming later" note.
+   `CATEGORY_AUDIENCE_DEFAULTS.radiusKm` kept as the seed for real
+   geo-targeting, filed as **AIC-60** (business location + geocoding + Meta
+   `custom_locations`) — the AC-accurate version of what radius was faking.
+
+The category rationales were also rewritten to justify age/gender only (they
+previously claimed "local radius" targeting P0 doesn't apply). Browser-verified
+(selector re-derives home_services → 28–60/all; placements shows no badge).
+No new automated test — no web component-test infra exists, and the
+server/Meta payload is unchanged (radius never reached it); the builder route
+integration test already covers the age/gender/country build.
+
 ### 2026-08-11 — Launch gate: PAUSED → review → customer approval → ACTIVE (AIC-53)
 The controlled path from "built (paused)" to "spending (active)" — a
 builder-created campaign never spends without an explicit customer approval.

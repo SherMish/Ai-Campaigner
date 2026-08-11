@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   RECOMMENDED_BUDGET_AGOROT_PER_DAY, RECOMMENDED_SPECIAL_AD_CATEGORY,
-  SPECIAL_AD_CATEGORY, resolveAudienceDefault, normalizeBusinessCategory, type SpecialAdCategory,
+  SPECIAL_AD_CATEGORY, BUSINESS_CATEGORY, resolveAudienceDefault, normalizeBusinessCategory,
+  type SpecialAdCategory, type BusinessCategory,
 } from "@aic/shared";
 import { strings } from "../strings";
 import {
@@ -24,7 +25,6 @@ interface WizardState {
   ageMin: number;
   ageMax: number;
   gender: Gender;
-  radiusKm: number;
 }
 
 function Recommended() {
@@ -34,7 +34,7 @@ function Recommended() {
 export function Builder() {
   const nav = useNavigate();
   const [phase, setPhase] = useState<"loading" | "not_ready" | "ready" | "error">("loading");
-  const [category, setCategory] = useState("");
+  const [category, setCategory] = useState<BusinessCategory>("other");
   const [localCampaignId, setLocalCampaignId] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [wizard, setWizard] = useState<WizardState | null>(null);
@@ -46,13 +46,16 @@ export function Builder() {
   useEffect(() => {
     getBuilderContext()
       .then((ctx) => {
-        setCategory(ctx.category);
-        const d = resolveAudienceDefault(ctx.category);
+        // Normalize the operator-typed category to a known value so the
+        // selector shows a real, correctable option (never a blank/mystery).
+        const cat = normalizeBusinessCategory(ctx.category);
+        setCategory(cat);
+        const d = resolveAudienceDefault(cat);
         setWizard({
           whatsappNumber: "",
           dailyBudgetShekels: RECOMMENDED_BUDGET_AGOROT_PER_DAY.recommended / 100,
           specialCategory: RECOMMENDED_SPECIAL_AD_CATEGORY,
-          ageMin: d.ageMin, ageMax: d.ageMax, gender: d.genders, radiusKm: d.radiusKm,
+          ageMin: d.ageMin, ageMax: d.ageMax, gender: d.genders,
         });
         return startBuilder();
       })
@@ -197,6 +200,25 @@ export function Builder() {
           {step === 4 && (
             <div>
               <div className="row between"><b style={{ fontSize: "1.2rem" }}>{au.title}</b><Recommended /></div>
+              {/* Business type — the input driving the whole recommendation.
+                  Shown + editable so the assumption is visible and correctable. */}
+              <div className="field" style={{ marginTop: 12 }}>
+                <label>{au.businessTypeLabel}</label>
+                <select
+                  value={category}
+                  onChange={(e) => {
+                    const cat = e.target.value as BusinessCategory;
+                    setCategory(cat);
+                    const d = resolveAudienceDefault(cat);
+                    patch({ ageMin: d.ageMin, ageMax: d.ageMax, gender: d.genders });
+                  }}
+                >
+                  {BUSINESS_CATEGORY.map((c) => (
+                    <option key={c} value={c}>{au.businessTypes[c]}</option>
+                  ))}
+                </select>
+                <span className="muted" style={{ fontSize: "0.82rem" }}>{au.businessTypeHint}</span>
+              </div>
               <div className="field-row" style={{ marginTop: 12 }}>
                 <div className="field"><label>{au.ageMinLabel}</label><input type="number" min={13} max={65} value={wizard.ageMin} onChange={(e) => patch({ ageMin: Number(e.target.value) })} /></div>
                 <div className="field"><label>{au.ageMaxLabel}</label><input type="number" min={13} max={65} value={wizard.ageMax} onChange={(e) => patch({ ageMax: Number(e.target.value) })} /></div>
@@ -209,20 +231,16 @@ export function Builder() {
                   <option value="female">{au.genderOptions.female}</option>
                 </select>
               </div>
-              <div className="field" style={{ marginTop: 12 }}>
-                <label>{au.radiusLabel}</label>
-                <input type="number" min={1} value={wizard.radiusKm} onChange={(e) => patch({ radiusKm: Number(e.target.value) })} />
-              </div>
-              <p className="muted" style={{ marginTop: 12 }}>{au.categoryRationale[normalizeBusinessCategory(category)]}</p>
-              <p className="muted" style={{ fontSize: "0.85rem", marginTop: 6 }}>{au.radiusNote}</p>
+              <p className="muted" style={{ marginTop: 12 }}>{au.categoryRationale[category]}</p>
+              <p className="muted" style={{ fontSize: "0.85rem", marginTop: 6 }}>{au.geoNote}</p>
             </div>
           )}
 
           {step === 5 && (
             <div>
-              <div className="row between"><b style={{ fontSize: "1.2rem" }}>{pl.title}</b><Recommended /></div>
+              <b style={{ fontSize: "1.2rem" }}>{pl.title}</b>
               <p className="muted" style={{ marginTop: 12 }}>{pl.body}</p>
-              <p className="muted" style={{ marginTop: 12 }}>{pl.rationale}</p>
+              <p className="muted" style={{ fontSize: "0.85rem", marginTop: 12 }}>{pl.fixedNote}</p>
             </div>
           )}
 
@@ -239,8 +257,9 @@ export function Builder() {
               <p className="muted" style={{ margin: "12px 0 20px" }}>{rv.body}</p>
               <div className="summary-row"><span className="k">{rv.whatsappLine}</span><b>{wizard.whatsappNumber}</b></div>
               <div className="summary-row"><span className="k">{rv.budgetLine}</span><b>₪{wizard.dailyBudgetShekels}</b></div>
-              <div className="summary-row"><span className="k">{rv.audienceLine}</span><b>{wizard.ageMin}–{wizard.ageMax}, {au.genderOptions[wizard.gender]}</b></div>
-              <div className="summary-row"><span className="k">{rv.placementsLine}</span><b>Advantage+</b></div>
+              <div className="summary-row"><span className="k">{rv.businessLine}</span><b>{au.businessTypes[category]}</b></div>
+              <div className="summary-row"><span className="k">{rv.audienceLine}</span><b>{wizard.ageMin}–{wizard.ageMax}, {au.genderOptions[wizard.gender]} · {rv.geoValue}</b></div>
+              <div className="summary-row"><span className="k">{rv.placementsLine}</span><b>{rv.placementsValue}</b></div>
               <div className="summary-row"><span className="k">{rv.adsLine}</span><b>{createdAds.length}</b></div>
               {buildError && <p className="muted" style={{ marginTop: 16, color: "var(--orange)" }}>{buildError}</p>}
               <button className="btn btn-primary" style={{ marginTop: 20 }} disabled={building || createdAds.length === 0} onClick={submit}>

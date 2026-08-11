@@ -656,33 +656,56 @@ export const strings = {
       },
       audience: {
         title: "קהל היעד",
+        // Business type drives the age/gender defaults — shown as an editable
+        // control so the assumption is visible and correctable, not silently
+        // read from an operator-typed field the customer never sees.
+        businessTypeLabel: "סוג העסק",
+        businessTypeHint: "לפי מה שסיפרתם לנו. לא מדויק? אפשר לשנות כאן.",
+        businessTypes: {
+          beautician: "יופי וטיפוח",
+          fitness: "כושר ואימונים",
+          tutor: "הוראה פרטית",
+          restaurant: "מסעדנות ואוכל",
+          home_services: "שירותים בבית (אינסטלציה, חשמל וכו')",
+          retail: "חנות / קמעונאות",
+          health_wellness: "בריאות ורווחה",
+          professional_services: "שירותים מקצועיים",
+          real_estate: "נדל\"ן",
+          other: "אחר",
+        },
         ageMinLabel: "גיל מינימום",
         ageMaxLabel: "גיל מקסימום",
         genderLabel: "מגדר",
         genderOptions: { all: "הכל", male: "גברים", female: "נשים" },
-        radiusLabel: "רדיוס מהעסק (ק״מ, אינפורמטיבי)",
-        radiusNote: "הרדיוס משמש כהמלצה בלבד לשלב זה — הטירגוט בפועל הוא גיל+מגדר+ישראל.",
+        // In P0 the campaign targets all of Israel by age + gender. Real
+        // location/radius targeting is a separate future step (AIC-54) — so we
+        // say that plainly rather than showing a radius control that does nothing.
+        geoNote: "בשלב הזה הקמפיין מטרגט את כל ישראל, לפי גיל ומגדר. טירגוט לפי אזור או רדיוס מהעסק יתווסף בהמשך.",
         // Keyed by BusinessCategory (shared/recommended-defaults.ts) — every
         // key there must have a match here, kept in sync manually since
-        // strings.ts stays free of a runtime dependency on @aic/shared.
+        // strings.ts stays free of a runtime dependency on @aic/shared. These
+        // justify the age/gender recommendation only — NOT a local radius,
+        // which P0 doesn't apply (see geoNote).
         categoryRationale: {
-          beautician: "עסקי יופי וטיפוח מתבססים על תנועה מקומית — רדיוס צר ונשים 18–45 בדרך כלל הקהל הרלוונטי ביותר.",
-          fitness: "אימונים וכושר תלויים בנוחות ההגעה — רדיוס מקומי, וקהל רחב משני המגדרים.",
-          tutor: "בהוראה פרטית ההורים (או התלמידים הבוגרים) הם מקבלי ההחלטה — קהל רחב יותר, כולל היכן שהם יהיו מוכנים לנסוע.",
-          restaurant: "מסעדות ובתי קפה מבוססים כמעט לגמרי על תנועה מקומית — רדיוס צר מאוד וקהל רחב.",
-          home_services: "בעלי מקצוע שמגיעים אל הלקוח (אינסטלציה, חשמל, ניקיון) יכולים לכסות רדיוס רחב יותר.",
-          retail: "חנות מקומית פונה לרוב לתנועה באזור — רדיוס בינוני וקהל רחב.",
-          health_wellness: "קליניקות וטיפולים בריאותיים מושכים קהל מקומי-אזורי רחב יחסית.",
-          professional_services: "שירותים מקצועיים (ייעוץ, ראיית חשבון וכו') — לקוחות מוכנים לנסוע יותר עבור מומחיות, רדיוס רחב.",
-          real_estate: "נדל\"ן פונה לאזור שלם ולא רק לשכונה — רדיוס רחב.",
-          other: "אין לנו עדיין המלצה ספציפית לתחום הזה — התחלה רחבה וניתנת לשינוי לפי מה שתדעו על הלקוחות שלכם.",
+          beautician: "בעסקי יופי וטיפוח, נשים בגילי 18–45 הן בדרך כלל הקהל הרלוונטי ביותר.",
+          fitness: "לכושר ואימונים מתאים קהל רחב משני המגדרים, בעיקר בגילי 20–45.",
+          tutor: "בהוראה פרטית ההורים או התלמידים הבוגרים הם מקבלי ההחלטה — קהל רחב יחסית משני המגדרים.",
+          restaurant: "מסעדות ובתי קפה פונים לקהל רחב מאוד — כל המגדרים וטווח גילים רחב.",
+          home_services: "לשירותים בבית (אינסטלציה, חשמל, ניקיון) מתאים קהל בוגר רחב משני המגדרים.",
+          retail: "לחנות מקומית מתאים קהל רחב — כל המגדרים וטווח גילים בינוני.",
+          health_wellness: "טיפולי בריאות ורווחה מושכים קהל בוגר רחב יחסית.",
+          professional_services: "לשירותים מקצועיים (ייעוץ, ראיית חשבון וכו') מתאים קהל בוגר, כל המגדרים.",
+          real_estate: "נדל\"ן פונה לקהל בוגר רחב.",
+          other: "אין לנו עדיין המלצה ספציפית לתחום הזה — התחלנו בטווח רחב שאפשר לצמצם לפי מה שתדעו על הלקוחות שלכם.",
         },
       },
       placements: {
         title: "מיקומים",
-        body: "המיקומים האוטומטיים (Advantage+) קבועים בשלב הזה — מטא מחפשת את המיקום הזול ביותר לכל פנייה.",
-        rationale:
-          "השארת המיקומים אוטומטיים (Advantage+) נותנת למטא לחפש את המיקום הזול ביותר לכל ליד. צמצום מיקומים ידני בדרך כלל מעלה את העלות לפנייה בלי לשפר את האיכות.",
+        body: "המיקומים נקבעים אוטומטית (Advantage+): מטא מציגה את המודעות בפיד, בסטוריז ובכל מקום שבו יש סיכוי טוב לפנייה, ומחפשת את העלות הזולה ביותר לכל פנייה.",
+        // Presented as a FIXED choice (like the goal step), not a badged
+        // recommendation — there's no code path to narrow placements in P0, so
+        // we don't imply the customer has a lever they don't.
+        fixedNote: "בשלב הזה המיקומים קבועים על אוטומטי ולא מוצגים כבחירה — זו בדרך כלל הגישה שנותנת את העלות הטובה ביותר לפנייה.",
       },
       creatives: {
         title: "מודעות",
@@ -714,8 +737,11 @@ export const strings = {
         goalLine: "יעד",
         whatsappLine: "וואטסאפ",
         budgetLine: "תקציב יומי",
+        businessLine: "סוג העסק",
         audienceLine: "קהל",
         placementsLine: "מיקומים",
+        placementsValue: "אוטומטי (Advantage+)",
+        geoValue: "כל ישראל",
         adsLine: "מודעות",
         createCta: "יצירת הקמפיין (מושהה)",
         creating: "יוצר…",

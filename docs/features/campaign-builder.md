@@ -89,9 +89,11 @@ single-ad-set ideal, presented here as what it's always been: a
 customer can and does run more ad sets (audience splits are normal, not
 exceptional — see [DATA_MODEL.md](../DATA_MODEL.md)).
 
-**Placements** (`RECOMMENDED_PLACEMENTS`): Advantage+ (automatic). The
-"narrowing raises cost" rationale is display copy, not spec data — it lives
-in `web/src/strings.ts`'s `builder.placements.rationale` (AIC-52 correction,
+**Placements** (`FIXED_PLACEMENTS`): Advantage+ (automatic). This is a
+*fixed* P0 choice, not a recommendation — `createAdSet` sends no placement
+field so Meta uses automatic placements, and there's no path to narrow them.
+Presented in the builder as fixed (no מומלץ badge), copy in
+`web/src/strings.ts`'s `builder.placements.fixedNote` (AIC-52 honesty pass,
 see below).
 
 **Budget** (`RECOMMENDED_BUDGET_AGOROT_PER_DAY`): a ₪30–50/day range, ₪40
@@ -111,11 +113,13 @@ but a hint only prompts a more careful honest answer; it never sets the
 declaration itself.
 
 **Business-category → audience defaults** (`CATEGORY_AUDIENCE_DEFAULTS`,
-`resolveAudienceDefault`): age range, gender, and a local-radius
-recommendation per business category (`BUSINESS_CATEGORY` — a small, curated
-set of common Israeli-SMB categories, not a taxonomy: beautician, fitness,
-tutor, restaurant, home_services, retail, health_wellness,
-professional_services, real_estate). `customers.category` (migration 002)
+`resolveAudienceDefault`): age range and gender per business category
+(`BUSINESS_CATEGORY` — a small, curated set of common Israeli-SMB categories,
+not a taxonomy: beautician, fitness, tutor, restaurant, home_services, retail,
+health_wellness, professional_services, real_estate). Each default also
+carries a `radiusKm`, kept as the per-category seed for real geo-targeting
+(AIC-60) — **P0 does not wire it to Meta** (all-of-Israel by age+gender only);
+see the audience-step notes below. `customers.category` (migration 002)
 stays free text, set by the operator during manual onboarding (AIC-44) — it
 is **not** validated against this list at the DB layer, so
 `normalizeBusinessCategory` case/whitespace-normalizes and resolves anything
@@ -281,6 +285,49 @@ with a green "מומלץ" badge (`StatusPill variant="ok"`, reusing the existing
 component rather than inventing a new one) marking the recommended option
 and a one-line rationale underneath, pulled from `shared/recommended-defaults.ts`'s
 structural values + `web/src/strings.ts`'s matching copy.
+
+**מומלץ vs fixed — the badge means "you can change this," and only appears
+where that's true.** A follow-up honesty pass (see below) drew the line hard:
+the goal and placements steps are *fixed* (no code path to change them in P0),
+so they carry no badge and say so plainly, exactly like the goal step's
+"...קבועות בשלב הזה ולא מוצגות כבחירה." Only steps with a real, wired,
+editable control (budget, special-ad-category, audience) get the מומלץ badge.
+
+**The audience step's business type is an editable control, not an invisible
+field.** The single input driving the whole audience recommendation
+(age/gender defaults + rationale) is the customer's business category. It was
+originally read silently from `customers.category` — a free-text field only
+an *operator* sets during manual onboarding, which the customer never sees or
+confirms. That meant a mis-typed or blank category would confidently target,
+say, a plumber as "women 18–45" with no way for them to notice or fix it. So
+the step now leads with a **business-type `<select>`** (`web/src/app/Builder.tsx`,
+options from `BUSINESS_CATEGORY`, labels in `strings.ts`'s
+`builder.audience.businessTypes`), pre-selected from the onboarding category
+(normalized via `normalizeBusinessCategory`, so a blank/unknown value resolves
+to a real `other` option rather than a mystery) and **editable** — changing it
+re-derives age/gender from `resolveAudienceDefault(cat)` and re-renders the
+rationale live. "לפי מה שסיפרתם לנו. לא מדויק? אפשר לשנות כאן."
+
+**Placements are genuinely fixed, and the copy no longer pretends otherwise.**
+`createAdSet` sends no placement field at all → Meta uses automatic
+(Advantage+) placements; there is no code path to narrow them. The step
+originally carried a מומלץ badge and a rationale about "the tradeoff of
+narrowing manually" — language that only makes sense for a lever the customer
+doesn't have. It's now presented as fixed (no badge, `builder.placements.fixedNote`),
+and the spec constant was renamed `RECOMMENDED_PLACEMENTS` → `FIXED_PLACEMENTS`
+so the code, spec, and copy finally agree.
+
+**Location/radius is all-of-Israel in P0, said plainly — not a dead control.**
+The audience step originally shipped a "radius (ק״מ)" number input that *went
+nowhere*: the value never left the browser, and `createAdSet` sends only
+`age_min`/`age_max`/`genders`/`geo_locations.countries=["IL"]`. A control that
+silently discards its input is a lie, so it was removed and replaced with a
+plain note: the campaign targets all of Israel by age + gender, and
+area/radius targeting is coming later. `CATEGORY_AUDIENCE_DEFAULTS[cat].radiusKm`
+is kept in the spec as the per-category seed for that future work — real
+geo-targeting (business location + geocoding + Meta `custom_locations`) is its
+own ticket, **AIC-60**, which is the AC-accurate version of what the radius
+input was faking.
 
 **HTTP routes** (`server/src/routes/builder.ts`, mounted at
 `/api/app/builder`, `requireAuth` throughout): `GET /context` (resolves

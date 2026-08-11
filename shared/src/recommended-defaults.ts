@@ -19,6 +19,12 @@ export const FIXED_BUYING_TYPE = "AUCTION";
 export const FIXED_DESTINATION = "whatsapp"; // Click-to-WhatsApp, PRD-mandated in P0
 export const FIXED_CTA = "WHATSAPP_MESSAGE"; // Meta call_to_action.type — follows from FIXED_DESTINATION, not a separate choice (AIC-51)
 export const FIXED_BID_STRATEGY = "LOWEST_COST_WITHOUT_CAP"; // no bid-strategy step in the builder (AIC-52) — not presented as a choice
+// Placements are FIXED in P0, not a recommendation: createAdSet sends no
+// placement field at all, so Meta uses automatic (Advantage+) placements and
+// there is no code path to narrow them. Presented in the builder as a fixed
+// choice with an explanation, NOT a badged "recommended" option the customer
+// could change — the same honesty as objective/buying-type above.
+export const FIXED_PLACEMENTS = "advantage_plus";
 
 // ── Structure (AIC-38: the single-ad-set ideal is a RECOMMENDATION, never an
 // assumption the engine/review may rely on — a customer can and does run more) ──
@@ -26,11 +32,6 @@ export const RECOMMENDED_STRUCTURE = {
   adSetCount: 1,
   adCountMin: 3,
   adCountMax: 5,
-} as const;
-
-// ── Placements ────────────────────────────────────────────────────────────
-export const RECOMMENDED_PLACEMENTS = {
-  advantagePlus: true,
 } as const;
 
 // ── Budget: a starting range, framed honestly as "enough to gather data" —
@@ -72,6 +73,11 @@ export interface AudienceDefault {
   ageMin: number;
   ageMax: number;
   genders: "all" | "male" | "female";
+  // Reserved for real geo-targeting (AIC-54): P0 targets all of Israel and
+  // does NOT wire this to Meta — createAdSet sends only age/gender/country.
+  // Kept here as the per-category seed the geo ticket will use once we collect
+  // a business location; the builder deliberately does NOT show it as an
+  // editable control, since a control that silently discards its value is a lie.
   radiusKm: number;
 }
 
