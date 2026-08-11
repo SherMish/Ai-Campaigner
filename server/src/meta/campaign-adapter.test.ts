@@ -95,3 +95,125 @@ describe("GraphCampaignAdapter create-writes — always PAUSED", () => {
     })).rejects.toThrow(/Invalid parameter/);
   });
 });
+
+describe("GraphCampaignAdapter creative handling (AIC-51)", () => {
+  it("uploadImage sends the file as base64 bytes and parses the returned hash", async () => {
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({
+      ok: true, status: 200,
+      json: async () => ({ images: { "photo.jpg": { hash: "img_hash_1", url: "https://x/photo.jpg" } } }),
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+    const fileBuffer = Buffer.from("fake image bytes");
+
+    const result = await adapter.uploadImage("act_123", fileBuffer, "photo.jpg");
+
+    expect(result).toEqual({ hash: "img_hash_1", url: "https://x/photo.jpg" });
+    const [url, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("act_123/adimages");
+    const body = new URLSearchParams(String(init.body));
+    expect(body.get("bytes")).toBe(fileBuffer.toString("base64"));
+  });
+
+  it("uploadImage throws honestly (never a fabricated hash) when Meta rejects the file", async () => {
+    const mock = vi.fn(async () => ({
+      ok: false, status: 400, json: async () => ({ error: { message: "Unsupported image type" } }),
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+    await expect(adapter.uploadImage("act_123", Buffer.from("x"), "bad.txt")).rejects.toThrow(/Unsupported image type/);
+  });
+
+  it("uploadVideo posts multipart form data, polls until Meta reports ready, and returns the thumbnail", async () => {
+    let pollCount = 0;
+    const mock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/advideos")) {
+        expect(init?.body).toBeInstanceOf(FormData);
+        return { ok: true, status: 200, json: async () => ({ id: "vid_1" }) } as unknown as Response;
+      }
+      pollCount++;
+      if (pollCount === 1) {
+        return { ok: true, status: 200, json: async () => ({ status: { video_status: "processing" } }) } as unknown as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({ status: { video_status: "ready" }, picture: "https://x/thumb.jpg" }) } as unknown as Response;
+    });
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok", undefined, 0); // 0ms poll delay — no real waiting in the test
+
+    const result = await adapter.uploadVideo("act_123", Buffer.from("fake video bytes"), "clip.mp4");
+
+    expect(result).toEqual({ videoId: "vid_1", thumbnailUrl: "https://x/thumb.jpg" });
+    expect(pollCount).toBe(2); // processing once, then ready
+  });
+
+  it("uploadVideo throws honestly if Meta reports the video failed processing", async () => {
+    const mock = vi.fn(async (url: string) => {
+      if (String(url).includes("/advideos")) return { ok: true, status: 200, json: async () => ({ id: "vid_1" }) } as unknown as Response;
+      return { ok: true, status: 200, json: async () => ({ status: { video_status: "error" } }) } as unknown as Response;
+    });
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok", undefined, 0);
+    await expect(adapter.uploadVideo("act_123", Buffer.from("x"), "clip.mp4")).rejects.toThrow(/failed processing/);
+  });
+
+  it("uploadVideo gives up honestly after the poll budget is exhausted rather than hanging forever", async () => {
+    const mock = vi.fn(async (url: string) => {
+      if (String(url).includes("/advideos")) return { ok: true, status: 200, json: async () => ({ id: "vid_1" }) } as unknown as Response;
+      return { ok: true, status: 200, json: async () => ({ status: { video_status: "processing" } }) } as unknown as Response;
+    });
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok", undefined, 0);
+    await expect(adapter.uploadVideo("act_123", Buffer.from("x"), "clip.mp4")).rejects.toThrow(/did not finish processing/);
+  });
+
+  it("listPromotablePosts maps Meta's fields to a plain post list", async () => {
+    const mock = vi.fn(async (_url: string) => ({
+      ok: true, status: 200,
+      json: async () => ({ data: [{ id: "post_1", message: "hello", picture: "https://x/p.jpg", created_time: "2026-08-01T00:00:00Z" }] }),
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const posts = await adapter.listPromotablePosts("page_1");
+
+    expect(posts).toEqual([{ id: "post_1", message: "hello", pictureUrl: "https://x/p.jpg", createdAt: "2026-08-01T00:00:00Z" }]);
+    const [url] = mock.mock.calls[0] as [string];
+    expect(url).toContain("page_1/promotable_posts");
+  });
+
+  it("createCreativeFromUpload sends a WhatsApp object_story_spec referencing the uploaded image", async () => {
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ id: "crea_1" }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const id = await adapter.createCreativeFromUpload({
+      adAccountId: "act_123", pageId: "page_1", name: "Ad 1",
+      headline: "מבצע קיץ", primaryText: "20% הנחה",
+      whatsappNumber: "972500000000",
+      media: { kind: "image", imageHash: "img_hash_1" },
+    });
+
+    expect(id).toBe("crea_1");
+    const [url, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("act_123/adcreatives");
+    const body = new URLSearchParams(String(init.body));
+    const spec = JSON.parse(body.get("object_story_spec") ?? "{}");
+    expect(spec.page_id).toBe("page_1");
+    expect(spec.link_data.image_hash).toBe("img_hash_1");
+    expect(spec.link_data.call_to_action).toEqual({ type: "WHATSAPP_MESSAGE", value: { whatsapp_number: "972500000000" } });
+  });
+
+  it("createCreativeFromExistingPost sends object_story_id (page_post) — no upload fields at all", async () => {
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ id: "crea_2" }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const id = await adapter.createCreativeFromExistingPost({ adAccountId: "act_123", pageId: "page_1", name: "Ad 2", postId: "post_9" });
+
+    expect(id).toBe("crea_2");
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    const body = new URLSearchParams(String(init.body));
+    expect(body.get("object_story_id")).toBe("page_1_post_9");
+    expect(body.has("object_story_spec")).toBe(false);
+  });
+});

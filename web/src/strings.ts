@@ -580,6 +580,21 @@ export const strings = {
       reconnectCta: "התחברות מחדש",
       healthyStatus: "החיבור לחשבון הפרסום תקין",
     },
+
+    // Campaign builder — creative step (AIC-51). The server validates and
+    // returns error CODES only (see shared/creative-handling.ts); the actual
+    // Hebrew shown to the customer lives here, mapped via creativeValidationMessage.
+    builder: {
+      creativeResponsibilityNotice:
+        "התוכן שאתם מעלים (תמונות, טקסט, הבטחות) הוא באחריותכם — כולל דיוק ועמידה בדרישות החוק והמדיניות של מטא. אנחנו לא בודקים או עורכים את התוכן.",
+      creativeErrors: {
+        missing_media: "צריך להעלות תמונה/וידאו או לבחור פוסט קיים לפני שממשיכים.",
+        missing_headline: "חסרה כותרת למודעה.",
+        headline_too_long: "הכותרת ארוכה מדי — היא עלולה להיחתך בחלק מהמיקומים.",
+        missing_primary_text: "חסר טקסט ראשי למודעה.",
+        primary_text_too_long: "הטקסט הראשי ארוך מדי.",
+      },
+    },
   },
 } as const;
 
@@ -599,4 +614,10 @@ export function connectionMessage(
     body: c.needsAttentionBody,
     cta: c.reconnectCta,
   };
+}
+
+// Map a creative-validation error code (shared/creative-handling.ts) to its
+// Hebrew message. Codes cross the API untranslated; only the client displays copy.
+export function creativeValidationMessage(code: keyof typeof strings.he.builder.creativeErrors): string {
+  return strings.he.builder.creativeErrors[code];
 }

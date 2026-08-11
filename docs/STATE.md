@@ -6,6 +6,41 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-11 — Creative handling: upload/existing-post → Meta ad creative (AIC-51)
+The builder's content step, split the same way as AIC-50: platform-
+independent spec in `shared/src/creative-handling.ts` (limits,
+`validateCreativeCopy` — returns error CODES only, e.g. `missing_headline`,
+never Hebrew text), Meta API calls in `GraphCampaignAdapter` via a new
+`CreativeWriter` interface (`server/src/builder/creative-types.ts`):
+`uploadImage`/`uploadVideo` (video upload polls Meta, bounded, until a
+thumbnail is ready), `listPromotablePosts`, `createCreativeFromUpload`/
+`createCreativeFromExistingPost`. Idempotent the same way as AIC-50's
+creates (`server/src/builder/creative-create.ts`, migration 021 widens the
+outbox's kind check for `create_creative`) — except the raw upload step
+itself, deliberately left one-shot (a file buffer isn't a resumable
+payload the way small JSON creates are).
+
+Corrected an AIC-49 precedent while building this: AIC-51's own AC requires
+"copy/labels in the strings file," so — unlike `recommended-defaults.ts`'s
+rationale strings — no Hebrew lives in `creative-handling.ts`. The
+responsibility notice and every validation error message moved to
+`web/src/strings.ts`'s new `builder` section (`creativeValidationMessage()`
+maps a code to its text, same pattern as `connectionMessage()`).
+AIC-49's existing rationale-strings-in-shared/ is now flagged as the same
+class of debt, deferred to AIC-52 rather than retrofitted mid-ticket.
+
+No HTTP route was built — AIC-51's AC never requires one, and nothing calls
+one without AIC-52's UI to exist yet; building disconnected endpoints now
+would be guessing at a shape AIC-52 should actually determine.
+
+Tests: `shared/creative-handling.test.ts` (7, asserting error codes now
+instead of Hebrew substrings), `campaign-adapter.test.ts` gained 8
+(upload/video-poll/list-posts/create-creative, mocked fetch), new
+`creative-create.integration.test.ts` (5: upload path, existing-post path,
+idempotent-per-key, failure-then-resume, distinct creatives per clientKey).
+Live-verification of the WhatsApp creative field shape rides along with
+AIC-50's still-pending dogfood test.
+
 ### 2026-08-11 — Meta create-writes: createCampaign/createAdSet/createAd, always PAUSED (AIC-50)
 The builder's write surface. New `BuilderWriter` interface
 (`server/src/builder/types.ts`), implemented by `GraphCampaignAdapter`

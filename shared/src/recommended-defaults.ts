@@ -15,6 +15,7 @@ import type { Agorot } from "./money.js";
 export const FIXED_OBJECTIVE = "OUTCOME_LEADS"; // Meta campaign objective
 export const FIXED_BUYING_TYPE = "AUCTION";
 export const FIXED_DESTINATION = "whatsapp"; // Click-to-WhatsApp, PRD-mandated in P0
+export const FIXED_CTA = "WHATSAPP_MESSAGE"; // Meta call_to_action.type — follows from FIXED_DESTINATION, not a separate choice (AIC-51)
 
 // ── Structure (AIC-38: the single-ad-set ideal is a RECOMMENDATION, never an
 // assumption the engine/review may rely on — a customer can and does run more) ──

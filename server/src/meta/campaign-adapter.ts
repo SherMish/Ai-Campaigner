@@ -2,6 +2,14 @@ import type { LiveCampaignState, MetaReader, ExecWriter } from "../execution/saf
 import { normalizeAdSet, isProblem, type AdSetHealth, type DeliveryReader, type RawAdSetDelivery } from "./delivery-health.js";
 import { normalizeAdSetMeta, type AdSetMeta, type RawAdSetMeta } from "./audience-label.js";
 import type { BuilderWriter, CreateCampaignParams, CreateAdSetParams, CreateAdParams } from "../builder/types.js";
+import type {
+  CreativeWriter,
+  UploadedImage,
+  UploadedVideo,
+  PromotablePost,
+  CreateUploadCreativeParams,
+  CreatePostCreativeParams,
+} from "../builder/creative-types.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
 // Marketing API. Budgets are read/written in the account currency's MINOR unit,
@@ -12,12 +20,15 @@ import type { BuilderWriter, CreateCampaignParams, CreateAdSetParams, CreateAdPa
 // one, so setDailyBudget targets the right object.
 const BASE = "https://graph.facebook.com";
 
-export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter {
+export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter {
   private budgetObj = new Map<string, string>(); // campaignId → budget object id
 
   constructor(
     private readonly token: string,
     private readonly ver = process.env.META_GRAPH_VERSION || "v21.0",
+    // Injectable so tests can poll uploadVideo's processing check without
+    // waiting in real time — production never overrides this.
+    private readonly videoPollDelayMs = 2000,
   ) {}
 
   private async get(pathAndQuery: string): Promise<Record<string, unknown>> {
@@ -203,6 +214,96 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       adset_id: params.metaAdSetId,
       status: "PAUSED",
       creative: { creative_id: params.creativeId },
+    });
+  }
+
+  // ── Creative handling (AIC-51) ─────────────────────────────────────────────
+  // Field-shape confidence note (same caveat as the create-writes above): the
+  // WhatsApp call-to-action shape on an upload-based creative is this
+  // adapter's best-effort reading of Meta's Click-to-WhatsApp API, not yet
+  // live-verified. createCreativeFromExistingPost's object_story_id shape is
+  // the well-established, simpler path (no destination fields to get wrong).
+
+  async uploadImage(adAccountId: string, fileBuffer: Buffer, filename: string): Promise<UploadedImage> {
+    const body = new URLSearchParams({ bytes: fileBuffer.toString("base64") });
+    const r = await fetch(`${BASE}/${this.ver}/${adAccountId}/adimages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+    });
+    const json = (await r.json().catch(() => ({}))) as { images?: Record<string, { hash?: string; url?: string }>; error?: unknown };
+    const entry = json.images ? Object.values(json.images)[0] : undefined;
+    if (!r.ok || !entry?.hash) {
+      throw new Error(`POST ${adAccountId}/adimages → ${r.status} ${JSON.stringify(json.error ?? json)}`);
+    }
+    return { hash: entry.hash, url: entry.url ?? "" };
+  }
+
+  // Uploads via multipart (native FormData/Blob — no extra dependency), then
+  // polls (bounded) for Meta to finish processing so a thumbnail exists — a
+  // video creative can't be created without one.
+  async uploadVideo(adAccountId: string, fileBuffer: Buffer, filename: string): Promise<UploadedVideo> {
+    const form = new FormData();
+    form.set("source", new Blob([new Uint8Array(fileBuffer)]), filename);
+    const r = await fetch(`${BASE}/${this.ver}/${adAccountId}/advideos`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.token}` },
+      body: form,
+    });
+    const json = (await r.json().catch(() => ({}))) as { id?: string; error?: unknown };
+    if (!r.ok || !json.id) {
+      throw new Error(`POST ${adAccountId}/advideos → ${r.status} ${JSON.stringify(json.error ?? json)}`);
+    }
+    const videoId = json.id;
+
+    const POLL_ATTEMPTS = 10;
+    for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt++) {
+      const status = await this.get(`${videoId}?fields=status,picture`);
+      const videoStatus = (status.status as { video_status?: string } | undefined)?.video_status;
+      if (videoStatus === "ready" && status.picture) {
+        return { videoId, thumbnailUrl: String(status.picture) };
+      }
+      if (videoStatus === "error") {
+        throw new Error(`video ${videoId} failed processing on Meta's side`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, this.videoPollDelayMs));
+    }
+    throw new Error(`video ${videoId} did not finish processing within ${(POLL_ATTEMPTS * this.videoPollDelayMs) / 1000}s`);
+  }
+
+  async listPromotablePosts(pageId: string): Promise<PromotablePost[]> {
+    const body = await this.get(`${pageId}/promotable_posts?fields=id,message,picture,created_time&limit=25`);
+    return ((body.data as Array<Record<string, unknown>>) ?? []).map((p) => ({
+      id: String(p.id),
+      message: p.message ? String(p.message) : null,
+      pictureUrl: p.picture ? String(p.picture) : null,
+      createdAt: String(p.created_time ?? ""),
+    }));
+  }
+
+  async createCreativeFromUpload(params: CreateUploadCreativeParams): Promise<string> {
+    const linkData: Record<string, unknown> =
+      params.media.kind === "image"
+        ? { image_hash: params.media.imageHash }
+        : { video_id: params.media.videoId, image_url: params.media.thumbnailUrl };
+    return this.postCreate(params.adAccountId, "adcreatives", {
+      name: params.name,
+      object_story_spec: {
+        page_id: params.pageId,
+        link_data: {
+          ...linkData,
+          message: params.primaryText,
+          name: params.headline,
+          call_to_action: { type: "WHATSAPP_MESSAGE", value: { whatsapp_number: params.whatsappNumber } },
+        },
+      },
+    });
+  }
+
+  async createCreativeFromExistingPost(params: CreatePostCreativeParams): Promise<string> {
+    return this.postCreate(params.adAccountId, "adcreatives", {
+      name: params.name,
+      object_story_id: `${params.pageId}_${params.postId}`,
     });
   }
 }

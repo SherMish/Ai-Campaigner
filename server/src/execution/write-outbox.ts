@@ -1,7 +1,7 @@
 import type pg from "pg";
 
-export type WriteKind = "set_daily_budget" | "pause_ad" | "create_campaign" | "create_ad_set" | "create_ad";
-export const CREATE_WRITE_KINDS: readonly WriteKind[] = ["create_campaign", "create_ad_set", "create_ad"];
+export type WriteKind = "set_daily_budget" | "pause_ad" | "create_campaign" | "create_ad_set" | "create_ad" | "create_creative";
+export const CREATE_WRITE_KINDS: readonly WriteKind[] = ["create_campaign", "create_ad_set", "create_ad", "create_creative"];
 
 export interface OutboxEntry {
   idempotencyKey: string; // deterministic per intended change
