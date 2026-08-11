@@ -31,6 +31,7 @@ const SUMMARY_HE: Record<string, string> = {
   decrease_budget: "הורדת תקציב",
   replace_creative: "החלפת קריאייטיב",
   no_action: "לא בוצע שינוי",
+  activate_campaign: "הפעלת הקמפיין", // AIC-53 launch gate
 };
 
 function rowToEntry(r: Record<string, unknown>): ActionHistoryEntry {

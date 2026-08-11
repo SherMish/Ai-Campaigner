@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { strings } from "../strings";
 import {
   postLeadQuality,
   getCampaignAudiences,
+  getPendingLaunch,
+  approveLaunch,
   shekels,
   type CustomerOverview,
   type HomeState,
   type CampaignAudiences,
+  type LaunchSummary,
 } from "../api";
 import { StatusPill } from "./components";
 import { useSharedOverview, invalidateOverview } from "./overview-store";
@@ -18,18 +21,21 @@ const L = h.live;
 const D = h.details;
 
 const PILL: Record<HomeState, "ok" | "info" | "neutral" | "attn"> = {
-  ok: "ok", collecting: "neutral", paused: "neutral", attention: "attn", no_campaign: "neutral",
+  ok: "ok", collecting: "neutral", paused: "neutral", attention: "attn", no_campaign: "neutral", ready_to_launch: "info",
 };
 
-// Which status-hero copy + optional CTA each real state shows. Only CTAs that
-// point at a real screen are wired; paused/collecting/ok carry no button.
-function hero(state: HomeState, attentionKind: CustomerOverview["attentionKind"], readyToBuild: boolean): { badge: string; title: string; body: string; cta?: { to: string; label: string } } {
+// Which status-hero copy + optional CTA each real state shows. A `launch: true`
+// hero opens the launch-approval modal instead of navigating (the only in-place
+// action); the rest either link to a real screen or carry no button.
+function hero(state: HomeState, attentionKind: CustomerOverview["attentionKind"], readyToBuild: boolean): { badge: string; title: string; body: string; cta?: { to: string; label: string }; launch?: { label: string } } {
   switch (state) {
     case "attention":
       // A delivery problem (AIC-39) reads differently from a lost connection.
       if (attentionKind === "delivery")
         return { badge: h.states.delivery.badge, title: h.states.delivery.title, body: h.states.delivery.body };
       return { ...h.states.attention, cta: { to: "/connect", label: h.states.attention.cta } };
+    case "ready_to_launch":
+      return { badge: h.states.readyToLaunch.badge, title: h.states.readyToLaunch.title, body: h.states.readyToLaunch.body, launch: { label: h.states.readyToLaunch.cta } };
     case "paused":
       return { badge: h.states.paused.badge, title: h.states.paused.title, body: h.states.paused.body };
     case "collecting":
@@ -59,6 +65,7 @@ function Delta({ pct, goodDown }: { pct: number | null; goodDown?: boolean }) {
 
 export function Home() {
   const { data: ov, loading, error: err, reload } = useSharedOverview(); // shared with Sidebar/Settings (AIC-42)
+  const [launchOpen, setLaunchOpen] = useState(false);
 
   if (loading && !ov)
     return <div className="wrap page"><p className="muted">{a.loading}</p></div>;
@@ -102,8 +109,11 @@ export function Home() {
                 <p className="muted" style={{ maxWidth: "42em" }}>{hd.body}</p>
               </div>
               {hd.cta && <Link className="btn btn-primary btn-sm" to={hd.cta.to}>{hd.cta.label}</Link>}
+              {hd.launch && <button className="btn btn-primary btn-sm" onClick={() => setLaunchOpen(true)}>{hd.launch.label}</button>}
             </div>
           </div>
+
+          {launchOpen && <LaunchModal onClose={() => setLaunchOpen(false)} />}
 
           {/* KPIs — the questions the customer actually asks */}
           <div className="grid-3">
@@ -258,6 +268,78 @@ function AudienceDetails() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// The launch-approval modal (AIC-53): the customer sees exactly what will run —
+// budget, estimated monthly max spend, ad count, WhatsApp destination — and an
+// explicit approve. Approving is what actually flips the campaign to spending;
+// nothing here activates without this click.
+const LN = a.launch;
+function LaunchModal({ onClose }: { onClose: () => void }) {
+  const [summary, setSummary] = useState<LaunchSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [approving, setApproving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    getPendingLaunch()
+      .then((r) => setSummary(r.launch))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, []);
+
+  function approve() {
+    setApproving(true);
+    setError(false);
+    approveLaunch()
+      .then((r) => {
+        if (r.outcome === "activated" || r.outcome === "already_launched") {
+          setDone(true);
+          invalidateOverview(); // Home re-fetches → the hero leaves the launch state
+        } else {
+          setError(true);
+        }
+      })
+      .catch(() => setError(true))
+      .finally(() => setApproving(false));
+  }
+
+  const maxMonthly = summary && summary.budgetPeriod === "daily" ? summary.dailyBudgetAgorot * 30 : summary?.dailyBudgetAgorot ?? 0;
+
+  return (
+    <div className="op-modal-backdrop" onClick={onClose}>
+      <div className="op-modal" onClick={(e) => e.stopPropagation()}>
+        {done ? (
+          <div>
+            <StatusPill variant="ok">✓</StatusPill>
+            <h3 style={{ fontSize: "1.3rem", margin: "12px 0 10px" }}>{LN.successTitle}</h3>
+            <p className="muted" style={{ marginBottom: 20 }}>{LN.successBody}</p>
+            <button className="btn btn-primary" onClick={onClose}>{h.states.ok.badge}</button>
+          </div>
+        ) : loading ? (
+          <p className="muted">{a.loading}</p>
+        ) : !summary ? (
+          <div><p className="muted" style={{ marginBottom: 16 }}>{a.loadError}</p><button className="btn btn-outline btn-sm" onClick={onClose}>{LN.cancel}</button></div>
+        ) : (
+          <div>
+            <h3 style={{ fontSize: "1.3rem", marginBottom: 10 }}>{LN.title}</h3>
+            <p className="muted" style={{ marginBottom: 18 }}>{LN.intro}</p>
+            <div className="summary-row"><span className="k">{LN.nameLine}</span><b>{summary.name}</b></div>
+            <div className="summary-row"><span className="k">{LN.budgetLine}</span><b>{shekels(summary.dailyBudgetAgorot)} {L.perDay}</b></div>
+            <div className="summary-row"><span className="k">{LN.maxSpendLine}</span><b>{shekels(maxMonthly)} {LN.perMonth}</b></div>
+            <div className="summary-row"><span className="k">{LN.adsLine}</span><b>{summary.adCount}</b></div>
+            <div className="summary-row"><span className="k">{LN.whatsappLine}</span><b>{summary.whatsappDestination}</b></div>
+            {error && <p className="muted" style={{ marginTop: 14, color: "var(--orange)" }}>{LN.failed}</p>}
+            <div className="row gap12" style={{ marginTop: 22 }}>
+              <button className="btn btn-primary" onClick={approve} disabled={approving}>{approving ? LN.approving : LN.approveCta}</button>
+              <button className="btn btn-outline" onClick={onClose} disabled={approving}>{LN.cancel}</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

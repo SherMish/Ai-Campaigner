@@ -10,6 +10,7 @@ import type {
   CreateUploadCreativeParams,
   CreatePostCreativeParams,
 } from "../builder/creative-types.js";
+import type { LaunchWriter, MetaCampaignStatus } from "../launch/types.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
 // Marketing API. Budgets are read/written in the account currency's MINOR unit,
@@ -20,7 +21,7 @@ import type {
 // one, so setDailyBudget targets the right object.
 const BASE = "https://graph.facebook.com";
 
-export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter {
+export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter {
   private budgetObj = new Map<string, string>(); // campaignId → budget object id
 
   constructor(
@@ -305,5 +306,19 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       name: params.name,
       object_story_id: `${params.pageId}_${params.postId}`,
     });
+  }
+
+  // ── Launch gate (AIC-53) ────────────────────────────────────────────────
+  // activateCampaign is the ONLY write in this whole adapter that can set a
+  // campaign ACTIVE — status is hardcoded, never a caller-supplied value,
+  // mirroring the create-writes' "always PAUSED" invariant in reverse.
+
+  async getCampaignStatus(metaCampaignId: string): Promise<MetaCampaignStatus> {
+    const camp = await this.get(`${metaCampaignId}?fields=effective_status`);
+    return String(camp.effective_status ?? "");
+  }
+
+  async activateCampaign(metaCampaignId: string): Promise<void> {
+    await this.post(metaCampaignId, { status: "ACTIVE" });
   }
 }

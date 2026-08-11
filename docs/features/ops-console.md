@@ -297,6 +297,16 @@ Source: `server/src/services/campaign-review.js`. Tests:
 `campaign-review.integration.test.ts` (all three outcomes + no-activation-without-
 approval).
 
+**One subtlety for builder-created campaigns (AIC-53).** For a campaign that
+already exists on Meta (a partner-managed existing campaign), `status='active'`
+means "we manage it and it's live." For a *builder-created* campaign it means
+"reviewed and managed" but the campaign is still PAUSED on Meta — going live is
+a separate customer launch approval (the AIC-53 launch gate,
+[campaign-builder.md](campaign-builder.md)), tracked by
+`managed_campaigns.launch_approved_at`. So `submitReview(approved)` moving a
+campaign to `active` is necessary but not sufficient for a builder campaign to
+spend; the launch gate is what actually flips it ACTIVE.
+
 **"Rebuild to standard" language** (once the review UI grows past its current
 three outcome buttons) should pull its rationale from
 [campaign-builder.md](campaign-builder.md)'s recommended-defaults spec

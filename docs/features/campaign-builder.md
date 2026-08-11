@@ -1,12 +1,15 @@
 # Campaign builder (P1 — create campaigns)
 
-**Status:** in progress. AIC-49 (recommended-defaults spec), AIC-50 (Meta
-create-writes), AIC-51 (creative handling), and AIC-52 (guided builder UI)
-are **built and unit/integration-tested, live-verified in the browser**;
-AIC-50's live Meta dogfood test (create a real paused campaign on an account
-we control, verify, clean up) is still pending, and AIC-51's WhatsApp-
-creative field shapes ride along with that same live test. AIC-53 (launch
-gate) is **planned** — this doc's later section fills in once it lands.
+**Status:** in progress. All five tickets — AIC-49 (recommended-defaults
+spec), AIC-50 (Meta create-writes), AIC-51 (creative handling), AIC-52
+(guided builder UI), AIC-53 (launch gate) — are **built and
+unit/integration-tested, live-verified in the browser**. The one thing still
+pending across the whole phase is a single live Meta dogfood on an account we
+control: create a real paused campaign, activate it, verify, clean up. That
+test is what finally confirms AIC-50's create field shapes, AIC-51's
+WhatsApp-creative shape, and AIC-53's PAUSED→ACTIVE flip against the real
+Marketing API — everything else is verified with a mocked `fetch` through
+the real adapter.
 
 **Source of truth:**
 - Recommended-defaults spec: `shared/src/recommended-defaults.ts`
@@ -30,16 +33,25 @@ gate) is **planned** — this doc's later section fills in once it lands.
   whatsapp/budget/specialCategory/audience/placements/review steps),
   `web/src/app/BuilderCreatives.tsx` (the creatives step), `web/src/api.ts`
   (builder client functions), `web/src/strings.ts`'s `builder` section
+- Launch gate: `server/src/launch/types.ts` (the `LaunchWriter` interface),
+  `server/src/launch/activate.ts` (`activateCampaign` — the one PAUSED→ACTIVE
+  path), `server/src/services/customer-launch.ts` (`getPendingLaunch`,
+  `approveLaunch`), routes in `server/src/routes/app.ts` (`/api/app/launch`,
+  `/api/app/launch/approve`); the customer UI is the `LaunchModal` in
+  `web/src/app/Home.tsx` + the `ready_to_launch` home state
 
 **Lock-in tests:** `shared/src/recommended-defaults.test.ts`,
 `shared/src/creative-handling.test.ts`,
 `server/src/meta/campaign-adapter.test.ts` (created-PAUSED invariant +
-upload/creative field shapes), `server/src/execution/write-outbox.integration.test.ts`
+upload/creative field shapes + the activate-always-sends-ACTIVE invariant),
+`server/src/execution/write-outbox.integration.test.ts`
 (`applyIdempotent`), `server/src/builder/campaign-create.integration.test.ts`
 (the full campaign orchestration), `server/src/builder/creative-create.integration.test.ts`
 (the creative-create orchestration), `server/src/routes/builder.integration.test.ts`
-(the full HTTP surface: context/start/upload/posts/creative/build, ownership
-checks, honest 409/503 degradation).
+(the full builder HTTP surface), `server/src/launch/activate.integration.test.ts`
+(the launch gate: activate-happy-path, blocked-before-review, idempotent,
+failed-write-not-marked-launched), `server/src/routes/launch.integration.test.ts`
+(the launch HTTP routes end to end).
 
 ---
 
@@ -350,8 +362,62 @@ horizontally scrollable (shrinking the circles/labels a bit) plus a
 the full wizard at 375px afterward — the two-up age-range `.field-row` and
 every other step render cleanly at that width.
 
-### Planned: AIC-53
+### The launch gate (AIC-53)
 
-- **Launch gate**: PAUSED → first-campaign review → customer approval →
-  activate, as an approved write through the safe-execute pipeline (AIC-12)
-  — no builder path may activate directly.
+The controlled path from "built (PAUSED)" to "spending (ACTIVE)" — so a
+campaign never starts spending a customer's money without an explicit
+approval. The full flow: builder finishes → everything exists PAUSED on Meta
+(AIC-50) → first-campaign review (AIC-18/38, the existing operator review,
+moves the local row to `status='active'`) → **customer launch approval** →
+activate.
+
+**Why "review-approved" is not "launched."** Before this ticket,
+`campaign-review.ts`'s `submitReview(approved)` set `status='active'`, which
+for a pre-existing (already-live) campaign correctly meant "we now manage
+it." But a *builder-created* campaign is `status='active'` while still
+**PAUSED on Meta** — reviewed and managed, but not yet spending. So AIC-53
+adds a separate `launch_approved_at` column (migration 022): NULL = reviewed
+but the customer hasn't said "go live" yet. Every campaign that existed
+before this migration is backfilled non-NULL (they were already spending, so
+retroactively "launched"); only a fresh builder campaign is genuinely NULL.
+
+**The one activation path** (`server/src/launch/activate.ts`,
+`activateCampaign`): deliberately its OWN small pipeline, not AIC-12's
+`SafeExecutor` (which is bound to a `recommendation` record — there is none
+here) and not AIC-50's create-writes (which hardcode PAUSED). Same
+discipline as both, though: gate (already-launched → idempotent no-op; not
+linked → fail; `status !== 'active'` → refuse, because review hasn't passed)
+→ read live status → write `ACTIVE` → **read-back verify it landed** → log to
+`action_history` (`action_type='activate_campaign'`, `human_involved=true`) +
+set `launch_approved_at`. A failed write is reported honestly and never
+marks the campaign launched, so a retry is always safe.
+
+**"No builder path can activate directly" — enforced, not just intended.**
+The activate write lives only behind this gate; `buildCampaignOnMeta`
+(AIC-50) never touches campaign status, and a fresh build always lands
+`under_review`. `activateCampaign` refuses any campaign whose local status
+isn't `active`, so a not-yet-reviewed campaign cannot be activated even by
+calling the gate directly. The one write method on the adapter that can send
+`status=ACTIVE` (`GraphCampaignAdapter.activateCampaign`) takes no status
+parameter — the same "hard rule in the adapter" shape the create-writes use
+for PAUSED, in reverse. Pinned by `campaign-adapter.test.ts`.
+
+**Customer surface** (`server/src/services/customer-launch.ts` +
+`web/src/app/Home.tsx`'s `LaunchModal`): a review-approved, still-unlaunched,
+Meta-linked campaign surfaces as a new `ready_to_launch` home state (it
+outranks delivery/collecting — a PAUSED campaign has no delivery data to
+judge, and the one actionable thing is the launch itself). Approving opens a
+modal showing exactly what will run — campaign name, daily budget, **the
+estimated monthly max spend** (daily × 30), ad count, WhatsApp destination —
+then a single "אישור והפעלה". This is the AIC-23 informed-approval pattern:
+the customer sees budget + max spend before anything spends. Approving is the
+only thing that flips the campaign live.
+
+**Verification**: the two integration suites named above (13 tests total),
+plus a real-browser walk of a locally-seeded review-approved campaign — the
+`ready_to_launch` hero, the modal's full spend summary (₪40/day → ₪1200/mo
+max, 3 ads), and the honest 503 degradation when no Meta token is configured
+(error copy shown, modal stays open, DB confirmed *not* marked launched). The
+actual PAUSED→ACTIVE flip against a real Meta campaign is the consequential
+live write — it's part of AIC-50's still-pending dogfood, deliberately gated
+behind explicit human go-ahead rather than run autonomously.

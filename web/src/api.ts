@@ -37,7 +37,7 @@ export class ApiError extends Error {
 // ── Customer overview (AIC-22/24) ─────────────────────────────────────────
 // Mirrors server/src/services/customer-overview.ts. Money is integer agorot.
 export type AccessHealth = "ok" | "revoked" | "invalid" | "needs_reconnect";
-export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campaign";
+export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campaign" | "ready_to_launch";
 export type CampaignStatus =
   | "under_review" | "active" | "paused" | "needs_attention"
   | "connection_problem" | "unmanaged";
@@ -62,7 +62,7 @@ export interface CustomerOverview {
   campaign: {
     id: string; name: string; status: CampaignStatus; objective: string;
     agreedBudgetAgorot: number; budgetPeriod: "daily" | "monthly";
-    automationEnabled: boolean; deliveryOk: boolean;
+    automationEnabled: boolean; deliveryOk: boolean; readyToLaunch: boolean;
   } | null;
   subscription: {
     plan: string; status: string; setupPaid: boolean;
@@ -395,6 +395,20 @@ export interface BuildCampaignResult {
 }
 export const buildCampaign = (body: BuildCampaignBody) =>
   api<BuildCampaignResult>("/app/builder/build", { method: "POST", body: JSON.stringify(body) });
+
+// ── Launch gate (AIC-53) ────────────────────────────────────────────────────
+export interface LaunchSummary {
+  campaignId: string;
+  name: string;
+  dailyBudgetAgorot: number;
+  budgetPeriod: "daily" | "monthly";
+  whatsappDestination: string;
+  adCount: number;
+}
+export const getPendingLaunch = () => api<{ launch: LaunchSummary | null }>("/app/launch");
+export type LaunchApproveOutcome = "activated" | "already_launched" | "not_approved" | "not_linked" | "failed";
+export const approveLaunch = () =>
+  api<{ outcome: LaunchApproveOutcome; reason?: string }>("/app/launch/approve", { method: "POST" });
 
 export const getOverview = () => api<CustomerOverview>("/app/overview");
 export const postLeadQuality = (leadsReported: number, relevantCount: number) =>

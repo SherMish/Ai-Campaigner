@@ -11,7 +11,7 @@ import {
 // from the customer's own rows (never another customer's) + the snapshot-based
 // readout. Everything is read-only; no live Meta call at render time.
 export type AccessHealth = "ok" | "revoked" | "invalid" | "needs_reconnect";
-export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campaign";
+export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campaign" | "ready_to_launch";
 
 export interface CustomerOverview {
   account: { name: string; email: string };
@@ -37,6 +37,9 @@ export interface CustomerOverview {
     budgetPeriod: "daily" | "monthly";
     automationEnabled: boolean;
     deliveryOk: boolean;
+    // AIC-53: review-approved (status='active') but the customer hasn't
+    // approved activation yet — the campaign is still PAUSED on Meta.
+    readyToLaunch: boolean;
   } | null;
   subscription: {
     plan: string;
@@ -64,6 +67,10 @@ function deriveHomeState(
 ): HomeState {
   if (!campaign) return "no_campaign";
   if (connection && connection.accessHealth !== "ok") return "attention";
+  // AIC-53: review-approved but not yet customer-activated outranks delivery/
+  // collecting — a still-PAUSED campaign has no delivery data to judge yet,
+  // and the one actionable thing is the launch approval itself.
+  if (campaign.readyToLaunch) return "ready_to_launch";
   if (!campaign.deliveryOk) return "attention"; // a not-delivering ad set (AIC-39)
   if (campaign.status === "paused") return "paused";
   if (campaign.status === "needs_attention" || campaign.status === "connection_problem")
@@ -148,8 +155,10 @@ export async function buildCustomerOverview(
       budget_period: "daily" | "monthly";
       automation_enabled: boolean;
       delivery_ok: boolean;
+      launch_approved_at: Date | null;
+      meta_campaign_id: string | null;
     }>(
-      `SELECT id, name, status, objective, agreed_budget_agorot, budget_period, automation_enabled, delivery_ok
+      `SELECT id, name, status, objective, agreed_budget_agorot, budget_period, automation_enabled, delivery_ok, launch_approved_at, meta_campaign_id
        FROM managed_campaigns WHERE customer_id = $1`,
       [customerId],
     ),
@@ -201,6 +210,10 @@ export async function buildCustomerOverview(
         budgetPeriod: campRes.rows[0].budget_period,
         automationEnabled: campRes.rows[0].automation_enabled,
         deliveryOk: campRes.rows[0].delivery_ok,
+        readyToLaunch:
+          campRes.rows[0].status === "active" &&
+          campRes.rows[0].launch_approved_at === null &&
+          campRes.rows[0].meta_campaign_id !== null,
       }
     : null;
 

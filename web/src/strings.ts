@@ -431,6 +431,9 @@ export const strings = {
           // AIC-52: connected + ready, but the customer hasn't built their first
           // campaign yet — distinct from "setup" (still onboarding/connecting).
           createCampaign: { badge: "מוכן להתחיל", title: "בואו ניצור את הקמפיין הראשון שלכם", body: "כמה שאלות קצרות וממליצים לכם על ברירת מחדל בכל שלב — אפשר תמיד לשנות.", cta: "בניית הקמפיין" },
+          // AIC-53: built + review-approved, PAUSED on Meta, waiting for the
+          // customer's explicit go-live approval — nothing spends until they click.
+          readyToLaunch: { badge: "מוכן להפעלה", title: "הקמפיין מוכן — נותר רק לאשר הפעלה", body: "בנינו את הקמפיין והוא עבר בדיקה, אבל הוא עדיין מושהה ולא מוציא כסף. ההפעלה מתבצעת רק באישור שלכם.", cta: "אישור והפעלה" },
           // AIC-39: a not-delivering ad set — distinct from a lost Meta connection.
           delivery: { badge: "צריך טיפול", title: "חלק מהקמפיין לא מתפרסם כרגע", body: "אחת מקבוצות הפרסום נתקלה בבעיה ואינה מציגה מודעות. אנחנו כבר על זה — ניצור קשר אם נצטרך משהו מכם. שאר הקמפיין ממשיך לרוץ.", cta: "" },
         },
@@ -479,6 +482,23 @@ export const strings = {
         summaryTitle: "קמפיין WhatsApp",
         sMode: "מצב", sBudget: "תקציב", sAds: "מודעות", sLeads: "פניות לפי שבוע",
         sBudgetVal: "₪80 ביום", sAdsVal: "4 מודעות פעילות", sLeadsVal: "18 סה״כ",
+      },
+      // Launch gate (AIC-53) — the confirmation before a campaign goes live.
+      launch: {
+        title: "אישור הפעלת הקמפיין",
+        intro: "ברגע שתאשרו, הקמפיין יתחיל לפעול ולהוציא תקציב לפי מה שמופיע כאן. עד אז הוא מושהה ולא מוציא כלום.",
+        nameLine: "קמפיין",
+        budgetLine: "תקציב יומי",
+        maxSpendLine: "הוצאה מקסימלית מוערכת לחודש",
+        adsLine: "מודעות",
+        whatsappLine: "פניות אל וואטסאפ",
+        approveCta: "אישור והפעלה",
+        approving: "מפעיל…",
+        cancel: "לא עכשיו",
+        successTitle: "הקמפיין פעיל",
+        successBody: "הקמפיין הופעל ומתחיל לרוץ. נעקוב אחריו ונעדכן כשיהיה משהו ששווה לשנות.",
+        failed: "לא הצלחנו להפעיל את הקמפיין כרגע. אפשר לנסות שוב בעוד רגע — שום דבר לא הופעל פעמיים.",
+        perMonth: "לחודש",
       },
       recs: {
         title: "המלצות",

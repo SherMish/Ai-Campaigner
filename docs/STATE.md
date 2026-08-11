@@ -6,6 +6,36 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-11 — Launch gate: PAUSED → review → customer approval → ACTIVE (AIC-53)
+The controlled path from "built (paused)" to "spending (active)" — a
+builder-created campaign never spends without an explicit customer approval.
+New `launch_approved_at` column (migration 022, existing rows backfilled
+non-NULL since they were already live) distinguishes "review-approved +
+managed" (`status='active'`) from "customer approved going live." New
+`server/src/launch/activate.ts` `activateCampaign` is its own small
+validate→write→read-back-verify→log pipeline (deliberately NOT AIC-12's
+SafeExecutor, which is recommendation-bound, nor AIC-50's create-writes,
+which hardcode PAUSED). The single adapter method that can send
+`status=ACTIVE` takes no status parameter — the create-writes' "always
+PAUSED" invariant in reverse, pinned by a unit test.
+
+"No builder path activates directly" is enforced, not just intended:
+`buildCampaignOnMeta` never touches status, a fresh build lands
+`under_review`, and `activateCampaign` refuses anything not already
+review-`active`. Customer surface: a new `ready_to_launch` home state + a
+`LaunchModal` (`web/src/app/Home.tsx`) showing budget + estimated monthly
+max spend + ad count + WhatsApp destination before the single approve
+button (AIC-23 informed-approval pattern). Routes `/api/app/launch` +
+`/api/app/launch/approve`.
+
+Tests: `server/src/launch/activate.integration.test.ts` (6) +
+`server/src/routes/launch.integration.test.ts` (7) +
+`campaign-adapter.test.ts` (+3), all green. Live-verified in a real browser:
+the ready-to-launch hero, the modal's spend summary (₪40/day → ₪1200/mo max),
+and honest 503 degradation with no token (error shown, DB confirmed not
+marked launched). The real PAUSED→ACTIVE flip on a live account is part of
+AIC-50's still-pending dogfood, gated behind explicit human go-ahead.
+
 ### 2026-08-11 — Guided campaign builder UI + HTTP routes (AIC-52)
 The 8-step wizard (goal/WhatsApp/budget/special-ad-category/audience/
 placements/creatives/review) implementing "recommended default already

@@ -14,6 +14,8 @@ import {
   requestBudgetChange,
 } from "../services/customer-actions.js";
 import { buildCampaignAudiences } from "../services/campaign-audiences.js";
+import { getPendingLaunch, approveLaunch } from "../services/customer-launch.js";
+import { buildLaunchWriter } from "../launch/writer.js";
 
 // Customer-facing data API (AIC-22/24). Every route is scoped to the caller's
 // own customer via the JWT — the service only ever reads rows owned by req.userId.
@@ -170,6 +172,39 @@ appRouter.get("/audiences", requireAuth, async (req, res) => {
   } catch (e) {
     console.error("[app] audiences failed", e);
     res.status(500).json({ error: "failed to load audience details" });
+  }
+});
+
+// ── Launch gate (AIC-53) ─────────────────────────────────────────────────
+// A review-approved, still-PAUSED-on-Meta campaign shows here for the
+// customer's explicit launch approval — this is what actually flips the
+// campaign to spending, never review approval alone.
+appRouter.get("/launch", requireAuth, async (req, res) => {
+  try {
+    const launch = await getPendingLaunch(pool, (req as AuthedRequest).userId!);
+    res.json({ launch });
+  } catch (e) {
+    console.error("[app] launch summary failed", e);
+    res.status(500).json({ error: "failed to load launch summary" });
+  }
+});
+
+appRouter.post("/launch/approve", requireAuth, async (req, res) => {
+  try {
+    const writer = buildLaunchWriter();
+    if (!writer) {
+      res.status(503).json({ error: "execution temporarily unavailable" });
+      return;
+    }
+    const result = await approveLaunch(pool, writer, (req as AuthedRequest).userId!);
+    if (result.outcome === "not_found") {
+      res.status(404).json({ error: "nothing pending launch" });
+      return;
+    }
+    res.json(result);
+  } catch (e) {
+    console.error("[app] launch approve failed", e);
+    res.status(500).json({ error: "failed to approve launch" });
   }
 });
 

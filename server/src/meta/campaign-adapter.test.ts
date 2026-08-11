@@ -217,3 +217,38 @@ describe("GraphCampaignAdapter creative handling (AIC-51)", () => {
     expect(body.has("object_story_spec")).toBe(false);
   });
 });
+
+describe("GraphCampaignAdapter launch gate (AIC-53)", () => {
+  it("getCampaignStatus reads effective_status", async () => {
+    const mock = vi.fn(async (_url: string) => ({ ok: true, status: 200, json: async () => ({ effective_status: "PAUSED" }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const status = await adapter.getCampaignStatus("meta_camp_1");
+
+    expect(status).toBe("PAUSED");
+    const [url] = mock.mock.calls[0] as [string];
+    expect(url).toContain("meta_camp_1?fields=effective_status");
+  });
+
+  it("activateCampaign always sends status=ACTIVE, never a caller-supplied value", async () => {
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ success: true }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await adapter.activateCampaign("meta_camp_1");
+
+    const [url, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("meta_camp_1");
+    const body = new URLSearchParams(String(init.body));
+    expect(body.get("status")).toBe("ACTIVE");
+  });
+
+  it("activateCampaign throws honestly (never a silent success) when Meta rejects it", async () => {
+    const mock = vi.fn(async () => ({ ok: false, status: 400, json: async () => ({ error: { message: "Cannot activate" } }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await expect(adapter.activateCampaign("meta_camp_1")).rejects.toThrow(/Cannot activate/);
+  });
+});
