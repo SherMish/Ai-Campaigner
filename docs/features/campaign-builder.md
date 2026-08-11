@@ -1,14 +1,25 @@
 # Campaign builder (P1 — create campaigns)
 
-**Status:** in progress. AIC-49 (recommended-defaults spec) is **live**.
-AIC-50 (Meta create-writes), AIC-51 (creative handling), AIC-52 (guided
-builder UI), and AIC-53 (launch gate) are **planned** — this doc's later
-sections fill in as each lands.
+**Status:** in progress. AIC-49 (recommended-defaults spec) and AIC-50 (Meta
+create-writes) are **built and unit/integration-tested**; AIC-50's live
+dogfood verification (create a real paused campaign on an account we
+control, verify, clean up) is still pending. AIC-51 (creative handling),
+AIC-52 (guided builder UI), and AIC-53 (launch gate) are **planned** — this
+doc's later sections fill in as each lands.
 
 **Source of truth:**
 - Recommended-defaults spec: `shared/src/recommended-defaults.ts`
+- Create-writes: `server/src/builder/types.ts` (the `BuilderWriter` interface
+  + params), `server/src/builder/campaign-create.ts` (`startBuilderCampaign`,
+  `buildCampaignOnMeta`), `server/src/meta/campaign-adapter.ts`
+  (`GraphCampaignAdapter.createCampaign/createAdSet/createAd`)
+- Idempotency: `server/src/execution/write-outbox.ts` (`applyIdempotent`,
+  `builderKey` — extends the AIC-13 outbox)
 
-**Lock-in tests:** `shared/src/recommended-defaults.test.ts`.
+**Lock-in tests:** `shared/src/recommended-defaults.test.ts`,
+`server/src/meta/campaign-adapter.test.ts` (created-PAUSED invariant),
+`server/src/execution/write-outbox.integration.test.ts` (`applyIdempotent`),
+`server/src/builder/campaign-create.integration.test.ts` (the full orchestration).
 
 ---
 
@@ -87,11 +98,78 @@ to wire this into right now — this is a forward reference: once the review
 UI grows detailed "rebuild to standard" copy, it should pull rationale
 strings from here rather than re-writing them.
 
-### Planned: AIC-50–53
+### Meta create-writes (AIC-50)
 
-- **AIC-50 — Meta create-writes**: `createCampaign`/`createAdSet`/`createAd`
-  on the adapter + `ExecWriter`, always created `PAUSED`, idempotent via the
-  AIC-13 outbox pattern, with defined partial-failure reconcile behavior.
+The write surface the builder needs: `createCampaign` / `createAdSet` /
+`createAd` on `GraphCampaignAdapter`, implementing a new `BuilderWriter`
+interface (`builder/types.ts`) — kept **separate from `ExecWriter`**
+(safe-executor.ts): these create new objects, they never modify an existing
+recommendation's target, so folding them into the recommendation-approval
+interface would be the wrong shape. `SafeExecutor`/recommendations are
+untouched by this ticket.
+
+**Hard rule, enforced in the adapter, not configurable by a caller:** every
+create sends `status=PAUSED`. There is no code path that can create a live
+object — `campaign-adapter.test.ts` pins this directly against the real
+field names sent to Meta.
+
+**Idempotent via the AIC-13 outbox, extended, not duplicated** (migration
+020 widens `meta_write_outbox.kind` to include the three create kinds + adds
+a `result` column for the created object's real Meta id).
+`WriteOutbox.applyIdempotent(entry, writer)` is the new synchronous
+create-write path (`drainOnce` stays as-is for the existing async
+budget/pause writes — a create can't drain in arbitrary background order
+since ad-set creation needs the campaign's *real* Meta id, and ad creation
+needs the ad set's): check for an already-`succeeded` row for this key first
+(read its remembered result, skip calling Meta again) → atomically claim the
+row (`pending`→`in_progress`, so a concurrent double-submit's loser backs off
+instead of racing to create a second object) → call the writer → record the
+result or the failure.
+
+**Orchestration** (`builder/campaign-create.ts`):
+`startBuilderCampaign(pool, customerId, adAccountId)` creates (or, if one
+already exists unlinked, reuses) the **local `managed_campaigns` shell row**
+every create-write anchors to — `status='under_review'`,
+`meta_campaign_id=NULL` until every step lands. `buildCampaignOnMeta(pool,
+writer, input)` walks campaign → each ad set → each ad, computing a
+deterministic `builderKey(localCampaignId, kind, clientKey)` idempotency key
+per object, logging an `action_history` row per successful create
+(`recommendation_id=NULL`, `human_involved=true`), and — only once every
+step has landed — updates the local row with the real `meta_campaign_id`
+and the agreed budget. Until that final UPDATE, `listEligibleForGeneration`
+(generation.ts) can't see the campaign at all (it requires
+`meta_campaign_id IS NOT NULL`), so a campaign mid-build is never evaluated
+by the engine.
+
+**Partial-failure reconcile = resume, not cleanup.** If step N throws, the
+error propagates and the campaign+every-prior-step's PAUSED objects are left
+exactly as they are — they are the resume point, not orphans. Re-calling
+`buildCampaignOnMeta` with the same `localCampaignId` and the same
+`clientKey`s per ad set/ad recomputes the same idempotency keys, finds the
+already-`succeeded` ones, skips re-creating them, and continues from the
+first step that hasn't landed yet.
+
+**Field-shape confidence.** Campaign fields (name/objective/status/budget/
+special_ad_categories/bid_strategy) mirror fields this codebase already
+reads and writes elsewhere — well-verified. The ad-set WhatsApp-destination
+fields (`optimization_goal=CONVERSATIONS`, `destination_type=WHATSAPP`,
+`promoted_object={page_id}`) are this adapter's best-effort reading of
+Meta's Click-to-WhatsApp API and are **not yet live-verified** the way
+`setDailyBudget`/`pauseAdSet` were (AIC-1/36's reversible dogfood tests).
+The AC's "dogfood on an account we control" step is what actually verifies
+this shape — treat that live test, not this code, as the real confirmation.
+
+Tests: `campaign-adapter.test.ts` (created-PAUSED + correct endpoint/field
+shape per object, mocked `fetch`), `write-outbox.integration.test.ts`
+(`applyIdempotent`: resume-without-recreating, failure-then-retry, and the
+concurrent-claim race is blocked), `campaign-create.integration.test.ts`
+(the full orchestration: shell-row idempotency, every object PAUSED +
+action_history logged + the campaign linked on success, a mid-build failure
+resumes without recreating prior steps, a full re-run after success makes no
+new Meta calls at all).
+
+### Planned: AIC-51–53
+
 - **AIC-51 — Creative handling**: upload image/video or select an existing
   IG/FB post → a Meta ad creative; per-ad copy; recommends 3–5 separate ads.
 - **AIC-52 — Guided builder UI**: the step flow implementing "recommended +

@@ -6,6 +6,41 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-11 — Meta create-writes: createCampaign/createAdSet/createAd, always PAUSED (AIC-50)
+The builder's write surface. New `BuilderWriter` interface
+(`server/src/builder/types.ts`), implemented by `GraphCampaignAdapter`
+alongside its existing `MetaReader`/`ExecWriter`/`DeliveryReader` roles —
+deliberately kept off `ExecWriter` itself, since create-writes aren't part of
+the recommendation-approval flow. Every create hardcodes `status=PAUSED`, no
+caller-controllable path to a live object — pinned directly with a mocked-
+fetch unit test (`campaign-adapter.test.ts`), the first `GraphCampaignAdapter`
+method to get one (every prior write was live-dogfooded only).
+
+Idempotency extends the AIC-13 outbox rather than duplicating it: migration
+020 widens `meta_write_outbox.kind` for the three create kinds + adds a
+`result` column. New `WriteOutbox.applyIdempotent` is a synchronous
+claim-then-create-or-resume path (atomic `pending`→`in_progress` claim
+blocks a concurrent double-submit from creating two objects) — `drainOnce`
+is untouched for the existing async budget/pause writes. New
+`server/src/builder/campaign-create.ts`: `startBuilderCampaign` creates (or
+resumes) the local `managed_campaigns` shell row every create-write anchors
+to (`status='under_review'`, `meta_campaign_id=NULL` until every step
+lands — invisible to `listEligibleForGeneration` until then);
+`buildCampaignOnMeta` walks campaign→ad-sets→ads with a deterministic
+idempotency key per object, logs `action_history` per success, and links the
+local row on completion. A mid-build failure is reconcilable by resuming the
+same call with the same keys — already-created PAUSED objects are the
+resume point, never orphans to clean up.
+
+**Honest field-shape caveat**: the ad-set WhatsApp-destination fields
+(`optimization_goal`/`destination_type`/`promoted_object`) are a best-effort
+reading of Meta's API, not yet live-verified the way `setDailyBudget`/
+`pauseAdSet` were — the AC's own "dogfood on an account we control" step is
+what actually confirms this shape, pending as of this entry. Tests: 4 unit +
+10 integration (`write-outbox.integration.test.ts` +4,
+`campaign-create.integration.test.ts` new file, 4 tests). Doc:
+`campaign-builder.md`.
+
 ### 2026-08-10 — Recommended-defaults spec (AIC-49), P1 Campaign Builder begins
 Kicks off the new P1 phase: creating a customer's first campaign in-product
 instead of a founder walking them through Ads Manager by hand (what actually

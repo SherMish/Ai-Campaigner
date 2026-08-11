@@ -1,6 +1,7 @@
 import type { LiveCampaignState, MetaReader, ExecWriter } from "../execution/safe-executor.js";
 import { normalizeAdSet, isProblem, type AdSetHealth, type DeliveryReader, type RawAdSetDelivery } from "./delivery-health.js";
 import { normalizeAdSetMeta, type AdSetMeta, type RawAdSetMeta } from "./audience-label.js";
+import type { BuilderWriter, CreateCampaignParams, CreateAdSetParams, CreateAdParams } from "../builder/types.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
 // Marketing API. Budgets are read/written in the account currency's MINOR unit,
@@ -11,7 +12,7 @@ import { normalizeAdSetMeta, type AdSetMeta, type RawAdSetMeta } from "./audienc
 // one, so setDailyBudget targets the right object.
 const BASE = "https://graph.facebook.com";
 
-export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader {
+export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter {
   private budgetObj = new Map<string, string>(); // campaignId → budget object id
 
   constructor(
@@ -36,6 +37,28 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     });
     const body = (await r.json().catch(() => ({}))) as Record<string, unknown>;
     if (!r.ok) throw new Error(`POST ${id} → ${r.status} ${JSON.stringify(body.error ?? body)}`);
+  }
+
+  // Create a new object under `parentId` (e.g. an ad account, campaign, or ad
+  // set) and return its real Meta id. Meta's create endpoints return
+  // `{ id: "..." }` on success. Fields are sent as JSON-string values in the
+  // form body, matching how Meta expects nested params (targeting, creative,
+  // special_ad_categories) on these endpoints.
+  private async postCreate(parentId: string, edge: string, fields: Record<string, unknown>): Promise<string> {
+    const body = new URLSearchParams();
+    for (const [k, v] of Object.entries(fields)) {
+      body.set(k, typeof v === "string" ? v : JSON.stringify(v));
+    }
+    const r = await fetch(`${BASE}/${this.ver}/${parentId}/${edge}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+    });
+    const json = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!r.ok || !json.id) {
+      throw new Error(`POST ${parentId}/${edge} → ${r.status} ${JSON.stringify(json.error ?? json)}`);
+    }
+    return String(json.id);
   }
 
   async getCampaignState(metaCampaignId: string): Promise<LiveCampaignState> {
@@ -126,5 +149,60 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       `${metaCampaignId}/adsets?fields=id,name,is_dynamic_creative,targeting{age_min,age_max,genders,geo_locations}&limit=100`,
     );
     return ((body.data as RawAdSetMeta[]) ?? []).map(normalizeAdSetMeta);
+  }
+
+  // ── Create-writes (AIC-50, the builder) ────────────────────────────────────
+  // Every create is status=PAUSED — the builder NEVER produces a live, spending
+  // object directly (the hard rule this ticket exists to enforce). Activation
+  // is a separate, approved write (AIC-53), never something a create call does.
+  //
+  // Field-shape confidence note: campaign create (name/objective/status/budget/
+  // special_ad_categories) mirrors the same fields already read+written
+  // elsewhere in this file, so those are well-verified. The ad-set WhatsApp-
+  // destination fields (optimization_goal/destination_type/promoted_object)
+  // are this adapter's best-effort reading of Meta's Click-to-WhatsApp API —
+  // NOT yet live-verified the way setDailyBudget/pauseAdSet were (AIC-1/36
+  // dogfood). Treat the first live create-write test on an account we control
+  // as the real verification of this specific shape, not this code review.
+
+  async createCampaign(params: CreateCampaignParams): Promise<string> {
+    return this.postCreate(params.adAccountId, "campaigns", {
+      name: params.name,
+      objective: "OUTCOME_LEADS",
+      status: "PAUSED",
+      buying_type: "AUCTION",
+      special_ad_categories: params.specialAdCategories,
+      daily_budget: String(params.dailyBudgetAgorot),
+      bid_strategy: params.bidStrategy,
+    });
+  }
+
+  // Meta creates ad sets on the AD ACCOUNT's edge (not the campaign's) — the
+  // parent is identified by campaign_id IN the body, same pattern as createAd.
+  async createAdSet(params: CreateAdSetParams): Promise<string> {
+    return this.postCreate(params.adAccountId, "adsets", {
+      name: params.name,
+      campaign_id: params.metaCampaignId,
+      status: "PAUSED",
+      billing_event: "IMPRESSIONS",
+      optimization_goal: "CONVERSATIONS",
+      destination_type: "WHATSAPP",
+      promoted_object: { page_id: params.pageId },
+      targeting: {
+        age_min: params.targeting.ageMin,
+        age_max: params.targeting.ageMax,
+        genders: params.targeting.genders,
+        geo_locations: { countries: params.targeting.countries },
+      },
+    });
+  }
+
+  async createAd(params: CreateAdParams): Promise<string> {
+    return this.postCreate(params.adAccountId, "ads", {
+      name: params.name,
+      adset_id: params.metaAdSetId,
+      status: "PAUSED",
+      creative: { creative_id: params.creativeId },
+    });
   }
 }

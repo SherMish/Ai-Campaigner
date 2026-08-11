@@ -1,6 +1,7 @@
 import type pg from "pg";
 
-export type WriteKind = "set_daily_budget" | "pause_ad";
+export type WriteKind = "set_daily_budget" | "pause_ad" | "create_campaign" | "create_ad_set" | "create_ad";
+export const CREATE_WRITE_KINDS: readonly WriteKind[] = ["create_campaign", "create_ad_set", "create_ad"];
 
 export interface OutboxEntry {
   idempotencyKey: string; // deterministic per intended change
@@ -20,6 +21,13 @@ export interface DrainSummary {
   drained: number;
   succeeded: number;
   failed: number;
+}
+
+// Creates a new Meta object and returns its id — NOT naturally idempotent on
+// its own (calling it twice makes two objects), unlike MetaWriter's absolute-
+// set ops. applyIdempotent() is what makes it safe to call repeatedly.
+export interface CreatingWriter {
+  create(kind: WriteKind, payload: Record<string, unknown>): Promise<{ metaId: string }>;
 }
 
 const MAX_ATTEMPTS = 5;
@@ -100,11 +108,76 @@ export class WriteOutbox {
       client.release();
     }
   }
+
+  // The builder's create-write path (AIC-50): synchronous, because the caller
+  // needs the created object's real Meta id immediately to build the NEXT
+  // step's payload (an ad set needs its campaign's real id; an ad needs its
+  // ad set's real id) — unlike budget/pause writes, a create can't drain in
+  // arbitrary background order. Idempotent by construction: if a row for this
+  // key already succeeded (an earlier attempt got this far before a crash, a
+  // timeout, or a plain retry), its remembered `result` is returned WITHOUT
+  // calling Meta again — this is what makes "the builder died mid-create, or
+  // the request retried" safe, and what makes a step's already-created PAUSED
+  // object a resume point rather than an orphan to clean up.
+  async applyIdempotent(entry: OutboxEntry, writer: CreatingWriter): Promise<string> {
+    const settled = await this.checkSettled(entry.idempotencyKey);
+    if (settled) return settled;
+
+    await this.enqueue(entry); // no-op if a row (any status) already exists
+
+    // Atomically claim it: only one concurrent caller can flip pending→in_progress
+    // (Postgres locks the row for the UPDATE), so a double-submit or a client
+    // retry racing an in-flight attempt can never both call Meta's create
+    // endpoint — the loser backs off instead of making a second object.
+    const claim = await this.pool.query(
+      `UPDATE meta_write_outbox SET status = 'in_progress' WHERE idempotency_key = $1 AND status = 'pending' RETURNING id`,
+      [entry.idempotencyKey],
+    );
+    if (claim.rows.length === 0) {
+      const settledNow = await this.checkSettled(entry.idempotencyKey);
+      if (settledNow) return settledNow;
+      throw new Error(`create already in progress for ${entry.idempotencyKey} — retry shortly`);
+    }
+
+    try {
+      const { metaId } = await writer.create(entry.kind, entry.payload);
+      await this.pool.query(
+        `UPDATE meta_write_outbox SET status = 'succeeded', result = $2, attempts = attempts + 1 WHERE idempotency_key = $1`,
+        [entry.idempotencyKey, JSON.stringify({ metaId })],
+      );
+      return metaId;
+    } catch (err) {
+      await this.pool.query(
+        `UPDATE meta_write_outbox
+         SET status = 'pending', attempts = attempts + 1, last_error = $2,
+             next_attempt_at = now() + ($3 || ' milliseconds')::interval
+         WHERE idempotency_key = $1`,
+        [entry.idempotencyKey, (err as Error).message, String(BACKOFF_MS)],
+      );
+      throw err;
+    }
+  }
+
+  private async checkSettled(idempotencyKey: string): Promise<string | null> {
+    const { rows } = await this.pool.query<{ status: string; result: { metaId: string } | null }>(
+      `SELECT status, result FROM meta_write_outbox WHERE idempotency_key = $1`,
+      [idempotencyKey],
+    );
+    return rows[0]?.status === "succeeded" && rows[0].result ? rows[0].result.metaId : null;
+  }
 }
 
 // Deterministic idempotency key for a recommendation's intended change.
 export function outboxKey(recommendationId: string, kind: WriteKind, targetId: string): string {
   return `${recommendationId}:${kind}:${targetId}`;
+}
+
+// Deterministic idempotency key for a builder create-write (AIC-50) — no
+// recommendation is involved, so it's keyed on the LOCAL managed_campaigns
+// shell row (created before any Meta object exists) + a client-supplied key
+// stable across a resumed/retried submission (e.g. "adset-1", "adset-1-ad-2").
+export function builderKey(localCampaignId: string, kind: WriteKind, clientKey: string): string {
+  return `${localCampaignId}:${kind}:${clientKey}`;
 }
 
 // Test double that records applied writes and can be told to fail.

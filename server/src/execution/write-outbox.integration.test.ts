@@ -3,7 +3,7 @@
 // backoff-on-failure.
 import { describe, it, expect, afterAll } from "vitest";
 import { pool } from "../db/pool.js";
-import { WriteOutbox, FakeMetaWriter, outboxKey } from "./write-outbox.js";
+import { WriteOutbox, FakeMetaWriter, outboxKey, builderKey, type CreatingWriter, type WriteKind } from "./write-outbox.js";
 
 const HAS_DB = !!process.env.DATABASE_URL;
 const d = HAS_DB ? describe : describe.skip;
@@ -64,6 +64,61 @@ d("WriteOutbox (DB)", () => {
     const second = await outbox.drainOnce(writer);
     expect(second.succeeded).toBe(1);
     expect(writer.applied).toHaveLength(1);
+    await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
+  });
+
+  // applyIdempotent (AIC-50): the builder's synchronous create-write path.
+  class CountingCreatingWriter implements CreatingWriter {
+    public calls = 0;
+    public failNext = 0;
+    async create(_kind: WriteKind, _payload: Record<string, unknown>): Promise<{ metaId: string }> {
+      this.calls++;
+      if (this.failNext > 0) { this.failNext--; throw new Error("simulated create failure"); }
+      return { metaId: `meta_${this.calls}` };
+    }
+  }
+
+  it("applyIdempotent creates once, then resumes from the remembered result on a repeat call (no second Meta call)", async () => {
+    const { campaignId, customerId } = await makeCampaign();
+    const outbox = new WriteOutbox(pool);
+    const writer = new CountingCreatingWriter();
+    const entry = { idempotencyKey: builderKey(campaignId, "create_campaign", "campaign"), campaignId, recommendationId: null, kind: "create_campaign" as const, payload: { name: "x" } };
+
+    const first = await outbox.applyIdempotent(entry, writer);
+    const second = await outbox.applyIdempotent(entry, writer); // simulates a retry/resume
+
+    expect(second).toBe(first); // same real Meta id both times
+    expect(writer.calls).toBe(1); // Meta was only ever called once — no duplicate object
+    await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
+  });
+
+  it("applyIdempotent surfaces a failure and a retry (after the failure) succeeds and is remembered", async () => {
+    const { campaignId, customerId } = await makeCampaign();
+    const outbox = new WriteOutbox(pool);
+    const writer = new CountingCreatingWriter();
+    writer.failNext = 1;
+    const entry = { idempotencyKey: builderKey(campaignId, "create_ad_set", "adset-1"), campaignId, recommendationId: null, kind: "create_ad_set" as const, payload: {} };
+
+    await expect(outbox.applyIdempotent(entry, writer)).rejects.toThrow("simulated create failure");
+    const resumed = await outbox.applyIdempotent(entry, writer); // the customer/builder resubmits
+    expect(resumed).toBe("meta_2"); // second attempt succeeded
+    expect(writer.calls).toBe(2); // one failed + one succeeded — never more
+    await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
+  });
+
+  it("a concurrent double-submit never calls Meta twice — the loser backs off instead of racing", async () => {
+    const { campaignId, customerId } = await makeCampaign();
+    const outbox = new WriteOutbox(pool);
+    const writer = new CountingCreatingWriter();
+    const entry = { idempotencyKey: builderKey(campaignId, "create_ad", "adset-1-ad-1"), campaignId, recommendationId: null, kind: "create_ad" as const, payload: {} };
+
+    // Enqueue first (simulating the first request having already claimed the
+    // row), then a "concurrent" second attempt must see it as in-flight.
+    await outbox.enqueue(entry);
+    await pool.query(`UPDATE meta_write_outbox SET status = 'in_progress' WHERE idempotency_key = $1`, [entry.idempotencyKey]);
+
+    await expect(outbox.applyIdempotent(entry, writer)).rejects.toThrow(/already in progress/);
+    expect(writer.calls).toBe(0); // never called Meta while another attempt owns the row
     await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
   });
 });
