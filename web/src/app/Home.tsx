@@ -127,30 +127,32 @@ function LeadsGraph({ daily }: { daily: DailyPoint[] }) {
     }
   }
   const max = Math.max(1, ...weeks.map((w) => w.leads));
-  const hasAny = weeks.some((w) => w.leads > 0);
+  const total = weeks.reduce((s, w) => s + w.leads, 0);
+  const hasAny = total > 0;
 
   return (
     <div className="card">
-      <b style={{ fontSize: "0.98rem" }}>{h.graphTitle}</b>
+      <div className="row between" style={{ flexWrap: "wrap", alignItems: "baseline", gap: 10 }}>
+        <b style={{ fontSize: "0.98rem" }}>{h.graphTitle}</b>
+        {hasAny && <span className="bars-total">{total} {h.graphTotalSuffix}</span>}
+      </div>
       {!hasAny ? (
         <p className="muted" style={{ marginTop: 10, fontSize: "0.88rem" }}>{h.graphEmpty}</p>
       ) : (
-        <div className="row" style={{ alignItems: "flex-end", gap: 10, height: 96, marginTop: 14 }}>
+        <div className="bars">
           {weeks.map((w, i) => (
-            <div key={i} className="stack" style={{ flex: 1, alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: "0.78rem", fontWeight: 700 }}>{w.leads}</span>
+            <div key={i} className="col">
               <div
+                className="bar"
                 title={`${h.graphWeekPrefix} ${w.label}: ${w.leads}`}
                 style={{
-                  width: "100%",
-                  // Always a visible sliver so an empty week reads as "zero",
-                  // not as a missing bar.
-                  height: `${Math.max(4, Math.round((w.leads / max) * 64))}px`,
-                  borderRadius: 6,
-                  background: w.leads > 0 ? "var(--orange)" : "var(--line)",
+                  // min-height in CSS keeps an empty week a visible sliver, so
+                  // "no leads" reads as zero rather than a missing bar.
+                  height: `${Math.round((w.leads / max) * 100)}%`,
+                  background: w.leads > 0 ? "var(--orange)" : "rgba(23,23,23,.12)",
                 }}
               />
-              <span className="muted" style={{ fontSize: "0.68rem", whiteSpace: "nowrap" }}>{w.label}</span>
+              <span className="lbl">{w.label}</span>
             </div>
           ))}
         </div>
@@ -223,7 +225,12 @@ export function Home() {
 
   return (
     <div className="wrap page dash">
-      <h1 className="dash-title">{h.title}</h1>
+      {/* Design reference: the range switcher sits inline with the page
+          title, not stacked below the hero. */}
+      <div className="dash-head">
+        <h1 className="dash-title">{h.title}</h1>
+        <RangeSwitcher value={range} onChange={setRange} />
+      </div>
 
       <div className="dash-grid">
         {/* MAIN column */}
@@ -243,12 +250,6 @@ export function Home() {
 
           {launchOpen && <LaunchModal onClose={() => setLaunchOpen(false)} />}
 
-          {/* ONE explicit window, chosen by the customer. This replaced a
-              "today card + separate 7-day KPI block", which showed two sets
-              of numbers for the same campaign and read as a contradiction.
-              The engine still evaluates on complete days regardless of what's
-              selected here — see the no-rec note below. */}
-          <RangeSwitcher value={range} onChange={setRange} />
           <div className="grid-3">
             <div className="kpi">
               <b>{cpl === null ? L.none : shekels(cpl)}</b>

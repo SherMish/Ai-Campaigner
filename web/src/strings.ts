@@ -467,6 +467,7 @@ export const strings = {
         graphTitle: "פניות לפי שבוע",
         graphEmpty: "עדיין אין מספיק נתונים לגרף.",
         graphWeekPrefix: "שבוע",
+        graphTotalSuffix: "סה״כ",
         states: {
           ok: { badge: "פעיל", title: "הכל עובד כרגיל", body: "הקמפיין פעיל ואין כרגע משהו שדורש את תשומת הלב שלך." },
           rec: { badge: "מחכה לך", title: "יש לנו המלצה אחת", body: "מצאנו שינוי שיכול לשפר את הקמפיין ומחכה לאישור שלך.", cta: "לצפייה בהמלצה" },

@@ -345,19 +345,37 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 /* The nested audience/ad blocks stay cream so they read as INSIDE a card. */
 .dash .card .soft { background: var(--cream-2); }
 
-/* Range switcher — a cream track with the selected option as a white chip. */
+/* Range switcher — design reference: a tinted track with the selected option
+   as a white chip, sitting inline with the page title. */
 .range-switch {
-  display: inline-flex; gap: 4px; padding: 4px;
-  background: var(--cream-2); border-radius: 100px; align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px;
+  background: rgba(23, 23, 23, 0.06); border-radius: 100px;
 }
 .range-opt {
-  min-height: 36px; padding: 6px 16px; border: 0; border-radius: 100px;
+  min-height: 36px; padding: 8px 16px; border: 0; border-radius: 100px;
   background: transparent; color: rgba(23, 23, 23, 0.6);
-  font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+  font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer;
   transition: background .15s, color .15s;
 }
 .range-opt:hover { color: var(--ink); }
-.range-opt.on { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(23, 23, 23, 0.08); }
+.range-opt.on { background: #fff; color: var(--ink); }
+
+/* Title row: heading on one side, range switcher on the other. */
+.dash-head {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  justify-content: space-between; gap: 14px; margin-bottom: 18px;
+}
+.dash-head .dash-title { margin: 0; }
+
+/* Leads-per-week bars (design reference): rounded top only, mono labels. */
+.bars { display: flex; align-items: flex-end; gap: 10px; height: 96px; margin-top: 20px; }
+.bars .col {
+  flex: 1 1 0; min-width: 0; height: 100%;
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 8px;
+}
+.bars .bar { width: 100%; min-height: 4px; border-radius: 6px 6px 0 0; }
+.bars .lbl { font-family: var(--mono); font-size: 0.69rem; opacity: 0.5; white-space: nowrap; }
+.bars-total { font-family: var(--mono); font-size: 0.75rem; opacity: 0.5; }
 
 /* Lead-quality ask — the one deliberately loud card (design reference):
    ink background, cream text, orange eyebrow + primary action.

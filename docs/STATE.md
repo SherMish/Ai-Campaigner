@@ -6,6 +6,16 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Range switcher + weekly graph: exact design match
+Follow-up to the range-switcher ship below. The first pass approximated the
+switcher's look; corrected against the extracted reference markup: track
+`rgba(23,23,23,.06)`, selected chip plain white with no shadow, inline with
+the page title instead of stacked below the hero. The weekly graph now shows
+its total in a mono-font header label and uses top-rounded-only bars, matching
+the reference exactly instead of an approximation. The lead-quality card's
+black styling stays conditional on the "asking" state (matches the reference,
+which is also white in its saved/caught-up states) — confirmed, not changed.
+
 ### 2026-08-12 — One range switcher replaces the today/7-day split; per-day ingestion
 "Very very confusing" — the dashboard showed a "today" card next to separate
 7-day KPIs, two sets of numbers for one campaign. Replaced with a single
