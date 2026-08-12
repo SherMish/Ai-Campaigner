@@ -50,7 +50,7 @@ export function Sidebar() {
 
   return (
     <aside className="ap-side">
-      <div className="ap-brand"><img src="/favicon.png" alt="Ads Manager" className="ap-brand-icon" /></div>
+      <div className="ap-brand"><img src="/favicon.png" alt="" className="ap-brand-icon" />Ads Manager</div>
 
       <div className="ap-nav-section">
         <div className="ap-nav-label">{a.nav.sectionManage}</div>
