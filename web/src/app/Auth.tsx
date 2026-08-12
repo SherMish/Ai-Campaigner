@@ -45,7 +45,16 @@ export function Signup() {
         <Field label={a.auth.name} value={name} onChange={setName} />
         <Field label={a.auth.email} type="email" value={email} onChange={setEmail} />
         <Field label={a.auth.password} type="password" value={password} onChange={setPassword} />
-        <label className="check"><input type="checkbox" defaultChecked />{a.auth.terms}</label>
+        <label className="check">
+          <input type="checkbox" defaultChecked />
+          <span>
+            {a.auth.terms.pre}
+            <a className="link" href="/terms.html" target="_blank" rel="noopener noreferrer">{a.auth.terms.tos}</a>
+            {a.auth.terms.mid}
+            <a className="link" href="/privacy.html" target="_blank" rel="noopener noreferrer">{a.auth.terms.privacy}</a>
+            {a.auth.terms.post}
+          </span>
+        </label>
         <ErrorNote msg={err} />
         <button className="btn btn-primary block" type="submit" disabled={busy}>{a.auth.createAccount}</button>
       </form>

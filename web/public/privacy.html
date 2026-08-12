@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>מדיניות פרטיות — Ads Manager</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="robots" content="noindex" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --cream: #f7f2ea;
+        --page: #efe9de;
+        --ink: #171717;
+        --orange: #ff5a36;
+        --line: rgba(23, 23, 23, 0.12);
+        --muted: rgba(23, 23, 23, 0.58);
+        --maxw: 780px;
+        --mono: "IBM Plex Mono", ui-monospace, monospace;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Rubik, system-ui, "Segoe UI", Arial, sans-serif;
+        background: var(--page);
+        color: var(--ink);
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: inherit; }
+      .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+
+      header {
+        position: sticky; top: 0; z-index: 10;
+        background: color-mix(in srgb, var(--page) 88%, transparent);
+        backdrop-filter: blur(8px); border-bottom: 1px solid var(--line);
+      }
+      .nav { display: flex; align-items: center; justify-content: space-between; height: 74px; max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+      .brand {
+        display: inline-flex; align-items: center; gap: 9px;
+        font-size: 1.5rem; font-weight: 800; letter-spacing: -0.03em; direction: ltr;
+        text-decoration: none;
+      }
+      .brand-icon { width: 26px; height: 26px; display: block; }
+
+      main { padding: 56px 0 90px; }
+      .eyebrow {
+        font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.14em;
+        color: var(--orange); margin: 0 0 14px;
+      }
+      h1 { font-size: clamp(1.8rem, 4vw, 2.4rem); font-weight: 800; letter-spacing: -0.02em; margin: 0 0 10px; }
+      .updated {
+        display: inline-block; font-family: var(--mono); font-size: 0.8rem;
+        background: #fff; border: 1px solid var(--line); border-radius: 999px;
+        padding: 6px 14px; margin-bottom: 30px;
+      }
+      .note {
+        background: #fff; border: 1px solid var(--line); border-inline-start: 4px solid var(--orange);
+        border-radius: 14px; padding: 20px 22px; margin-bottom: 40px; color: var(--muted); font-size: 0.95rem;
+      }
+      .warn {
+        background: #fdeede; border: 1px solid rgba(224,138,43,0.35); border-radius: 14px;
+        padding: 16px 20px; margin: 18px 0; color: #a05a12; font-size: 0.9rem;
+      }
+      h2 {
+        font-size: 1.25rem; font-weight: 800; letter-spacing: -0.01em;
+        margin: 40px 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--line);
+      }
+      p { margin: 0 0 14px; }
+      ol { margin: 0 0 14px; padding-inline-start: 22px; }
+      ol > li { margin-bottom: 10px; }
+      .muted { color: var(--muted); }
+      a.link { color: var(--orange); font-weight: 600; }
+      a.link:hover { text-decoration: underline; }
+
+      footer { background: var(--ink); color: var(--cream); padding: 40px 0; margin-top: 40px; }
+      .foot { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; align-items: center; max-width: 1180px; margin: 0 auto; padding: 0 24px; font-size: 0.9rem; }
+      .foot a { color: rgba(247, 242, 234, 0.8); }
+      .foot a:hover { color: var(--orange); }
+      .foot-links { display: flex; gap: 22px; flex-wrap: wrap; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="nav">
+        <a href="/" class="brand"><img src="/favicon.png" alt="" class="brand-icon" />Ads Manager</a>
+      </div>
+    </header>
+
+    <main>
+      <div class="wrap">
+        <p class="eyebrow">מסמך משפטי</p>
+        <h1>מדיניות פרטיות — Ads Manager</h1>
+        <p class="muted">מדיניות הגנת הפרטיות, אבטחת המידע ושימוש בנתוני Meta API</p>
+        <span class="updated">תאריך עדכון אחרון: 11 באוגוסט 2026</span>
+
+        <div class="note">
+          מדיניות פרטיות זו מפרטת כיצד מערכת Ads Manager (להלן: "המערכת" או "המפעילה") אוספת, מעבדת,
+          מאבטחת ומוחקת נתונים המתקבלים ממשתמשי המערכת וממשקי ה-API של Meta. המערכת מחויבת להגנה מלאה
+          על הפרטיות ולעמידה בדרישות Meta Developer Policies והדין החל.
+        </div>
+
+        <h2>1. איסוף נתונים וסוגי המידע הנאסף</h2>
+        <ol>
+          <li>
+            <b>פרטי מזהים וגישה:</b> מזהי חשבון פרסום (Ad Account IDs), מזהי Business Manager, ו-Access
+            Tokens שמתקבלים בעת חיבור המערכת דרך פרוטוקול OAuth.
+          </li>
+          <li>
+            <b>נתוני ביצועים וטלמטריה (Analytics &amp; Insights):</b> נתוני קמפיינים, הצעות מחיר, תקציבים,
+            נתוני המרות, CTR, CPM, ROAS, ונתוני אנליטיקה נוספים המגיעים מ-Meta Insights API.
+          </li>
+          <li>
+            <b>איסוף מידע מזהה אישי (PII):</b> המערכת <b>אינה</b> אוספת, שומרת או מעבדת מידע מזהה אישי של
+            משתמשי קצה של מטא (כגון שמות פרטיים, מספרי טלפון, כתובות דוא"ל או מידע פרופיל אישי).
+          </li>
+        </ol>
+
+        <h2>2. הגבלת השימוש בנתונים (Data Use Restrictions)</h2>
+        <ol>
+          <li>
+            <b>שימוש ייעודי בלבד:</b> המערכת משתמשת בנתוני Meta API אך ורק לצורך מתן השירותים המפורשים,
+            האוטומציה והאופטימיזציה עבור המשתמש בתוך אפליקציית Ads Manager.
+          </li>
+          <li>
+            <b>איסור מכירה או שיתוף:</b> המערכת אינה מוכרת, משכירה, מעבירה או משתפת נתוני API של Meta עם
+            צדדים שלישיים, רשתות פרסום או ברוקרי נתונים.
+          </li>
+          <li>
+            <b>הגנה על מודלי AI:</b> המערכת אינה משתמשת בנתוני ה-API של המשתמש לצורך אימון מודלי AI
+            כלליים לשימוש משתמשים אחרים.
+          </li>
+        </ol>
+
+        <h2>3. אבטחת מידע (Data Security)</h2>
+        <ol>
+          <li>
+            המערכת מופעלת באמצעי אבטחה טכנולוגיים וארגוניים מתקדמים (הצפנת נתונים במעבר ובתנועה —
+            Encryption in Transit/Rest) כדי להגן על הנתונים מפני גישה בלתי מורשית, דליפה או שימוש לרעה.
+          </li>
+          <li>גישה לנתונים מוגבלת אך ורק לרכיבים האוטומטיים במערכת הנדרשים לתפעול השירות.</li>
+        </ol>
+
+        <h2>4. מחיקת נתונים וזכות להישכח (Data Deletion Instructions)</h2>
+        <ol>
+          <li>
+            <b>זכות המשתמש למחיקה:</b> בהתאם למדיניות המפתחים של Meta, המשתמש רשאי לבקש את מחיקת כל
+            הנתונים שנאספו אודותיו ואודות חשבון הפרסום שלו בכל עת.
+          </li>
+          <li>
+            <b>מנגנון מחיקה אוטומטי (Data Deletion Callback):</b> מחיקת הנתונים תתבצע באופן אוטומטי עם
+            הסרת האפליקציה מחשבון ה-Meta על ידי המשתמש, באמצעות Data Deletion Request Callback מורשה.
+            בנוסף, המשתמש יכול לשלוח בקשת מחיקה יזומה לכתובת הדוא"ל:
+            <a class="link" href="mailto:hello@ads-manager.co.il">hello@ads-manager.co.il</a>.
+          </li>
+          <li>
+            <b>לוח זמנים למחיקה:</b> עם קבלת הבקשה או ניתוק האפליקציה, המערכת תמחק את כל ה-Access Tokens,
+            נתוני הטלמטריה וההיסטוריה הביצועית הנקשרים לחשבון בתוך 30 ימים.
+          </li>
+        </ol>
+
+        <div class="warn">
+          <b>הערת תאימות Meta API:</b> סעיף זה ומנגנון המחיקה המפורט בו מבטיחים עמידה מלאה בדרישות ה-App
+          Review וה-Data Privacy של Meta.
+        </div>
+
+        <h2>5. יצירת קשר בנושאי פרטיות</h2>
+        <p>
+          בכל שאלה, בקשה למחיקת נתונים או בקשה להבהרה בנוגע למדיניות פרטיות זו, ניתן לפנות לממונה על
+          הפרטיות במערכת בכתובת הדוא"ל:
+          <a class="link" href="mailto:hello@ads-manager.co.il">hello@ads-manager.co.il</a>
+        </p>
+
+        <p class="muted" style="margin-top: 40px; font-family: var(--mono); font-size: 0.8rem">
+          Ads Manager Privacy Policy · Compliant with Meta Platform &amp; Developer Policies
+        </p>
+      </div>
+    </main>
+
+    <footer>
+      <div class="foot">
+        <span>© Ads Manager</span>
+        <nav class="foot-links">
+          <a href="/">בית</a>
+          <a href="/terms.html">תנאי שימוש</a>
+          <a href="/login">כניסה</a>
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>

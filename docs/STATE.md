@@ -6,6 +6,18 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Real terms-of-use + privacy-policy pages, linked from footer + signup
+Built `web/public/terms.html` and `web/public/privacy.html` from the real
+lawyer-provided documents (not placeholder text), normalized to the
+**Ads Manager** name and `hello@ads-manager.co.il` contact. Static, self-contained
+pages served the same way `favicon.png` is (Vite `public/` → `dist/` root →
+`express.static`) — no server route needed. Landing footer's `תקנון`/`פרטיות`
+now point at them instead of `#`; the signup checkbox's "תנאי השירות" and
+"מדיניות הפרטיות" are real links too (`strings.he.app.auth.terms` split into
+labeled parts so the copy stays in the strings file while still rendering
+actual `<a>` tags). Verified live: both pages render correctly RTL, and both
+sets of links resolve.
+
 ### 2026-08-12 — Rebrand: AdPilot / AI Campaigner → Ads Manager, real logo added
 Resolves the naming ambiguity landing.md had flagged as an open decision (the
 design said "AdPilot", the code's `appName` default said "AI Campaigner").

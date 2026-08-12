@@ -305,7 +305,9 @@ export const strings = {
         name: "שם מלא",
         email: "אימייל",
         password: "סיסמה",
-        terms: "אני מאשר/ת את תנאי השירות ואת מדיניות הפרטיות.",
+        // Split so the checkbox label can render real links to /terms.html
+        // and /privacy.html (Auth.tsx) instead of plain unlinked text.
+        terms: { pre: "אני מאשר/ת את ", tos: "תנאי השירות", mid: " ואת ", privacy: "מדיניות הפרטיות", post: "." },
         createAccount: "יצירת חשבון",
         haveAccount: "כבר יש לכם חשבון?",
         login: "כניסה",
