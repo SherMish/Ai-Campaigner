@@ -12,8 +12,9 @@ const WA = "https://wa.me/972500000000"; // TODO: real WhatsApp number
 
 export function Brand({ className = "brand" }: { className?: string }) {
   return (
-    <span className={className}>
-      AdPilot<span className="d">.</span>
+    <span className={className} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+      <img src="/favicon.png" alt="" className="brand-icon" />
+      Ads Manager
     </span>
   );
 }

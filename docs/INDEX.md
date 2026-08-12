@@ -22,7 +22,7 @@ See also: [STATE.md](STATE.md) (dated changelog) · [features/_TEMPLATE.md](feat
 | Manual object controls — pause/resume (all users), archive/delete (admin) | [features/manual-controls.md](features/manual-controls.md) |
 | Action history surface (audit trail + condensed projection) | [features/action-history.md](features/action-history.md) |
 | Ops console — customers, needs-attention, review, billing | [features/ops-console.md](features/ops-console.md) |
-| Landing page (static marketing, AdPilot brand) | [features/landing.md](features/landing.md) |
+| Landing page (static marketing, Ads Manager brand) | [features/landing.md](features/landing.md) |
 | Customer app — auth, onboarding, connect, home, recommendations, settings (frontend) | [features/customer-app.md](features/customer-app.md) |
 | Customer auth — email+password, JWT sessions (backend) | [features/customer-auth.md](features/customer-auth.md) |
 | Customer overview — Home/Settings data API, homeState, lead-quality (backend) | [features/customer-overview.md](features/customer-overview.md) |

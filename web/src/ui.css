@@ -138,6 +138,7 @@ button { font-family: inherit; }
 .appbar .inner { display: flex; align-items: center; justify-content: space-between; height: 72px; }
 .brand { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.03em; direction: ltr; }
 .brand .d { color: var(--orange); }
+.brand-icon { width: 22px; height: 22px; display: block; }
 .appnav { display: flex; align-items: center; gap: 26px; font-weight: 500; }
 .appnav a { color: var(--muted); }
 .appnav a.active, .appnav a:hover { color: var(--ink); }
@@ -223,8 +224,12 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
   height: 100vh; position: sticky; top: 0;
   display: flex; flex-direction: column; padding: 22px 0 14px;
 }
-.ap-brand { padding: 0 22px 18px; font-weight: 800; font-size: 1.5rem; color: var(--cream); letter-spacing: -0.01em; }
+.ap-brand {
+  display: flex; align-items: center; gap: 9px;
+  padding: 0 22px 18px; font-weight: 800; font-size: 1.5rem; color: var(--cream); letter-spacing: -0.01em;
+}
 .ap-brand .d { color: var(--orange); }
+.ap-brand-icon { width: 24px; height: 24px; display: block; flex-shrink: 0; }
 .ap-nav-section { padding: 6px 0; }
 .ap-nav-label { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(247,242,234,0.38); padding: 8px 22px 6px; }
 .ap-nav-item {

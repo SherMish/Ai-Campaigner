@@ -2,7 +2,7 @@
 // (The static landing page is the one exception; its copy lives in landing/.)
 export const strings = {
   he: {
-    appName: "AI Campaigner",
+    appName: "Ads Manager",
     tagline:
       "מנהלים לכם את הפרסום במטא — בלי ריטיינר של אלפי שקלים. עוקבים, מנתחים וממליצים; כל שינוי בתקציב או בקמפיין מתבצע רק באישור שלכם.",
 
@@ -58,7 +58,7 @@ export const strings = {
 
     // Admin console shell + nav (AIC-43)
     adminShell: {
-      brand: "AdPilot",
+      brand: "Ads Manager",
       brandSub: "ניהול",
       navOverview: "סקירה כללית",
       navCustomers: "לקוחות",
@@ -394,7 +394,7 @@ export const strings = {
         howTitle: "איך עושים את זה",
         steps: [
           "פותחים את הגדרות העסק ב־Meta",
-          "מוסיפים את AdPilot כשותף עסקי",
+          "מוסיפים את Ads Manager כשותף עסקי",
           "נותנים גישה לחשבון הפרסום",
           "אם נדרש, נותנים גישה גם לעמוד הפייסבוק / אינסטגרם",
           "חוזרים לכאן ואנחנו בודקים שהכול מחובר",
@@ -419,7 +419,7 @@ export const strings = {
         fixSteps: [
           "בהגדרות העסק ב־Meta עוברים ל״עמודים״.",
           "בוחרים את העמוד ולוחצים על ״שותפים״.",
-          "מוסיפים את AdPilot עם הרשאת ניהול מודעות.",
+          "מוסיפים את Ads Manager עם הרשאת ניהול מודעות.",
         ],
         recheck: "בדיקה מחדש",
         notVerifiedTitle: "לא הצלחנו לאמת את החיבור",

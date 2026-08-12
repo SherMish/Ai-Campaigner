@@ -1,6 +1,6 @@
 # Customer app (P0.5)
 
-**Status:** every customer screen exists in the AdPilot design and is wired to
+**Status:** every customer screen exists in the Ads Manager design and is wired to
 the backend — **Auth (AIC-21), Home (AIC-22), Settings (AIC-24), Onboarding +
 Connect (AIC-21), and the recommendations flow (AIC-23, approve/dismiss
 through the real safe-execute pipeline)**. Home + Settings render live from
@@ -10,7 +10,7 @@ specific proposal-cards that don't yet match the `campaign_reviews` schema).
 No screen keeps an in-component mock-state switcher anymore except Review.
 
 **Source of truth:**
-- Design system: `web/src/ui.css` (AdPilot tokens/components) + fonts in `web/index.html`
+- Design system: `web/src/ui.css` (Ads Manager tokens/components) + fonts in `web/index.html`
 - Copy: `web/src/strings.ts` → `strings.he.app` (all screen copy centralized)
 - Shared components: `web/src/app/components.tsx` (AppHeader, AuthLayout, Stepper, StatusPill, SupportCard, Field, Brand)
 - Screens: `web/src/app/*` — `Auth.tsx`, `Checkout.tsx`, `Onboarding.tsx`, `Connect.tsx`, `Review.tsx`, `Home.tsx`, `Recommendations.tsx`, `Settings.tsx`
@@ -42,9 +42,10 @@ else (single-origin).
 ## App shell (AIC-40)
 
 The signed-in app (`/app*`) is wrapped by a **right-side sidebar shell** (Pisga-style
-`studentApp` chrome, restyled in AdPilot's palette — ink sidebar, orange accent):
-`web/src/app/AppShell.tsx` (a React Router **layout route** rendering `<Outlet/>`) +
-`web/src/app/Sidebar.tsx`. The sidebar has the AdPilot brand → nav sections
+`studentApp` chrome, restyled in the Ads Manager palette — ink sidebar, orange
+accent): `web/src/app/AppShell.tsx` (a React Router **layout route** rendering
+`<Outlet/>`) + `web/src/app/Sidebar.tsx`. The sidebar has the Ads Manager brand
+(logo icon + wordmark) → nav sections
 (ניהול: ראשי `/app`, המלצות `/app/recommendations` + pending-recs badge · עזרה:
 עזרה והגדרות `/app/settings`) → spacer → a user card at the bottom (initials avatar +
 real name/email from `getOverview`, gear → account menu with settings + logout).
@@ -95,7 +96,7 @@ the earlier looser sizing — one visual system across every `/app*` screen.
   FAB, and account-menu entries.
 
 ## Design system
-AdPilot palette (orange `#FF5A36`, cream `#F7F2EA`/`#EDE6DA`, ink `#171717`, green
+Ads Manager palette (orange `#FF5A36`, cream `#F7F2EA`/`#EDE6DA`, ink `#171717`, green
 `#2FA36B`, indigo `#665CFF`, WhatsApp `#DCF8C6`), Rubik + IBM Plex Mono, RTL Hebrew.
 `ui.css` provides `.btn* .card .pill .kpi .stepper .field .appbar` etc. reused by
 every screen; responsive at ≤860px (grids collapse, nav hides).

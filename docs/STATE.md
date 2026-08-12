@@ -6,6 +6,16 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Rebrand: AdPilot / AI Campaigner → Ads Manager, real logo added
+Resolves the naming ambiguity landing.md had flagged as an open decision (the
+design said "AdPilot", the code's `appName` default said "AI Campaigner").
+Both retired — the product's consumer-facing name is now **Ads Manager**
+everywhere: page titles, the customer sidebar, the admin sidebar, the
+pre-shell `Brand` component (Connect/Review/Checkout/Onboarding), and the
+landing header/footer. The real logo icon (provided, not generated) is now
+the site favicon and renders beside the wordmark at every one of those
+brand marks.
+
 ### 2026-08-12 — Real blocker found: "use existing post" ad creation needs our Meta app in Live mode
 Live usage: creating an ad creative from an existing IG/FB post failed with a
 raw 502. The real error underneath (`code 100, subcode 1885183`): "Ads

@@ -1,7 +1,7 @@
 # Landing page
 
-**Status:** live — the static marketing page (AIC-20), implementing the **AdPilot**
-design directions (RTL Hebrew, cream/ink/orange).
+**Status:** live — the static marketing page (AIC-20), implementing the **Ads
+Manager** design directions (RTL Hebrew, cream/ink/orange).
 
 **Source of truth:** `landing/index.html` (self-contained static HTML/CSS). Served
 at `/` by the server (`web/dist/index.html` after build) and by the Vite dev
@@ -15,7 +15,7 @@ server serves the landing at `/`.
 
 ## How it works today
 
-A single fluid, responsive RTL page in the AdPilot brand:
+A single fluid, responsive RTL page in the Ads Manager brand:
 - **Palette:** orange `#FF5A36`, cream `#F7F2EA`/`#EDE6DA`, ink `#171717`, green
   `#2FA36B`, indigo `#665CFF`, WhatsApp `#DCF8C6`. Fonts: **Rubik** + **IBM Plex
   Mono** (Google Fonts).
@@ -38,6 +38,10 @@ A single fluid, responsive RTL page in the AdPilot brand:
 - Footer `תקנון` / `פרטיות` link to `#` until those pages exist.
 
 ## Note — brand
-The design brands the product **AdPilot**; the app code/strings still say "AI
-Campaigner". Aligning the two (rename, or keep AdPilot as the consumer brand over
-the AI Campaigner codename) is an open product decision.
+The product's consumer-facing name is **Ads Manager** (decided 2026-08-12,
+resolving the earlier AdPilot-vs-AI-Campaigner ambiguity — both were retired).
+The logo icon (`web/public/favicon.png`, full-res source `logo-source.png`)
+renders beside the wordmark everywhere the brand appears: the customer sidebar,
+the admin sidebar, the pre-shell screens' `Brand` component
+(`web/src/app/components.tsx`), and the landing header/footer. The site
+favicon uses the same file.
