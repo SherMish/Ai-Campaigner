@@ -225,7 +225,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
   display: flex; flex-direction: column; padding: 22px 0 14px;
 }
 .ap-brand {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: 0 22px 18px; font-weight: 500; font-size: 0.92rem; color: var(--cream); letter-spacing: -0.005em;
 }
 .ap-brand-icon { width: 24px; height: 24px; display: block; flex-shrink: 0; }
