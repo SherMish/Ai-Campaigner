@@ -312,4 +312,30 @@ describe("GraphCampaignAdapter add-to-existing-campaign (AIC-63)", () => {
     const [url] = mock.mock.calls[0] as [string];
     expect(url).toContain("effective_status");
   });
+
+  it("getAdSetMeta requests the ads sub-field and treats a genuinely-omitted `ads` field as zero ads (AIC-65)", async () => {
+    // Real GelNails shape, captured live: Meta OMITS `ads` entirely for an ad
+    // set with no ads (not {data: []}) — this query always requests the
+    // field, so an omission here must be treated as confirmed-zero, not
+    // "unknown, don't penalize" (that default protects OTHER callers that
+    // never asked for the field at all).
+    const mock = vi.fn(async (_url: string) => ({
+      ok: true, status: 200,
+      json: async () => ({
+        data: [
+          { id: "as_real", name: "Real", effective_status: "ACTIVE", is_dynamic_creative: false, targeting: {}, ads: { data: [{ id: "ad_1" }] } },
+          { id: "as_dead", name: "Dead draft", effective_status: "ACTIVE", is_dynamic_creative: false, targeting: {} }, // no `ads` key at all
+        ],
+      }),
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const meta = await adapter.getAdSetMeta("meta_camp_1");
+
+    const [url] = mock.mock.calls[0] as [string];
+    expect(url).toContain("ads.limit(1){id}");
+    expect(meta.find((m) => m.adSetId === "as_real")?.isManaged).toBe(true);
+    expect(meta.find((m) => m.adSetId === "as_dead")?.isManaged).toBe(false);
+  });
 });
