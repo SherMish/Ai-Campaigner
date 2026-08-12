@@ -7,8 +7,10 @@ import {
   getPendingLaunch,
   approveLaunch,
   getControlState,
+  getAdMedia,
   setObjectPaused,
   type ControlState,
+  type AdMedia,
   shekels,
   type CustomerOverview,
   type HomeState,
@@ -283,7 +285,12 @@ export function Home() {
 // The customer's own pause/resume (AIC-66). Pausing your own ad IS the
 // authorization — no approval step, unlike an engine recommendation. There is
 // deliberately no delete here; destructive actions are operator-only.
-function PauseToggle({
+//
+// AIC-73 round 2: DEMOTED from a large outline pill to a quiet text link. It's
+// a secondary, mildly destructive action and was previously the most prominent
+// element in the row after the title. Reading order should be
+// "what is this → how is it doing → (quietly) what can I do".
+function PauseLink({
   kind, metaObjectId, paused, busy, onToggle,
 }: {
   kind: "ad" | "ad_set";
@@ -297,13 +304,44 @@ function PauseToggle({
     : (paused ? CT.resumeAd : CT.pauseAd);
   return (
     <button
-      className="btn btn-outline btn-sm"
+      className="link"
       disabled={busy}
+      style={{ background: "none", border: "none", padding: "6px 2px", fontSize: "0.82rem", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}
       title={kind === "ad_set" && !paused ? CT.adSetNote : paused ? CT.resumeNote : undefined}
       onClick={(e) => { e.stopPropagation(); onToggle(kind, metaObjectId, !paused); }}
     >
       {busy ? CT.working : label}
     </button>
+  );
+}
+
+// Per-row state (AIC-73 round 2) — arguably the most useful single fact in a
+// detail row, and previously absent: you could only infer "is this running?"
+// from which way the action button pointed. Uses AIC-71's state vocabulary:
+// a customer's own pause is distinct from a problem.
+function RowStatus({ paused }: { paused: boolean }) {
+  return (
+    <span className={`pill ${paused ? "neutral" : "ok"}`} style={{ padding: "2px 10px", fontSize: "0.72rem", whiteSpace: "nowrap" }}>
+      <span className="dot" />
+      {paused ? D.statusPausedByYou : D.statusRunning}
+    </span>
+  );
+}
+
+// A real chevron, not a text triangle: renders consistently as SVG at small
+// sizes instead of depending on font metrics, and rotates to communicate
+// current state (AIC-73 round 2 — the old ▾ was ~10px, low-contrast, and
+// didn't read as interactive).
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="18" height="18" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+      style={{ transform: open ? "rotate(180deg)" : undefined, transition: "transform .18s ease", flexShrink: 0 }}
+      aria-hidden="true"
+    >
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
   );
 }
 
@@ -319,14 +357,29 @@ function Metric({ label, value, small }: { label: string; value: string; small?:
   );
 }
 
+// AIC-73 round 2: the nested disclosure is GONE. One click on "פירוט" reveals
+// audiences AND their ads. Progressive disclosure solved a volume problem that
+// doesn't exist here (a typical customer has 1–2 audiences × 1–5 ads, and the
+// P0 builder always creates exactly one ad set), it hid the very thing the
+// customer just asked for, and it corrupted AIC-37's measurement — low
+// engagement conflated "doesn't want detail" with "never found the second
+// toggle". Hierarchy now comes from layout, not from interaction.
+//
+// Adaptive guard: above ADAPTIVE_COLLAPSE_ABOVE audiences the per-audience
+// collapse comes BACK, so disclosure is earned by real volume rather than
+// applied preemptively to the ~95% who have one audience.
+const ADAPTIVE_COLLAPSE_ABOVE = 3;
+
 function AudienceDetails({ activeAds }: { activeAds: number }) {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<CampaignAudiences | null>(null);
   const [loading, setLoading] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
-  // Live statuses, fetched alongside the details (the readout itself is
-  // DB-only — a cached status would render a button that lies).
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Live statuses + creative media, fetched alongside the details (the readout
+  // itself is DB-only — a cached status would render a button that lies, and
+  // it carries no image data at all).
   const [ctl, setCtl] = useState<ControlState | null>(null);
+  const [media, setMedia] = useState<Map<string, AdMedia>>(new Map());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [ctlFailed, setCtlFailed] = useState(false);
 
@@ -335,9 +388,23 @@ function AudienceDetails({ activeAds }: { activeAds: number }) {
     setOpen(next);
     if (next && !data) {
       setLoading(true);
-      getCampaignAudiences().then(setData).catch(() => {}).finally(() => setLoading(false));
+      getCampaignAudiences()
+        .then((d) => {
+          setData(d);
+          // Only collapse when there's genuinely enough volume to manage.
+          if (d.audiences.length > ADAPTIVE_COLLAPSE_ABOVE) {
+            setCollapsed(new Set(d.audiences.map((x) => x.adSetId)));
+          }
+        })
+        .catch(() => {})
+        .finally(() => setLoading(false));
     }
     if (next && !ctl) getControlState().then(setCtl).catch(() => {});
+    if (next && media.size === 0) {
+      getAdMedia()
+        .then((r) => setMedia(new Map(r.ads.map((m) => [m.adId, m]))))
+        .catch(() => {}); // degrade to names, never break the panel
+    }
   }
 
   const isPaused = (kind: "ad" | "ad_set", id: string) =>
@@ -361,18 +428,20 @@ function AudienceDetails({ activeAds }: { activeAds: number }) {
     }
   }
 
+  const adaptive = (data?.audiences.length ?? 0) > ADAPTIVE_COLLAPSE_ABOVE;
+
   return (
     <div className="card">
-      {/* AIC-73: caret sits directly beside the label, and — while collapsed —
-          a preview of what's inside, built from the count Home already has
-          (no prefetch; audiences are still only fetched once opened). */}
+      {/* Whole row is the hit target at ≥44px (the accessibility floor) — the
+          old ~10px text triangle was near-impossible to hit on a phone and
+          didn't read as interactive. */}
       <button
         className="row gap8"
-        style={{ background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "inherit" }}
+        style={{ width: "100%", minHeight: 44, background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "inherit", textAlign: "start" }}
         onClick={toggle}
         aria-expanded={open}
       >
-        <span style={{ transform: open ? "rotate(180deg)" : undefined, transition: "transform .15s", fontSize: "0.8rem" }}>▾</span>
+        <Chevron open={open} />
         <b>{open ? D.hide : D.show}</b>
         {!open && activeAds > 0 && (
           <span className="muted" style={{ fontSize: "0.85rem" }}>· {activeAds} {D.previewAds}</span>
@@ -380,7 +449,7 @@ function AudienceDetails({ activeAds }: { activeAds: number }) {
       </button>
 
       {open && (
-        <div style={{ marginTop: 14 }}>
+        <div style={{ marginTop: 10 }}>
           {ctlFailed && <p className="muted" style={{ color: "var(--orange)", marginBottom: 10 }}>{CT.failed}</p>}
           {loading ? (
             <p className="muted">{a.loading}</p>
@@ -389,81 +458,109 @@ function AudienceDetails({ activeAds }: { activeAds: number }) {
           ) : (
             <div className="stack gap8">
               {data.audiences.map((aud) => {
-                const isExpanded = expanded === aud.adSetId;
+                const audPaused = isPaused("ad_set", aud.adSetId);
+                const shown = !collapsed.has(aud.adSetId);
                 return (
                   <div key={aud.adSetId} className="soft" style={{ borderRadius: 14, padding: 14 }}>
-                    {/* Audience row: label + human targeting on one side, its
-                        labeled metrics on the other — bidi-isolated so a
-                        mixed Hebrew/English label never renders reversed. */}
-                    <div className="row between" style={{ flexWrap: "wrap", gap: 10 }}>
-                      <button
-                        className="row gap8"
-                        style={{ background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "inherit" }}
-                        onClick={() => setExpanded(isExpanded ? null : aud.adSetId)}
-                        aria-expanded={isExpanded}
-                      >
-                        <span style={{ transform: isExpanded ? "rotate(180deg)" : undefined, transition: "transform .15s", fontSize: "0.75rem" }}>▾</span>
-                        <b><bdi>{aud.label}</bdi></b>
-                        {isPaused("ad_set", aud.adSetId) && (
-                          <span className="pill neutral" style={{ padding: "2px 8px", fontSize: "0.7rem" }}>{CT.pausedBadge}</span>
+                    {/* Audience = a section HEADER, not a toggle: status +
+                        label, then its metrics immediately underneath. The
+                        metrics used to float opposite the title with a large
+                        gap between them and a lone button — the whitespace
+                        read as "something failed to load". */}
+                    <div className="row between" style={{ gap: 10, alignItems: "flex-start" }}>
+                      <div className="row gap8" style={{ flexWrap: "wrap", alignItems: "center" }}>
+                        {adaptive && (
+                          <button
+                            className="row"
+                            style={{ minHeight: 44, background: "none", border: "none", cursor: "pointer", padding: 0, color: "inherit" }}
+                            onClick={() => setCollapsed((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(aud.adSetId)) next.delete(aud.adSetId); else next.add(aud.adSetId);
+                              return next;
+                            })}
+                            aria-expanded={shown}
+                          >
+                            <Chevron open={shown} />
+                          </button>
                         )}
-                      </button>
-                      <span className="row gap16" style={{ flexWrap: "wrap" }}>
-                        <Metric label={D.spendCol} value={shekels(aud.spendAgorot)} />
-                        <Metric label={D.leadsCol} value={String(aud.leads)} />
-                        <Metric label={D.cplCol} value={aud.cplAgorot === null ? L.none : shekels(aud.cplAgorot)} />
-                      </span>
+                        <RowStatus paused={audPaused} />
+                        <b><bdi>{aud.label}</bdi></b>
+                      </div>
+                      {ctl && (
+                        <PauseLink
+                          kind="ad_set" metaObjectId={aud.adSetId}
+                          paused={audPaused} busy={busyId === aud.adSetId} onToggle={onToggle}
+                        />
+                      )}
+                    </div>
+                    <div className="row gap16" style={{ flexWrap: "wrap", marginTop: 6 }}>
+                      <Metric label={D.spendCol} value={shekels(aud.spendAgorot)} />
+                      <Metric label={D.leadsCol} value={String(aud.leads)} />
+                      <Metric label={D.cplCol} value={aud.cplAgorot === null ? L.none : shekels(aud.cplAgorot)} />
                     </div>
 
-                    {/* Consistent action placement (AIC-73): the audience's own
-                        pause control always sits here, same position on every
-                        card — never sharing a row with the expand toggle. */}
-                    {ctl && (
-                      <div style={{ marginTop: 10 }}>
-                        <PauseToggle
-                          kind="ad_set" metaObjectId={aud.adSetId}
-                          paused={isPaused("ad_set", aud.adSetId)}
-                          busy={busyId === aud.adSetId} onToggle={onToggle}
-                        />
-                      </div>
-                    )}
-
-                    {/* Its ads, visually nested under the audience (AIC-73) —
-                        an explicit rule + indent, not near-equal weight. */}
-                    {isExpanded && (
+                    {/* Its ads, nested by LAYOUT (indent + rule), not behind a
+                        second click. */}
+                    {shown && (
                       <div style={{ marginTop: 12, borderInlineStart: "2px solid var(--line)", paddingInlineStart: 12 }}>
-                        <div className="muted" style={{ fontSize: "0.78rem", marginBottom: 8, fontWeight: 600 }}>{D.creativesHeading}</div>
                         {aud.creatives.length === 0 ? (
                           <p className="muted" style={{ fontSize: "0.85rem" }}>{D.noCreatives}</p>
                         ) : (
-                          <div className="stack gap8">
-                            {/* Single-child case: the one ad's numbers ARE the
-                                audience's numbers — say so instead of letting
-                                identical values look duplicated/broken. */}
-                            {aud.creatives.length === 1 && (
-                              <p className="muted" style={{ fontSize: "0.78rem" }}>{D.onlyChild}</p>
-                            )}
-                            {aud.creatives.map((c) => (
-                              <div key={c.metaObjectId} className="row between" style={{ flexWrap: "wrap", gap: 8, paddingBottom: 8, borderBottom: "1px solid var(--line)" }}>
-                                <span className="row gap8">
-                                  <bdi style={{ fontSize: "0.88rem" }}>{c.creativeName ?? c.metaObjectId}</bdi>
-                                  {isPaused("ad", c.metaObjectId) && (
-                                    <span className="pill neutral" style={{ padding: "1px 7px", fontSize: "0.68rem" }}>{CT.pausedBadge}</span>
+                          <div className="stack gap12">
+                            {aud.creatives.map((c) => {
+                              const adPaused = isPaused("ad", c.metaObjectId);
+                              const m = media.get(c.metaObjectId);
+                              return (
+                                <div key={c.metaObjectId}>
+                                  <div className="row between" style={{ gap: 10, alignItems: "flex-start" }}>
+                                    <div className="row gap8" style={{ flexWrap: "wrap", alignItems: "center" }}>
+                                      <RowStatus paused={adPaused} />
+                                      {/* Honest count: what Meta actually
+                                          reports for this creative, never
+                                          inferred from the ad's name. */}
+                                      <b style={{ fontSize: "0.85rem" }}>
+                                        {m && m.assetCount > 1 ? `${m.assetCount} ${D.adCreativesSuffix}` : D.adOne}
+                                      </b>
+                                    </div>
+                                    {ctl && (
+                                      <PauseLink
+                                        kind="ad" metaObjectId={c.metaObjectId}
+                                        paused={adPaused} busy={busyId === c.metaObjectId} onToggle={onToggle}
+                                      />
+                                    )}
+                                  </div>
+
+                                  {/* The ads ARE pictures — a comma-separated
+                                      English name string was the weakest
+                                      possible representation of them. Falls
+                                      back to the name when Meta gives us no
+                                      usable image. */}
+                                  {m && m.thumbnails.length > 0 ? (
+                                    <div className="row gap8" style={{ flexWrap: "wrap", marginTop: 6 }}>
+                                      {m.thumbnails.map((src, i) => (
+                                        <img
+                                          key={i} src={src} alt="" loading="lazy"
+                                          style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", background: "var(--cream-2)" }}
+                                        />
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="muted" style={{ fontSize: "0.8rem", marginTop: 4 }}>
+                                      <bdi>{c.creativeName ?? c.metaObjectId}</bdi>
+                                    </div>
                                   )}
-                                </span>
-                                <span className="row gap12" style={{ flexWrap: "wrap", alignItems: "center" }}>
-                                  <Metric label={D.spendCol} value={shekels(c.spendAgorot)} small />
-                                  <Metric label={D.leadsCol} value={String(c.leads)} small />
-                                  {ctl && (
-                                    <PauseToggle
-                                      kind="ad" metaObjectId={c.metaObjectId}
-                                      paused={isPaused("ad", c.metaObjectId)}
-                                      busy={busyId === c.metaObjectId} onToggle={onToggle}
-                                    />
-                                  )}
-                                </span>
-                              </div>
-                            ))}
+
+                                  {/* Same metric set as the audience row —
+                                      previously the ad row silently dropped
+                                      עלות לפנייה. */}
+                                  <div className="row gap12" style={{ flexWrap: "wrap", marginTop: 6 }}>
+                                    <Metric label={D.spendCol} value={shekels(c.spendAgorot)} small />
+                                    <Metric label={D.leadsCol} value={String(c.leads)} small />
+                                    <Metric label={D.cplCol} value={c.cplAgorot === null ? L.none : shekels(c.cplAgorot)} small />
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>

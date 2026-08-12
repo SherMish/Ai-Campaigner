@@ -228,6 +228,26 @@ d("manual controls routes (AIC-66)", () => {
     expect(res.body.adSetStatuses).toMatchObject({ as_1: "active" });
   });
 
+  // AIC-73 round 2: thumbnails come from a live read on panel open, the same
+  // explicit-user-action rule that justifies GET /state.
+  it("GET /media returns per-ad creative thumbnails, scoped to the caller's campaign", async () => {
+    const { token } = await seed("media");
+    const fetchMock = vi.fn(async () =>
+      jsonRes({ data: [{ id: "ad_1", name: "almond green, french", creative: { thumbnail_url: "https://cdn/t.jpg" } }] }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await request(app).get("/api/app/controls/media").set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    // assetCount is 1 despite the multi-part NAME — never inferred from it.
+    expect(res.body.ads).toMatchObject([{ adId: "ad_1", thumbnails: ["https://cdn/t.jpg"], assetCount: 1 }]);
+  });
+
+  it("GET /media requires auth", async () => {
+    expect((await request(app).get("/api/app/controls/media")).status).toBe(401);
+  });
+
   it("there is NO customer-facing delete or archive route", async () => {
     const { token } = await seed("nodelete");
     for (const action of ["delete", "archive"]) {

@@ -6,6 +6,34 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Details panel round 2 + a confidently-wrong audience label (AIC-73)
+Round-2 review of the redesigned panel. The important find was a **data** bug,
+not a layout one: the label read **18–65** for an ad set actually targeting
+**21–46**. With Advantage+ audience expansion on (the default for
+builder-created ad sets) Meta reports `age_min`/`age_max` as the EXPANSION
+CEILING, while the configured range lives in `age_range`. We were reading the
+ceiling — showing customers an audience they never chose, which is worse than
+showing a raw name. Fixed in `audience-label.ts` (+ the ops explorer, same
+bug). The ad set's own NAME said "18-46" while the truth was 21–46, so names
+stay untrusted.
+
+Also corrected an assumption in the review itself: it asked for "מודעה אחת ·
+4 קרייטיבים" on the basis that the ad named `almond green, french, video,
+pink lines` was a flexible ad with four creatives. The live API says one
+creative, no `asset_feed_spec` — the name is just a label someone typed. So
+`assetCount` comes from Meta and the UI says "מודעה אחת"; it only claims N
+creatives when `asset_feed_spec` genuinely carries them.
+
+Rest of the round: nested disclosure REMOVED (one click reveals everything;
+hierarchy from layout, with adaptive collapse only above 3 audiences), geo
+localised to Hebrew, real creative thumbnails (new `meta/ad-media.ts` +
+`GET /api/app/controls/media`, live-on-open like `/state`), per-row status
+chips, pause demoted to a quiet link, metrics pulled under their row title,
+matching metric sets at both levels, and 18px SVG chevrons that rotate inside
+a ≥44px hit target.
+
+Full detail: [features/customer-overview.md](features/customer-overview.md).
+
 ### 2026-08-12 — Dashboard shows today; engine still evaluates complete days (AIC-67 follow-up #2)
 Reported live: "I see 1 and 4." Both numbers were individually correct and
 still contradicted each other. The KPI window (`rollingPeriods().current`)

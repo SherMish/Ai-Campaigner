@@ -139,6 +139,68 @@ wrapped in `<bdi>` so nothing renders reversed.
 numbers from before the redesign measured "is the details panel usable,"
 not "do customers want detail."
 
+### Round 2 (AIC-73, same day)
+
+**One click, no nested disclosure.** The panel used to be פירוט → audience →
+ads (two clicks). The second level is gone: hierarchy comes from layout
+(indent + rule), not interaction. Progressive disclosure was solving a volume
+problem that doesn't exist — a typical customer has 1–2 audiences × 1–5 ads,
+and the P0 builder always creates exactly one ad set (AIC-49), so a collapsed
+container around a single item was pure ceremony. It also hid the thing the
+customer had just asked for, and corrupted AIC-37's measurement (low
+engagement conflated "doesn't want detail" with "never found the second
+toggle"). Above `ADAPTIVE_COLLAPSE_ABOVE` (3) audiences the per-audience
+collapse returns — disclosure earned by real volume, not applied preemptively.
+
+**⚠️ `age_range`, not `age_min`/`age_max` — a real confidently-wrong label.**
+The panel showed **18–65** for an ad set actually targeting **21–46**. With
+Advantage+ audience expansion on (the default for builder-created ad sets),
+Meta reports `age_min`/`age_max` as the EXPANSION CEILING, while the
+configured range lives in `age_range`. `configuredAge()` in `audience-label.ts`
+prefers `age_range` and falls back only when it's absent/malformed; the
+adapter and the ops explorer both request the field. Note the ad set's own
+NAME said "18-46" while the truth was 21–46 — another reason names are never
+trusted.
+
+**Geo is localised** (`localizePlace`): Meta returns place names in English
+regardless of locale, so "נשים · 21–46 · Ramat Gan, Giv'atayim" was still
+half-raw. Unmapped names pass through unchanged — an English city name beats
+a wrong transliteration.
+
+**Creative thumbnails** (`meta/ad-media.ts`, `GET /api/app/controls/media`):
+the ads are pictures, and a grey comma-string was the weakest possible
+representation of them. Fetched live on panel open — the same
+explicit-user-action rule that justifies `GET /state`, since the DB-only
+readout carries no image data. Degrades to the ad's name when Meta exposes no
+usable image.
+
+**`assetCount` is what Meta reports, never inferred from the name.** The
+round-2 review assumed this ad was "one flexible ad containing 4 creatives"
+because it's named `almond green, french, video, pink lines`. The live API
+says otherwise: one creative, no `asset_feed_spec`, `is_dynamic_creative`
+false. The name is just a label someone typed. So the UI says "מודעה אחת"
+here, and only says "N קרייטיבים" when `asset_feed_spec` genuinely carries N
+assets — claiming 4 would have been inventing data.
+
+**Also:** per-row status chips (`מפרסם` / `מושהה על ידך`, AIC-71's
+vocabulary) so "is this running?" no longer has to be inferred from which way
+the action button points; pause demoted from a prominent outline pill to a
+quiet text link (secondary, mildly destructive — it shouldn't out-rank the
+audience label); metrics moved directly under their row title, removing dead
+space that read as "something failed to load"; the ad row now shows the same
+three metrics as the audience row (it silently dropped עלות לפנייה); and real
+SVG chevrons at 18px that rotate on toggle, inside a ≥44px hit target
+(the old ~10px text triangle was near-impossible to hit on a phone).
+
+**API-call cost, stated honestly:** opening the panel now makes **four** Meta
+reads (campaign + ad sets + ads for `/state`, plus ads-with-creative for
+`/media`). Both calls fail soft — `/state` failing hides the pause links,
+`/media` failing falls back to names — and neither breaks the panel. This was
+observed for real during development: heavy API probing tripped Meta's
+per-ad-account rate limit (code 17) and the panel degraded exactly as
+designed. If panel opens ever become frequent, merging the two ad-level reads
+into one is the obvious saving.
+
 ## Today vs the engine's window — two questions, two windows
 
 **Real bug, 2026-08-12:** a customer got 3 leads today and the headline still

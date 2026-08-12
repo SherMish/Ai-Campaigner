@@ -14,6 +14,7 @@ import type { LaunchWriter, MetaCampaignStatus } from "../launch/types.js";
 import type { AdditionWriter } from "../additions/types.js";
 import type { ControlWriter, ManualObjectStatus } from "../controls/types.js";
 import { extractLeads } from "./insights.js";
+import { normalizeAdMedia, type AdMedia, type AdMediaReader, type RawAdMedia } from "./ad-media.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
 // Marketing API. Budgets are read/written in the account currency's MINOR unit,
@@ -24,7 +25,7 @@ import { extractLeads } from "./insights.js";
 // one, so setDailyBudget targets the right object.
 const BASE = "https://graph.facebook.com";
 
-export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter, AdditionWriter, ControlWriter {
+export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter, AdditionWriter, ControlWriter, AdMediaReader {
   private budgetObj = new Map<string, string>(); // campaignId → budget object id
 
   constructor(
@@ -177,6 +178,22 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     return health;
   }
 
+  // Per-ad creative media (AIC-73 round 2) — a nail salon's ads ARE images;
+  // "almond green, french, video, pink lines" as a comma-string is the
+  // weakest possible representation of visual content.
+  //
+  // Honesty note verified live: this campaign's ad has exactly ONE creative
+  // (no asset_feed_spec, is_dynamic_creative false) — the multi-part ad NAME
+  // is just a label someone typed, NOT four creatives. So this returns the
+  // real assets Meta reports and the UI counts THOSE; it never infers a
+  // creative count from the name.
+  async getAdMedia(metaCampaignId: string): Promise<AdMedia[]> {
+    const body = await this.get(
+      `${metaCampaignId}/ads?fields=id,name,creative{thumbnail_url,image_url,asset_feed_spec{images,videos}}&limit=200`,
+    );
+    return ((body.data as RawAdMedia[]) ?? []).map(normalizeAdMedia);
+  }
+
   // True lifetime lead count (AIC-67 follow-up, real bug fix). `date_preset=
   // maximum` is a single non-overlapping window covering the campaign's
   // entire history — verified live: it does NOT need a known campaign-start
@@ -199,7 +216,9 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // at customer render time.
   async getAdSetMeta(metaCampaignId: string): Promise<AdSetMeta[]> {
     const body = await this.get(
-      `${metaCampaignId}/adsets?fields=id,name,is_dynamic_creative,effective_status,targeting{age_min,age_max,genders,geo_locations},ads.limit(1){id}&limit=100`,
+      // age_range is REQUIRED, not optional: age_min/age_max report the
+      // Advantage+ expansion ceiling, not the configured range (AIC-73).
+      `${metaCampaignId}/adsets?fields=id,name,is_dynamic_creative,effective_status,targeting{age_min,age_max,age_range,genders,geo_locations},ads.limit(1){id}&limit=100`,
     );
     // Root-caused live (AIC-65, 2026-08-12): Meta OMITS the `ads` connection
     // field entirely when it's genuinely empty, rather than returning

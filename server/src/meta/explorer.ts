@@ -117,8 +117,12 @@ interface RawInsightsRow {
   conversion_rate_ranking?: string;
 }
 interface RawTargeting {
+  // age_min/age_max are the Advantage+ EXPANSION CEILING, not the configured
+  // range — see audience-label.ts. Even on this raw-truth surface an operator
+  // debugging targeting wants what was actually set (AIC-73).
   age_min?: number;
   age_max?: number;
+  age_range?: number[]; // [min, max] — authoritative when present
   genders?: number[]; // 1=male, 2=female; absent/empty = all
   geo_locations?: { countries?: string[] };
   flexible_spec?: Array<{ interests?: Array<{ name?: string }> }>;
@@ -211,9 +215,11 @@ export function normalizeTargeting(raw?: RawTargeting): ExplorerTargeting {
     .flatMap((spec) => spec.interests ?? [])
     .map((i) => i.name)
     .filter((n): n is string => !!n);
+  const ageRange = raw?.age_range;
+  const hasRange = Array.isArray(ageRange) && ageRange.length >= 2;
   return {
-    ageMin: raw?.age_min ?? null,
-    ageMax: raw?.age_max ?? null,
+    ageMin: (hasRange ? ageRange[0] : raw?.age_min) ?? null,
+    ageMax: (hasRange ? ageRange[1] : raw?.age_max) ?? null,
     genders: genders.length ? genders : ["all"],
     geoCountries: raw?.geo_locations?.countries ?? [],
     interests,
@@ -224,7 +230,7 @@ const GRAPH_BASE = "https://graph.facebook.com";
 
 const ADSET_FIELDS =
   "id,name,effective_status,issues_info,daily_budget,lifetime_budget,bid_strategy,promoted_object," +
-  "targeting{age_min,age_max,genders,geo_locations,flexible_spec{interests}}";
+  "targeting{age_min,age_max,age_range,genders,geo_locations,flexible_spec{interests}}";
 const AD_FIELDS =
   "id,name,adset_id,effective_status,issues_info,effective_object_story_id," +
   "creative{id,name,title,body,call_to_action_type,image_url,video_id,thumbnail_url,object_story_spec{page_id},asset_feed_spec{images,videos,bodies,titles}}";

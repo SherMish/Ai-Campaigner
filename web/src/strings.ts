@@ -529,12 +529,20 @@ export const strings = {
           // has (deliveringAdCount) — no prefetch, keeps AIC-37's opt-in
           // principle intact (nothing about audiences is fetched until opened).
           previewAds: "מודעות פעילות",
-          // A single creative under a single audience shares the audience's own
-          // totals — say so plainly rather than let identical numbers look like
-          // a bug (AIC-73).
-          onlyChild: "כל המודעות בקהל הזה",
-          creativesHeading: "מודעות בקהל",
           noCreatives: "אין עדיין מודעות בקהל הזה.",
+          // AIC-73 round 2: per-row state, so "is this running?" is readable
+          // without inferring it from which direction the action button points.
+          statusRunning: "מפרסם",
+          statusPausedByYou: "מושהה על ידך",
+          // Ad-level heading. `assetCount` comes from what Meta actually
+          // reports for the creative — NOT from splitting the ad's name (the
+          // real ad is named "almond green, french, video, pink lines" but has
+          // exactly one creative; claiming 4 would invent data).
+          adOne: "מודעה אחת",
+          adCreativesSuffix: "קרייטיבים",
+          // Actions are demoted to a quiet link — secondary and mildly
+          // destructive, so they must not out-rank the audience label.
+          moreActions: "עוד",
         },
         recWaitingTitle: "המלצה שמחכה לך",
         recWaiting: "כדאי לעצור את אחת המודעות",

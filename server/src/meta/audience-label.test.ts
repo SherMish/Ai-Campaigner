@@ -10,6 +10,47 @@ describe("normalizeAdSetMeta", () => {
     expect(m).toMatchObject({ adSetId: "as_1", ageMin: 35, ageMax: 45, genders: "female" });
   });
 
+  // REGRESSION (real GelNails data, AIC-73 round 2): with Advantage+ audience
+  // expansion on — the default for builder-created ad sets — Meta reports
+  // age_min/age_max as the EXPANSION CEILING (18–65) while the actually
+  // configured range lives in age_range. The panel confidently showed
+  // "18–65", an audience the customer never chose. A confidently-wrong label
+  // is worse than a raw name.
+  it("prefers age_range over the Advantage+ expansion ceiling in age_min/age_max", () => {
+    const m = normalizeAdSetMeta({
+      id: "as_1",
+      name: "IL | Ramat Gan, Givatayim | Women 18-46 | Advantage+",
+      targeting: { age_min: 18, age_max: 65, age_range: [21, 46], genders: [2] },
+    });
+    expect(m).toMatchObject({ ageMin: 21, ageMax: 46 });
+  });
+
+  it("falls back to age_min/age_max when age_range is absent", () => {
+    const m = normalizeAdSetMeta({ id: "as_1", targeting: { age_min: 25, age_max: 40 } });
+    expect(m).toMatchObject({ ageMin: 25, ageMax: 40 });
+  });
+
+  it("ignores a malformed age_range rather than producing a garbage range", () => {
+    const m = normalizeAdSetMeta({ id: "as_1", targeting: { age_min: 25, age_max: 40, age_range: [30] } });
+    expect(m).toMatchObject({ ageMin: 25, ageMax: 40 });
+  });
+
+  it("localizes Meta's English place names to Hebrew (they're never returned localized)", () => {
+    const m = normalizeAdSetMeta({
+      id: "as_1",
+      targeting: { geo_locations: { cities: [{ name: "Ramat Gan" }, { name: "Giv'atayim" }] } },
+    });
+    expect(m.geoSummary).toBe("רמת גן, גבעתיים");
+  });
+
+  it("leaves an unmapped place name unchanged rather than mangling it", () => {
+    const m = normalizeAdSetMeta({
+      id: "as_1",
+      targeting: { geo_locations: { cities: [{ name: "Someplace New" }] } },
+    });
+    expect(m.geoSummary).toBe("Someplace New");
+  });
+
   it("no genders array (or both) → 'all'", () => {
     expect(normalizeAdSetMeta({ id: "as_1", targeting: {} }).genders).toBe("all");
     expect(normalizeAdSetMeta({ id: "as_1", targeting: { genders: [1, 2] } }).genders).toBe("all");

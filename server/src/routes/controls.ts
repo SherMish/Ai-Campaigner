@@ -5,6 +5,7 @@ import { resolveAdditionContext, buildAdditionWriter } from "../additions/sessio
 import { setObjectStatus, assertOwnedByCampaign } from "../controls/manual-controls.js";
 import type { ControlObjectKind, ControlWriter } from "../controls/types.js";
 import type { DeliveryReader } from "../meta/delivery-health.js";
+import type { AdMediaReader } from "../meta/ad-media.js";
 import { refreshDeliveryNow } from "../services/delivery-monitor.js";
 import { OpsQueue } from "../services/ops-queue.js";
 
@@ -49,6 +50,27 @@ controlsRouter.get("/state", requireAuth, async (req, res) => {
   } catch (e) {
     console.error("[controls] state failed", e);
     res.status(502).json({ error: "failed to read current state" });
+  }
+});
+
+// GET /media — per-ad creative thumbnails (AIC-73 round 2). Same
+// live-on-explicit-open rule as /state above: the DB-only readout has no
+// image data, and a salon owner's ads are pictures — a comma-separated name
+// string is the weakest possible representation of them. Read-only; a
+// failure degrades the UI to names rather than breaking the panel.
+controlsRouter.get("/media", requireAuth, async (req, res) => {
+  try {
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    if (!ctx) {
+      res.status(409).json({ error: "no managed campaign" });
+      return;
+    }
+    const reader = buildAdditionWriter() as AdMediaReader | null;
+    if (!reader) return unavailable(res);
+    res.json({ ads: await reader.getAdMedia(ctx.metaCampaignId) });
+  } catch (e) {
+    console.error("[controls] media failed", e);
+    res.status(502).json({ error: "failed to read creative media" });
   }
 });
 

@@ -277,6 +277,17 @@ export interface ControlState {
 }
 export const getControlState = () => api<ControlState>("/app/controls/state");
 
+/** Creative thumbnails per ad (AIC-73) — same live-on-open rule as the control
+ *  state. `assetCount` is what Meta actually reports, never inferred from the
+ *  ad's name. */
+export interface AdMedia {
+  adId: string;
+  name: string | null;
+  thumbnails: string[];
+  assetCount: number;
+}
+export const getAdMedia = () => api<{ ads: AdMedia[] }>("/app/controls/media");
+
 export const setObjectPaused = (kind: ControlKind, metaObjectId: string, paused: boolean) =>
   api<{ outcome: ControlOutcome; status: string }>(`/app/controls/${paused ? "pause" : "resume"}`, {
     method: "POST",

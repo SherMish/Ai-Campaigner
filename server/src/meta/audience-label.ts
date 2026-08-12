@@ -9,8 +9,17 @@ export interface RawAdSetMeta {
   is_dynamic_creative?: boolean | null;
   effective_status?: string | null;
   targeting?: {
+    // ⚠️ age_min/age_max are NOT necessarily the customer's chosen range.
+    // With Advantage+ audience expansion on (targeting_automation.
+    // individual_setting.age = 1 — the default for builder-created ad sets),
+    // Meta reports the EXPANSION CEILING here, typically 18–65, while the
+    // actually-configured range lives in `age_range`. Real GelNails case
+    // (AIC-73): age_min/age_max = 18/65 but age_range = [21,46] — the panel
+    // confidently showed "18–65", an audience the customer never chose.
+    // Always prefer age_range; these are the fallback.
     age_min?: number;
     age_max?: number;
+    age_range?: number[]; // [min, max] — the real configured range
     genders?: number[]; // Meta: [1]=male, [2]=female, absent/both=all
     geo_locations?: {
       countries?: string[];
@@ -55,26 +64,65 @@ const GENDER_HE: Record<AdSetMeta["genders"], string> = {
   female: "נשים",
 };
 
+// Meta returns place names in ENGLISH regardless of locale, so an otherwise
+// Hebrew label read half-raw ("נשים · 21–46 · Ramat Gan, Giv'atayim").
+// Israel has a bounded set of real ad-targetable cities, so a lookup is
+// honest and cheap. Anything unmapped falls through UNCHANGED rather than
+// being mangled — an English city name is worse than Hebrew but far better
+// than a wrong transliteration.
+const CITY_HE: Record<string, string> = {
+  "tel aviv": "תל אביב", "tel aviv-yafo": "תל אביב-יפו", jerusalem: "ירושלים",
+  haifa: "חיפה", "rishon letziyon": "ראשון לציון", "rishon lezion": "ראשון לציון",
+  "petah tikva": "פתח תקווה", ashdod: "אשדוד", netanya: "נתניה", beersheba: "באר שבע",
+  "be'er sheva": "באר שבע", holon: "חולון", "bnei brak": "בני ברק", "ramat gan": "רמת גן",
+  "giv'atayim": "גבעתיים", givatayim: "גבעתיים", rehovot: "רחובות", ashkelon: "אשקלון",
+  "bat yam": "בת ים", "beit shemesh": "בית שמש", "kfar saba": "כפר סבא", herzliya: "הרצליה",
+  "kfar sava": "כפר סבא", hadera: "חדרה", modiin: "מודיעין", "modi'in": "מודיעין",
+  ramla: "רמלה", raanana: "רעננה", "ra'anana": "רעננה", "rosh haayin": "ראש העין",
+  lod: "לוד", nazareth: "נצרת", akko: "עכו", eilat: "אילת", tiberias: "טבריה",
+  "kiryat gat": "קריית גת", "kiryat ono": "קריית אונו", "kiryat bialik": "קריית ביאליק",
+  "kiryat motzkin": "קריית מוצקין", "kiryat yam": "קריית ים", "kiryat ata": "קריית אתא",
+  nahariya: "נהריה", afula: "עפולה", dimona: "דימונה", yavne: "יבנה",
+  "or yehuda": "אור יהודה", "hod hasharon": "הוד השרון", "even yehuda": "אבן יהודה",
+  israel: "ישראל", il: "ישראל",
+};
+
+export function localizePlace(name: string): string {
+  return CITY_HE[name.trim().toLowerCase()] ?? name;
+}
+
+// The customer's ACTUAL configured age range. `age_range` is authoritative
+// when present; age_min/age_max are the Advantage+ expansion ceiling and are
+// only a fallback (see the RawAdSetMeta comment).
+function configuredAge(t: NonNullable<RawAdSetMeta["targeting"]>): { min: number | null; max: number | null } {
+  const r = t.age_range;
+  if (Array.isArray(r) && r.length >= 2 && Number.isFinite(r[0]) && Number.isFinite(r[1])) {
+    return { min: r[0], max: r[1] };
+  }
+  return { min: t.age_min ?? null, max: t.age_max ?? null };
+}
+
 export function normalizeAdSetMeta(row: RawAdSetMeta): AdSetMeta {
   const t = row.targeting ?? {};
   const genders = t.genders ?? [];
   const gender: AdSetMeta["genders"] =
     genders.length === 1 && genders[0] === 1 ? "male" : genders.length === 1 && genders[0] === 2 ? "female" : "all";
-  const places = [
+  const places = ([
     ...(t.geo_locations?.cities ?? []).map((c) => c.name).filter(Boolean),
     ...(t.geo_locations?.regions ?? []).map((r) => r.name).filter(Boolean),
     ...(t.geo_locations?.countries ?? []),
-  ] as string[];
+  ] as string[]).map(localizePlace);
   // A "no ads" signal only counts when the field was actually requested and
   // returned an empty list — if `ads` is absent entirely, we don't know
   // either way, so don't penalize (never falsely exclude a real ad set just
   // because a caller didn't ask for this field).
   const isDraftWithNoAds = row.ads != null && (row.ads.data?.length ?? 0) === 0;
+  const age = configuredAge(t);
   return {
     adSetId: row.id,
     name: row.name ?? "",
-    ageMin: t.age_min ?? null,
-    ageMax: t.age_max ?? null,
+    ageMin: age.min,
+    ageMax: age.max,
     genders: gender,
     geoSummary: places.slice(0, 2).join(", "),
     isDynamicCreative: row.is_dynamic_creative === true,
