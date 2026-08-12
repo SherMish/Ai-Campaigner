@@ -252,6 +252,38 @@ export interface ExplorerResult {
 export const getCampaignExplorer = (campaignId: string) =>
   api<ExplorerResult>(`/admin/campaigns/${campaignId}/explorer`);
 
+// ── Manual object controls (AIC-66) ─────────────────────────────────────────
+export type ControlKind = "ad" | "ad_set";
+export type ControlOutcome = "changed" | "already" | "not_found" | "failed";
+
+/** Customer-side: live ACTIVE/PAUSED per object, fetched only when the details
+ *  panel is opened (the readout itself stays DB-only). */
+export interface ControlState {
+  adStatuses: Record<string, "active" | "paused">;
+  adSetStatuses: Record<string, "active" | "paused">;
+}
+export const getControlState = () => api<ControlState>("/app/controls/state");
+
+export const setObjectPaused = (kind: ControlKind, metaObjectId: string, paused: boolean) =>
+  api<{ outcome: ControlOutcome; status: string }>(`/app/controls/${paused ? "pause" : "resume"}`, {
+    method: "POST",
+    body: JSON.stringify({ kind, metaObjectId }),
+  });
+
+/** Operator-side. `confirm` must equal the object id for archive/delete —
+ *  enforced server-side too, so a bypassed client changes nothing. */
+export const adminObjectControl = (
+  campaignId: string,
+  action: "pause" | "resume" | "archive" | "delete",
+  kind: ControlKind,
+  metaObjectId: string,
+  confirm?: string,
+) =>
+  api<{ outcome: ControlOutcome; status: string }>(`/admin/campaigns/${campaignId}/objects/${action}`, {
+    method: "POST",
+    body: JSON.stringify({ kind, metaObjectId, confirm }),
+  });
+
 // ── Admin: recommendations oversight (AIC-46) ───────────────────────────────
 export interface AdminRecRow {
   id: string;

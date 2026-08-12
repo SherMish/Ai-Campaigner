@@ -6,6 +6,9 @@ import {
   getCampaignAudiences,
   getPendingLaunch,
   approveLaunch,
+  getControlState,
+  setObjectPaused,
+  type ControlState,
   shekels,
   type CustomerOverview,
   type HomeState,
@@ -19,6 +22,7 @@ const a = strings.he.app;
 const h = a.home;
 const L = h.live;
 const D = h.details;
+const CT = h.controls;
 
 // AIC-64: distinct, honest copy for WHY there's no recommendation, keyed by the
 // engine's reason. `delivery_blocked` is deliberately absent — a delivery
@@ -231,11 +235,43 @@ export function Home() {
 // abstraction or detail" product question via the AIC-28 metrics layer. AIC-28
 // isn't built yet, so there's no event sink to write to — deferred until it
 // lands rather than half-building a bespoke one here.
+// The customer's own pause/resume (AIC-66). Pausing your own ad IS the
+// authorization — no approval step, unlike an engine recommendation. There is
+// deliberately no delete here; destructive actions are operator-only.
+function PauseToggle({
+  kind, metaObjectId, paused, busy, onToggle,
+}: {
+  kind: "ad" | "ad_set";
+  metaObjectId: string;
+  paused: boolean;
+  busy: boolean;
+  onToggle: (kind: "ad" | "ad_set", id: string, pause: boolean) => void;
+}) {
+  const label = kind === "ad_set"
+    ? (paused ? CT.resumeAdSet : CT.pauseAdSet)
+    : (paused ? CT.resumeAd : CT.pauseAd);
+  return (
+    <button
+      className="btn btn-outline btn-sm"
+      disabled={busy}
+      title={kind === "ad_set" && !paused ? CT.adSetNote : paused ? CT.resumeNote : undefined}
+      onClick={(e) => { e.stopPropagation(); onToggle(kind, metaObjectId, !paused); }}
+    >
+      {busy ? CT.working : label}
+    </button>
+  );
+}
+
 function AudienceDetails() {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<CampaignAudiences | null>(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Live statuses, fetched alongside the details (the readout itself is
+  // DB-only — a cached status would render a button that lies).
+  const [ctl, setCtl] = useState<ControlState | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [ctlFailed, setCtlFailed] = useState(false);
 
   function toggle() {
     const next = !open;
@@ -243,6 +279,23 @@ function AudienceDetails() {
     if (next && !data) {
       setLoading(true);
       getCampaignAudiences().then(setData).catch(() => {}).finally(() => setLoading(false));
+    }
+    if (next && !ctl) getControlState().then(setCtl).catch(() => {});
+  }
+
+  const isPaused = (kind: "ad" | "ad_set", id: string) =>
+    (kind === "ad" ? ctl?.adStatuses[id] : ctl?.adSetStatuses[id]) === "paused";
+
+  async function onToggle(kind: "ad" | "ad_set", id: string, pause: boolean) {
+    setBusyId(id);
+    setCtlFailed(false);
+    try {
+      await setObjectPaused(kind, id, pause);
+      setCtl(await getControlState()); // re-read Meta's truth, don't assume
+    } catch {
+      setCtlFailed(true);
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -260,6 +313,7 @@ function AudienceDetails() {
 
       {open && (
         <div style={{ marginTop: 14 }}>
+          {ctlFailed && <p className="muted" style={{ color: "var(--orange)", marginBottom: 10 }}>{CT.failed}</p>}
           {loading ? (
             <p className="muted">{a.loading}</p>
           ) : !data || data.audiences.length === 0 ? (
@@ -273,17 +327,45 @@ function AudienceDetails() {
                     style={{ width: "100%", background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "inherit" }}
                     onClick={() => setExpanded(expanded === aud.adSetId ? null : aud.adSetId)}
                   >
-                    <b>{aud.label}</b>
+                    <b>
+                      {aud.label}
+                      {isPaused("ad_set", aud.adSetId) && (
+                        <span className="pill neutral" style={{ marginInlineStart: 8, padding: "2px 8px", fontSize: "0.7rem" }}>{CT.pausedBadge}</span>
+                      )}
+                    </b>
                     <span className="muted" style={{ fontSize: "0.85rem" }}>
                       {shekels(aud.spendAgorot)} · {aud.leads} {D.leadsCol} · {aud.cplAgorot === null ? L.none : shekels(aud.cplAgorot)}
                     </span>
                   </button>
+                  {ctl && (
+                    <div style={{ marginTop: 8 }}>
+                      <PauseToggle
+                        kind="ad_set" metaObjectId={aud.adSetId}
+                        paused={isPaused("ad_set", aud.adSetId)}
+                        busy={busyId === aud.adSetId} onToggle={onToggle}
+                      />
+                    </div>
+                  )}
                   {expanded === aud.adSetId && aud.creatives.length > 0 && (
                     <div style={{ marginTop: 10 }}>
                       {aud.creatives.map((c) => (
-                        <div key={c.metaObjectId} className="summary-row" style={{ fontSize: "0.85rem" }}>
-                          <span className="k">{c.creativeName ?? c.metaObjectId}</span>
-                          <b>{shekels(c.spendAgorot)} · {c.leads} {D.leadsCol}</b>
+                        <div key={c.metaObjectId} className="summary-row" style={{ fontSize: "0.85rem", alignItems: "center", gap: 10 }}>
+                          <span className="k">
+                            {c.creativeName ?? c.metaObjectId}
+                            {isPaused("ad", c.metaObjectId) && (
+                              <span className="pill neutral" style={{ marginInlineStart: 8, padding: "1px 7px", fontSize: "0.68rem" }}>{CT.pausedBadge}</span>
+                            )}
+                          </span>
+                          <span className="row gap8" style={{ alignItems: "center" }}>
+                            <b>{shekels(c.spendAgorot)} · {c.leads} {D.leadsCol}</b>
+                            {ctl && (
+                              <PauseToggle
+                                kind="ad" metaObjectId={c.metaObjectId}
+                                paused={isPaused("ad", c.metaObjectId)}
+                                busy={busyId === c.metaObjectId} onToggle={onToggle}
+                              />
+                            )}
+                          </span>
                         </div>
                       ))}
                     </div>

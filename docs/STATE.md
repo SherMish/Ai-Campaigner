@@ -6,6 +6,35 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Manual pause/resume/archive/delete of ads + ad sets (AIC-66)
+Until now the only way an object changed state was an approved engine
+recommendation — a management product that can't manually turn an ad off was
+missing table stakes. Adds direct human control on both surfaces, settling a
+three-actor authorization model: the engine proposes and the customer
+approves; a **customer acting on their own object is self-authorized** (adding
+an approval step there would be incoherent — approval exists because the
+*engine* proposed something); an **operator** may do the same plus
+archive/delete, audited.
+
+Deliberately does NOT reuse `SafeExecutor` (AIC-12), which is
+recommendation-bound at every step — reusing it would mean inserting a fake
+`recommendations` row and walking it through `proposed → approved`, inventing
+an approval that never happened in the one part of the system whose value is
+that its records are true. Follows AIC-63's `activateOne` shape instead: read
+→ no-op if already at target → write → read-back verify → log.
+
+New `setAdStatus`/`setAdSetStatus` are the first adapter writes taking a
+caller-supplied status; the create-always-PAUSED (AIC-50) and
+activate-always-ACTIVE (AIC-53/63) invariants they sit next to are unaffected
+and the code says so. Destructive actions are operator-only with server-side
+confirm-to-type (the bar AIC-44 set for deleting a whole customer), archive
+preferred over delete, and the object then drops out of counts via AIC-65's
+filtering. First action to write **both** `action_history` and
+`admin_audit_log` — the "no current overlap to cross-link" note in `admin.ts`
+is now updated.
+
+Full detail: [features/manual-controls.md](features/manual-controls.md).
+
 ### 2026-08-12 — Meta setup runbook rewritten around the three layers of access
 Investigating why add-content (AIC-63) couldn't be fixed produced a much more
 useful finding than the bug itself: **Meta access is three independent layers**,

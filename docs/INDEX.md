@@ -19,6 +19,7 @@ See also: [STATE.md](STATE.md) (dated changelog) · [features/_TEMPLATE.md](feat
 | Recommendation engine — state machine, rules, staleness, explainer | [features/recommendation-engine.md](features/recommendation-engine.md) |
 | Rule thresholds + LLM boundary | [RULES.md](RULES.md) |
 | Approval & safe execution — budget safety, outbox, pipeline | [features/safe-execution.md](features/safe-execution.md) |
+| Manual object controls — pause/resume (all users), archive/delete (admin) | [features/manual-controls.md](features/manual-controls.md) |
 | Action history surface (audit trail + condensed projection) | [features/action-history.md](features/action-history.md) |
 | Ops console — customers, needs-attention, review, billing | [features/ops-console.md](features/ops-console.md) |
 | Landing page (static marketing, AdPilot brand) | [features/landing.md](features/landing.md) |

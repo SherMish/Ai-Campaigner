@@ -1,11 +1,89 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { formatShekel } from "@aic/shared";
-import { api, getCampaignExplorer, type ExplorerResult, type ExplorerMetrics, type ExplorerAdSet, type ExplorerAd } from "../api";
+import { api, getCampaignExplorer, adminObjectControl, type ExplorerResult, type ExplorerMetrics, type ExplorerAdSet, type ExplorerAd, type ControlKind } from "../api";
 import { strings } from "../strings";
 
 const m = strings.he.metaExplorer;
 const a = strings.he.admin;
+const mc = m.controls;
+
+type ControlAction = "pause" | "resume" | "archive" | "delete";
+const DESTRUCTIVE: ControlAction[] = ["archive", "delete"];
+
+// Manual object controls (AIC-66), operator half. Pause/resume are one click;
+// archive/delete require typing the object id back — the same confirm-to-type
+// bar as deleting a customer (AIC-44), and enforced server-side regardless.
+function ObjectControls({
+  campaignId, kind, metaObjectId, effectiveStatus, onDone,
+}: {
+  campaignId: string;
+  kind: ControlKind;
+  metaObjectId: string;
+  effectiveStatus: string | null;
+  onDone: () => void;
+}) {
+  const [busy, setBusy] = useState<ControlAction | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [confirming, setConfirming] = useState<ControlAction | null>(null);
+  const [typed, setTyped] = useState("");
+
+  const isPaused = (effectiveStatus ?? "").toUpperCase() !== "ACTIVE";
+
+  async function run(action: ControlAction, confirm?: string) {
+    setBusy(action);
+    setFailed(false);
+    try {
+      await adminObjectControl(campaignId, action, kind, metaObjectId, confirm);
+      setConfirming(null);
+      setTyped("");
+      onDone(); // re-read the tree so the UI shows Meta's truth, not our guess
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="row gap8" style={{ flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+      <button className="btn btn-outline btn-sm" disabled={!!busy}
+        onClick={() => run(isPaused ? "resume" : "pause")}>
+        {busy === "pause" || busy === "resume" ? mc.working : isPaused ? mc.resume : mc.pause}
+      </button>
+      {DESTRUCTIVE.map((action) => (
+        <button key={action} className="btn btn-outline btn-sm" disabled={!!busy}
+          style={action === "delete" ? { color: "#c0362c", borderColor: "#c0362c" } : undefined}
+          onClick={() => { setConfirming(action); setTyped(""); setFailed(false); }}>
+          {action === "archive" ? mc.archive : mc.delete}
+        </button>
+      ))}
+      {failed && <span className="muted" style={{ color: "var(--orange)", fontSize: "0.8rem" }}>{mc.failed}</span>}
+
+      {confirming && (
+        <div className="op-modal-backdrop" onClick={() => setConfirming(null)}>
+          <div className="op-modal" onClick={(e) => e.stopPropagation()}>
+            <b style={{ fontSize: "1.05rem" }}>{mc.confirmTitle}</b>
+            <p className="muted" style={{ margin: "10px 0" }}>
+              {confirming === "archive" ? mc.confirmArchive : mc.confirmDelete}
+            </p>
+            <code style={{ fontSize: "0.85rem" }}>{metaObjectId}</code>
+            <div className="field" style={{ marginTop: 10 }}>
+              <input type="text" value={typed} onChange={(e) => setTyped(e.target.value)} />
+            </div>
+            <div className="row gap12" style={{ marginTop: 12 }}>
+              <button className="btn btn-primary btn-sm" disabled={typed.trim() !== metaObjectId || !!busy}
+                onClick={() => run(confirming, typed.trim())}>
+                {busy ? mc.working : mc.confirmCta}
+              </button>
+              <button className="btn btn-outline btn-sm" onClick={() => setConfirming(null)}>{mc.cancel}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface CustomerPick {
   id: string;
@@ -37,7 +115,7 @@ function MetricGrid({ metrics }: { metrics: ExplorerMetrics }) {
   );
 }
 
-function AdCard({ ad }: { ad: ExplorerAd }) {
+function AdCard({ ad, campaignId, onDone }: { ad: ExplorerAd; campaignId: string; onDone: () => void }) {
   const problem = ad.issues.length > 0;
   const c = ad.creative;
   return (
@@ -72,12 +150,13 @@ function AdCard({ ad }: { ad: ExplorerAd }) {
         )}
         {c?.pageId && <p className="muted" style={{ fontSize: "0.75rem", margin: "2px 0" }}>{m.pageLabel}: {c.pageId}</p>}
         <MetricGrid metrics={ad.metrics} />
+        <ObjectControls campaignId={campaignId} kind="ad" metaObjectId={ad.id} effectiveStatus={ad.effectiveStatus} onDone={onDone} />
       </div>
     </div>
   );
 }
 
-function AdSetCard({ adSet }: { adSet: ExplorerAdSet }) {
+function AdSetCard({ adSet, campaignId, onDone }: { adSet: ExplorerAdSet; campaignId: string; onDone: () => void }) {
   // AIC-65: a deleted/never-published ad set is never a "problem" to flag —
   // its leftover issues_info (if any) is stale noise from before it died.
   const problem = adSet.isManaged && adSet.issues.length > 0;
@@ -105,9 +184,10 @@ function AdSetCard({ adSet }: { adSet: ExplorerAdSet }) {
       {adSet.pageId && <p className="muted" style={{ fontSize: "0.78rem" }}>{m.pageLabel}: {adSet.pageId}</p>}
 
       <MetricGrid metrics={adSet.metrics} />
+      <ObjectControls campaignId={campaignId} kind="ad_set" metaObjectId={adSet.id} effectiveStatus={adSet.effectiveStatus} onDone={onDone} />
 
       <div className="op-ad-list">
-        {adSet.ads.length === 0 ? <p className="muted" style={{ fontSize: "0.85rem" }}>{m.noAds}</p> : adSet.ads.map((ad) => <AdCard key={ad.id} ad={ad} />)}
+        {adSet.ads.length === 0 ? <p className="muted" style={{ fontSize: "0.85rem" }}>{m.noAds}</p> : adSet.ads.map((ad) => <AdCard key={ad.id} ad={ad} campaignId={campaignId} onDone={onDone} />)}
       </div>
     </div>
   );
@@ -208,7 +288,7 @@ export function AdminMeta() {
           <MetricGrid metrics={result.tree.metrics} />
 
           <b style={{ fontSize: "0.95rem", display: "block", marginTop: 18 }}>{m.adSets} ({result.tree.adSets.length})</b>
-          {result.tree.adSets.length === 0 ? <p className="muted">{m.noAdSets}</p> : result.tree.adSets.map((as) => <AdSetCard key={as.id} adSet={as} />)}
+          {result.tree.adSets.length === 0 ? <p className="muted">{m.noAdSets}</p> : result.tree.adSets.map((as) => <AdSetCard key={as.id} adSet={as} campaignId={result.campaignId} onDone={() => load(result.campaignId)} />)}
         </div>
       ) : null}
     </div>

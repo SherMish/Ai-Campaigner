@@ -15,6 +15,18 @@ safe-execute pipeline (AIC-12) and emergency controls (AIC-14) extend this doc.
 
 ---
 
+> **Scope note (AIC-66).** This doc covers the *approval-gated* path: the engine
+> proposes, the customer approves, `SafeExecutor` executes. **Manual controls —
+> a human directly pausing/resuming/archiving their own ad or ad set — are a
+> separate, non-approval path** with its own module and pipeline; see
+> [manual-controls.md](manual-controls.md). It deliberately does not reuse
+> `SafeExecutor`, which is recommendation-bound at every step.
+>
+> Also note the vocabulary clash: **AIC-14's "pause" below means *stop our
+> automation*, a DB flag** that never touches Meta. AIC-66's "pause" means
+> *stop this ad from delivering*, a real Meta write. They're unrelated
+> mechanisms with the same English word.
+
 ## Budget safety (AIC-13)
 
 The customer's agreed budget (`managed_campaigns.agreed_budget_agorot`) is a hard

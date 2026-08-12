@@ -37,6 +37,19 @@ const SUMMARY_HE: Record<string, string> = {
   create_ad: "הוספת מודעה",
   activate_ad_set: "הפעלת קבוצת מודעות",
   activate_ad: "הפעלת מודעה",
+  // AIC-66 manual controls. Deliberately distinct from `pause_creative` (which
+  // is the ENGINE's recommendation vocabulary) even though both end in a
+  // paused ad — the condensed history reads better when "you paused this" and
+  // "we recommended pausing this" don't share a label. `human_involved` already
+  // separates automated from human, but the wording should agree with it.
+  pause_ad: "השהיית מודעה",
+  pause_ad_set: "השהיית קהל",
+  resume_ad: "הפעלת מודעה מחדש",
+  resume_ad_set: "הפעלת קהל מחדש",
+  archive_ad: "העברת מודעה לארכיון",
+  archive_ad_set: "העברת קהל לארכיון",
+  delete_ad: "מחיקת מודעה",
+  delete_ad_set: "מחיקת קהל",
 };
 
 function rowToEntry(r: Record<string, unknown>): ActionHistoryEntry {

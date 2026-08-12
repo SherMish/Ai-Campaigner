@@ -160,6 +160,21 @@ export const strings = {
       flexibleTitles: "כותרות",
       noCreative: "אין קריאייטיב מקושר.",
       pageLabel: "עמוד",
+      // AIC-66 operator controls. Archive is the default destructive action
+      // (recoverable); delete is the deliberate harder one.
+      controls: {
+        pause: "השהיה",
+        resume: "הפעלה",
+        archive: "העברה לארכיון",
+        delete: "מחיקה",
+        working: "מבצע…",
+        failed: "הפעולה נכשלה",
+        confirmTitle: "פעולה בלתי הפיכה",
+        confirmArchive: "העברה לארכיון ניתנת לשחזור, אבל האובייקט יפסיק לרוץ ויוסר מהדוחות. להמשך, הקלידו את המזהה:",
+        confirmDelete: "מחיקה היא לצמיתות ואי אפשר לשחזר אותה. להמשך, הקלידו את המזהה:",
+        confirmCta: "אישור",
+        cancel: "ביטול",
+      },
       // AIC-65: a deleted/never-published ad set — shown clearly as such, not
       // as a normal active ad set and never as a problem.
       deletedBadge: "נמחק / לא פורסם",
@@ -464,6 +479,21 @@ export const strings = {
         },
         // AIC-37: opt-in per-audience / per-creative details — collapsed by
         // default, never the landing view.
+        // AIC-66: the customer's own pause/resume. Pausing your own ad is
+        // itself the authorization — no approval step, unlike an engine
+        // recommendation. Deliberately no delete on this surface.
+        controls: {
+          pauseAd: "השהיית המודעה",
+          resumeAd: "הפעלת המודעה",
+          pauseAdSet: "השהיית הקהל",
+          resumeAdSet: "הפעלת הקהל",
+          pausedBadge: "מושהה",
+          working: "רגע…",
+          failed: "לא הצלחנו לבצע את השינוי. נסו שוב.",
+          // An ad set carries every ad under it — say so plainly before they click.
+          adSetNote: "השהיית קהל עוצרת את כל המודעות שרצות אליו.",
+          resumeNote: "הפעלה מחדש מחזירה את ההוצאה על האובייקט הזה.",
+        },
         details: {
           show: "הצג פירוט",
           hide: "הסתר פירוט",
