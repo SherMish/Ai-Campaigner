@@ -19,18 +19,33 @@ let counter = 0;
 
 // A shared status map lets an activate POST flip what a later status GET
 // reads back — exactly the read-back-verify path approveAddition depends on.
-function mockMetaFetch(existingAdSets: Array<{ id: string; name: string; status?: string }> = []) {
+// `hasAds: false` models a deleted / never-published ad set the way Meta really
+// reports it (AIC-65, verified live): `effective_status` still says ACTIVE, and
+// the `ads` connection field is OMITTED entirely rather than returned empty.
+function mockMetaFetch(existingAdSets: Array<{ id: string; name: string; status?: string; hasAds?: boolean }> = []) {
   const statuses = new Map<string, string>(existingAdSets.map((a) => [a.id, a.status ?? "ACTIVE"]));
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     const u = String(url);
     const method = init?.method ?? "GET";
 
     if (method === "GET") {
-      if (u.includes("/promotable_posts")) {
-        return jsonRes({ data: [{ id: "post_1", message: "hi", picture: "https://x/p.jpg", created_time: "2026-01-01T00:00:00Z" }] });
+      // Page content needs the Page's own token, fetched from me/accounts first
+      // (verified live — see campaign-adapter.test.ts).
+      if (u.includes("me/accounts")) {
+        return jsonRes({ data: [{ id: "page_1", access_token: "PAGE_TOKEN" }] });
+      }
+      if (u.includes("/posts?")) {
+        return jsonRes({ data: [{ id: "post_1", message: "hi", full_picture: "https://x/p.jpg", created_time: "2026-01-01T00:00:00Z" }] });
       }
       if (u.includes("/adsets?")) {
-        return jsonRes({ data: existingAdSets.map((a) => ({ id: a.id, name: a.name, is_dynamic_creative: false, effective_status: statuses.get(a.id) ?? "ACTIVE", targeting: {} })) });
+        return jsonRes({
+          data: existingAdSets.map((a) => ({
+            id: a.id, name: a.name, is_dynamic_creative: false,
+            effective_status: statuses.get(a.id) ?? "ACTIVE", targeting: {},
+            // omit `ads` entirely when the ad set has none — Meta's real shape
+            ...(a.hasAds === false ? {} : { ads: { data: [{ id: `${a.id}_ad` }] } }),
+          })),
+        });
       }
       if (u.includes("fields=effective_status")) {
         const id = u.split("/").pop()!.split("?")[0];
@@ -202,6 +217,34 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
 
     const approve = await request(app).post(`/api/app/additions/${addSet.body.additionId}/approve`).set("Authorization", `Bearer ${token}`);
     expect(approve.body).toEqual({ outcome: "approved" });
+  });
+
+  // AIC-65 reached the engine tick but NOT these customer-facing routes — found
+  // live on 2026-08-12 when the real dead GelNails ad set was still offered in
+  // the add-ad picker. An ad added to a dead ad set would never deliver.
+  it("never offers a dead/never-published ad set, and refuses one passed by id", async () => {
+    const { token, campaignId } = await seedExistingCampaign("deadadset");
+    const { fetchMock } = mockMetaFetch([
+      { id: "as_real", name: "Women 18-45" },
+      { id: "as_dead", name: "Deleted draft", hasAds: false },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const list = await request(app).get("/api/app/additions/ad-sets").set("Authorization", `Bearer ${token}`);
+    expect(list.status).toBe(200);
+    expect(list.body.adSets.map((a: { id: string }) => a.id)).toEqual(["as_real"]);
+
+    // ...and the id is rejected even if a client sends it directly (the ad-set
+    // check runs before anything is created, so a placeholder creative id is
+    // enough to prove the guard fires).
+    const res = await request(app)
+      .post("/api/app/additions/ad")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ metaAdSetId: "as_dead", name: "Ad", creativeId: "crea_placeholder", additionKey: "k1" });
+    expect(res.status).toBe(404);
+
+    const pending = await pool.query(`SELECT count(*)::int AS n FROM pending_additions WHERE campaign_id = $1`, [campaignId]);
+    expect(pending.rows[0].n).toBe(0); // nothing created against a dead ad set
   });
 
   it("503s honestly with no META_SYSTEM_USER_TOKEN configured", async () => {

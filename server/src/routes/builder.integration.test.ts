@@ -19,8 +19,13 @@ let counter = 0;
 function mockMetaFetch() {
   return vi.fn(async (url: string) => {
     const u = String(url);
-    if (u.includes("/promotable_posts")) {
-      return jsonRes({ data: [{ id: "post_1", message: "hi", picture: "https://x/p.jpg", created_time: "2026-01-01T00:00:00Z" }] });
+    // Page content requires the Page's own token, fetched from me/accounts
+    // first — `/promotable_posts` does not exist (verified live 2026-08-12).
+    if (u.includes("me/accounts")) {
+      return jsonRes({ data: [{ id: "page_it_1", access_token: "PAGE_TOKEN" }] });
+    }
+    if (u.includes("/posts?")) {
+      return jsonRes({ data: [{ id: "post_1", message: "hi", full_picture: "https://x/p.jpg", created_time: "2026-01-01T00:00:00Z" }] });
     }
     if (u.endsWith("/adimages")) return jsonRes({ images: { "photo.jpg": { hash: "img_hash_1", url: "https://x/photo.jpg" } } });
     if (u.endsWith("/adcreatives")) return jsonRes({ id: `crea_${++counter}` });

@@ -33,9 +33,11 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     private readonly videoPollDelayMs = 2000,
   ) {}
 
-  private async get(pathAndQuery: string): Promise<Record<string, unknown>> {
+  // `token` defaults to the System User token; Page-content edges must pass the
+  // Page's own token instead (see pageAccessToken).
+  private async get(pathAndQuery: string, token: string = this.token): Promise<Record<string, unknown>> {
     const r = await fetch(`${BASE}/${this.ver}/${pathAndQuery}`, {
-      headers: { Authorization: `Bearer ${this.token}` },
+      headers: { Authorization: `Bearer ${token}` },
     });
     const body = (await r.json().catch(() => ({}))) as Record<string, unknown>;
     if (!r.ok) throw new Error(`GET ${pathAndQuery} → ${r.status} ${JSON.stringify(body.error ?? body)}`);
@@ -281,12 +283,38 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     throw new Error(`video ${videoId} did not finish processing within ${(POLL_ATTEMPTS * this.videoPollDelayMs) / 1000}s`);
   }
 
+  // The Page's own access token, required for every Page-content edge. Verified
+  // live 2026-08-12: Meta rejects the System User token on `/{page}/posts` with
+  // "A Page access token is required for this call for the new Pages
+  // experience" (code 190/subcode 2069032). The Page must be assigned to this
+  // System User for `/me/accounts` to include it — see docs/META_SETUP.md's
+  // three-layers-of-access section.
+  private async pageAccessToken(pageId: string): Promise<string> {
+    const body = await this.get(`me/accounts?fields=id,access_token&limit=200`);
+    const rows = (body.data as Array<{ id?: string; access_token?: string }>) ?? [];
+    const match = rows.find((r) => String(r.id) === pageId);
+    if (!match?.access_token) {
+      throw new Error(
+        `no Page access token for ${pageId} — the Page is not assigned to this System User (see docs/META_SETUP.md)`,
+      );
+    }
+    return match.access_token;
+  }
+
   async listPromotablePosts(pageId: string): Promise<PromotablePost[]> {
-    const body = await this.get(`${pageId}/promotable_posts?fields=id,message,picture,created_time&limit=25`);
+    // NOT `/promotable_posts` — that edge does not exist (verified live: "(#100)
+    // Tried accessing nonexisting field (promotable_posts)" with BOTH a System
+    // User and a Page token). `/posts` is the real edge, and it needs the Page's
+    // own token.
+    const pageToken = await this.pageAccessToken(pageId);
+    const body = await this.get(
+      `${pageId}/posts?fields=id,message,full_picture,created_time&limit=25`,
+      pageToken,
+    );
     return ((body.data as Array<Record<string, unknown>>) ?? []).map((p) => ({
       id: String(p.id),
       message: p.message ? String(p.message) : null,
-      pictureUrl: p.picture ? String(p.picture) : null,
+      pictureUrl: p.full_picture ? String(p.full_picture) : null,
       createdAt: String(p.created_time ?? ""),
     }));
   }

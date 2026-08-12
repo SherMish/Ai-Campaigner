@@ -166,19 +166,47 @@ describe("GraphCampaignAdapter creative handling (AIC-51)", () => {
     await expect(adapter.uploadVideo("act_123", Buffer.from("x"), "clip.mp4")).rejects.toThrow(/did not finish processing/);
   });
 
-  it("listPromotablePosts maps Meta's fields to a plain post list", async () => {
-    const mock = vi.fn(async (_url: string) => ({
+  // Verified live 2026-08-12 against the real "Byliam nails" Page:
+  //  - `/{page}/promotable_posts` does NOT exist ("(#100) Tried accessing
+  //    nonexisting field") with EITHER a System User or a Page token
+  //  - `/{page}/posts` works, but ONLY with the Page's own access token
+  //    (System User token → 190/2069032 "A Page access token is required")
+  // The previous version of this test asserted the promotable_posts URL and
+  // passed against a mock, which is exactly why the broken endpoint shipped.
+  it("listPromotablePosts fetches the Page token, then reads /posts WITH it", async () => {
+    const mock = vi.fn(async (url: string, _init?: RequestInit) => ({
       ok: true, status: 200,
-      json: async () => ({ data: [{ id: "post_1", message: "hello", picture: "https://x/p.jpg", created_time: "2026-08-01T00:00:00Z" }] }),
+      json: async () =>
+        url.includes("me/accounts")
+          ? { data: [{ id: "page_1", access_token: "PAGE_TOKEN" }] }
+          : { data: [{ id: "post_1", message: "hello", full_picture: "https://x/p.jpg", created_time: "2026-08-01T00:00:00Z" }] },
     } as unknown as Response));
     vi.stubGlobal("fetch", mock);
-    const adapter = new GraphCampaignAdapter("tok");
+    const adapter = new GraphCampaignAdapter("SYSTEM_TOKEN");
 
     const posts = await adapter.listPromotablePosts("page_1");
 
     expect(posts).toEqual([{ id: "post_1", message: "hello", pictureUrl: "https://x/p.jpg", createdAt: "2026-08-01T00:00:00Z" }]);
-    const [url] = mock.mock.calls[0] as [string];
-    expect(url).toContain("page_1/promotable_posts");
+
+    const [tokenUrl, tokenInit] = mock.mock.calls[0] as [string, RequestInit];
+    expect(tokenUrl).toContain("me/accounts");
+    expect((tokenInit.headers as Record<string, string>).Authorization).toBe("Bearer SYSTEM_TOKEN");
+
+    const [postsUrl, postsInit] = mock.mock.calls[1] as [string, RequestInit];
+    expect(postsUrl).toContain("page_1/posts");
+    expect(postsUrl).not.toContain("promotable_posts");
+    // the Page token, NOT the System User token — the whole point
+    expect((postsInit.headers as Record<string, string>).Authorization).toBe("Bearer PAGE_TOKEN");
+  });
+
+  it("listPromotablePosts fails honestly when the Page isn't assigned to the System User", async () => {
+    const mock = vi.fn(async (_url: string) => ({
+      ok: true, status: 200, json: async () => ({ data: [] }), // no Pages reachable
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await expect(adapter.listPromotablePosts("page_1")).rejects.toThrow(/not assigned to this System User/);
   });
 
   it("createCreativeFromUpload sends a WhatsApp object_story_spec referencing the uploaded image", async () => {

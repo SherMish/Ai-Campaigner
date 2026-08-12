@@ -50,7 +50,9 @@ additionsRouter.get("/ad-sets", requireAuth, async (req, res) => {
     if (!ctx) return notReady(res);
     const writer = buildAdditionWriter();
     if (!writer) return unavailable(res);
-    const adsets = await writer.getAdSetMeta(ctx.metaCampaignId);
+    // AIC-65: never offer a deleted/archived/never-published ad set as a place
+    // to add an ad — an ad added there would never deliver.
+    const adsets = (await writer.getAdSetMeta(ctx.metaCampaignId)).filter((a) => a.isManaged);
     res.json({ adSets: adsets.map((a) => ({ id: a.adSetId, name: a.name, status: a.status })) });
   } catch (e) {
     console.error("[additions] list ad sets failed", e);
@@ -168,7 +170,10 @@ additionsRouter.post("/ad", requireAuth, async (req, res) => {
     const writer = buildAdditionWriter();
     if (!writer) return unavailable(res);
 
-    const ownAdSets = await writer.getAdSetMeta(ctx.metaCampaignId);
+    // Ownership + liveness re-check: the ad set must be the caller's AND still
+    // a real, managed one (AIC-65) — a client can't target a dead ad set by id
+    // even though the picker no longer offers it.
+    const ownAdSets = (await writer.getAdSetMeta(ctx.metaCampaignId)).filter((a) => a.isManaged);
     if (!ownAdSets.some((a) => a.adSetId === body.metaAdSetId)) {
       res.status(404).json({ error: "ad set not found" });
       return;
