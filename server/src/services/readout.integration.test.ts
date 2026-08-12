@@ -164,4 +164,53 @@ d("dogfood readout (DB + HTTP)", () => {
 
     await pool.query(`DELETE FROM customers WHERE id = $1`, [cust.rows[0].id]);
   });
+
+  // The day/week/month/all-time switcher. The critical property: ranges are
+  // summed from DISJOINT per-day rows and are completely unaffected by the
+  // overlapping rolling-window rows stored alongside them — summing those was
+  // the real bug that made 1 lead read as 3.
+  it("ranges sum disjoint per-day rows and ignore the overlapping rolling windows", async () => {
+    const cust = await pool.query<{ id: string }>(
+      `INSERT INTO customers (business_name, is_test) VALUES ('__it_ro_ranges', true) RETURNING id`,
+    );
+    const conn = await pool.query<{ id: string }>(
+      `INSERT INTO meta_connections (customer_id, access_health) VALUES ($1,'ok') RETURNING id`,
+      [cust.rows[0].id],
+    );
+    const acct = await pool.query<{ id: string }>(
+      `INSERT INTO ad_accounts (connection_id, meta_ad_account_id) VALUES ($1,$2) RETURNING id`,
+      [conn.rows[0].id, `act_rg_${conn.rows[0].id.slice(0, 8)}`],
+    );
+    const camp = await pool.query<{ id: string }>(
+      `INSERT INTO managed_campaigns (customer_id, ad_account_id, name, status, leads_to_date, spend_to_date)
+       VALUES ($1,$2,'Ranges','active', 99, 12345) RETURNING id`,
+      [cust.rows[0].id, acct.rows[0].id],
+    );
+    const campaignId = camp.rows[0].id;
+    const iso = (offset: number) => new Date(Date.now() - offset * 86400000).toISOString().slice(0, 10);
+
+    const store = new PgSnapshotStore(pool);
+    await store.upsert([
+      // Disjoint single-day rows: today, 3 days ago, 20 days ago.
+      snap(campaignId, { periodStart: iso(0), periodEnd: iso(0), spendAgorot: 100, leads: 1 }),
+      snap(campaignId, { periodStart: iso(3), periodEnd: iso(3), spendAgorot: 200, leads: 2 }),
+      snap(campaignId, { periodStart: iso(20), periodEnd: iso(20), spendAgorot: 400, leads: 4 }),
+      // An OVERLAPPING rolling window covering all of the above. If ranges
+      // ever summed this too, every figure below would be inflated.
+      snap(campaignId, { periodStart: iso(25), periodEnd: iso(0), spendAgorot: 9999, leads: 99 }),
+    ]);
+
+    const readout = await buildCampaignReadout(pool, campaignId);
+    expect(readout!.ranges.day).toMatchObject({ spendAgorot: 100, leads: 1 });
+    expect(readout!.ranges.week).toMatchObject({ spendAgorot: 300, leads: 3 }); // today + 3d ago
+    expect(readout!.ranges.month).toMatchObject({ spendAgorot: 700, leads: 7 }); // + 20d ago
+    // All-time comes from the cached lifetime read, NOT from summing days —
+    // per-day rows only reach back DAILY_LOOKBACK_DAYS.
+    expect(readout!.ranges.allTime).toMatchObject({ spendAgorot: 12345, leads: 99 });
+    // The graph series carries only the real single-day points.
+    expect(readout!.daily.map((p) => p.leads)).toEqual([4, 2, 1]);
+    expect(readout!.firstDataDate).toBe(iso(20));
+
+    await pool.query(`DELETE FROM customers WHERE id = $1`, [cust.rows[0].id]);
+  });
 });

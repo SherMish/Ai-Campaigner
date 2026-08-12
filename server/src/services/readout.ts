@@ -2,8 +2,23 @@ import type pg from "pg";
 import type { Agorot } from "@aic/shared";
 import type { CampaignStatus } from "@aic/shared";
 import type { InsightsPeriod } from "../meta/types.js";
-import { PgSnapshotStore, type PeriodAgg } from "../meta/snapshot-store.js";
-import { rollingPeriods, todayPeriod } from "../meta/scheduled-ingestion.js";
+import { PgSnapshotStore, type PeriodAgg, type DailyPoint } from "../meta/snapshot-store.js";
+import { rollingPeriods, todayPeriod, dailyPeriod } from "../meta/scheduled-ingestion.js";
+import { computeCpl } from "../meta/insights.js";
+
+// The customer-selectable ranges. "day" is today so far (provisional);
+// "week"/"month" are trailing windows INCLUDING today, so the switcher always
+// answers "how am I doing" rather than the engine's complete-days question.
+export const RANGE_KEYS = ["day", "week", "month", "allTime"] as const;
+export type RangeKey = (typeof RANGE_KEYS)[number];
+
+const RANGE_DAYS: Record<Exclude<RangeKey, "allTime">, number> = { day: 1, week: 7, month: 30 };
+
+function sumDays(points: DailyPoint[]): PeriodAgg {
+  const spendAgorot = points.reduce((s, p) => s + p.spendAgorot, 0);
+  const leads = points.reduce((s, p) => s + p.leads, 0);
+  return { spendAgorot, leads, cplAgorot: computeCpl(spendAgorot, leads) };
+}
 
 export interface CreativeRow {
   metaObjectId: string;
@@ -28,6 +43,17 @@ export interface CampaignReadout {
   // noisy mid-day without helping anyone. Provisional: Meta's same-day
   // conversion data is incomplete and revises upward.
   today: PeriodAgg;
+  // The customer's day/week/month/all-time switcher. Every bounded range is
+  // summed from DISJOINT per-day rows; `allTime` comes from the cached
+  // lifetime Meta read instead (per-day rows only go back
+  // DAILY_LOOKBACK_DAYS). Never summed from the rolling-window snapshots —
+  // those overlap and would multiply every figure.
+  ranges: Record<RangeKey, PeriodAgg>;
+  // Per-day series behind the leads graph, oldest first.
+  daily: DailyPoint[];
+  // Earliest day we have real data for, so the UI can say "this campaign is
+  // new" instead of implying a flat empty month.
+  firstDataDate: string | null;
   delta: {
     spendPct: number | null;
     leadsPct: number | null;
@@ -54,20 +80,43 @@ export async function buildCampaignReadout(
     name: string;
     status: CampaignStatus;
     meta_campaign_id: string | null;
+    leads_to_date: number | null;
+    spend_to_date: number | null;
   }>(
-    `SELECT name, status, meta_campaign_id FROM managed_campaigns WHERE id = $1`,
+    `SELECT name, status, meta_campaign_id, leads_to_date, spend_to_date
+     FROM managed_campaigns WHERE id = $1`,
     [campaignId],
   );
   if (camp.rows.length === 0) return null;
 
   const { current, previous } = rollingPeriods(ref);
   const todayWindow = todayPeriod(ref);
+  const dailyWindow = dailyPeriod(ref);
   const store = new PgSnapshotStore(pool);
-  const [cur, prev, today] = await Promise.all([
+  const [cur, prev, today, daily] = await Promise.all([
     store.campaignTotals(campaignId, current.start, current.end),
     store.campaignTotals(campaignId, previous.start, previous.end),
     store.campaignTotals(campaignId, todayWindow.start, todayWindow.end),
+    store.dailySeries(campaignId, dailyWindow.start, dailyWindow.end),
   ]);
+
+  // Bounded ranges = sums over disjoint days, trailing and INCLUDING today.
+  const day = 24 * 60 * 60 * 1000;
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const rangeFrom = (days: number) => iso(new Date(ref.getTime() - (days - 1) * day));
+  const ranges = {
+    day: sumDays(daily.filter((p) => p.date >= rangeFrom(RANGE_DAYS.day))),
+    week: sumDays(daily.filter((p) => p.date >= rangeFrom(RANGE_DAYS.week))),
+    month: sumDays(daily.filter((p) => p.date >= rangeFrom(RANGE_DAYS.month))),
+    // Lifetime figures come from the cached Meta read — the per-day rows only
+    // reach back DAILY_LOOKBACK_DAYS, so summing them would silently
+    // under-report an older campaign's "all time".
+    allTime: {
+      spendAgorot: Number(camp.rows[0].spend_to_date ?? 0),
+      leads: Number(camp.rows[0].leads_to_date ?? 0),
+      cplAgorot: computeCpl(Number(camp.rows[0].spend_to_date ?? 0), Number(camp.rows[0].leads_to_date ?? 0)),
+    },
+  } satisfies Record<RangeKey, PeriodAgg>;
 
   const creatives = await pool.query<{
     meta_object_id: string;
@@ -94,6 +143,9 @@ export async function buildCampaignReadout(
     current: cur,
     previous: prev,
     today,
+    ranges,
+    daily,
+    firstDataDate: daily.find((p) => p.spendAgorot > 0 || p.leads > 0)?.date ?? null,
     delta: {
       spendPct: deltaPct(cur.spendAgorot, prev.spendAgorot),
       leadsPct: deltaPct(cur.leads, prev.leads),

@@ -17,6 +17,9 @@ import {
   type CampaignAudiences,
   type LaunchSummary,
   type LeadQualityStatus,
+  type DailyPoint,
+  type RangeKey,
+  RANGE_KEYS,
 } from "../api";
 import { StatusPill } from "./components";
 import { useSharedOverview, invalidateOverview } from "./overview-store";
@@ -26,7 +29,6 @@ const h = a.home;
 const L = h.live;
 const D = h.details;
 const CT = h.controls;
-const TD = h.today;
 
 // AIC-64: distinct, honest copy for WHY there's no recommendation, keyed by the
 // engine's reason. `delivery_blocked` is deliberately absent — a delivery
@@ -80,6 +82,83 @@ function hero(state: HomeState, attentionKind: CustomerOverview["attentionKind"]
   }
 }
 
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("he-IL", { day: "numeric", month: "short" });
+
+// The day/week/month/all-time switcher. Design reference: a pill row where the
+// selected item is a white chip on the cream track. Makes the window an
+// explicit choice instead of an unstated assumption — the previous screen
+// showed a "today" card next to 7-day KPIs and the two read as contradictory.
+function RangeSwitcher({ value, onChange }: { value: RangeKey; onChange: (r: RangeKey) => void }) {
+  return (
+    <div className="range-switch" role="tablist" aria-label={h.graphTitle}>
+      {RANGE_KEYS.map((k) => (
+        <button
+          key={k}
+          role="tab"
+          aria-selected={value === k}
+          className={`range-opt${value === k ? " on" : ""}`}
+          onClick={() => onChange(k)}
+        >
+          {h.ranges[k]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Leads per week — the rail's "is this trending anywhere" glance. Built from
+// the disjoint per-day series (never the overlapping rolling windows), bucketed
+// into trailing 7-day blocks, oldest first.
+function LeadsGraph({ daily }: { daily: DailyPoint[] }) {
+  const weeks: Array<{ label: string; leads: number }> = [];
+  if (daily.length > 0) {
+    const last = daily[daily.length - 1].date;
+    const end = new Date(last + "T00:00:00Z").getTime();
+    for (let w = 3; w >= 0; w--) {
+      const hi = end - w * 7 * 86400000;
+      const lo = hi - 6 * 86400000;
+      const isoLo = new Date(lo).toISOString().slice(0, 10);
+      const isoHi = new Date(hi).toISOString().slice(0, 10);
+      weeks.push({
+        label: fmtDate(isoLo),
+        leads: daily.filter((p) => p.date >= isoLo && p.date <= isoHi).reduce((s, p) => s + p.leads, 0),
+      });
+    }
+  }
+  const max = Math.max(1, ...weeks.map((w) => w.leads));
+  const hasAny = weeks.some((w) => w.leads > 0);
+
+  return (
+    <div className="card">
+      <b style={{ fontSize: "0.98rem" }}>{h.graphTitle}</b>
+      {!hasAny ? (
+        <p className="muted" style={{ marginTop: 10, fontSize: "0.88rem" }}>{h.graphEmpty}</p>
+      ) : (
+        <div className="row" style={{ alignItems: "flex-end", gap: 10, height: 96, marginTop: 14 }}>
+          {weeks.map((w, i) => (
+            <div key={i} className="stack" style={{ flex: 1, alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: "0.78rem", fontWeight: 700 }}>{w.leads}</span>
+              <div
+                title={`${h.graphWeekPrefix} ${w.label}: ${w.leads}`}
+                style={{
+                  width: "100%",
+                  // Always a visible sliver so an empty week reads as "zero",
+                  // not as a missing bar.
+                  height: `${Math.max(4, Math.round((w.leads / max) * 64))}px`,
+                  borderRadius: 6,
+                  background: w.leads > 0 ? "var(--orange)" : "var(--line)",
+                }}
+              />
+              <span className="muted" style={{ fontSize: "0.68rem", whiteSpace: "nowrap" }}>{w.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // A signed percent delta as an arrow + label. `goodDown` flips the color meaning
 // (CPL improving = down = good; leads improving = up = good).
 function Delta({ pct, goodDown }: { pct: number | null; goodDown?: boolean }) {
@@ -96,6 +175,7 @@ function Delta({ pct, goodDown }: { pct: number | null; goodDown?: boolean }) {
 export function Home() {
   const { data: ov, loading, error: err, reload } = useSharedOverview(); // shared with Sidebar/Settings (AIC-42)
   const [launchOpen, setLaunchOpen] = useState(false);
+  const [range, setRange] = useState<RangeKey>("week");
 
   if (loading && !ov)
     return <div className="wrap page"><p className="muted">{a.loading}</p></div>;
@@ -114,9 +194,13 @@ export function Home() {
   const readyToBuild = ov.connection?.accessHealth === "ok" && !!ov.connection.adAccount && !!ov.connection.pageId;
   const hd = hero(state, ov.attentionKind, readyToBuild);
   const r = ov.readout;
-  const leads = r?.current.leads ?? 0;
-  const cpl = r?.current.cplAgorot ?? null;
-  const spend = r?.current.spendAgorot ?? 0;
+  // One explicit window, chosen by the customer — replaces the old
+  // "today card + separate 7-day KPIs" split, which showed two sets of
+  // numbers for the same campaign and read as a contradiction.
+  const agg = r?.ranges[range] ?? r?.current;
+  const leads = agg?.leads ?? 0;
+  const cpl = agg?.cplAgorot ?? null;
+  const spend = agg?.spendAgorot ?? 0;
   // AIC-71: `deliveringAdCount` is the engine's live per-tick count of ads
   // that are actually deliverable right now (real ad/ad-set status) — the
   // honest number. Before the engine's first tick for this campaign it's
@@ -127,6 +211,15 @@ export function Home() {
     ov.campaign?.deliveringAdCount ??
     new Set((r?.perCreative ?? []).map((c) => c.creativeName ?? c.metaObjectId)).size;
   const period = ov.campaign?.budgetPeriod === "monthly" ? L.perMonth : L.perDay;
+  // True when the selected window reaches back further than we have data for,
+  // i.e. the range is padded with days the campaign didn't exist.
+  const rangeStartsBeforeData = (() => {
+    if (!r?.firstDataDate || range === "day") return false;
+    if (range === "allTime") return false; // all-time is by definition exactly what exists
+    const days = range === "week" ? 7 : 30;
+    const start = new Date(Date.now() - (days - 1) * 86400000).toISOString().slice(0, 10);
+    return start < r.firstDataDate;
+  })();
 
   return (
     <div className="wrap page dash">
@@ -150,37 +243,12 @@ export function Home() {
 
           {launchOpen && <LaunchModal onClose={() => setLaunchOpen(false)} />}
 
-          {/* Today so far — the thing the owner actually wants to know, and
-              what the 7-day window below structurally cannot show (it stops
-              at yesterday, matching the engine's complete-days evaluation).
-              Deliberately its own line rather than blended into the KPIs:
-              folding a partial day into a 7-day CPL makes that ratio noisy
-              mid-day without helping anyone. */}
-          {r && (
-            <div className="card">
-              <div className="row between" style={{ flexWrap: "wrap", gap: 10 }}>
-                <b>{TD.title}</b>
-                {r.today.leads === 0 && r.today.spendAgorot === 0 ? (
-                  <span className="muted" style={{ fontSize: "0.88rem" }}>{TD.none}</span>
-                ) : (
-                  <span className="row gap16" style={{ flexWrap: "wrap" }}>
-                    <Metric label={TD.leads} value={String(r.today.leads)} />
-                    <Metric label={TD.spend} value={shekels(r.today.spendAgorot)} />
-                  </span>
-                )}
-              </div>
-              {(r.today.leads > 0 || r.today.spendAgorot > 0) && (
-                <p className="muted" style={{ marginTop: 8, fontSize: "0.8rem" }}>{TD.provisional}</p>
-              )}
-            </div>
-          )}
-
-          {/* KPIs — the questions the customer actually asks. Window stated
-              once above the group, so no number is ever presented as
-              something it isn't (the old "הוצאה החודש" sat on a 7-day value). */}
-          {/* paddingInline matches .dash .card so the window label lines up
-              with the card TEXT below it, not the card's outer edge. */}
-          <div className="muted" style={{ fontSize: "0.8rem", marginTop: 4, paddingInline: 20 }}>{h.kpiWindow}</div>
+          {/* ONE explicit window, chosen by the customer. This replaced a
+              "today card + separate 7-day KPI block", which showed two sets
+              of numbers for the same campaign and read as a contradiction.
+              The engine still evaluates on complete days regardless of what's
+              selected here — see the no-rec note below. */}
+          <RangeSwitcher value={range} onChange={setRange} />
           <div className="grid-3">
             <div className="kpi">
               <b>{cpl === null ? L.none : shekels(cpl)}</b>
@@ -198,6 +266,18 @@ export function Home() {
               <Delta pct={r?.delta.spendPct ?? null} />
             </div>
           </div>
+
+          {/* Only "today" is a still-updating partial window. */}
+          {range === "day" && (
+            <p className="muted" style={{ fontSize: "0.8rem", paddingInline: 20 }}>{h.provisional}</p>
+          )}
+          {/* Honest thin-data: a campaign that started 4 days ago shouldn't
+              let "חודש" imply a flat, empty month of bad performance. */}
+          {rangeStartsBeforeData && r?.firstDataDate && (
+            <p className="muted" style={{ fontSize: "0.8rem", paddingInline: 20 }}>
+              {h.newCampaignPrefix} {fmtDate(r.firstDataDate)} {h.newCampaignSuffix}
+            </p>
+          )}
 
           {/* opt-in per-audience / per-creative details (AIC-37) — collapsed by default */}
           {ov.campaign && <AudienceDetails activeAds={activeAds} />}
@@ -267,6 +347,7 @@ export function Home() {
               <div className="summary-row"><span className="k">{h.sLeads}</span><b>{leads}</b></div>
             </div>
           </div>
+          {r && <LeadsGraph daily={r.daily} />}
         </div>
       </div>
     </div>
@@ -685,14 +766,17 @@ function LeadQualityCard({ leadQuality }: { leadQuality: LeadQualityStatus }) {
       .finally(() => setSaving(false));
   }
 
+  // Only the ASK is the loud ink+orange card (design reference) — it's the one
+  // thing on the page that wants the customer to do something. Caught-up and
+  // thank-you states stay quiet white cards.
+  const asking = !saved && pending > 0;
+
   return (
-    <div className="card">
+    <div className={`card${asking ? " lq-card" : ""}`}>
       <div className="row between">
-        <b>{h.weeklyTitle}</b>
-        {!saved && (
-          <span className={`pill ${pending > 0 ? "warn" : "ok"}`} style={{ fontSize: "0.75rem" }}>
-            {pending > 0 ? `${pending} ${h.toReviewBadge}` : h.caughtUpBadge}
-          </span>
+        {asking ? <div className="lq-eyebrow">{h.weeklyTitle}</div> : <b>{h.weeklyTitle}</b>}
+        {!saved && !asking && (
+          <span className="pill ok" style={{ fontSize: "0.75rem" }}>{h.caughtUpBadge}</span>
         )}
       </div>
 
@@ -710,15 +794,15 @@ function LeadQualityCard({ leadQuality }: { leadQuality: LeadQualityStatus }) {
         </>
       ) : (
         <>
-          <p className="muted" style={{ margin: "8px 0 4px" }}>{h.pendingPrefix} {pending} {h.pendingSuffix}</p>
-          <p style={{ margin: "4px 0 16px", fontWeight: 500 }}>{h.pendingQuestion}</p>
+          <div style={{ fontSize: "1.25rem", fontWeight: 700, marginTop: 10 }}>{h.pendingQuestion}</div>
+          <p className="muted" style={{ margin: "8px 0 16px" }}>{h.pendingPrefix} {pending} {h.pendingSuffix}</p>
           <div className="row gap16" style={{ flexWrap: "wrap" }}>
             <div className="stepper-inline">
               <button onClick={() => setRelevant((c) => Math.max(0, c - 1))}>−</button>
               <span className="v">{relevant}</span>
               <button onClick={() => setRelevant((c) => Math.min(pending, c + 1))}>+</button>
             </div>
-            <button className="btn btn-dark" onClick={submit} disabled={saving}>{a.save}</button>
+            <button className="btn btn-primary" onClick={submit} disabled={saving}>{a.save}</button>
           </div>
           {error && <p className="muted" style={{ marginTop: 10 }}>{a.loadError}</p>}
         </>

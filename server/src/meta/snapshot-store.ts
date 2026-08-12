@@ -55,6 +55,22 @@ export interface SnapshotStore {
     start: string,
     end: string,
   ): Promise<AdsetStatRow[]>;
+  // Per-DAY campaign rows within [start, end], ascending. ONLY rows whose
+  // period covers exactly one day (period_start = period_end) — the rolling
+  // 7-day windows stored alongside them OVERLAP and must never be summed
+  // into a range (the real bug that made 1 lead read as 3).
+  dailySeries(
+    campaignId: string,
+    start: string,
+    end: string,
+  ): Promise<DailyPoint[]>;
+}
+
+// One calendar day of campaign-grain performance.
+export interface DailyPoint {
+  date: string; // YYYY-MM-DD
+  spendAgorot: number;
+  leads: number;
 }
 
 export class PgSnapshotStore implements SnapshotStore {
@@ -182,6 +198,25 @@ export class PgSnapshotStore implements SnapshotStore {
       deliveryStatus: r.delivery_status,
     }));
   }
+
+  async dailySeries(campaignId: string, start: string, end: string): Promise<DailyPoint[]> {
+    const { rows } = await this.pool.query<{ d: string; spend_agorot: number; leads: number }>(
+      // period_start = period_end is what makes a row a single DAY. Without
+      // it this would also sweep up the overlapping rolling-7-day rows and
+      // multiply every total.
+      `SELECT to_char(period_start, 'YYYY-MM-DD') AS d,
+              SUM(spend_agorot)::int AS spend_agorot,
+              SUM(leads)::int        AS leads
+       FROM insight_snapshots
+       WHERE campaign_id = $1 AND grain = 'campaign'
+         AND period_start = period_end
+         AND period_start >= $2 AND period_start <= $3
+       GROUP BY period_start
+       ORDER BY period_start ASC`,
+      [campaignId, start, end],
+    );
+    return rows.map((r) => ({ date: r.d, spendAgorot: Number(r.spend_agorot), leads: Number(r.leads) }));
+  }
 }
 
 // In-memory store for unit tests.
@@ -261,5 +296,20 @@ export class InMemorySnapshotStore implements SnapshotStore {
         deliveryStatus: r.deliveryStatus,
       }))
       .sort((a, b) => b.spendAgorot - a.spendAgorot);
+  }
+
+  async dailySeries(campaignId: string, start: string, end: string): Promise<DailyPoint[]> {
+    const byDate = new Map<string, DailyPoint>();
+    for (const r of this.rows.values()) {
+      // Single-day rows only — see the Pg implementation's note.
+      if (r.campaignId !== campaignId || r.grain !== "campaign") continue;
+      if (r.periodStart !== r.periodEnd) continue;
+      if (r.periodStart < start || r.periodStart > end) continue;
+      const cur = byDate.get(r.periodStart) ?? { date: r.periodStart, spendAgorot: 0, leads: 0 };
+      cur.spendAgorot += r.spendAgorot;
+      cur.leads += r.leads;
+      byDate.set(r.periodStart, cur);
+    }
+    return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
   }
 }

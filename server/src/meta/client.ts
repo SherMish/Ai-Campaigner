@@ -78,6 +78,38 @@ export class GraphMetaClient implements MetaClient {
     }
   }
 
+  // Per-DAY campaign rows (`time_increment=1`). These are DISJOINT — one row
+  // per calendar day — which is the whole point: the rolling-window snapshots
+  // this class also writes OVERLAP (a new [today-7..today-1] window every
+  // tick), so summing them over an arbitrary range double-counts. That was a
+  // real live bug (1 lead read as 3). Any range the customer can pick
+  // (day/week/month) is summed from these daily rows instead.
+  //
+  // Campaign grain only: the range switcher shows campaign totals, and asking
+  // for ad-set/ad grain per day would multiply the row count for no gain.
+  async getDailyInsights(
+    campaignMetaId: string,
+    period: InsightsPeriod,
+  ): Promise<Array<{ date: string; row: RawInsightRow }>> {
+    const timeRange = encodeURIComponent(
+      JSON.stringify({ since: period.start, until: period.end }),
+    );
+    const url =
+      `${GRAPH_BASE}/${this.graphVersion}/${campaignMetaId}/insights` +
+      `?level=campaign&fields=${INSIGHT_FIELDS}&time_range=${timeRange}&time_increment=1&limit=500`;
+    const res = await this.fetchImpl(url, {
+      headers: { Authorization: `Bearer ${this.token}` },
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => undefined)) as GraphErrorBody | undefined;
+      throw new Error(`daily insights failed: ${JSON.stringify(body?.error ?? res.status)}`);
+    }
+    const json = (await res.json()) as { data?: Record<string, unknown>[] };
+    return (json.data ?? [])
+      .map((d) => ({ date: String(d.date_start ?? ""), row: mapInsightRow(d, "campaign") }))
+      .filter((r) => r.date.length === 10);
+  }
+
   async getInsights(
     campaignMetaId: string,
     period: InsightsPeriod,

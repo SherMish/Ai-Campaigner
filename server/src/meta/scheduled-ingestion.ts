@@ -46,6 +46,19 @@ export function todayPeriod(ref: Date = new Date()): InsightsPeriod {
   return { start: iso, end: iso };
 }
 
+// How far back per-day rows are pulled each tick. Comfortably covers the
+// customer's widest bounded range (month) plus the leads-per-week graph, with
+// slack for Meta's attribution revising recent days upward. "All time" does
+// NOT come from these — it's the cached lifetime read (leads_to_date /
+// spend_to_date), so this window never has to grow with campaign age.
+export const DAILY_LOOKBACK_DAYS = 45;
+
+export function dailyPeriod(ref: Date = new Date()): InsightsPeriod {
+  const day = 24 * 60 * 60 * 1000;
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return { start: iso(new Date(ref.getTime() - DAILY_LOOKBACK_DAYS * day)), end: iso(ref) };
+}
+
 // Yesterday-inclusive 7-day window and the 7 days before it, from a reference
 // date (defaults to now). Dates as YYYY-MM-DD in UTC.
 export function rollingPeriods(ref: Date = new Date()): {
@@ -91,6 +104,7 @@ export function buildIngestionTick(
       ingestion,
       period: current,
       extraPeriods: [todayPeriod()], // customer dashboard only — see todayPeriod
+      dailyPeriod: dailyPeriod(), // disjoint per-day rows for the range switcher + graph
       logger: consoleLogger,
       connectionService,
     });

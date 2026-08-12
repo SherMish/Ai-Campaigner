@@ -11,12 +11,16 @@ export async function recordLeadsToDate(deps: {
   pool: pg.Pool;
   campaignId: string;
   leadsToDate: number;
+  // Lifetime spend, from the same Meta call. Optional so existing callers
+  // that only care about the lead watermark don't have to supply it.
+  spendToDate?: number;
 }): Promise<void> {
-  const { pool, campaignId, leadsToDate } = deps;
+  const { pool, campaignId, leadsToDate, spendToDate } = deps;
   await pool.query(
     `UPDATE managed_campaigns
-     SET leads_to_date = $2, leads_to_date_checked_at = now()
+     SET leads_to_date = $2, leads_to_date_checked_at = now(),
+         spend_to_date = COALESCE($3, spend_to_date)
      WHERE id = $1`,
-    [campaignId, leadsToDate],
+    [campaignId, leadsToDate, spendToDate ?? null],
   );
 }

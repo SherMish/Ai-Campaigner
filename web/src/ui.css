@@ -338,3 +338,36 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 .dash .rec h3 { font-size: 1.15rem; }
 .dash .muted { font-size: 0.92rem; }
 .dash .summary-row { font-size: 0.9rem; }
+
+/* Dashboard cards are WHITE on the cream page (design reference): the cards
+   used to share the page's cream tone, so they read as one flat surface. */
+.dash .card, .dash .kpi { background: #fff; border: 1px solid rgba(23, 23, 23, 0.12); }
+/* The nested audience/ad blocks stay cream so they read as INSIDE a card. */
+.dash .card .soft { background: var(--cream-2); }
+
+/* Range switcher — a cream track with the selected option as a white chip. */
+.range-switch {
+  display: inline-flex; gap: 4px; padding: 4px;
+  background: var(--cream-2); border-radius: 100px; align-self: flex-start;
+}
+.range-opt {
+  min-height: 36px; padding: 6px 16px; border: 0; border-radius: 100px;
+  background: transparent; color: rgba(23, 23, 23, 0.6);
+  font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.range-opt:hover { color: var(--ink); }
+.range-opt.on { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(23, 23, 23, 0.08); }
+
+/* Lead-quality ask — the one deliberately loud card (design reference):
+   ink background, cream text, orange eyebrow + primary action.
+   NOTE the `.dash` prefix: `.dash .card` sets a white background, so a bare
+   `.lq-card` rule loses on specificity and leaves cream text on white. */
+.dash .card.lq-card { background: var(--ink); color: var(--cream); border: 0; }
+.dash .card.lq-card .lq-eyebrow {
+  font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.05em; color: var(--orange);
+}
+.dash .card.lq-card .muted { color: rgba(247, 242, 234, 0.75); }
+.dash .card.lq-card .stepper-inline { background: rgba(247, 242, 234, 0.1); }
+.dash .card.lq-card .stepper-inline button { background: rgba(247, 242, 234, 0.14); color: var(--cream); border: 0; }
+.dash .card.lq-card .stepper-inline .v { color: var(--cream); }

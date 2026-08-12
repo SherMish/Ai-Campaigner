@@ -454,17 +454,19 @@ export const strings = {
         // class of small lie as a false "פעיל". The window is stated once
         // above the group (kpiWindow) rather than repeated three times.
         kpiCpl: "עלות לפנייה", kpiLeads: "פניות", kpiSpend: "הוצאה",
-        kpiWindow: "7 ימים אחרונים (עד אתמול)",
-        // Today so far — shown separately, never folded into the 7-day
-        // figures. Meta's same-day conversion data is incomplete and revises
-        // upward, so it's labelled provisional rather than presented as final.
-        today: {
-          title: "היום עד עכשיו",
-          leads: "פניות",
-          spend: "הוצאה",
-          provisional: "נתוני היום עדיין מתעדכנים ועשויים לעלות.",
-          none: "עדיין לא נרשמה פעילות היום.",
-        },
+        // One explicit range switcher replaced the old "today card + 7-day
+        // KPIs" split, which read as two contradictory sets of numbers. Now
+        // there's one set and the customer picks the window.
+        ranges: { day: "היום", week: "שבוע", month: "חודש", allTime: "הכל" },
+        // Only "היום" is a partial, still-updating window.
+        provisional: "נתוני היום עדיין מתעדכנים ועשויים לעלות.",
+        // Honest thin-data note: a new campaign shouldn't imply a flat empty
+        // month of bad performance.
+        newCampaignPrefix: "הקמפיין רץ מאז",
+        newCampaignSuffix: "— לטווחים ארוכים יותר עדיין אין נתונים מלאים.",
+        graphTitle: "פניות לפי שבוע",
+        graphEmpty: "עדיין אין מספיק נתונים לגרף.",
+        graphWeekPrefix: "שבוע",
         states: {
           ok: { badge: "פעיל", title: "הכל עובד כרגיל", body: "הקמפיין פעיל ואין כרגע משהו שדורש את תשומת הלב שלך." },
           rec: { badge: "מחכה לך", title: "יש לנו המלצה אחת", body: "מצאנו שינוי שיכול לשפר את הקמפיין ומחכה לאישור שלך.", cta: "לצפייה בהמלצה" },
@@ -595,7 +597,7 @@ export const strings = {
           { d: "1 באוג׳", t: "התחיל ניהול הקמפיין." },
         ],
         summaryTitle: "קמפיין WhatsApp",
-        sMode: "מצב", sBudget: "תקציב", sAds: "מודעות", sLeads: "פניות (7 ימים)",
+        sMode: "מצב", sBudget: "תקציב", sAds: "מודעות", sLeads: "פניות",
         sBudgetVal: "₪80 ביום", sAdsVal: "4 מודעות פעילות", sLeadsVal: "18 סה״כ",
       },
       // Launch gate (AIC-53) — the confirmation before a campaign goes live.

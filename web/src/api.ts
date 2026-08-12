@@ -47,6 +47,13 @@ export interface PeriodAgg {
   leads: number;
   cplAgorot: number | null;
 }
+export const RANGE_KEYS = ["day", "week", "month", "allTime"] as const;
+export type RangeKey = (typeof RANGE_KEYS)[number];
+export interface DailyPoint {
+  date: string;
+  spendAgorot: number;
+  leads: number;
+}
 // AIC-67: the incremental delta-review watermark.
 export interface LeadQualityStatus {
   reviewedSoFar: number;
@@ -84,6 +91,11 @@ export interface CustomerOverview {
     // Today so far — provisional, never folded into `current` (which stops at
     // yesterday, matching the engine's complete-days evaluation window).
     today: PeriodAgg;
+    // The day/week/month/all-time switcher's data. Bounded ranges are summed
+    // from disjoint per-day rows; allTime is the cached lifetime read.
+    ranges: Record<RangeKey, PeriodAgg>;
+    daily: DailyPoint[];
+    firstDataDate: string | null;
     delta: { spendPct: number | null; leadsPct: number | null; cplPct: number | null };
     perCreative: Array<{ metaObjectId: string; creativeName: string | null; deliveryStatus: string }>;
   } | null;

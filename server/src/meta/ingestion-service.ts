@@ -27,6 +27,23 @@ export class IngestionService {
     return this.store.upsert(snaps);
   }
 
+  // Per-DAY campaign snapshots (period_start === period_end). Stored as their
+  // own rows so any customer-selectable range (day/week/month) is a sum over
+  // DISJOINT days — never over the overlapping rolling windows above, which
+  // would double-count (a real live bug: 1 lead read as 3). Also the series
+  // behind the leads-per-week graph.
+  async ingestDaily(
+    campaign: { id: string; metaCampaignId: string },
+    period: InsightsPeriod,
+  ): Promise<number> {
+    if (!this.client.getDailyInsights) return 0;
+    const days = await this.client.getDailyInsights(campaign.metaCampaignId, period);
+    const snaps = days.map(({ date, row }) =>
+      normalizeRow(row, campaign.id, { start: date, end: date }),
+    );
+    return this.store.upsert(snaps);
+  }
+
   // This-period vs previous-period campaign totals (PRD §14 comparison).
   async periodComparison(
     campaignId: string,
@@ -61,6 +78,9 @@ export async function runIngestionTick(deps: {
   // dashboard needs today. A failure on an extra window never fails the
   // campaign — the primary window is what the engine depends on.
   extraPeriods?: InsightsPeriod[];
+  // Window to pull per-DAY campaign rows for (disjoint; powers the customer's
+  // range switcher + the leads graph). Display-only, same as extraPeriods.
+  dailyPeriod?: InsightsPeriod;
   logger: Logger;
   connectionService?: ConnectionService;
 }): Promise<TickSummary> {
@@ -101,6 +121,17 @@ export async function runIngestionTick(deps: {
       } catch (err) {
         // Display-only data; never counts the campaign as failed.
         logger.error(`ingestion failed for campaign ${c.id} window ${extra.start}..${extra.end}`, err);
+      }
+    }
+
+    if (deps.dailyPeriod) {
+      try {
+        summary.snapshots += await ingestion.ingestDaily(
+          { id: c.id, metaCampaignId: c.metaCampaignId },
+          deps.dailyPeriod,
+        );
+      } catch (err) {
+        logger.error(`daily ingestion failed for campaign ${c.id}`, err);
       }
     }
   }

@@ -6,6 +6,34 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — One range switcher replaces the today/7-day split; per-day ingestion
+"Very very confusing" — the dashboard showed a "today" card next to separate
+7-day KPIs, two sets of numbers for one campaign. Replaced with a single
+explicit **day / שבוע / חודש / הכל** switcher, so the window is a choice
+rather than an unstated assumption.
+
+That required fixing the data foundation first. Snapshots were stored ONLY as
+overlapping rolling-7-day windows — the same flaw behind "1 lead read as 3" —
+so no arbitrary range could be summed from them. Ingestion now also writes
+**disjoint per-day rows** (`getDailyInsights`, `time_increment=1`), and every
+bounded range sums those. "All time" comes from the cached lifetime read
+(`leads_to_date`/`spend_to_date`, migration 029) because per-day rows only
+reach back `DAILY_LOOKBACK_DAYS` (45). Pinned by a test that plants an
+overlapping window alongside the daily rows and asserts the ranges ignore it.
+
+The same disjoint series powers a new **פניות לפי שבוע** bar graph in the rail.
+Thin data is handled honestly: a campaign that started 4 days ago says so
+rather than implying a flat empty month.
+
+Visual pass to the design reference: dashboard cards are now **white** on the
+cream page, and the lead-quality ask is the one deliberately loud card (ink
+background, cream text, orange eyebrow + primary button). Caught quickly in
+the browser that `.dash .card`'s white background out-specified a bare
+`.lq-card` rule, which would have shipped cream text on white.
+
+Verified live on desktop and 375px: day 3 / week 4 / month 4 / all-time 4,
+with all-time matching Meta's lifetime figure exactly.
+
 ### 2026-08-12 — Details panel round 2 + a confidently-wrong audience label (AIC-73)
 Round-2 review of the redesigned panel. The important find was a **data** bug,
 not a layout one: the label read **18–65** for an ad set actually targeting

@@ -201,6 +201,50 @@ per-ad-account rate limit (code 17) and the panel degraded exactly as
 designed. If panel opens ever become frequent, merging the two ad-level reads
 into one is the obvious saving.
 
+## The range switcher (day / week / month / all-time)
+
+Home's KPIs are driven by ONE customer-selected window. This replaced a
+"today card + separate 7-day KPI block" that showed two sets of numbers for
+the same campaign and read as a contradiction ("very very confusing"). The
+window is now an explicit choice rather than an unstated assumption.
+
+**The data foundation had to change first.** Snapshots were stored only as
+overlapping rolling-7-day windows (a fresh `[today-7 … today-1]` row every
+tick), so summing them over an arbitrary range double-counts — the same flaw
+that made 1 real lead read as 3. Ingestion now ALSO writes **disjoint
+per-day rows** (`MetaClient.getDailyInsights`, `time_increment=1`, stored with
+`period_start = period_end`), and `PgSnapshotStore.dailySeries` reads only
+those (`WHERE period_start = period_end`). Every bounded range is a sum over
+days.
+
+| range | source |
+| --- | --- |
+| `day` | today's per-day row (partial, still updating) |
+| `week` / `month` | trailing 7 / 30 per-day rows, **including today** |
+| `allTime` | cached lifetime read (`leads_to_date` / `spend_to_date`) |
+
+`allTime` deliberately does NOT sum the daily rows: those only reach back
+`DAILY_LOOKBACK_DAYS` (45), so an older campaign would be silently
+under-reported. The lifetime figures come from one
+`date_preset=maximum` Meta call per generation tick.
+
+**The engine is unaffected.** It still evaluates on `rollingPeriods().current`
+— complete days only — no matter what the customer has selected. A
+half-finished day looks like underperformance and must never trigger a
+recommendation. AIC-64's no-rec card explains the difference when today has
+activity, so the two surfaces never look like they're contradicting.
+
+**Thin data is stated, not implied.** `firstDataDate` (earliest day with real
+data) lets Home say "the campaign has been running since 9 Aug" instead of
+letting a 30-day window imply a flat, empty month of bad performance.
+
+## פניות לפי שבוע graph
+
+The rail's trend glance, built from the same disjoint daily series bucketed
+into trailing 7-day blocks (newest first in RTL). A zero week renders as a
+visible grey sliver rather than a missing bar, so "no leads that week" reads
+as zero rather than as a rendering gap.
+
 ## Today vs the engine's window — two questions, two windows
 
 **Real bug, 2026-08-12:** a customer got 3 leads today and the headline still

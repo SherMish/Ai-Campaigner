@@ -13,6 +13,7 @@ import type {
 import type { LaunchWriter, MetaCampaignStatus } from "../launch/types.js";
 import type { AdditionWriter } from "../additions/types.js";
 import type { ControlWriter, ManualObjectStatus } from "../controls/types.js";
+import { shekelToAgorot } from "@aic/shared";
 import { extractLeads } from "./insights.js";
 import { normalizeAdMedia, type AdMedia, type AdMediaReader, type RawAdMedia } from "./ad-media.js";
 
@@ -203,9 +204,22 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // one day per tick), so the same real leads get counted once per
   // overlapping row — confirmed live, 1 real lead read back as "3."
   async getLifetimeLeads(metaCampaignId: string): Promise<number> {
-    const body = await this.get(`${metaCampaignId}/insights?level=campaign&fields=actions&date_preset=maximum`);
-    const row = (body.data as Array<{ actions?: Array<{ action_type: string; value: string }> }>)?.[0];
-    return extractLeads(row?.actions);
+    return (await this.getLifetimeTotals(metaCampaignId)).leads;
+  }
+
+  // Lifetime leads AND spend in one call — the "all time" range can't be
+  // summed from the per-day rows (those only cover DAILY_LOOKBACK_DAYS), so
+  // it reads these cached lifetime figures instead. That also keeps the daily
+  // window from having to grow with campaign age.
+  async getLifetimeTotals(metaCampaignId: string): Promise<{ leads: number; spendAgorot: number }> {
+    const body = await this.get(
+      `${metaCampaignId}/insights?level=campaign&fields=actions,spend&date_preset=maximum`,
+    );
+    const row = (body.data as Array<{ actions?: Array<{ action_type: string; value: string }>; spend?: string }>)?.[0];
+    return {
+      leads: extractLeads(row?.actions),
+      spendAgorot: shekelToAgorot(Number(row?.spend ?? 0) || 0),
+    };
   }
 
   // Ad-set name + targeting (AIC-37) — the separate read that lets us derive a

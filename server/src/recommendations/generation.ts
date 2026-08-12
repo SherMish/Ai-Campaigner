@@ -28,6 +28,9 @@ export interface AudienceMetaReader {
 // windows — see leads-to-date.ts).
 export interface LeadsReader {
   getLifetimeLeads(metaCampaignId: string): Promise<number>;
+  // Lifetime leads + spend in one call. Optional so existing doubles that
+  // only implement getLifetimeLeads keep working.
+  getLifetimeTotals?(metaCampaignId: string): Promise<{ leads: number; spendAgorot: number }>;
 }
 
 // The scheduled recommendation evaluator (AIC-9). It closes the engine loop:
@@ -96,7 +99,7 @@ export async function runGenerationTick(deps: {
   // watermark. A read failure just means the watermark doesn't advance this
   // tick — never guessed from snapshot sums.
   leadsReader?: LeadsReader;
-  recordLeadsToDate?: (campaign: GenCampaign, leadsToDate: number) => Promise<void>;
+  recordLeadsToDate?: (campaign: GenCampaign, leadsToDate: number, spendToDate?: number) => Promise<void>;
   ref?: Date;
   logger?: Logger;
 }): Promise<GenerationSummary> {
@@ -124,10 +127,12 @@ export async function runGenerationTick(deps: {
 
     if (deps.leadsReader) {
       try {
-        const leadsToDate = await deps.leadsReader.getLifetimeLeads(campaign.metaCampaignId);
-        await deps.recordLeadsToDate?.(campaign, leadsToDate);
+        const r = deps.leadsReader.getLifetimeTotals
+          ? await deps.leadsReader.getLifetimeTotals(campaign.metaCampaignId)
+          : { leads: await deps.leadsReader.getLifetimeLeads(campaign.metaCampaignId), spendAgorot: undefined };
+        await deps.recordLeadsToDate?.(campaign, r.leads, r.spendAgorot);
       } catch (e) {
-        log?.error(`[generation] ${campaign.id}: could not read/record lifetime leads — ${(e as Error).message}`);
+        log?.error(`[generation] ${campaign.id}: could not read/record lifetime totals — ${(e as Error).message}`);
       }
     }
 
@@ -245,8 +250,8 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
         await recordLiveBudget({ pool, campaignId: campaign.id, liveBudgetAgorot });
       },
       leadsReader: adapter,
-      recordLeadsToDate: async (campaign, leadsToDate) => {
-        await recordLeadsToDate({ pool, campaignId: campaign.id, leadsToDate });
+      recordLeadsToDate: async (campaign, leadsToDate, spendToDate) => {
+        await recordLeadsToDate({ pool, campaignId: campaign.id, leadsToDate, spendToDate });
       },
       snapshotStore,
       recommendationStore,

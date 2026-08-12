@@ -45,4 +45,11 @@ export interface MetaClient {
     campaignMetaId: string,
     period: InsightsPeriod,
   ): Promise<RawInsightRow[]>;
+  // Per-day campaign rows — DISJOINT, unlike the overlapping rolling windows
+  // getInsights writes. Optional so test doubles don't all have to implement
+  // it; a client without it simply contributes no daily series.
+  getDailyInsights?(
+    campaignMetaId: string,
+    period: InsightsPeriod,
+  ): Promise<Array<{ date: string; row: RawInsightRow }>>;
 }
