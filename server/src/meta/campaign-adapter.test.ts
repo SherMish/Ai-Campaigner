@@ -252,3 +252,64 @@ describe("GraphCampaignAdapter launch gate (AIC-53)", () => {
     await expect(adapter.activateCampaign("meta_camp_1")).rejects.toThrow(/Cannot activate/);
   });
 });
+
+describe("GraphCampaignAdapter add-to-existing-campaign (AIC-63)", () => {
+  it("getAdSetStatus / getAdStatus read effective_status", async () => {
+    const mock = vi.fn(async (url: string) =>
+      ({ ok: true, status: 200, json: async () => ({ effective_status: String(url).includes("as_1") ? "ACTIVE" : "PAUSED" }) } as unknown as Response),
+    );
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    expect(await adapter.getAdSetStatus("as_1")).toBe("ACTIVE");
+    expect(await adapter.getAdStatus("ad_1")).toBe("PAUSED");
+  });
+
+  it("activateAdSet always sends status=ACTIVE, never a caller-supplied value", async () => {
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ success: true }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await adapter.activateAdSet("as_1");
+
+    const [url, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("as_1");
+    expect(new URLSearchParams(String(init.body)).get("status")).toBe("ACTIVE");
+  });
+
+  it("activateAd always sends status=ACTIVE, never a caller-supplied value", async () => {
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ success: true }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await adapter.activateAd("ad_1");
+
+    const [url, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("ad_1");
+    expect(new URLSearchParams(String(init.body)).get("status")).toBe("ACTIVE");
+  });
+
+  it("activateAdSet/activateAd throw honestly when Meta rejects them", async () => {
+    const mock = vi.fn(async () => ({ ok: false, status: 400, json: async () => ({ error: { message: "Cannot activate" } }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await expect(adapter.activateAdSet("as_1")).rejects.toThrow(/Cannot activate/);
+    await expect(adapter.activateAd("ad_1")).rejects.toThrow(/Cannot activate/);
+  });
+
+  it("getAdSetMeta includes effective_status in the requested fields", async () => {
+    const mock = vi.fn(async (_url: string) => ({
+      ok: true, status: 200,
+      json: async () => ({ data: [{ id: "as_1", name: "Set A", effective_status: "ACTIVE", is_dynamic_creative: false, targeting: {} }] }),
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const [meta] = await adapter.getAdSetMeta("meta_camp_1");
+
+    expect(meta.status).toBe("active");
+    const [url] = mock.mock.calls[0] as [string];
+    expect(url).toContain("effective_status");
+  });
+});

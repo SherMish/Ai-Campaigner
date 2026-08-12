@@ -4,10 +4,15 @@ import type { AdSetMeta } from "../meta/audience-label.js";
 // Persist ad-set metadata (AIC-37) so the customer surface + explainer can derive
 // a human audience label without a live Meta call. Upserted by the engine tick
 // (piggybacking on the same per-campaign pass as delivery-health).
+// status isn't persisted here (this cache backs the human-audience-label view,
+// which never surfaces it) — narrowed so callers/tests don't need to supply
+// a field this function ignores. AIC-63's live ad-set picker reads status
+// fresh from Meta instead, since a cached value could be stale by the time
+// a customer picks where to add an ad.
 export async function upsertAdSetMeta(
   pool: pg.Pool,
   campaignId: string,
-  adsets: AdSetMeta[],
+  adsets: Omit<AdSetMeta, "status">[],
 ): Promise<void> {
   for (const a of adsets) {
     await pool.query(

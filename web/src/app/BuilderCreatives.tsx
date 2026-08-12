@@ -39,14 +39,36 @@ export function newAdDraft(index: number): AdDraft {
   };
 }
 
+// The minimal creative-creation shape, without localCampaignId — the builder
+// resolves that from a prop closure (see below); AIC-63's add-content screen
+// resolves it server-side from the caller's context instead, so it's never
+// part of this shared shape.
+export type AdCreativeBody =
+  | { clientKey: string; name: string; headline: string; primaryText: string; whatsappNumber: string; media: UploadedMedia }
+  | { clientKey: string; name: string; postId: string };
+
 interface Props {
   ads: AdDraft[];
   onChange: (ads: AdDraft[]) => void;
-  localCampaignId: string;
+  // Only used by the default createCreativeFn (the builder's own endpoint) —
+  // omit when passing a custom createCreativeFn (AIC-63's screen resolves
+  // its campaign server-side instead).
+  localCampaignId?: string;
   whatsappNumber: string;
+  // AIC-63: injectable so AddContent.tsx can point creative creation at
+  // /app/additions/* instead of /app/builder/* — same component and UI,
+  // different backend routes. Defaults to the builder's own endpoints.
+  getPosts?: () => Promise<{ posts: PromotablePost[] }>;
+  uploadFile?: (file: File) => Promise<UploadedMedia>;
+  createCreativeFn?: (body: AdCreativeBody) => Promise<{ creativeId: string }>;
 }
 
-export function BuilderCreatives({ ads, onChange, localCampaignId, whatsappNumber }: Props) {
+export function BuilderCreatives({
+  ads, onChange, localCampaignId, whatsappNumber,
+  getPosts = getPromotablePosts,
+  uploadFile = uploadCreativeFile,
+  createCreativeFn = (body) => createCreative({ ...body, localCampaignId } as CreateCreativeBody),
+}: Props) {
   const [posts, setPosts] = useState<PromotablePost[] | null>(null);
   const [postsLoading, setPostsLoading] = useState(false);
 
@@ -64,7 +86,7 @@ export function BuilderCreatives({ ads, onChange, localCampaignId, whatsappNumbe
   function loadPosts() {
     if (posts !== null || postsLoading) return;
     setPostsLoading(true);
-    getPromotablePosts()
+    getPosts()
       .then((r) => setPosts(r.posts))
       .catch(() => setPosts([]))
       .finally(() => setPostsLoading(false));
@@ -73,7 +95,7 @@ export function BuilderCreatives({ ads, onChange, localCampaignId, whatsappNumbe
   async function doUpload(ad: AdDraft, file: File) {
     update(ad.clientKey, { status: "uploading", error: null });
     try {
-      const media = await uploadCreativeFile(file);
+      const media = await uploadFile(file);
       update(ad.clientKey, { media, status: "draft" });
     } catch {
       update(ad.clientKey, { status: "error", error: "העלאת הקובץ נכשלה, אפשר לנסות שוב." });
@@ -83,14 +105,14 @@ export function BuilderCreatives({ ads, onChange, localCampaignId, whatsappNumbe
   async function doCreate(ad: AdDraft) {
     update(ad.clientKey, { status: "creating", error: null });
     try {
-      const body: CreateCreativeBody =
+      const body: AdCreativeBody =
         ad.source === "post"
-          ? { localCampaignId, clientKey: ad.clientKey, name: ad.name, postId: ad.postId! }
+          ? { clientKey: ad.clientKey, name: ad.name, postId: ad.postId! }
           : {
-              localCampaignId, clientKey: ad.clientKey, name: ad.name,
+              clientKey: ad.clientKey, name: ad.name,
               headline: ad.headline, primaryText: ad.primaryText, whatsappNumber, media: ad.media!,
             };
-      const { creativeId } = await createCreative(body);
+      const { creativeId } = await createCreativeFn(body);
       update(ad.clientKey, { creativeId, status: "created" });
     } catch (e) {
       if (e instanceof CreativeValidationError) {

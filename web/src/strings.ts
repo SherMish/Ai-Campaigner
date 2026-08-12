@@ -759,6 +759,47 @@ export const strings = {
         primary_text_too_long: "הטקסט הראשי ארוך מדי.",
       },
     },
+
+    // Add content to an existing campaign (AIC-63) — the everyday management
+    // action, distinct from the builder (first campaign only).
+    additions: {
+      navLabel: "הוספת תוכן",
+      eyebrow: "הקמפיין הקיים שלכם",
+      title: "הוספת תוכן לקמפיין",
+      notReadyTitle: "עוד אין קמפיין להוסיף לו תוכן",
+      notReadyBody: "צריך קודם ליצור את הקמפיין הראשון שלכם.",
+      goToBuilder: "ליצירת הקמפיין",
+      unavailable: "הוספת תוכן לא זמינה כרגע. נסו שוב בעוד כמה דקות.",
+      modeAd: "הוספת מודעה",
+      modeAdSet: "הוספת קבוצת מודעות",
+
+      // add-ad mode
+      pickAdSetTitle: "לאיזו קבוצת מודעות?",
+      pickAdSetLoading: "טוען קבוצות מודעות…",
+      noAdSets: "לא נמצאו קבוצות מודעות בקמפיין.",
+      adSetPaused: "מושהית",
+      adsTitle: "המודעה",
+
+      // add-ad-set mode
+      adSetNameLabel: "שם פנימי לקבוצת המודעות",
+      adSetNamePlaceholder: "למשל: נשים 35-55",
+
+      submitAdCta: "הוספת המודעה (מושהית)",
+      submitAdSetCta: "הוספת קבוצת המודעות (מושהית)",
+      submitting: "מוסיף…",
+      submitSuccessTitle: "נוסף במצב מושהה",
+      submitSuccessBody: "מחכה לאישור שלכם למטה כדי להתחיל לרוץ.",
+      submitAnother: "הוספת עוד",
+      submitError: "משהו השתבש בהוספה. אפשר לנסות שוב — מה שכבר נוצר לא ייווצר פעמיים.",
+
+      pendingTitle: "ממתין לאישור שלכם",
+      pendingEmpty: "אין כרגע תוכן שממתין לאישור.",
+      pendingKindAd: "מודעה חדשה",
+      pendingKindAdSet: "קבוצת מודעות חדשה",
+      approveCta: "אישור והפעלה",
+      approving: "מפעיל…",
+      approveError: "ההפעלה נכשלה. אפשר לנסות שוב.",
+    },
   },
 } as const;
 

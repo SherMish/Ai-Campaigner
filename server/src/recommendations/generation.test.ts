@@ -150,7 +150,7 @@ async function seedFlexibleCreative(store: InMemorySnapshotStore) {
 }
 
 function adSetMeta(adSetId: string, isDynamicCreative: boolean): AdSetMeta {
-  return { adSetId, name: adSetId, ageMin: null, ageMax: null, genders: "all", geoSummary: "", isDynamicCreative };
+  return { adSetId, name: adSetId, ageMin: null, ageMax: null, genders: "all", geoSummary: "", isDynamicCreative, status: "active" };
 }
 
 describe("runGenerationTick — flexible/Advantage+ creative exclusion (AIC-36)", () => {

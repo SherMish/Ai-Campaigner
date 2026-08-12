@@ -1,13 +1,14 @@
 # Campaign builder (P1 — create campaigns)
 
-**Status:** in progress. All five tickets — AIC-49 (recommended-defaults
+**Status:** in progress. All six tickets — AIC-49 (recommended-defaults
 spec), AIC-50 (Meta create-writes), AIC-51 (creative handling), AIC-52
-(guided builder UI), AIC-53 (launch gate) — are **built and
-unit/integration-tested, live-verified in the browser**. The one thing still
-pending across the whole phase is a single live Meta dogfood on an account we
-control: create a real paused campaign, activate it, verify, clean up. That
-test is what finally confirms AIC-50's create field shapes, AIC-51's
-WhatsApp-creative shape, and AIC-53's PAUSED→ACTIVE flip against the real
+(guided builder UI), AIC-53 (launch gate), AIC-63 (add to an existing
+campaign) — are **built and unit/integration-tested, live-verified in the
+browser**. The one thing still pending across the whole phase is a single
+live Meta dogfood on an account we control: create a real paused campaign,
+activate it, verify, clean up. That test is what finally confirms AIC-50's
+create field shapes, AIC-51's WhatsApp-creative shape, AIC-53's
+PAUSED→ACTIVE flip, and AIC-63's add-content writes against the real
 Marketing API — everything else is verified with a mocked `fetch` through
 the real adapter.
 
@@ -39,11 +40,20 @@ the real adapter.
   `approveLaunch`), routes in `server/src/routes/app.ts` (`/api/app/launch`,
   `/api/app/launch/approve`); the customer UI is the `LaunchModal` in
   `web/src/app/Home.tsx` + the `ready_to_launch` home state
+- Add to an existing campaign: `server/src/additions/types.ts` (the
+  `AdditionWriter` interface), `server/src/additions/session.ts`
+  (`resolveAdditionContext`, `buildAdditionWriter`), `server/src/additions/add-content.ts`
+  (`addAdToExistingCampaign`, `addAdSetToExistingCampaign`),
+  `server/src/additions/approve.ts` (`approveAddition`, `listPendingAdditions`),
+  routes in `server/src/routes/additions.ts` (mounted at `/api/app/additions`);
+  the customer UI is `web/src/app/AddContent.tsx` (+ the shared
+  `web/src/app/AudienceFields.tsx`, also used by the builder)
 
 **Lock-in tests:** `shared/src/recommended-defaults.test.ts`,
 `shared/src/creative-handling.test.ts`,
 `server/src/meta/campaign-adapter.test.ts` (created-PAUSED invariant +
-upload/creative field shapes + the activate-always-sends-ACTIVE invariant),
+upload/creative field shapes + the activate-always-sends-ACTIVE invariant,
+for both the campaign and the ad-set/ad level),
 `server/src/execution/write-outbox.integration.test.ts`
 (`applyIdempotent`), `server/src/builder/campaign-create.integration.test.ts`
 (the full campaign orchestration), `server/src/builder/creative-create.integration.test.ts`
@@ -51,7 +61,10 @@ upload/creative field shapes + the activate-always-sends-ACTIVE invariant),
 (the full builder HTTP surface), `server/src/launch/activate.integration.test.ts`
 (the launch gate: activate-happy-path, blocked-before-review, idempotent,
 failed-write-not-marked-launched), `server/src/routes/launch.integration.test.ts`
-(the launch HTTP routes end to end).
+(the launch HTTP routes end to end), `server/src/additions/add-content.integration.test.ts`
+(add-ad, add-ad-set, idempotent, partial-failure-resume, approve, ownership),
+`server/src/routes/additions.integration.test.ts` (the full add-content HTTP
+surface end to end).
 
 ---
 
@@ -468,3 +481,114 @@ max, 3 ads), and the honest 503 degradation when no Meta token is configured
 actual PAUSED→ACTIVE flip against a real Meta campaign is the consequential
 live write — it's part of AIC-50's still-pending dogfood, deliberately gated
 behind explicit human go-ahead rather than run autonomously.
+
+### Add to an existing campaign (AIC-63)
+
+The gap the first five tickets left: the builder is hard-scoped to a
+customer's *first* campaign (`resolveBuilderContext` 409s unless there's no
+managed campaign yet, and `startBuilderCampaign` has a `UNIQUE(customer_id)`
+constraint). Creating a first campaign is rare — most customers arrive with
+one already. **Adding a creative or testing a new audience is the everyday
+management action**, and until this ticket there was no in-app way to do it;
+the only option was Ads Manager, which defeats the product. This ticket adds
+the missing everyday path, reusing every primitive the builder already
+proved out rather than duplicating it.
+
+**Two sub-flows, one orchestration module**
+(`server/src/additions/add-content.ts`):
+
+- **Add an ad** (`addAdToExistingCampaign`) — one PAUSED ad under an
+  *existing* ad set the caller already owns.
+- **Add an ad set** (`addAdSetToExistingCampaign`) — a new PAUSED ad set +
+  its ads under the *existing* campaign. The builder's "always exactly one
+  ad set" rule doesn't apply here — this is precisely how a second (or
+  third) ad set gets added.
+
+Both reuse `createAdSet`/`createAd` (AIC-50, unchanged — still always
+PAUSED) and the SAME idempotent outbox (`WriteOutbox.applyIdempotent`,
+`builderKey`) via `campaign-create.ts`'s `asCreatingWriter` (exported, not
+duplicated). Creative creation reuses AIC-51's `createCreativeIdempotent`
+and `uploadCreativeMedia` unchanged too — only the HTTP routes differ
+(`/api/app/additions/{upload,posts,creative}` instead of `/api/app/builder/*`),
+because the precondition is the opposite (an existing campaign is *required*,
+not forbidden) and reusing the builder's own routes would have meant
+weakening that gate.
+
+**`pending_additions`** (migration 023) is the approval marker — the
+per-object equivalent of AIC-53's `managed_campaigns.launch_approved_at`,
+needed because an added ad/ad-set doesn't have its own row anywhere else to
+track "created, not yet approved" against. Inserted only once every create
+for that addition has succeeded (same "anchor only once complete" discipline
+as `buildCampaignOnMeta`) — idempotent per `(campaign_id, addition_key)` so
+a resubmitted addition (its underlying creates all replaying as
+already-succeeded via the outbox) never produces a second pending row for
+the same objects.
+
+**Activation is per-object, not per-campaign.** AIC-53's `activateCampaign`
+only flips the *campaign*; it doesn't touch the ad sets/ads under it (which
+were also created PAUSED). AIC-63 needed a genuinely new activation
+primitive: `GraphCampaignAdapter.activateAd` (mirrors `activateCampaign` —
+hardcodes `status=ACTIVE`, no caller-supplied value) and `activateAdSet`
+(wraps the pre-existing `setAdSetStatus`, same hard rule). `server/src/additions/approve.ts`'s
+`approveAddition` activates the ad set first (if `kind='ad_set'`) then every
+ad, checking each object's live status *before* writing — an activation
+write is naturally idempotent (setting an already-ACTIVE object to ACTIVE is
+a harmless no-op), so this check is what makes a retry after a partial
+failure never re-activate or double-log an object that already landed.
+
+**Ownership is checked twice, not assumed.** `resolveAdditionContext`
+resolves the caller's own campaign/ad-account/Page fresh from their JWT (the
+same pattern as `resolveBuilderContext`), and `POST /additions/ad` separately
+re-validates the client-supplied `metaAdSetId` against a **live** re-fetch of
+`getAdSetMeta` before creating anything — a customer can never add an ad to
+an ad set that isn't genuinely theirs, even if they guessed a valid-looking
+ID. The ad-set list is read live (not the `ad_set_meta` cache), specifically
+so an ad set created moments earlier in the *same* visit — before the hourly
+engine tick would ever refresh that cache — is immediately pickable.
+
+**Customer surface** (`web/src/app/AddContent.tsx`): reached via a new
+persistent sidebar entry ("הוספת תוכן"), shown whenever a managed campaign
+exists — the opposite gate from the builder's `no_campaign`-only Home CTA.
+Two mode tabs (add ad / add ad set); the ad-set audience fields reuse
+`AudienceFields.tsx`, extracted from `Builder.tsx` during this ticket so the
+honesty-pass fix (visible, editable business type; no dead radius control)
+only has to exist once. The creatives step reuses `BuilderCreatives.tsx`,
+which was parameterized (`getPosts`/`uploadFile`/`createCreativeFn` props,
+defaulting to the builder's own endpoints) rather than forked, so both
+screens share one upload/validation/post-picker implementation. A "ממתין
+לאישור שלכם" section lists every pending addition with its own approve
+button — deliberately a plain list, not a single modal like the launch gate,
+since more than one addition can be pending at once.
+
+**Two real bugs found and fixed while verifying, not just described:**
+
+1. The add-ad-set audience step never actually derived age/gender from the
+   loaded business category — `category` populated correctly (visible in the
+   dropdown) but `ageMin`/`ageMax`/`gender` stayed at a hardcoded fallback
+   instead of the category's real default. Fixed by calling
+   `resolveAudienceDefault` in the context-load effect, matching
+   `Builder.tsx`'s own pattern.
+2. **A pre-existing, session-wide mobile bug**, not introduced by this
+   ticket but first caught verifying it: CSS Grid items default to
+   `min-width: auto`, so a `.grid-2`/`.grid-3` column can't shrink below its
+   widest child's intrinsic content size. At 375px this silently forced the
+   *entire page* to ~497px wide on every screen using those grids (including
+   `SupportCard`, present on nearly every customer screen) — invisible in a
+   plain screenshot, only caught by measuring `scrollWidth` against the
+   viewport directly. Fixed generically: `.grid-2 > *, .grid-3 > * { min-width: 0; }`
+   in `ui.css`. A second, narrower instance — `.btn`'s `white-space: nowrap`
+   forcing long-label submit buttons ("הוספת קבוצת המודעות (מושהית)") wider
+   than their container — got its own `.btn-wide` utility class, applied to
+   the builder's and both add-content submit buttons.
+
+**Verification**: `add-content.integration.test.ts` (8) +
+`additions.integration.test.ts` (7, full HTTP through the real adapter with
+mocked `fetch`) + `campaign-adapter.test.ts` (+5: `getAdSetStatus`/`getAdStatus`
+reads, `activateAdSet`/`activateAd` always-ACTIVE, honest throws, `getAdSetMeta`
+carrying `effective_status`). Real-browser walk at both desktop and 375px
+mobile against a locally-seeded customer with an existing linked campaign:
+sidebar entry appears/disappears correctly, both mode tabs render, the
+ad-set picker's honest empty state (503, no Meta token), the audience
+prefill bug fix, and the mobile overflow fix — all confirmed zero
+`scrollWidth` overflow after the CSS fix. The actual create + activate
+against a real Meta campaign rides the same pending live dogfood as AIC-50.

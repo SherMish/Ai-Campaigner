@@ -65,6 +65,9 @@ export async function buildCampaignAudiences(
       genders: m?.genders ?? "all",
       geoSummary: m?.geoSummary ?? "",
       isDynamicCreative: m?.isDynamicCreative ?? false,
+      // Not tracked by the cache (audience_meta_cache) and unused by
+      // deriveAudienceLabels — this view never surfaces an ad set's status.
+      status: "active",
     };
   });
   const labels = deriveAudienceLabels(asMetaList);

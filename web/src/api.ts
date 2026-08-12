@@ -410,6 +410,98 @@ export type LaunchApproveOutcome = "activated" | "already_launched" | "not_appro
 export const approveLaunch = () =>
   api<{ outcome: LaunchApproveOutcome; reason?: string }>("/app/launch/approve", { method: "POST" });
 
+// ── Add content to an existing campaign (AIC-63) ────────────────────────────
+// Everyday management: add an ad to an existing ad set, or a new ad set +
+// ads, to a campaign we already manage. Opposite precondition from the
+// builder (requires an EXISTING linked campaign) — separate routes, same
+// underlying create/creative/activate machinery.
+export interface AdditionContext {
+  campaignName: string;
+  category: string;
+  whatsappDestination: string;
+}
+export const getAdditionContext = () => api<AdditionContext>("/app/additions/context");
+
+export interface ExistingAdSet {
+  id: string;
+  name: string;
+  status: "active" | "paused";
+}
+export const getExistingAdSets = () => api<{ adSets: ExistingAdSet[] }>("/app/additions/ad-sets");
+
+// Bypasses api() for the same reason as uploadCreativeFile — multipart body.
+export async function uploadAdditionFile(file: File): Promise<UploadedMedia> {
+  const form = new FormData();
+  form.append("file", file);
+  const token = getAuthToken();
+  const res = await fetch("/api/app/additions/upload", {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: form,
+  });
+  if (!res.ok) {
+    let msg = `upload failed: ${res.status}`;
+    try { const b = (await res.json()) as { error?: string }; if (b?.error) msg = b.error; } catch { /* non-JSON */ }
+    throw new ApiError(res.status, msg);
+  }
+  return ((await res.json()) as { media: UploadedMedia }).media;
+}
+
+export const getAdditionPosts = () => api<{ posts: PromotablePost[] }>("/app/additions/posts");
+
+export type AddContentCreativeBody =
+  | { clientKey: string; name: string; headline: string; primaryText: string; whatsappNumber: string; media: UploadedMedia }
+  | { clientKey: string; name: string; postId: string };
+
+// Bypasses api() too — a 400 here carries {errors: code[]}, matching createCreative.
+export async function createAdditionCreative(body: AddContentCreativeBody): Promise<{ creativeId: string }> {
+  const token = getAuthToken();
+  const res = await fetch("/api/app/additions/creative", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 400) {
+    const b = (await res.json().catch(() => ({}))) as { errors?: CreativeErrorCode[] };
+    throw new CreativeValidationError(b.errors ?? []);
+  }
+  if (!res.ok) throw new ApiError(res.status, `create creative failed: ${res.status}`);
+  return res.json() as Promise<{ creativeId: string }>;
+}
+
+export interface AddAdBody {
+  metaAdSetId: string;
+  name: string;
+  creativeId: string;
+  additionKey: string;
+}
+export interface AddResult {
+  additionId: string;
+  metaAdSetId: string;
+  metaAdIds: string[];
+}
+export const addAd = (body: AddAdBody) => api<AddResult>("/app/additions/ad", { method: "POST", body: JSON.stringify(body) });
+
+export interface AddAdSetBody {
+  name: string;
+  targeting: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[] };
+  ads: Array<{ clientKey: string; name: string; creativeId: string }>;
+  additionKey: string;
+}
+export const addAdSet = (body: AddAdSetBody) => api<AddResult>("/app/additions/ad-set", { method: "POST", body: JSON.stringify(body) });
+
+export interface PendingAddition {
+  id: string;
+  kind: "ad" | "ad_set";
+  name: string;
+  createdAt: string;
+}
+export const getPendingAdditions = () => api<{ pending: PendingAddition[] }>("/app/additions/pending");
+
+export type ApproveAdditionOutcome = "approved" | "already_approved" | "failed";
+export const approveAddition = (id: string) =>
+  api<{ outcome: ApproveAdditionOutcome; reason?: string }>(`/app/additions/${id}/approve`, { method: "POST" });
+
 export const getOverview = () => api<CustomerOverview>("/app/overview");
 export const postLeadQuality = (leadsReported: number, relevantCount: number) =>
   api<{ ok: true }>("/app/lead-quality", {

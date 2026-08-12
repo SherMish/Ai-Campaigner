@@ -6,6 +6,38 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Add ad / ad set to an existing managed campaign (AIC-63)
+The builder only ever handles a customer's *first* campaign
+(`resolveBuilderContext` 409s once one exists). Until now that meant
+there was no in-app way to add a creative or test a new audience
+afterward — the everyday management action — short of Ads Manager. New
+`/api/app/additions/*` route family + `/app/add-content` screen add it,
+reusing AIC-50/51/53's primitives rather than duplicating them: the same
+idempotent outbox (`WriteOutbox.applyIdempotent`, `add-`-prefixed
+`builderKey`s), the same `asCreatingWriter` (exported for reuse), the same
+creative upload/validation pipeline. New `pending_additions` table
+(migration 023) generalizes AIC-53's single-campaign launch gate to a
+per-object, repeatable approval — every add lands PAUSED and stays that
+way until explicitly approved. New `AdditionWriter.activateAdSet`/
+`activateAd` mirror `activateCampaign`'s hard rule (no caller-supplied
+status; can only ever send `ACTIVE`), and approval checks each object's
+live status before writing so a retry after partial failure never
+double-activates. `POST /additions/ad` re-validates the client-supplied ad
+set ID against a **live** `getAdSetMeta` fetch (not the hourly cache) —
+both to prevent adding to an ad set that isn't the caller's, and so an ad
+set created earlier in the same visit is immediately usable.
+
+Two real bugs caught dogfooding, not just described: the add-ad-set
+audience step loaded the business category but never derived age/gender
+from it (stayed at a hardcoded 18–65/all default); and a pre-existing,
+app-wide mobile bug — CSS Grid's default `min-width: auto` on grid items
+silently forced every `.grid-2`/`.grid-3` screen to ~497px at a 375px
+viewport (via `SupportCard`, present on nearly every screen) — fixed
+generically (`.grid-2 > *, .grid-3 > * { min-width: 0; }`), not just
+patched at the one button that surfaced it.
+
+Full detail: [features/campaign-builder.md](features/campaign-builder.md).
+
 ### 2026-08-11 — Builder honesty pass: business-type selector, fixed placements, no dead radius (AIC-52 follow-up)
 Three defects surfaced by dogfooding the builder against a seeded customer,
 all the same class ("a control/badge implying a choice the customer doesn't

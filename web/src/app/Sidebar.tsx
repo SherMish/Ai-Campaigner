@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutGrid, Sparkles, LifeBuoy, Settings, LogOut } from "lucide-react";
+import { LayoutGrid, Sparkles, LifeBuoy, Settings, LogOut, PlusCircle } from "lucide-react";
 import { strings } from "../strings";
 import { clearAuthToken } from "../api";
 import { useSharedOverview } from "./overview-store";
@@ -61,6 +61,13 @@ export function Sidebar() {
           <span className="ic"><Sparkles size={18} /></span><span>{a.home.navRecs}</span>
           {badge > 0 && <span className="ap-nav-badge">{badge}</span>}
         </NavLink>
+        {/* AIC-63: everyday content management, shown once a campaign exists
+            (the opposite gate from the builder's no_campaign-only CTA). */}
+        {ov?.campaign && (
+          <NavLink to="/app/add-content" className={cls}>
+            <span className="ic"><PlusCircle size={18} /></span><span>{strings.he.additions.navLabel}</span>
+          </NavLink>
+        )}
       </div>
 
       <div className="ap-nav-section">

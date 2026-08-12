@@ -16,7 +16,8 @@ export const builderRouter = Router();
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_VIDEO_BYTES } });
 
-function gendersOf(g: "all" | "male" | "female"): number[] {
+// Exported so routes/additions.ts (AIC-63) doesn't duplicate the Meta gender-code mapping.
+export function gendersOf(g: "all" | "male" | "female"): number[] {
   return g === "male" ? [1] : g === "female" ? [2] : [];
 }
 

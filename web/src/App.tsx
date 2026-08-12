@@ -18,6 +18,7 @@ import { Home } from "./app/Home";
 import { Recommendations, RecommendationDetail } from "./app/Recommendations";
 import { Settings } from "./app/Settings";
 import { Builder } from "./app/Builder";
+import { AddContent } from "./app/AddContent";
 import { AuthGate } from "./app/AuthGate";
 
 // An already-signed-in visitor has no business on the entry screens (login /
@@ -49,6 +50,7 @@ export function App() {
         <Route element={<AuthGate><AppShell /></AuthGate>}>
           <Route path="/app" element={<Home />} />
           <Route path="/app/builder" element={<Builder />} />
+          <Route path="/app/add-content" element={<AddContent />} />
           <Route path="/app/recommendations" element={<Recommendations />} />
           <Route path="/app/recommendations/:id" element={<RecommendationDetail />} />
           <Route path="/app/settings" element={<Settings />} />

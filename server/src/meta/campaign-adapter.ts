@@ -11,6 +11,7 @@ import type {
   CreatePostCreativeParams,
 } from "../builder/creative-types.js";
 import type { LaunchWriter, MetaCampaignStatus } from "../launch/types.js";
+import type { AdditionWriter } from "../additions/types.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
 // Marketing API. Budgets are read/written in the account currency's MINOR unit,
@@ -21,7 +22,7 @@ import type { LaunchWriter, MetaCampaignStatus } from "../launch/types.js";
 // one, so setDailyBudget targets the right object.
 const BASE = "https://graph.facebook.com";
 
-export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter {
+export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter, AdditionWriter {
   private budgetObj = new Map<string, string>(); // campaignId → budget object id
 
   constructor(
@@ -158,7 +159,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // at customer render time.
   async getAdSetMeta(metaCampaignId: string): Promise<AdSetMeta[]> {
     const body = await this.get(
-      `${metaCampaignId}/adsets?fields=id,name,is_dynamic_creative,targeting{age_min,age_max,genders,geo_locations}&limit=100`,
+      `${metaCampaignId}/adsets?fields=id,name,is_dynamic_creative,effective_status,targeting{age_min,age_max,genders,geo_locations}&limit=100`,
     );
     return ((body.data as RawAdSetMeta[]) ?? []).map(normalizeAdSetMeta);
   }
@@ -320,5 +321,27 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
 
   async activateCampaign(metaCampaignId: string): Promise<void> {
     await this.post(metaCampaignId, { status: "ACTIVE" });
+  }
+
+  // ── Add to an existing campaign (AIC-63) ────────────────────────────────
+  // Same "no caller-supplied status" pattern as activateCampaign — these are
+  // the only two writes that can set an ad set / ad ACTIVE.
+
+  async getAdSetStatus(adSetId: string): Promise<MetaCampaignStatus> {
+    const r = await this.get(`${adSetId}?fields=effective_status`);
+    return String(r.effective_status ?? "");
+  }
+
+  async getAdStatus(adId: string): Promise<MetaCampaignStatus> {
+    const r = await this.get(`${adId}?fields=effective_status`);
+    return String(r.effective_status ?? "");
+  }
+
+  async activateAdSet(adSetId: string): Promise<void> {
+    await this.setAdSetStatus(adSetId, "ACTIVE");
+  }
+
+  async activateAd(adId: string): Promise<void> {
+    await this.post(adId, { status: "ACTIVE" });
   }
 }

@@ -1,0 +1,289 @@
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { normalizeBusinessCategory, resolveAudienceDefault, type BusinessCategory } from "@aic/shared";
+import { strings } from "../strings";
+import {
+  getAdditionContext, getExistingAdSets, getPendingAdditions, approveAddition,
+  addAd, addAdSet, ApiError,
+  uploadAdditionFile, getAdditionPosts, createAdditionCreative,
+  type ExistingAdSet, type PendingAddition,
+} from "../api";
+import { StatusPill, SupportCard } from "./components";
+import { AudienceFields, type Gender } from "./AudienceFields";
+import { BuilderCreatives, newAdDraft, type AdDraft } from "./BuilderCreatives";
+
+const s = strings.he.additions;
+
+function freshKey(): string {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+export function AddContent() {
+  const [phase, setPhase] = useState<"loading" | "not_ready" | "ready" | "error">("loading");
+  const [whatsappNumber, setWhatsappNumber] = useState("");
+  const [mode, setMode] = useState<"ad" | "ad_set">("ad");
+
+  // add-ad mode
+  const [adSets, setAdSets] = useState<ExistingAdSet[] | null>(null);
+  const [adSetsLoading, setAdSetsLoading] = useState(false);
+  const [selectedAdSetId, setSelectedAdSetId] = useState<string | null>(null);
+  const [adDrafts, setAdDrafts] = useState<AdDraft[]>([newAdDraft(1)]);
+
+  // add-ad-set mode
+  const [category, setCategory] = useState<BusinessCategory>("other");
+  const [audience, setAudience] = useState<{ ageMin: number; ageMax: number; gender: Gender }>({ ageMin: 18, ageMax: 65, gender: "all" });
+  const [setName, setSetName] = useState("");
+  const [groupAdDrafts, setGroupAdDrafts] = useState<AdDraft[]>([newAdDraft(1), newAdDraft(2), newAdDraft(3)]);
+
+  const [additionKey, setAdditionKey] = useState(freshKey);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [justAdded, setJustAdded] = useState(false);
+
+  const [pending, setPending] = useState<PendingAddition[]>([]);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [approveError, setApproveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getAdditionContext()
+      .then((ctx) => {
+        setWhatsappNumber(ctx.whatsappDestination);
+        const cat = normalizeBusinessCategory(ctx.category);
+        setCategory(cat);
+        const d = resolveAudienceDefault(cat);
+        setAudience({ ageMin: d.ageMin, ageMax: d.ageMax, gender: d.genders });
+        setPhase("ready");
+      })
+      .catch((e) => setPhase(e instanceof ApiError && e.status === 409 ? "not_ready" : "error"));
+    refreshPending();
+  }, []);
+
+  function refreshPending() {
+    getPendingAdditions().then((r) => setPending(r.pending)).catch(() => {});
+  }
+
+  function loadAdSets() {
+    if (adSets !== null || adSetsLoading) return;
+    setAdSetsLoading(true);
+    getExistingAdSets().then((r) => setAdSets(r.adSets)).catch(() => setAdSets([])).finally(() => setAdSetsLoading(false));
+  }
+
+  useEffect(() => {
+    if (mode === "ad" && phase === "ready") loadAdSets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, phase]);
+
+  function switchMode(next: "ad" | "ad_set") {
+    setMode(next);
+    setAdditionKey(freshKey());
+    setSubmitError(null);
+    setJustAdded(false);
+  }
+
+  async function submitAd() {
+    if (!selectedAdSetId) return;
+    const created = adDrafts.filter((d) => d.creativeId);
+    if (created.length === 0) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      for (const draft of created) {
+        await addAd({ metaAdSetId: selectedAdSetId, name: draft.name, creativeId: draft.creativeId!, additionKey: `${additionKey}-${draft.clientKey}` });
+      }
+      setJustAdded(true);
+      refreshPending();
+    } catch (e) {
+      setSubmitError(e instanceof ApiError ? e.message : s.submitError);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitAdSet() {
+    const created = groupAdDrafts.filter((d) => d.creativeId);
+    if (!setName.trim() || created.length === 0) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await addAdSet({
+        name: setName,
+        targeting: { ageMin: audience.ageMin, ageMax: audience.ageMax, genders: audience.gender },
+        ads: created.map((d) => ({ clientKey: d.clientKey, name: d.name, creativeId: d.creativeId! })),
+        additionKey,
+      });
+      setJustAdded(true);
+      refreshPending();
+    } catch (e) {
+      setSubmitError(e instanceof ApiError ? e.message : s.submitError);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function addAnother() {
+    setJustAdded(false);
+    setAdditionKey(freshKey());
+    setSelectedAdSetId(null);
+    setAdDrafts([newAdDraft(1)]);
+    setSetName("");
+    setGroupAdDrafts([newAdDraft(1), newAdDraft(2), newAdDraft(3)]);
+    setAdSets(null);
+    if (mode === "ad") loadAdSets();
+  }
+
+  async function doApprove(id: string) {
+    setApprovingId(id);
+    setApproveError(null);
+    try {
+      const result = await approveAddition(id);
+      if (result.outcome !== "approved" && result.outcome !== "already_approved") {
+        setApproveError(s.approveError);
+      }
+      refreshPending();
+    } catch {
+      setApproveError(s.approveError);
+    } finally {
+      setApprovingId(null);
+    }
+  }
+
+  if (phase === "loading") return <div className="wrap page"><p className="muted">{strings.he.app.loading}</p></div>;
+  if (phase === "not_ready") {
+    return (
+      <div className="wrap page">
+        <div className="card">
+          <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 8 }}>{s.notReadyTitle}</b>
+          <p className="muted" style={{ marginBottom: 16 }}>{s.notReadyBody}</p>
+          <Link className="btn btn-primary btn-sm" to="/app/builder">{s.goToBuilder}</Link>
+        </div>
+      </div>
+    );
+  }
+  if (phase === "error") return <div className="wrap page"><div className="card"><p className="muted">{s.unavailable}</p></div></div>;
+
+  const adReady = !!selectedAdSetId && adDrafts.some((d) => d.creativeId);
+  const adSetReady = !!setName.trim() && groupAdDrafts.some((d) => d.creativeId);
+
+  return (
+    <div className="wrap page">
+      <div style={{ marginBottom: 24 }}>
+        <div className="eyebrow">{s.eyebrow}</div>
+        <h1 style={{ marginTop: 10 }}>{s.title}</h1>
+      </div>
+
+      <div className="grid-2">
+        <div>
+          <div className="row gap12" style={{ marginBottom: 20 }}>
+            <button className={`btn btn-sm ${mode === "ad" ? "btn-dark" : "btn-outline"}`} onClick={() => switchMode("ad")}>{s.modeAd}</button>
+            <button className={`btn btn-sm ${mode === "ad_set" ? "btn-dark" : "btn-outline"}`} onClick={() => switchMode("ad_set")}>{s.modeAdSet}</button>
+          </div>
+
+          {justAdded ? (
+            <div className="card">
+              <StatusPill variant="ok">✓</StatusPill>
+              <b style={{ fontSize: "1.2rem", display: "block", margin: "14px 0 10px" }}>{s.submitSuccessTitle}</b>
+              <p className="muted" style={{ marginBottom: 20 }}>{s.submitSuccessBody}</p>
+              <button className="btn btn-primary btn-sm" onClick={addAnother}>{s.submitAnother}</button>
+            </div>
+          ) : mode === "ad" ? (
+            <div className="stack gap16">
+              <div className="card">
+                <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 12 }}>{s.pickAdSetTitle}</b>
+                {adSetsLoading ? (
+                  <p className="muted">{s.pickAdSetLoading}</p>
+                ) : !adSets || adSets.length === 0 ? (
+                  <p className="muted">{s.noAdSets}</p>
+                ) : (
+                  <div className="stack gap12">
+                    {adSets.map((set) => (
+                      <label key={set.id} className="row gap12" style={{ alignItems: "center", cursor: "pointer" }}>
+                        <input type="radio" name="ad-set-pick" checked={selectedAdSetId === set.id} onChange={() => setSelectedAdSetId(set.id)} />
+                        <span>{set.name || set.id}</span>
+                        {set.status === "paused" && <StatusPill variant="neutral">{s.adSetPaused}</StatusPill>}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="card">
+                <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 12 }}>{s.adsTitle}</b>
+                <BuilderCreatives
+                  ads={adDrafts}
+                  onChange={setAdDrafts}
+                  whatsappNumber={whatsappNumber}
+                  getPosts={getAdditionPosts}
+                  uploadFile={uploadAdditionFile}
+                  createCreativeFn={createAdditionCreative}
+                />
+              </div>
+
+              {submitError && <p className="muted" style={{ color: "var(--orange)" }}>{submitError}</p>}
+              <button className="btn btn-primary btn-wide" disabled={!adReady || submitting} onClick={submitAd}>
+                {submitting ? s.submitting : s.submitAdCta}
+              </button>
+            </div>
+          ) : (
+            <div className="stack gap16">
+              <div className="card">
+                <div className="field">
+                  <label>{s.adSetNameLabel}</label>
+                  <input type="text" placeholder={s.adSetNamePlaceholder} value={setName} onChange={(e) => setSetName(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="card">
+                <AudienceFields
+                  category={category}
+                  value={audience}
+                  onCategoryChange={setCategory}
+                  onChange={(patch) => setAudience((prev) => ({ ...prev, ...patch }))}
+                />
+              </div>
+
+              <div className="card">
+                <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 12 }}>{strings.he.builder.creatives.title}</b>
+                <BuilderCreatives
+                  ads={groupAdDrafts}
+                  onChange={setGroupAdDrafts}
+                  whatsappNumber={whatsappNumber}
+                  getPosts={getAdditionPosts}
+                  uploadFile={uploadAdditionFile}
+                  createCreativeFn={createAdditionCreative}
+                />
+              </div>
+
+              {submitError && <p className="muted" style={{ color: "var(--orange)" }}>{submitError}</p>}
+              <button className="btn btn-primary btn-wide" disabled={!adSetReady || submitting} onClick={submitAdSet}>
+                {submitting ? s.submitting : s.submitAdSetCta}
+              </button>
+            </div>
+          )}
+
+          <div className="card" style={{ marginTop: 24 }}>
+            <b style={{ fontSize: "1.1rem", display: "block", marginBottom: 12 }}>{s.pendingTitle}</b>
+            {pending.length === 0 ? (
+              <p className="muted">{s.pendingEmpty}</p>
+            ) : (
+              <div className="stack gap12">
+                {pending.map((p) => (
+                  <div key={p.id} className="row between" style={{ alignItems: "center" }}>
+                    <span>
+                      <b>{p.name}</b>{" "}
+                      <span className="muted" style={{ fontSize: "0.85rem" }}>({p.kind === "ad_set" ? s.pendingKindAdSet : s.pendingKindAd})</span>
+                    </span>
+                    <button className="btn btn-outline btn-sm" disabled={approvingId === p.id} onClick={() => doApprove(p.id)}>
+                      {approvingId === p.id ? s.approving : s.approveCta}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {approveError && <p className="muted" style={{ color: "var(--orange)", marginTop: 12 }}>{approveError}</p>}
+          </div>
+        </div>
+        <SupportCard />
+      </div>
+    </div>
+  );
+}

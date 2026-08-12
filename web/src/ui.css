@@ -50,6 +50,13 @@ button { font-family: inherit; }
 .btn:hover { transform: translateY(-1px); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 .btn.block { width: 100%; }
+/* A primary CTA whose Hebrew label can run long ("הוספת קבוצת המודעות
+   (מושהית)") — .btn's white-space:nowrap is right for short labels, but
+   forces THE WHOLE PAGE to overflow horizontally on a narrow viewport when
+   the label doesn't fit on one line (a flex item's default min-width:auto
+   means width:100% alone doesn't stop this). Found on AIC-52/63's submit
+   buttons at 375px. */
+.btn-wide { white-space: normal; width: 100%; text-align: center; min-width: 0; }
 .btn-primary { background: var(--orange); color: #fff; }
 .btn-primary:hover { background: #ff4a22; }
 .btn-dark { background: var(--ink); color: var(--cream); }
@@ -155,6 +162,11 @@ button { font-family: inherit; }
 .page h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 800; }
 .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+/* Grid items default to min-width:auto, so a column can't shrink below its
+   widest child's intrinsic content size — at 375px this silently forced the
+   whole page to ~497px (found verifying AIC-63, but pre-existing on every
+   .grid-2/.grid-3 screen, e.g. SupportCard). The standard fix. */
+.grid-2 > *, .grid-3 > * { min-width: 0; }
 .tabs { display: inline-flex; background: var(--cream-2); border-radius: 999px; padding: 5px; gap: 4px; }
 .tabs button { border: 0; background: transparent; border-radius: 999px; padding: 8px 18px; font-weight: 600; cursor: pointer; color: var(--muted); font-size: 0.9rem; }
 .tabs button.active { background: #fff; color: var(--ink); }

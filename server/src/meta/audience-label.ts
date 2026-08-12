@@ -9,6 +9,7 @@ export interface RawAdSetMeta {
   id: string;
   name?: string | null;
   is_dynamic_creative?: boolean | null;
+  effective_status?: string | null;
   targeting?: {
     age_min?: number;
     age_max?: number;
@@ -32,6 +33,9 @@ export interface AdSetMeta {
   // impression and doesn't expose reliable per-asset CPL — pause_weak_creative
   // must skip these ad sets rather than compare unreliable "peers".
   isDynamicCreative: boolean;
+  // AIC-63: whether a new ad added to this (already-existing) ad set would
+  // actually deliver once approved, or whether the ad set itself is paused.
+  status: "active" | "paused";
 }
 
 const GENDER_HE: Record<AdSetMeta["genders"], string> = {
@@ -58,6 +62,7 @@ export function normalizeAdSetMeta(row: RawAdSetMeta): AdSetMeta {
     genders: gender,
     geoSummary: places.slice(0, 2).join(", "),
     isDynamicCreative: row.is_dynamic_creative === true,
+    status: row.effective_status === "ACTIVE" ? "active" : "paused",
   };
 }
 

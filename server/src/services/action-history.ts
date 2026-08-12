@@ -32,6 +32,11 @@ const SUMMARY_HE: Record<string, string> = {
   replace_creative: "החלפת קריאייטיב",
   no_action: "לא בוצע שינוי",
   activate_campaign: "הפעלת הקמפיין", // AIC-53 launch gate
+  create_campaign: "יצירת הקמפיין", // AIC-50 builder — was missing, filled in while touching this map for AIC-63
+  create_ad_set: "הוספת קבוצת מודעות", // AIC-63 add-to-existing-campaign (also used by AIC-50's first build)
+  create_ad: "הוספת מודעה",
+  activate_ad_set: "הפעלת קבוצת מודעות",
+  activate_ad: "הפעלת מודעה",
 };
 
 function rowToEntry(r: Record<string, unknown>): ActionHistoryEntry {

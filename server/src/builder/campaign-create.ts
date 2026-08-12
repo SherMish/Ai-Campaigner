@@ -44,8 +44,11 @@ export interface BuildCampaignResult {
 
 // Adapts the typed BuilderWriter (what GraphCampaignAdapter implements) to the
 // outbox's generic (kind, payload) shape — kept here rather than in
-// write-outbox.ts so execution/ never needs to import builder/ types.
-function asCreatingWriter(writer: BuilderWriter): CreatingWriter {
+// write-outbox.ts so execution/ never needs to import builder/ types. Exported
+// so AIC-63's add-to-existing-campaign orchestration can reuse it unchanged —
+// creating an ad set/ad under an existing campaign is the identical write,
+// just anchored to a real meta_campaign_id instead of a freshly-created one.
+export function asCreatingWriter(writer: BuilderWriter): CreatingWriter {
   return {
     async create(kind: WriteKind, payload: Record<string, unknown>): Promise<{ metaId: string }> {
       switch (kind) {

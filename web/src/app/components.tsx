@@ -59,6 +59,13 @@ export function StatusPill({
   );
 }
 
+// The builder's "מומלץ" (recommended) badge — only ever on a step with a
+// real, editable control (AIC-52's honesty pass); a fixed step shows no
+// badge at all. Shared between Builder.tsx and AudienceFields.tsx.
+export function Recommended() {
+  return <StatusPill variant="ok">✓ {strings.he.builder.recommended}</StatusPill>;
+}
+
 // Logged-in app header.
 // Initials from a full name (first letters of the first two words).
 function initialsOf(name: string): string {
