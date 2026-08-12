@@ -4,11 +4,6 @@
   --cream-2: #ede6da;
   --page: #efe9de;
   --ink: #171717;
-  /* Distinct from --ink: the sidebar needs to sit visibly behind the brand
-     icon, whose own dark card is nearly the exact color of --ink (#171717
-     vs the icon's ~#12171F) — same color on same color made half the mark
-     disappear. A lighter charcoal fixes that at the source, no icon hacks. */
-  --ink-side: #22262f;
   --orange: #ff5a36;
   --green: #2fa36b;
   --green-soft: #e4f3ea;
@@ -225,7 +220,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 /* ── App shell: right-side sidebar (AIC-40) ─────────────────────────────── */
 .ap-shell { min-height: 100vh; display: grid; grid-template-columns: 264px 1fr; direction: rtl; background: var(--page); }
 .ap-side {
-  background: var(--ink-side); color: var(--cream);
+  background: var(--ink); color: var(--cream);
   height: 100vh; position: sticky; top: 0;
   display: flex; flex-direction: column; padding: 22px 0 14px;
 }
