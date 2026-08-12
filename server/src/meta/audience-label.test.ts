@@ -54,46 +54,49 @@ function meta(o: Partial<AdSetMeta> & Pick<AdSetMeta, "adSetId">): AdSetMeta {
   return { name: "", ageMin: null, ageMax: null, genders: "all", geoSummary: "", isDynamicCreative: false, status: "active", isManaged: true, ...o };
 }
 
-describe("deriveAudienceLabels — never show a raw ad-set name or 'ad set N' when something structured differs", () => {
-  it("age differs → age-range label per ad set", () => {
+describe("deriveAudienceLabels — never a raw ad-set name, compose from the ad set's OWN targeting (AIC-73)", () => {
+  // REGRESSION: the old rule only labeled a dimension when it DIFFERED across
+  // siblings — with exactly one ad set (the most common shape: a single small
+  // business with one audience), nothing ever differs, so every real account
+  // fell through to the raw Meta name. That's the live bug this section pins.
+  it("a SINGLE ad set gets its own composed label, never the raw Meta name", () => {
     const labels = deriveAudienceLabels([
-      meta({ adSetId: "a", ageMin: 18, ageMax: 35 }),
-      meta({ adSetId: "b", ageMin: 35, ageMax: 45 }),
+      meta({ adSetId: "a", ageMin: 18, ageMax: 46, genders: "female", geoSummary: "רמת גן, Givatayim", name: "IL | Ramat Gan, Givatayim | Women 18-46 | Advantage+" }),
     ]);
-    expect(labels.get("a")).toBe("18–35");
-    expect(labels.get("b")).toBe("35–45");
+    expect(labels.get("a")).toBe("נשים · 18–46 · רמת גן, Givatayim");
+  });
+
+  it("composes gender + age + geo together, not just the differing dimension", () => {
+    const labels = deriveAudienceLabels([
+      meta({ adSetId: "a", ageMin: 18, ageMax: 35, genders: "male", geoSummary: "תל אביב" }),
+      meta({ adSetId: "b", ageMin: 35, ageMax: 45, genders: "male", geoSummary: "תל אביב" }),
+    ]);
+    expect(labels.get("a")).toBe("גברים · 18–35 · תל אביב");
+    expect(labels.get("b")).toBe("גברים · 35–45 · תל אביב");
   });
 
   it("no age_max → open-ended '+' label", () => {
-    const labels = deriveAudienceLabels([meta({ adSetId: "a", ageMin: 18, ageMax: 35 }), meta({ adSetId: "b", ageMin: 55 })]);
-    expect(labels.get("b")).toBe("55+");
+    const labels = deriveAudienceLabels([meta({ adSetId: "a", ageMin: 55 })]);
+    expect(labels.get("a")).toBe("55+");
   });
 
-  it("same age, gender differs → gender label", () => {
-    const labels = deriveAudienceLabels([
-      meta({ adSetId: "a", ageMin: 25, ageMax: 40, genders: "male" }),
-      meta({ adSetId: "b", ageMin: 25, ageMax: 40, genders: "female" }),
-    ]);
-    expect(labels.get("a")).toBe("גברים");
-    expect(labels.get("b")).toBe("נשים");
+  it("genders 'all' is omitted from the composition (not spelled out)", () => {
+    const labels = deriveAudienceLabels([meta({ adSetId: "a", ageMin: 25, ageMax: 40, genders: "all" })]);
+    expect(labels.get("a")).toBe("25–40");
   });
 
-  it("same age + gender, geo differs → geo label", () => {
-    const labels = deriveAudienceLabels([
-      meta({ adSetId: "a", ageMin: 25, ageMax: 40, geoSummary: "תל אביב" }),
-      meta({ adSetId: "b", ageMin: 25, ageMax: 40, geoSummary: "חיפה" }),
-    ]);
-    expect(labels.get("a")).toBe("תל אביב");
-    expect(labels.get("b")).toBe("חיפה");
+  it("nothing structured at all → a neutral phrase, never the raw name", () => {
+    const labels = deriveAudienceLabels([meta({ adSetId: "a", name: "IL | Broad | Advantage+" })]);
+    expect(labels.get("a")).toBe("קהל כללי");
   });
 
-  it("nothing structured differs → falls back to the ad set's own name", () => {
+  it("two ad sets with identical targeting get disambiguated, still never the raw name", () => {
     const labels = deriveAudienceLabels([
       meta({ adSetId: "a", ageMin: 25, ageMax: 40, name: "Set A" }),
       meta({ adSetId: "b", ageMin: 25, ageMax: 40, name: "Set B" }),
     ]);
-    expect(labels.get("a")).toBe("Set A");
-    expect(labels.get("b")).toBe("Set B");
+    expect(labels.get("a")).toBe("25–40");
+    expect(labels.get("b")).toBe("25–40 (2)");
   });
 
   it("empty input → empty map", () => {

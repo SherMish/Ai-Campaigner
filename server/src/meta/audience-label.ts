@@ -1,9 +1,7 @@
-// Human audience labels (AIC-37). Never show a raw ad-set name or "ad set N" to
-// the customer. Derive the label from what actually DIFFERS between a campaign's
-// ad sets — age → "18–35"/"35–45", gender, or geo — falling back to the ad set's
-// own Meta name only when nothing structured distinguishes them. One shared
-// helper, reused by the customer details view, the explainer, and (later) the
-// internal Meta explorer (AIC-45).
+// Human audience labels (AIC-37, corrected AIC-73). Never show a raw ad-set
+// name or "ad set N" to the customer. One shared helper, reused by the
+// customer details view, the explainer, and (later) the internal Meta
+// explorer (AIC-45).
 
 export interface RawAdSetMeta {
   id: string;
@@ -85,27 +83,36 @@ export function normalizeAdSetMeta(row: RawAdSetMeta): AdSetMeta {
   };
 }
 
-// Derive one label per ad set: prefer the dimension that DIFFERS across the set
-// (age, then gender, then geo); fall back to the ad set's own name when nothing
-// structured distinguishes them (e.g. two ad sets that only differ by creative).
+// No structured targeting at all (a broad/Advantage+ audience with no
+// age/gender/geo set) — the only true fallback. Never the raw ad-set name
+// (AIC-73: the previous "fall back to the name when siblings don't differ"
+// rule broke on the single-ad-set account, the MOST common shape for a small
+// business — with nothing to differ from, every real account hit this
+// fallback and leaked "IL | Ramat Gan, Givatayim | Women 18-46 | Advantage+"
+// straight to the customer).
+const GENERIC_AUDIENCE_LABEL = "קהל כללי";
+
+// Derive one label per ad set by composing ITS OWN structured targeting —
+// gender (when not "all"), age range, geo — never conditioned on whether a
+// sibling ad set differs. A campaign's single ad set now gets an honest label
+// like "נשים · 18–46 · תל אביב" instead of falling through to the Meta name.
+// If two ad sets end up with the identical composed label (same targeting,
+// only creative differs), a running "(2)", "(3)" suffix disambiguates them —
+// still never the raw name.
 export function deriveAudienceLabels(adsets: AdSetMeta[]): Map<string, string> {
   const labels = new Map<string, string>();
-  if (adsets.length === 0) return labels;
-
-  const ages = new Set(adsets.map((a) => `${a.ageMin ?? ""}-${a.ageMax ?? ""}`));
-  const genders = new Set(adsets.map((a) => a.genders));
-  const geos = new Set(adsets.map((a) => a.geoSummary));
+  const seen = new Map<string, number>();
 
   for (const a of adsets) {
-    if (ages.size > 1 && a.ageMin != null) {
-      labels.set(a.adSetId, a.ageMax != null ? `${a.ageMin}–${a.ageMax}` : `${a.ageMin}+`);
-    } else if (genders.size > 1) {
-      labels.set(a.adSetId, GENDER_HE[a.genders]);
-    } else if (geos.size > 1 && a.geoSummary) {
-      labels.set(a.adSetId, a.geoSummary);
-    } else {
-      labels.set(a.adSetId, a.name || a.adSetId);
-    }
+    const parts: string[] = [];
+    if (a.genders !== "all") parts.push(GENDER_HE[a.genders]);
+    if (a.ageMin != null) parts.push(a.ageMax != null ? `${a.ageMin}–${a.ageMax}` : `${a.ageMin}+`);
+    if (a.geoSummary) parts.push(a.geoSummary);
+    const base = parts.length > 0 ? parts.join(" · ") : GENERIC_AUDIENCE_LABEL;
+
+    const n = (seen.get(base) ?? 0) + 1;
+    seen.set(base, n);
+    labels.set(a.adSetId, n === 1 ? base : `${base} (${n})`);
   }
   return labels;
 }

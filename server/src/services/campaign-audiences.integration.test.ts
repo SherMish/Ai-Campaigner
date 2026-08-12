@@ -88,7 +88,11 @@ d("campaign audiences (DB + HTTP)", () => {
     expect(res.body.audiences).toHaveLength(2);
   });
 
-  it("falls back to the ad set's own name when nothing structured differs", async () => {
+  // AIC-73: previously fell back to the raw ad-set name here ("Winter Promo
+  // A"/"B") — a real spec violation (AIC-37 forbids raw Meta names in the
+  // customer app). Corrected: never the name, even when two ad sets share
+  // identical structured targeting — a running suffix disambiguates instead.
+  it("never falls back to the raw ad-set name — identical targeting gets a disambiguating suffix, not the Meta name", async () => {
     const { userId, campaignId } = await seedChain("noname");
     const store = new PgSnapshotStore(pool);
     await store.upsert([
@@ -101,7 +105,25 @@ d("campaign audiences (DB + HTTP)", () => {
     ]);
     const result = await buildCampaignAudiences(pool, userId);
     const labels = result!.audiences.map((a) => a.label).sort();
-    expect(labels).toEqual(["Winter Promo A", "Winter Promo B"]);
+    expect(labels).toEqual(["25–40", "25–40 (2)"]);
+    expect(labels.some((l) => l.includes("Winter Promo"))).toBe(false);
+  });
+
+  // The single-ad-set case (AIC-73's actual trigger, e.g. GelNails): with
+  // nothing to differ from, the ad set still gets its own composed label —
+  // never the raw name it would have fallen back to under the old rule.
+  it("a single ad set gets its own composed label, not the raw Meta name", async () => {
+    const { userId, campaignId } = await seedChain("single");
+    const store = new PgSnapshotStore(pool);
+    await store.upsert([
+      snap(campaignId, { grain: "adset", metaObjectId: "as_only", spendAgorot: 950, leads: 1, cplAgorot: 950 }),
+    ]);
+    await upsertAdSetMeta(pool, campaignId, [
+      { adSetId: "as_only", name: "IL | Ramat Gan, Givatayim | Women 18-46 | Advantage+", ageMin: 18, ageMax: 46, genders: "female", geoSummary: "רמת גן, Givatayim", isDynamicCreative: false },
+    ]);
+    const result = await buildCampaignAudiences(pool, userId);
+    expect(result?.audiences).toHaveLength(1);
+    expect(result!.audiences[0].label).toBe("נשים · 18–46 · רמת גן, Givatayim");
   });
 
   it("excludes an ad set with historical spend but no meta-cache row (AIC-65: a dead/draft ad set never cached)", async () => {

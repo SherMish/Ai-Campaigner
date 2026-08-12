@@ -510,6 +510,16 @@ export const strings = {
           leadsCol: "פניות",
           cplCol: "עלות לפנייה",
           creativesCol: "מודעות",
+          // AIC-73: collapsed-state preview, built from the count Home already
+          // has (deliveringAdCount) — no prefetch, keeps AIC-37's opt-in
+          // principle intact (nothing about audiences is fetched until opened).
+          previewAds: "מודעות פעילות",
+          // A single creative under a single audience shares the audience's own
+          // totals — say so plainly rather than let identical numbers look like
+          // a bug (AIC-73).
+          onlyChild: "כל המודעות בקהל הזה",
+          creativesHeading: "מודעות בקהל",
+          noCreatives: "אין עדיין מודעות בקהל הזה.",
         },
         recWaitingTitle: "המלצה שמחכה לך",
         recWaiting: "כדאי לעצור את אחת המודעות",

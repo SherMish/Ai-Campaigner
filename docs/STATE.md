@@ -6,6 +6,27 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Audience details panel redesign + the real root cause of the raw-name leak (AIC-73)
+Observed live: the opt-in "הצג פירוט" panel showed the raw Meta ad-set name
+(`"IL | Ramat Gan, Givatayim | Women 18-46 | Advantage+"`, pipes and all) —
+an AIC-37 spec violation, not cosmetic. Root cause: `deriveAudienceLabels`
+only labeled a dimension when it DIFFERED across sibling ad sets; with
+exactly one ad set (the common single-audience small-business shape), nothing
+ever differs, so every real account fell through to the name. Fixed by
+composing every ad set's OWN gender/age/geo unconditionally
+(`"נשים · 18–46 · רמת גן, Givatayim"`); the only true fallback (no structured
+targeting at all) is a neutral phrase, never the name, and identical-label
+collisions get a disambiguating suffix.
+
+Also redesigned the panel itself: labeled metrics (no more bare repeated
+numbers), an explicit nested audience→ad hierarchy, a collapsed-state preview
+built from data Home already has (no prefetch), a labeled + explained
+creative list, consistent pause-button placement, and `<bdi>`-wrapped mixed
+Hebrew/Latin text so nothing renders reversed. Verified live on desktop and
+375px against the real GelNails account.
+
+Full detail: [features/customer-overview.md](features/customer-overview.md).
+
 ### 2026-08-12 — The above server fix needed a frontend half too (AIC-71 follow-up #2)
 Reported live immediately after the previous fix shipped: "after I click הפעלת
 קהל I need a full refresh before seeing the status updated." The server was

@@ -97,7 +97,7 @@ reaches this card — `deriveHomeState` already routes a delivery problem to
 `null` before the engine's first tick for a campaign; the card falls back to
 the original generic copy in that case.
 
-## Opt-in audience details (AIC-37)
+## Opt-in audience details (AIC-37, redesigned AIC-73)
 
 Home defaults to the campaign roll-up only — no ad-set/audience detail ever
 shows unprompted (PRD §14's "not prominently," not a ban). A collapsed "הצג
@@ -111,6 +111,33 @@ own per-creative breakdown. Backed by `services/campaign-audiences.ts`
 **Deferred AC:** instrumenting the toggle's open-rate needs the AIC-28 metrics
 layer, which doesn't exist yet — there's no event sink to write to, so this
 isn't half-built here.
+
+**AIC-73 fixed the actual root cause of the raw-name leak.**
+`deriveAudienceLabels` used to label a dimension only when it DIFFERED across
+sibling ad sets — with exactly one ad set (the common shape for a small
+business, e.g. GelNails), nothing ever differs, so every real account fell
+through to the ad set's own Meta name (`"IL | Ramat Gan, Givatayim | Women
+18-46 | Advantage+"`, pipes and all — a direct AIC-37 spec violation, not
+polish). Corrected to compose EVERY ad set's own gender/age/geo unconditionally
+(`"נשים · 18–46 · רמת גן, Givatayim"`), regardless of whether a sibling
+differs; the only true fallback (no structured targeting at all) is a neutral
+phrase ("קהל כללי"), never the raw name — and two ad sets that land on an
+identical composed label get a disambiguating `(2)`/`(3)` suffix instead of
+silently duplicating.
+
+**The panel itself was also redesigned** (raw-mixed-value strings, no metric
+labels, near-equal audience/ad visual weight, a caret stranded across the
+full card width, unlabeled creative list, inconsistent pause-button
+placement, reversed bidi text) — every number now carries its own label
+(`Metric` component), the audience/ad relationship is an explicit nested
+block (`border-inline-start` + indent), the collapsed state previews its
+content (`{activeAds} מודעות פעילות`, built from data Home already has — no
+prefetch), and mixed Hebrew/Latin strings (labels, creative names) are
+wrapped in `<bdi>` so nothing renders reversed.
+
+**Re-baseline any AIC-37 open-rate instrumentation built after this ships** —
+numbers from before the redesign measured "is the details panel usable,"
+not "do customers want detail."
 
 ## KPIs, deltas, sidebar
 

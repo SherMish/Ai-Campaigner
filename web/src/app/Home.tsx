@@ -166,7 +166,7 @@ export function Home() {
           </div>
 
           {/* opt-in per-audience / per-creative details (AIC-37) — collapsed by default */}
-          {ov.campaign && <AudienceDetails />}
+          {ov.campaign && <AudienceDetails activeAds={activeAds} />}
 
           {/* a pending recommendation outranks the reassurance card */}
           {ov.pendingRecommendations > 0 ? (
@@ -269,7 +269,19 @@ function PauseToggle({
   );
 }
 
-function AudienceDetails() {
+// A labeled number — the details panel's core honesty fix (AIC-73): every
+// value shown carries its own label directly above it, so "9.5₪ · 1 · 9.5₪"
+// never again reads like a rendering bug.
+function Metric({ label, value, small }: { label: string; value: string; small?: boolean }) {
+  return (
+    <span className="stack" style={{ gap: 2 }}>
+      <span className="muted" style={{ fontSize: small ? "0.66rem" : "0.72rem" }}>{label}</span>
+      <b style={{ fontSize: small ? "0.85rem" : "0.92rem" }}>{value}</b>
+    </span>
+  );
+}
+
+function AudienceDetails({ activeAds }: { activeAds: number }) {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<CampaignAudiences | null>(null);
   const [loading, setLoading] = useState(false);
@@ -313,14 +325,20 @@ function AudienceDetails() {
 
   return (
     <div className="card">
+      {/* AIC-73: caret sits directly beside the label, and — while collapsed —
+          a preview of what's inside, built from the count Home already has
+          (no prefetch; audiences are still only fetched once opened). */}
       <button
-        className="row between"
-        style={{ width: "100%", background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "inherit" }}
+        className="row gap8"
+        style={{ background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "inherit" }}
         onClick={toggle}
         aria-expanded={open}
       >
+        <span style={{ transform: open ? "rotate(180deg)" : undefined, transition: "transform .15s", fontSize: "0.8rem" }}>▾</span>
         <b>{open ? D.hide : D.show}</b>
-        <span style={{ transform: open ? "rotate(180deg)" : undefined, transition: "transform .15s" }}>▾</span>
+        {!open && activeAds > 0 && (
+          <span className="muted" style={{ fontSize: "0.85rem" }}>· {activeAds} {D.previewAds}</span>
+        )}
       </button>
 
       {open && (
@@ -332,58 +350,89 @@ function AudienceDetails() {
             <p className="muted">{D.empty}</p>
           ) : (
             <div className="stack gap8">
-              {data.audiences.map((aud) => (
-                <div key={aud.adSetId} className="soft" style={{ borderRadius: 14, padding: 14 }}>
-                  <button
-                    className="row between"
-                    style={{ width: "100%", background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "inherit" }}
-                    onClick={() => setExpanded(expanded === aud.adSetId ? null : aud.adSetId)}
-                  >
-                    <b>
-                      {aud.label}
-                      {isPaused("ad_set", aud.adSetId) && (
-                        <span className="pill neutral" style={{ marginInlineStart: 8, padding: "2px 8px", fontSize: "0.7rem" }}>{CT.pausedBadge}</span>
-                      )}
-                    </b>
-                    <span className="muted" style={{ fontSize: "0.85rem" }}>
-                      {shekels(aud.spendAgorot)} · {aud.leads} {D.leadsCol} · {aud.cplAgorot === null ? L.none : shekels(aud.cplAgorot)}
-                    </span>
-                  </button>
-                  {ctl && (
-                    <div style={{ marginTop: 8 }}>
-                      <PauseToggle
-                        kind="ad_set" metaObjectId={aud.adSetId}
-                        paused={isPaused("ad_set", aud.adSetId)}
-                        busy={busyId === aud.adSetId} onToggle={onToggle}
-                      />
+              {data.audiences.map((aud) => {
+                const isExpanded = expanded === aud.adSetId;
+                return (
+                  <div key={aud.adSetId} className="soft" style={{ borderRadius: 14, padding: 14 }}>
+                    {/* Audience row: label + human targeting on one side, its
+                        labeled metrics on the other — bidi-isolated so a
+                        mixed Hebrew/English label never renders reversed. */}
+                    <div className="row between" style={{ flexWrap: "wrap", gap: 10 }}>
+                      <button
+                        className="row gap8"
+                        style={{ background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "inherit" }}
+                        onClick={() => setExpanded(isExpanded ? null : aud.adSetId)}
+                        aria-expanded={isExpanded}
+                      >
+                        <span style={{ transform: isExpanded ? "rotate(180deg)" : undefined, transition: "transform .15s", fontSize: "0.75rem" }}>▾</span>
+                        <b><bdi>{aud.label}</bdi></b>
+                        {isPaused("ad_set", aud.adSetId) && (
+                          <span className="pill neutral" style={{ padding: "2px 8px", fontSize: "0.7rem" }}>{CT.pausedBadge}</span>
+                        )}
+                      </button>
+                      <span className="row gap16" style={{ flexWrap: "wrap" }}>
+                        <Metric label={D.spendCol} value={shekels(aud.spendAgorot)} />
+                        <Metric label={D.leadsCol} value={String(aud.leads)} />
+                        <Metric label={D.cplCol} value={aud.cplAgorot === null ? L.none : shekels(aud.cplAgorot)} />
+                      </span>
                     </div>
-                  )}
-                  {expanded === aud.adSetId && aud.creatives.length > 0 && (
-                    <div style={{ marginTop: 10 }}>
-                      {aud.creatives.map((c) => (
-                        <div key={c.metaObjectId} className="summary-row" style={{ fontSize: "0.85rem", alignItems: "center", gap: 10 }}>
-                          <span className="k">
-                            {c.creativeName ?? c.metaObjectId}
-                            {isPaused("ad", c.metaObjectId) && (
-                              <span className="pill neutral" style={{ marginInlineStart: 8, padding: "1px 7px", fontSize: "0.68rem" }}>{CT.pausedBadge}</span>
+
+                    {/* Consistent action placement (AIC-73): the audience's own
+                        pause control always sits here, same position on every
+                        card — never sharing a row with the expand toggle. */}
+                    {ctl && (
+                      <div style={{ marginTop: 10 }}>
+                        <PauseToggle
+                          kind="ad_set" metaObjectId={aud.adSetId}
+                          paused={isPaused("ad_set", aud.adSetId)}
+                          busy={busyId === aud.adSetId} onToggle={onToggle}
+                        />
+                      </div>
+                    )}
+
+                    {/* Its ads, visually nested under the audience (AIC-73) —
+                        an explicit rule + indent, not near-equal weight. */}
+                    {isExpanded && (
+                      <div style={{ marginTop: 12, borderInlineStart: "2px solid var(--line)", paddingInlineStart: 12 }}>
+                        <div className="muted" style={{ fontSize: "0.78rem", marginBottom: 8, fontWeight: 600 }}>{D.creativesHeading}</div>
+                        {aud.creatives.length === 0 ? (
+                          <p className="muted" style={{ fontSize: "0.85rem" }}>{D.noCreatives}</p>
+                        ) : (
+                          <div className="stack gap8">
+                            {/* Single-child case: the one ad's numbers ARE the
+                                audience's numbers — say so instead of letting
+                                identical values look duplicated/broken. */}
+                            {aud.creatives.length === 1 && (
+                              <p className="muted" style={{ fontSize: "0.78rem" }}>{D.onlyChild}</p>
                             )}
-                          </span>
-                          <span className="row gap8" style={{ alignItems: "center" }}>
-                            <b>{shekels(c.spendAgorot)} · {c.leads} {D.leadsCol}</b>
-                            {ctl && (
-                              <PauseToggle
-                                kind="ad" metaObjectId={c.metaObjectId}
-                                paused={isPaused("ad", c.metaObjectId)}
-                                busy={busyId === c.metaObjectId} onToggle={onToggle}
-                              />
-                            )}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+                            {aud.creatives.map((c) => (
+                              <div key={c.metaObjectId} className="row between" style={{ flexWrap: "wrap", gap: 8, paddingBottom: 8, borderBottom: "1px solid var(--line)" }}>
+                                <span className="row gap8">
+                                  <bdi style={{ fontSize: "0.88rem" }}>{c.creativeName ?? c.metaObjectId}</bdi>
+                                  {isPaused("ad", c.metaObjectId) && (
+                                    <span className="pill neutral" style={{ padding: "1px 7px", fontSize: "0.68rem" }}>{CT.pausedBadge}</span>
+                                  )}
+                                </span>
+                                <span className="row gap12" style={{ flexWrap: "wrap", alignItems: "center" }}>
+                                  <Metric label={D.spendCol} value={shekels(c.spendAgorot)} small />
+                                  <Metric label={D.leadsCol} value={String(c.leads)} small />
+                                  {ctl && (
+                                    <PauseToggle
+                                      kind="ad" metaObjectId={c.metaObjectId}
+                                      paused={isPaused("ad", c.metaObjectId)}
+                                      busy={busyId === c.metaObjectId} onToggle={onToggle}
+                                    />
+                                  )}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
