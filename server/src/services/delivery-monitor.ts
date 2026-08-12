@@ -1,6 +1,6 @@
 import type pg from "pg";
 import type { OpsQueue } from "./ops-queue.js";
-import type { DeliverySummary } from "../meta/delivery-health.js";
+import { summarize, type DeliverySummary, type DeliveryReader } from "../meta/delivery-health.js";
 
 // Persist a campaign's delivery health (AIC-39) and raise an ops item on the
 // ok → not-ok transition only (so a still-broken campaign doesn't spam the queue
@@ -41,4 +41,31 @@ export async function recordCampaignDelivery(deps: {
     return { raisedOps: true };
   }
   return { raisedOps: false };
+}
+
+// AIC-71 follow-up (found live, same day): the customer-facing "מצב" headline
+// reads `delivering`, which was only ever recomputed on the hourly engine
+// tick — a customer who pauses their own ad/ad set via the manual controls
+// (AIC-66) still saw "פעיל" for up to an hour after, silently contradicting
+// the action they'd just taken. Called from the pause/resume/archive/delete
+// routes right after a real write, so the headline catches up within the
+// same request instead of waiting for the next tick. Best-effort: a read
+// failure here must never fail the manual action that triggered it — the
+// write already succeeded and was already verified by setObjectStatus.
+export async function refreshDeliveryNow(deps: {
+  pool: pg.Pool;
+  ops: OpsQueue;
+  deliveryReader: DeliveryReader;
+  campaignId: string;
+  customerId: string | null;
+  metaCampaignId: string;
+}): Promise<void> {
+  const { pool, ops, deliveryReader, campaignId, customerId, metaCampaignId } = deps;
+  try {
+    const health = await deliveryReader.getDeliveryHealth(metaCampaignId);
+    const summary = summarize(health);
+    await recordCampaignDelivery({ pool, ops, campaignId, customerId, summary });
+  } catch (e) {
+    console.error(`[delivery-monitor] refreshDeliveryNow failed for ${campaignId}`, e);
+  }
 }

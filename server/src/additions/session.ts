@@ -3,6 +3,7 @@ import { GraphCampaignAdapter } from "../meta/campaign-adapter.js";
 import type { BuilderWriter } from "../builder/types.js";
 import type { CreativeWriter } from "../builder/creative-types.js";
 import type { AdditionWriter } from "./types.js";
+import type { DeliveryReader } from "../meta/delivery-health.js";
 
 // The inverse precondition of builder/session.ts's resolveBuilderContext:
 // that one requires NO managed campaign (first-time build only); this one
@@ -59,7 +60,10 @@ export async function resolveAdditionContext(pool: pg.Pool, userId: string): Pro
 }
 
 // Same token-gated factory pattern as buildBuilderWriter/buildLaunchWriter.
-export function buildAdditionWriter(): (BuilderWriter & CreativeWriter & AdditionWriter) | null {
+// Also a DeliveryReader (AIC-71 follow-up): the manual-controls routes reuse
+// this same adapter instance to recompute delivery state right after a write,
+// instead of waiting for the next hourly engine tick.
+export function buildAdditionWriter(): (BuilderWriter & CreativeWriter & AdditionWriter & DeliveryReader) | null {
   const token = process.env.META_SYSTEM_USER_TOKEN;
   if (!token) return null;
   const ver = process.env.META_GRAPH_VERSION || "v21.0";

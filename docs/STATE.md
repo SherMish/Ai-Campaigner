@@ -6,6 +6,21 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Manual pause/resume now updates the Home headline immediately (AIC-71 follow-up)
+Found minutes after AIC-71 shipped: paused the only ad set live and Home kept
+reading "פעיל" — `managed_campaigns.delivering` was only ever recomputed on
+the hourly engine tick, so a customer's own pause left the headline stale for
+up to an hour, directly undermining the "stopped" state just shipped to fix
+exactly this kind of staleness. `POST /pause`/`/resume` (customer) and the
+operator object-control route now call a new `refreshDeliveryNow` right after
+a write actually changes something — same computation as the engine tick,
+run synchronously instead of waiting. Caught a real test-mock gap in the
+process: `controls.integration.test.ts`'s shared Meta mock never returned
+`adset_id` on ad rows (nothing had needed it before AIC-71's ad-level
+rollup), silently zeroing every ad-count assertion until fixed.
+
+Full detail: [features/manual-controls.md](features/manual-controls.md).
+
 ### 2026-08-12 — Honest delivery state on Home: "stopped" + a real active-ad count (AIC-71)
 Real GelNails case, seen live right after AIC-66 shipped: the customer paused
 their only ad set via the new manual controls — zero delivery, zero spend —

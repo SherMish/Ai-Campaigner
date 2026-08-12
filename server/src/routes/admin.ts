@@ -2,6 +2,7 @@ import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { setObjectStatus, assertOwnedByCampaign } from "../controls/manual-controls.js";
 import type { ControlObjectKind, ControlWriter } from "../controls/types.js";
+import type { DeliveryReader } from "../meta/delivery-health.js";
 import { buildAdditionWriter } from "../additions/session.js";
 import { requireAdmin, requireFullAdmin } from "../middleware/admin.js";
 import type { AuthedRequest } from "../middleware/auth.js";
@@ -17,6 +18,7 @@ import { listAuditLog, logAdminAction, type Actor } from "../services/admin-audi
 import { listOperators, addOperator, setOperatorRole, removeOperator } from "../services/operator-accounts.js";
 import { PgUserStore, type AdminRole } from "../auth/user-store.js";
 import { OpsQueue } from "../services/ops-queue.js";
+import { refreshDeliveryNow } from "../services/delivery-monitor.js";
 import { consoleLogger } from "../services/logger.js";
 import { submitReview, recordCustomerDecision, getLatestReview } from "../services/campaign-review.js";
 import { updateBilling, conversionSummary, upsertLeadQuality, listLeadQuality, leadQualityResponseRate } from "../services/billing.js";
@@ -115,8 +117,8 @@ adminRouter.post("/campaigns/:id/objects/:action", async (req, res) => {
     return;
   }
 
-  const camp = await pool.query<{ meta_campaign_id: string | null; name: string; business_name: string }>(
-    `SELECT mc.meta_campaign_id, mc.name, c.business_name
+  const camp = await pool.query<{ meta_campaign_id: string | null; name: string; business_name: string; customer_id: string }>(
+    `SELECT mc.meta_campaign_id, mc.name, mc.customer_id, c.business_name
      FROM managed_campaigns mc JOIN customers c ON c.id = mc.customer_id WHERE mc.id = $1`,
     [req.params.id],
   );
@@ -134,7 +136,7 @@ adminRouter.post("/campaigns/:id/objects/:action", async (req, res) => {
     return;
   }
 
-  const writer = buildAdditionWriter() as ControlWriter | null;
+  const writer = buildAdditionWriter() as (ControlWriter & DeliveryReader) | null;
   if (!writer) {
     res.status(503).json({ error: "Meta not configured" });
     return;
@@ -177,6 +179,17 @@ adminRouter.post("/campaigns/:id/objects/:action", async (req, res) => {
     res.status(502).json({ outcome: result.outcome, detail: result.detail });
     return;
   }
+
+  // Same catch-up as the customer surface (AIC-71 follow-up): an operator
+  // pause/resume/archive/delete shouldn't leave the customer's "מצב" headline
+  // stale until the next hourly tick either.
+  if (result.outcome === "changed") {
+    await refreshDeliveryNow({
+      pool, ops: opsQueue, deliveryReader: writer, campaignId: req.params.id,
+      customerId: campaign.customer_id, metaCampaignId: campaign.meta_campaign_id,
+    });
+  }
+
   res.json({ outcome: result.outcome, status: result.newStatus ?? status });
 });
 

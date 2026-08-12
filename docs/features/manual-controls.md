@@ -141,6 +141,21 @@ These are kept distinct from the engine's `pause_creative` even though both end
 in a paused ad — the history reads better when "you paused this" and "we
 recommended pausing this" don't share a label.
 
+## The headline state catches up immediately, not on the next tick (AIC-71)
+
+Found live the same day AIC-71 shipped: a customer paused their only ad set
+and Home kept reading "פעיל" — `managed_campaigns.delivering`
+([customer-overview.md](customer-overview.md)) was only ever recomputed on
+the hourly engine tick, so a customer's own action left the headline stale
+for up to an hour. Both `POST /pause`/`/resume` (customer) and
+`POST /campaigns/:id/objects/:action` (operator) now call
+`refreshDeliveryNow` (`services/delivery-monitor.ts`) right after a write with
+outcome `"changed"` — a real Meta re-read (`getDeliveryHealth`) + persist,
+reusing the exact same computation as the engine tick, not a separate code
+path. Best-effort: a failure here is logged and swallowed, never surfaced as
+if the pause/resume itself had failed — that write already succeeded and was
+already verified by `setObjectStatus`.
+
 ## Customer surface
 
 `AudienceDetails` on Home (the opt-in AIC-37 details panel) is the only

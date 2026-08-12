@@ -4,6 +4,11 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { resolveAdditionContext, buildAdditionWriter } from "../additions/session.js";
 import { setObjectStatus, assertOwnedByCampaign } from "../controls/manual-controls.js";
 import type { ControlObjectKind, ControlWriter } from "../controls/types.js";
+import type { DeliveryReader } from "../meta/delivery-health.js";
+import { refreshDeliveryNow } from "../services/delivery-monitor.js";
+import { OpsQueue } from "../services/ops-queue.js";
+
+const ops = new OpsQueue(pool);
 
 // Customer-facing manual controls (AIC-66): "turn this ad off / back on".
 //
@@ -63,7 +68,7 @@ for (const action of ["pause", "resume"] as const) {
         res.status(409).json({ error: "no managed campaign" });
         return;
       }
-      const writer = buildAdditionWriter() as ControlWriter | null;
+      const writer = buildAdditionWriter() as (ControlWriter & DeliveryReader) | null;
       if (!writer) return unavailable(res);
 
       // Never trust a client-supplied Meta id: prove it lives under the
@@ -87,6 +92,18 @@ for (const action of ["pause", "resume"] as const) {
         res.status(502).json({ outcome: result.outcome });
         return;
       }
+
+      // Update the customer-facing "מצב" headline (AIC-71) right now, rather
+      // than leaving it stale until the next hourly engine tick — the whole
+      // point of a self-service pause is that the customer sees it took
+      // effect immediately.
+      if (result.outcome === "changed") {
+        await refreshDeliveryNow({
+          pool, ops, deliveryReader: writer, campaignId: ctx.localCampaignId,
+          customerId: ctx.customerId, metaCampaignId: ctx.metaCampaignId,
+        });
+      }
+
       res.json({ outcome: result.outcome, status: result.newStatus });
     } catch (e) {
       console.error(`[controls] ${action} failed`, e);

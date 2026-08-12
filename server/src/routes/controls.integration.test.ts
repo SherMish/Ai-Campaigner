@@ -27,7 +27,9 @@ function mockMeta(ads: string[], adSets: string[]) {
         return jsonRes({ data: adSets.map((id) => ({ id, effective_status: statuses.get(id) })) });
       }
       if (u.includes("/ads?")) {
-        return jsonRes({ data: ads.map((id) => ({ id, effective_status: statuses.get(id) })) });
+        // adset_id defaults to the (single) seeded ad set — every test in
+        // this file uses exactly one, matching the real campaign shape.
+        return jsonRes({ data: ads.map((id) => ({ id, adset_id: adSets[0], effective_status: statuses.get(id) })) });
       }
       if (u.includes("fields=status")) {
         const id = u.split("/").pop()!.split("?")[0];
@@ -138,6 +140,59 @@ d("manual controls routes (AIC-66)", () => {
     expect(res.status).toBe(200);
     expect(statuses.get("as_1")).toBe("ACTIVE");
     expect(await historyTypes(campaignId)).toEqual(["resume_ad_set"]);
+  });
+
+  // REGRESSION (live incident 2026-08-12, same day as AIC-71 shipped): a
+  // customer paused their only ad set and Home still read "פעיל" — `delivering`
+  // was only ever recomputed on the hourly engine tick, so a customer's own
+  // manual pause left the headline stale for up to an hour. The pause/resume
+  // routes must recompute+persist `delivering` synchronously, not wait for the
+  // next tick.
+  it("a customer's own pause updates managed_campaigns.delivering immediately, not on the next engine tick", async () => {
+    const { token, campaignId } = await seed("livedeliv");
+    const { fetchMock } = mockMeta(["ad_1"], ["as_1"]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const before = await pool.query(`SELECT delivering, delivering_ad_count FROM managed_campaigns WHERE id = $1`, [campaignId]);
+    expect(before.rows[0]).toMatchObject({ delivering: true }); // migration default, pre-tick
+
+    const res = await request(app).post("/api/app/controls/pause")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ kind: "ad_set", metaObjectId: "as_1" });
+    expect(res.status).toBe(200);
+
+    const after = await pool.query(`SELECT delivering, delivering_ad_count FROM managed_campaigns WHERE id = $1`, [campaignId]);
+    expect(after.rows[0]).toMatchObject({ delivering: false, delivering_ad_count: 0 });
+  });
+
+  it("a customer's own resume updates managed_campaigns.delivering immediately", async () => {
+    const { token, campaignId } = await seed("livedeliv2");
+    const { fetchMock, statuses } = mockMeta(["ad_1"], ["as_1"]);
+    statuses.set("as_1", "PAUSED");
+    vi.stubGlobal("fetch", fetchMock);
+    await pool.query(`UPDATE managed_campaigns SET delivering = false, delivering_ad_count = 0 WHERE id = $1`, [campaignId]);
+
+    const res = await request(app).post("/api/app/controls/resume")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ kind: "ad_set", metaObjectId: "as_1" });
+    expect(res.status).toBe(200);
+
+    const after = await pool.query(`SELECT delivering, delivering_ad_count FROM managed_campaigns WHERE id = $1`, [campaignId]);
+    expect(after.rows[0]).toMatchObject({ delivering: true, delivering_ad_count: 1 });
+  });
+
+  it("an operator's pause updates managed_campaigns.delivering immediately too", async () => {
+    const { campaignId } = await seed("livedelivop");
+    const { fetchMock } = mockMeta(["ad_1"], ["as_1"]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await request(app).post(`/api/admin/campaigns/${campaignId}/objects/pause`)
+      .set("Authorization", ADMIN)
+      .send({ kind: "ad_set", metaObjectId: "as_1" });
+    expect(res.status).toBe(200);
+
+    const after = await pool.query(`SELECT delivering, delivering_ad_count FROM managed_campaigns WHERE id = $1`, [campaignId]);
+    expect(after.rows[0]).toMatchObject({ delivering: false, delivering_ad_count: 0 });
   });
 
   it("refuses an object that isn't under the caller's campaign", async () => {
