@@ -24,6 +24,7 @@ const h = a.home;
 const L = h.live;
 const D = h.details;
 const CT = h.controls;
+const TD = h.today;
 
 // AIC-64: distinct, honest copy for WHY there's no recommendation, keyed by the
 // engine's reason. `delivery_blocked` is deliberately absent — a delivery
@@ -147,7 +148,37 @@ export function Home() {
 
           {launchOpen && <LaunchModal onClose={() => setLaunchOpen(false)} />}
 
-          {/* KPIs — the questions the customer actually asks */}
+          {/* Today so far — the thing the owner actually wants to know, and
+              what the 7-day window below structurally cannot show (it stops
+              at yesterday, matching the engine's complete-days evaluation).
+              Deliberately its own line rather than blended into the KPIs:
+              folding a partial day into a 7-day CPL makes that ratio noisy
+              mid-day without helping anyone. */}
+          {r && (
+            <div className="card">
+              <div className="row between" style={{ flexWrap: "wrap", gap: 10 }}>
+                <b>{TD.title}</b>
+                {r.today.leads === 0 && r.today.spendAgorot === 0 ? (
+                  <span className="muted" style={{ fontSize: "0.88rem" }}>{TD.none}</span>
+                ) : (
+                  <span className="row gap16" style={{ flexWrap: "wrap" }}>
+                    <Metric label={TD.leads} value={String(r.today.leads)} />
+                    <Metric label={TD.spend} value={shekels(r.today.spendAgorot)} />
+                  </span>
+                )}
+              </div>
+              {(r.today.leads > 0 || r.today.spendAgorot > 0) && (
+                <p className="muted" style={{ marginTop: 8, fontSize: "0.8rem" }}>{TD.provisional}</p>
+              )}
+            </div>
+          )}
+
+          {/* KPIs — the questions the customer actually asks. Window stated
+              once above the group, so no number is ever presented as
+              something it isn't (the old "הוצאה החודש" sat on a 7-day value). */}
+          {/* paddingInline matches .dash .card so the window label lines up
+              with the card TEXT below it, not the card's outer edge. */}
+          <div className="muted" style={{ fontSize: "0.8rem", marginTop: 4, paddingInline: 20 }}>{h.kpiWindow}</div>
           <div className="grid-3">
             <div className="kpi">
               <b>{cpl === null ? L.none : shekels(cpl)}</b>
@@ -181,10 +212,16 @@ export function Home() {
           ) : (state === "ok" || state === "collecting") ? (
             (() => {
               const nr = noRecCard(ov.campaign?.noRecReason ?? null);
+              // The dashboard now shows today while the engine still
+              // evaluates on complete days — so "3 פניות היום" can sit next
+              // to "עדיין אוספים נתונים". Say why, rather than let it read as
+              // the product contradicting itself (AIC-64's job).
+              const todayActive = !!r && (r.today.leads > 0 || r.today.spendAgorot > 0);
               return (
                 <div className="card">
                   <StatusPill variant="ok">{nr.title}</StatusPill>
                   <p className="muted" style={{ marginTop: 12 }}>{nr.body}</p>
+                  {todayActive && <p className="muted" style={{ marginTop: 8, fontSize: "0.85rem" }}>{h.noRec.completeDaysNote}</p>}
                   {nr.cta && <Link className="btn btn-outline btn-sm" style={{ marginTop: 12 }} to={nr.cta.to}>{nr.cta.label}</Link>}
                 </div>
               );

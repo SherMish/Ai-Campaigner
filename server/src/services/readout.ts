@@ -3,7 +3,7 @@ import type { Agorot } from "@aic/shared";
 import type { CampaignStatus } from "@aic/shared";
 import type { InsightsPeriod } from "../meta/types.js";
 import { PgSnapshotStore, type PeriodAgg } from "../meta/snapshot-store.js";
-import { rollingPeriods } from "../meta/scheduled-ingestion.js";
+import { rollingPeriods, todayPeriod } from "../meta/scheduled-ingestion.js";
 
 export interface CreativeRow {
   metaObjectId: string;
@@ -22,6 +22,12 @@ export interface CampaignReadout {
   period: { current: InsightsPeriod; previous: InsightsPeriod };
   current: PeriodAgg;
   previous: PeriodAgg;
+  // Today so far — customer-surface only, and deliberately NOT folded into
+  // `current` (which stops at yesterday). The engine evaluates on complete
+  // days; blending a partial day into the 7-day CPL would make that ratio
+  // noisy mid-day without helping anyone. Provisional: Meta's same-day
+  // conversion data is incomplete and revises upward.
+  today: PeriodAgg;
   delta: {
     spendPct: number | null;
     leadsPct: number | null;
@@ -55,10 +61,12 @@ export async function buildCampaignReadout(
   if (camp.rows.length === 0) return null;
 
   const { current, previous } = rollingPeriods(ref);
+  const todayWindow = todayPeriod(ref);
   const store = new PgSnapshotStore(pool);
-  const [cur, prev] = await Promise.all([
+  const [cur, prev, today] = await Promise.all([
     store.campaignTotals(campaignId, current.start, current.end),
     store.campaignTotals(campaignId, previous.start, previous.end),
+    store.campaignTotals(campaignId, todayWindow.start, todayWindow.end),
   ]);
 
   const creatives = await pool.query<{
@@ -85,6 +93,7 @@ export async function buildCampaignReadout(
     period: { current, previous },
     current: cur,
     previous: prev,
+    today,
     delta: {
       spendPct: deltaPct(cur.spendAgorot, prev.spendAgorot),
       leadsPct: deltaPct(cur.leads, prev.leads),

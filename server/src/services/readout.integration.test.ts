@@ -121,4 +121,47 @@ d("dogfood readout (DB + HTTP)", () => {
     ).set("Authorization", ADMIN);
     expect(res.status).toBe(404);
   });
+
+  // REGRESSION (real, 2026-08-12): a customer got 3 leads today and the
+  // dashboard headline still read "1 פניות" — nothing ingested today, and the
+  // 7-day window deliberately stops at yesterday. `today` is now its own
+  // snapshot + its own readout field, kept OUT of `current` so the engine
+  // still evaluates on complete days only.
+  it("today is reported separately and never folded into the 7-day window", async () => {
+    const cust = await pool.query<{ id: string }>(
+      `INSERT INTO customers (business_name, is_test) VALUES ('__it_ro_today', true) RETURNING id`,
+    );
+    const conn = await pool.query<{ id: string }>(
+      `INSERT INTO meta_connections (customer_id, access_health) VALUES ($1,'ok') RETURNING id`,
+      [cust.rows[0].id],
+    );
+    const acct = await pool.query<{ id: string }>(
+      `INSERT INTO ad_accounts (connection_id, meta_ad_account_id) VALUES ($1,$2) RETURNING id`,
+      [conn.rows[0].id, `act_ro_${conn.rows[0].id.slice(0, 8)}`],
+    );
+    const camp = await pool.query<{ id: string }>(
+      `INSERT INTO managed_campaigns (customer_id, ad_account_id, name, status)
+       VALUES ($1,$2,'Today split','active') RETURNING id`,
+      [cust.rows[0].id, acct.rows[0].id],
+    );
+    const campaignId = camp.rows[0].id;
+    const today = new Date().toISOString().slice(0, 10);
+
+    const store = new PgSnapshotStore(pool);
+    await store.upsert([
+      // The complete-days window the engine reads: 1 lead.
+      snap(campaignId, { spendAgorot: 1182, leads: 1, cplAgorot: 1182 }),
+      // Today's own row: 3 more leads that the 7-day window structurally
+      // cannot contain (its period ends yesterday).
+      snap(campaignId, { periodStart: today, periodEnd: today, spendAgorot: 2674, leads: 3, cplAgorot: 891 }),
+    ]);
+
+    const readout = await buildCampaignReadout(pool, campaignId);
+    // The engine's window is untouched by today — no partial-day contamination.
+    expect(readout!.current).toMatchObject({ spendAgorot: 1182, leads: 1 });
+    // ...and today is visible on its own, which is what the customer needed.
+    expect(readout!.today).toMatchObject({ spendAgorot: 2674, leads: 3 });
+
+    await pool.query(`DELETE FROM customers WHERE id = $1`, [cust.rows[0].id]);
+  });
 });

@@ -449,7 +449,22 @@ export const strings = {
         title: "הקמפיין שלך",
         navHome: "ראשי", navRecs: "המלצות", navSettings: "עזרה והגדרות",
         periods: { month: "החודש", days7: "7 ימים", prev: "חודש קודם" },
-        kpiCpl: "לפנייה", kpiLeads: "פניות", kpiSpend: "הוצאה החודש",
+        // Every KPI states its own window. "הוצאה החודש" used to sit on a
+        // 7-day value — a label claiming something the number isn't, the same
+        // class of small lie as a false "פעיל". The window is stated once
+        // above the group (kpiWindow) rather than repeated three times.
+        kpiCpl: "עלות לפנייה", kpiLeads: "פניות", kpiSpend: "הוצאה",
+        kpiWindow: "7 ימים אחרונים (עד אתמול)",
+        // Today so far — shown separately, never folded into the 7-day
+        // figures. Meta's same-day conversion data is incomplete and revises
+        // upward, so it's labelled provisional rather than presented as final.
+        today: {
+          title: "היום עד עכשיו",
+          leads: "פניות",
+          spend: "הוצאה",
+          provisional: "נתוני היום עדיין מתעדכנים ועשויים לעלות.",
+          none: "עדיין לא נרשמה פעילות היום.",
+        },
         states: {
           ok: { badge: "פעיל", title: "הכל עובד כרגיל", body: "הקמפיין פעיל ואין כרגע משהו שדורש את תשומת הלב שלך." },
           rec: { badge: "מחכה לך", title: "יש לנו המלצה אחת", body: "מצאנו שינוי שיכול לשפר את הקמפיין ומחכה לאישור שלך.", cta: "לצפייה בהמלצה" },
@@ -543,6 +558,12 @@ export const strings = {
             title: "אין כרגע משהו שצריך לעשות",
             body: "יש לכם כרגע קהל פרסום אחד פעיל — אין עדיין עם מה להשוות כדי להמליץ על שינוי קהל.",
           },
+          // Shown only when today already has activity but the engine hasn't
+          // acted. Without it, seeing "3 פניות היום" next to "עדיין אוספים
+          // נתונים" reads as the product contradicting itself — it isn't: we
+          // deliberately evaluate on complete days so a half-finished day
+          // never triggers a recommendation.
+          completeDaysNote: "את ההמלצות אנחנו מחשבים על ימים מלאים בלבד, כך שהפעילות של היום עוד לא נכללת.",
         },
         // AIC-67: incremental delta review — only ever asks about NEW leads
         // since the last review (never a cumulative total the customer has
@@ -566,7 +587,7 @@ export const strings = {
           { d: "1 באוג׳", t: "התחיל ניהול הקמפיין." },
         ],
         summaryTitle: "קמפיין WhatsApp",
-        sMode: "מצב", sBudget: "תקציב", sAds: "מודעות", sLeads: "פניות לפי שבוע",
+        sMode: "מצב", sBudget: "תקציב", sAds: "מודעות", sLeads: "פניות (7 ימים)",
         sBudgetVal: "₪80 ביום", sAdsVal: "4 מודעות פעילות", sLeadsVal: "18 סה״כ",
       },
       // Launch gate (AIC-53) — the confirmation before a campaign goes live.

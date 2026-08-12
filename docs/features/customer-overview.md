@@ -139,6 +139,41 @@ wrapped in `<bdi>` so nothing renders reversed.
 numbers from before the redesign measured "is the details panel usable,"
 not "do customers want detail."
 
+## Today vs the engine's window — two questions, two windows
+
+**Real bug, 2026-08-12:** a customer got 3 leads today and the headline still
+read **1 פניות**. Nothing was wrong with the number — the readout window is
+`rollingPeriods().current` = `[today-7 … today-1]`, which deliberately **stops
+at yesterday**, and nothing ever ingested today at all. So today's 3 leads and
+₪26.74 were invisible everywhere on the page, while the lead-quality card
+(all-time) correctly said 4. Two true numbers that read as a contradiction.
+
+The two surfaces are answering genuinely different questions and so get
+different windows:
+
+| | window | why |
+| --- | --- | --- |
+| **Engine / rules** | complete days only (`[today-7 … today-1]`) | A half-finished day looks like underperformance. Acting on it would move real money on bad evidence. |
+| **Customer dashboard** | + today, shown separately | Someone who got 3 leads today must see them, or the product looks broken. |
+
+Implementation: `todayPeriod(ref)` (`meta/scheduled-ingestion.ts`) is a
+single-day window ingested as its **own snapshot row** via
+`runIngestionTick`'s `extraPeriods` — a display-only extra whose failure is
+logged but never marks the campaign failed (the engine's primary window is
+what matters). `buildCampaignReadout` exposes it as `readout.today`,
+deliberately **not** folded into `current`: blending a partial day into a
+7-day CPL ratio makes that ratio noisy mid-day without helping anyone.
+
+On Home it renders as its own "היום עד עכשיו" line above the KPI group,
+labelled **provisional** — Meta's same-day conversion data is incomplete and
+revises upward, so 3 leads at noon becoming 5 by evening should read as
+expected, not as a bug.
+
+**The two surfaces can now legitimately disagree** — the customer can see
+today's leads while the engine still says "no recommendation yet." That's
+explained rather than left to look like a contradiction: the AIC-64 no-rec
+card appends `noRec.completeDaysNote` whenever today has activity.
+
 ## KPIs, deltas, sidebar
 
 CPL / leads / spend come from `readout.current`; the signed period-over-period
@@ -146,6 +181,21 @@ deltas from `readout.delta` (null when there's no prior period — shown as no
 comparison, never a fake +100%). The sidebar shows the campaign name, budget +
 period, active-creative count, and total leads. When collecting, values
 honestly render `—` / `0`, not placeholder numbers.
+
+**Every KPI states its own window** (fixed 2026-08-12 alongside the today
+split). `kpiSpend` used to read **"הוצאה החודש"** — *spend this month* — on a
+7-day value: a label claiming something the number isn't, the same class of
+small lie as a false "פעיל". The window is now stated once above the group
+(`h.kpiWindow` = "7 ימים אחרונים (עד אתמול)") rather than repeated on each
+tile, and the sidebar's "פניות לפי שבוע" became "פניות (7 ימים)".
+
+Deliberately **not** switched to month-to-date: a month figure resets to
+near-zero every 1st and would make performance look like it collapsed, and
+mixing a month-to-date spend next to a 7-day CPL makes adjacent tiles
+non-comparable. A real budget-pacing month element ("spent ₪X of your monthly
+budget") is a separate, deliberate addition — it belongs with AIC-55's
+day/week/month range work, where "which window" gets settled coherently
+rather than one KPI at a time.
 
 **Budget shown = `liveBudgetAgorot ?? agreedBudgetAgorot`** (real bug fixed
 2026-08-12): `agreedBudgetAgorot` is the engine's own safety ceiling

@@ -32,6 +32,20 @@ async function listManagedCampaigns(
   }));
 }
 
+// Today-only window. Deliberately SEPARATE from rollingPeriods (below), which
+// stops at yesterday: the engine must evaluate on COMPLETE days — a
+// half-finished day looks like underperformance and would produce bad
+// recommendations. But the customer dashboard has the opposite need: someone
+// who got 3 leads today must see them, or the product looks broken (the real
+// complaint: 3 leads today, headline still read "1 פניות"). So today is
+// ingested as its own snapshot row and surfaced only on the customer surface,
+// clearly marked provisional — Meta's same-day conversion data is incomplete
+// and revises upward.
+export function todayPeriod(ref: Date = new Date()): InsightsPeriod {
+  const iso = ref.toISOString().slice(0, 10);
+  return { start: iso, end: iso };
+}
+
 // Yesterday-inclusive 7-day window and the 7 days before it, from a reference
 // date (defaults to now). Dates as YYYY-MM-DD in UTC.
 export function rollingPeriods(ref: Date = new Date()): {
@@ -76,6 +90,7 @@ export function buildIngestionTick(
       campaigns,
       ingestion,
       period: current,
+      extraPeriods: [todayPeriod()], // customer dashboard only — see todayPeriod
       logger: consoleLogger,
       connectionService,
     });

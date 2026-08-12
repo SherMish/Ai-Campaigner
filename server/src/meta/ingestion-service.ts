@@ -55,10 +55,17 @@ export async function runIngestionTick(deps: {
   campaigns: ManagedCampaignRef[];
   ingestion: IngestionService;
   period: InsightsPeriod;
+  // Extra windows ingested alongside `period`, each stored as its own snapshot
+  // row. Used for the today-only window (scheduled-ingestion.ts's
+  // `todayPeriod`): the engine reads only complete days, but the customer
+  // dashboard needs today. A failure on an extra window never fails the
+  // campaign — the primary window is what the engine depends on.
+  extraPeriods?: InsightsPeriod[];
   logger: Logger;
   connectionService?: ConnectionService;
 }): Promise<TickSummary> {
   const { campaigns, ingestion, period, logger, connectionService } = deps;
+  const extraPeriods = deps.extraPeriods ?? [];
   const summary: TickSummary = { ok: 0, failed: 0, snapshots: 0 };
 
   for (const c of campaigns) {
@@ -82,6 +89,19 @@ export async function runIngestionTick(deps: {
     } catch (err) {
       summary.failed++;
       logger.error(`ingestion failed for campaign ${c.id}`, err);
+      continue; // primary window failed — don't bother with the extras
+    }
+
+    for (const extra of extraPeriods) {
+      try {
+        summary.snapshots += await ingestion.ingestCampaign(
+          { id: c.id, metaCampaignId: c.metaCampaignId },
+          extra,
+        );
+      } catch (err) {
+        // Display-only data; never counts the campaign as failed.
+        logger.error(`ingestion failed for campaign ${c.id} window ${extra.start}..${extra.end}`, err);
+      }
     }
   }
 

@@ -81,6 +81,9 @@ export interface CustomerOverview {
   } | null;
   readout: {
     current: PeriodAgg; previous: PeriodAgg;
+    // Today so far — provisional, never folded into `current` (which stops at
+    // yesterday, matching the engine's complete-days evaluation window).
+    today: PeriodAgg;
     delta: { spendPct: number | null; leadsPct: number | null; cplPct: number | null };
     perCreative: Array<{ metaObjectId: string; creativeName: string | null; deliveryStatus: string }>;
   } | null;

@@ -6,6 +6,35 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Dashboard shows today; engine still evaluates complete days (AIC-67 follow-up #2)
+Reported live: "I see 1 and 4." Both numbers were individually correct and
+still contradicted each other. The KPI window (`rollingPeriods().current`)
+deliberately **stops at yesterday**, and nothing ever ingested today at all —
+so today's 3 leads and ₪26.74 were invisible everywhere on the page, while
+the lead-quality card (all-time) correctly said 4.
+
+These are two different questions and now get two windows. The **engine**
+keeps complete-days-only: a half-finished day looks like underperformance and
+acting on it would move real money on bad evidence. The **dashboard** gets
+today, ingested as its own snapshot row (`todayPeriod` +
+`runIngestionTick`'s `extraPeriods`, display-only — its failure never marks a
+campaign failed) and surfaced as `readout.today`. Shown as its own "היום עד
+עכשיו" line rather than blended in: folding a partial day into a 7-day CPL
+makes that ratio noisy mid-day without helping anyone. Labelled provisional,
+since Meta's same-day conversion data revises upward. The two surfaces can
+now legitimately disagree, so AIC-64's no-rec card explains why ("we evaluate
+on complete days") instead of leaving it to read as self-contradiction.
+
+Also fixed the labels: `kpiSpend` read **"הוצאה החודש"** (*this month*) on a
+7-day value. Every KPI now states its window; deliberately NOT switched to
+month-to-date (resets each 1st, and mixing windows across adjacent tiles
+makes them non-comparable) — a real budget-pacing month element belongs with
+AIC-55's range work.
+
+Numbers now reconcile: 1 (7-day, complete) + 3 (today) = 4 (all-time to review).
+
+Full detail: [features/customer-overview.md](features/customer-overview.md).
+
 ### 2026-08-12 — leadsToDate over-counted from overlapping snapshots (AIC-67 follow-up)
 Found live within minutes of shipping AIC-67: a customer saw "1 פניות" on the
 main KPI and "3 לדירוג" on the new lead-quality card for the same campaign
