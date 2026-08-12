@@ -156,6 +156,16 @@ path. Best-effort: a failure here is logged and swallowed, never surfaced as
 if the pause/resume itself had failed — that write already succeeded and was
 already verified by `setObjectStatus`.
 
+**The server-side fix alone wasn't enough — found immediately after shipping
+it.** The DB updated instantly, but Home still needed a full page reload to
+show it: `AudienceDetails`' `onToggle` (`Home.tsx`) refreshed the per-row
+`ctl` state (`getControlState()`) but never invalidated the shared overview
+cache (`overview-store.ts`) that the headline "מצב" and מודעות פעילות count
+actually read from. Fixed by calling `invalidateOverview()` after a
+successful toggle — the same pattern AIC-53's launch-approval flow already
+uses to leave its own stale state. Lesson: a synchronous backend recompute is
+only half the fix when the frontend caches its own read separately.
+
 ## Customer surface
 
 `AudienceDetails` on Home (the opt-in AIC-37 details panel) is the only

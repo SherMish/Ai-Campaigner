@@ -6,6 +6,16 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — The above server fix needed a frontend half too (AIC-71 follow-up #2)
+Reported live immediately after the previous fix shipped: "after I click הפעלת
+קהל I need a full refresh before seeing the status updated." The server was
+already correct (previous entry) — `AudienceDetails`' `onToggle` (`Home.tsx`)
+refreshed the per-row live status but never invalidated the shared overview
+cache (`overview-store.ts`) the headline "מצב" actually reads from. One line:
+call `invalidateOverview()` after a successful toggle, the same pattern
+AIC-53's launch-approval flow already uses. Full detail:
+[features/manual-controls.md](features/manual-controls.md).
+
 ### 2026-08-12 — Manual pause/resume now updates the Home headline immediately (AIC-71 follow-up)
 Found minutes after AIC-71 shipped: paused the only ad set live and Home kept
 reading "פעיל" — `managed_campaigns.delivering` was only ever recomputed on

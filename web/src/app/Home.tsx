@@ -299,6 +299,11 @@ function AudienceDetails() {
     try {
       await setObjectPaused(kind, id, pause);
       setCtl(await getControlState()); // re-read Meta's truth, don't assume
+      // The server already recomputes homeState/delivering synchronously on
+      // this write (AIC-71 follow-up) — invalidate the shared overview so the
+      // headline "מצב" and מודעות פעילות count pick it up now, not on the
+      // next navigation/reload. Per-row badges above are already live via ctl.
+      invalidateOverview();
     } catch {
       setCtlFailed(true);
     } finally {
