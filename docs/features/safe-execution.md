@@ -6,11 +6,12 @@ safe-execute pipeline (AIC-12) and emergency controls (AIC-14) extend this doc.
 **Source of truth:**
 - Safe-execute pipeline: `server/src/execution/safe-executor.ts`
 - Budget safety: `server/src/execution/budget.ts`
+- Live budget sync (dashboard display + ceiling auto-raise): `server/src/services/live-budget.ts`
 - Idempotent write outbox: `server/src/execution/write-outbox.ts`, migration `008_meta_write_outbox.sql`
 - Customer copy: `server/src/execution/strings.he.ts`
 
 **Lock-in tests:** `server/src/execution/safe-executor.test.ts`, `budget.test.ts`,
-`write-outbox.integration.test.ts`.
+`write-outbox.integration.test.ts`, `services/live-budget.integration.test.ts`.
 
 ---
 
@@ -22,6 +23,26 @@ above it or ≤ 0; a `null` proposed (pause/replace — not a budget change) pas
 No budget changes automatically — only an approved recommendation, executed through
 the pipeline, can move budget, and the customer sees the exact new amount +
 `maxSpendImpactAgorot` before approving (carried on the recommendation from AIC-9).
+
+**`agreed_budget_agorot` vs the live Meta budget (real bug fixed 2026-08-12).**
+The ceiling is deliberately NOT a live mirror of Meta — it's the max the engine's
+own automated proposals may ever push the daily budget to. But a customer or
+operator can (and does) change the daily budget directly on Meta, bypassing the
+app entirely; when that happens the ceiling silently goes stale, and if the new
+live budget exceeds it, ANY future `decrease_budget` proposal (computed relative
+to the current live budget) would throw `BudgetLimitError` at execution — the
+ceiling ends up blocking a change smaller than what's already running.
+
+Fixed via `server/src/services/live-budget.ts` `recordLiveBudget`, called every
+generation tick right after the engine's existing live-budget read (`generation.ts`
+already fetches it to evaluate rules — this just also caches it): writes
+`managed_campaigns.live_budget_agorot`/`live_budget_checked_at` (migration 025) for
+display, and **auto-raises** `agreed_budget_agorot` to `GREATEST(agreed, live)` —
+never lowers it, so an operator's forward-looking pre-authorization (raising the
+ceiling ahead of an intended future increase, before Meta's live budget has caught
+up) is never silently reverted. The customer dashboard (`Home.tsx`, `Settings.tsx`)
+shows `liveBudgetAgorot ?? agreedBudgetAgorot` — the live-synced number when the
+engine has ticked at least once, falling back to the ceiling before that.
 
 ## Idempotent write outbox (AIC-13)
 

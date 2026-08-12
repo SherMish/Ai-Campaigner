@@ -44,6 +44,12 @@ export interface CustomerOverview {
     // the engine has ever run, or when an acting recommendation exists instead.
     noRecReason: string | null;
     noRecDetail: Record<string, unknown> | null;
+    // The live-read Meta daily budget, cached every generation tick — the
+    // number to actually show the customer. `agreedBudgetAgorot` is the
+    // engine's own safety ceiling and can legitimately differ (it only ever
+    // auto-rises to match live, never auto-lowers). Null before the engine's
+    // first tick for this campaign.
+    liveBudgetAgorot: Agorot | null;
   } | null;
   subscription: {
     plan: string;
@@ -163,8 +169,9 @@ export async function buildCustomerOverview(
       meta_campaign_id: string | null;
       no_rec_reason: string | null;
       no_rec_detail: Record<string, unknown> | null;
+      live_budget_agorot: number | null;
     }>(
-      `SELECT id, name, status, objective, agreed_budget_agorot, budget_period, automation_enabled, delivery_ok, launch_approved_at, meta_campaign_id, no_rec_reason, no_rec_detail
+      `SELECT id, name, status, objective, agreed_budget_agorot, budget_period, automation_enabled, delivery_ok, launch_approved_at, meta_campaign_id, no_rec_reason, no_rec_detail, live_budget_agorot
        FROM managed_campaigns WHERE customer_id = $1`,
       [customerId],
     ),
@@ -222,6 +229,7 @@ export async function buildCustomerOverview(
           campRes.rows[0].meta_campaign_id !== null,
         noRecReason: campRes.rows[0].no_rec_reason,
         noRecDetail: campRes.rows[0].no_rec_detail,
+        liveBudgetAgorot: campRes.rows[0].live_budget_agorot,
       }
     : null;
 

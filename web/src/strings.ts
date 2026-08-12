@@ -159,6 +159,7 @@ export const strings = {
       flexibleBodies: "טקסטים",
       flexibleTitles: "כותרות",
       noCreative: "אין קריאייטיב מקושר.",
+      pageLabel: "עמוד",
       metrics: {
         spend: "הוצאה", impressions: "חשיפות", reach: "הגעה", frequency: "תדירות",
         cpm: "CPM", ctr: "CTR", cpc: "CPC", leads: "פניות", cpl: "עלות לפנייה",

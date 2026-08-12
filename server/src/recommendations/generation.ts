@@ -14,6 +14,7 @@ import { recordCampaignDelivery } from "../services/delivery-monitor.js";
 import { deriveAudienceLabels, type AdSetMeta } from "../meta/audience-label.js";
 import { upsertAdSetMeta } from "../services/audience-meta-cache.js";
 import { recordNoRecReason } from "../services/evaluation-reason.js";
+import { recordLiveBudget } from "../services/live-budget.js";
 import { OpsQueue } from "../services/ops-queue.js";
 import { consoleLogger, type Logger } from "../services/logger.js";
 
@@ -80,6 +81,9 @@ export async function runGenerationTick(deps: {
   // AIC-64: cache WHY this tick had nothing to propose (or clear it when
   // something did), so the dashboard/ops console can show a real reason.
   recordNoRecReason?: (campaign: GenCampaign, draft: RecommendationDraft) => Promise<void>;
+  // Cache the live-read daily budget for display, so the dashboard never goes
+  // stale when someone changes the budget directly on Meta.
+  recordLiveBudget?: (campaign: GenCampaign, liveBudgetAgorot: number) => Promise<void>;
   ref?: Date;
   logger?: Logger;
 }): Promise<GenerationSummary> {
@@ -98,6 +102,11 @@ export async function runGenerationTick(deps: {
       summary.skipped++;
       log?.error(`[generation] ${campaign.id}: could not read live budget — ${(e as Error).message}`);
       continue;
+    }
+    try {
+      await deps.recordLiveBudget?.(campaign, currentBudgetAgorot);
+    } catch (e) {
+      log?.error(`[generation] ${campaign.id}: could not record live budget — ${(e as Error).message}`);
     }
 
     // Delivery health: record it + exclude any not-delivering ad set from the
@@ -189,6 +198,9 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
       },
       recordNoRecReason: async (campaign, draft) => {
         await recordNoRecReason({ pool, campaignId: campaign.id, draft });
+      },
+      recordLiveBudget: async (campaign, liveBudgetAgorot) => {
+        await recordLiveBudget({ pool, campaignId: campaign.id, liveBudgetAgorot });
       },
       snapshotStore,
       recommendationStore,

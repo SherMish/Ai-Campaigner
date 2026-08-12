@@ -83,9 +83,17 @@ isn't half-built here.
 
 CPL / leads / spend come from `readout.current`; the signed period-over-period
 deltas from `readout.delta` (null when there's no prior period — shown as no
-comparison, never a fake +100%). The sidebar shows the campaign name, agreed
-budget + period, active-creative count, and total leads. When collecting, values
+comparison, never a fake +100%). The sidebar shows the campaign name, budget +
+period, active-creative count, and total leads. When collecting, values
 honestly render `—` / `0`, not placeholder numbers.
+
+**Budget shown = `liveBudgetAgorot ?? agreedBudgetAgorot`** (real bug fixed
+2026-08-12): `agreedBudgetAgorot` is the engine's own safety ceiling
+([safe-execution.md](safe-execution.md#budget-safety-aic-13)), not necessarily
+what's live on Meta right now — a customer changing the budget directly on Meta
+used to leave the dashboard silently stale. `liveBudgetAgorot` is cached fresh
+every generation tick and is what's actually shown once the engine has ticked at
+least once for this campaign; the ceiling is only the fallback before that.
 
 ## Weekly lead-quality feedback
 

@@ -57,7 +57,7 @@ export function Settings() {
                 </div>
                 <div className="row gap16">
                   <b style={{ fontSize: "1.4rem" }}>
-                    {ov.campaign ? shekels(ov.campaign.agreedBudgetAgorot) : L.none}{" "}
+                    {ov.campaign ? shekels(ov.campaign.liveBudgetAgorot ?? ov.campaign.agreedBudgetAgorot) : L.none}{" "}
                     <span className="muted" style={{ fontSize: "0.9rem", fontWeight: 400 }}>{period}</span>
                   </b>
                   {budgetSent ? (

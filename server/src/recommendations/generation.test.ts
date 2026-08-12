@@ -246,6 +246,53 @@ describe("runGenerationTick — recordNoRecReason (AIC-64)", () => {
   });
 });
 
+// Real bug (2026-08-12): the dashboard showed a stale, manually-set budget
+// number instead of what's actually live on Meta — the engine already reads
+// it every tick but was discarding it. This is the fix: cache it for display.
+describe("runGenerationTick — recordLiveBudget", () => {
+  it("records the live-read budget on every successful tick", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await snapshots.upsert([snap({ grain: "campaign", metaObjectId: "camp", spendAgorot: 200, leads: 0, cplAgorot: null })]);
+    const recs = new InMemoryRecommendationStore();
+    let recorded: { campaignId: string; agorot: number } | null = null;
+    await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(3000),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      recordLiveBudget: async (c, agorot) => { recorded = { campaignId: c.id, agorot }; },
+    });
+    expect(recorded).toEqual({ campaignId: "camp-1", agorot: 3000 });
+  });
+
+  it("does NOT record when the budget read fails (nothing live to cache)", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    const recs = new InMemoryRecommendationStore();
+    let called = false;
+    const badReader: MetaReader = { getCampaignState: async () => { throw new Error("meta down"); } };
+    await runGenerationTick({
+      campaigns: [CAMP], reader: badReader,
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      recordLiveBudget: async () => { called = true; },
+    });
+    expect(called).toBe(false);
+  });
+
+  it("a failure recording the live budget doesn't fail the tick", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedWeak(snapshots);
+    const recs = new InMemoryRecommendationStore();
+    const res = await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      recordLiveBudget: async () => { throw new Error("db down"); },
+    });
+    expect(res.evaluated).toBe(1);
+    expect(res.created).toBe(1);
+  });
+});
+
 describe("runGenerationTick — flexible/Advantage+ creative exclusion (AIC-36), continued", () => {
   it("a genuinely weak creative in a NON-flexible ad set still fires (control)", async () => {
     const snapshots = new InMemorySnapshotStore();

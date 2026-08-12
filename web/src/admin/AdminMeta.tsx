@@ -70,6 +70,7 @@ function AdCard({ ad }: { ad: ExplorerAd }) {
         ) : (
           <p className="muted" style={{ fontSize: "0.82rem", margin: "4px 0" }}>{m.noCreative}</p>
         )}
+        {c?.pageId && <p className="muted" style={{ fontSize: "0.75rem", margin: "2px 0" }}>{m.pageLabel}: {c.pageId}</p>}
         <MetricGrid metrics={ad.metrics} />
       </div>
     </div>

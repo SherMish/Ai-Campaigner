@@ -6,6 +6,39 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Two real bugs found by Sharon dogfooding: stale budget + broken add-content
+Sharon (real customer + operator) reported the dashboard showing ₪10/day after
+raising the real Meta budget to ₪30, and "הוספת תוכן" claiming she had no
+campaign despite GelNails being live and healthy.
+
+**Stale budget**: `agreed_budget_agorot` is a safety ceiling for the engine's
+own automated proposals ([safe-execution.md](features/safe-execution.md)),
+not a live mirror of Meta — but the dashboard displayed it as if it were
+"today's budget." The engine already reads the live budget every generation
+tick (needs it to evaluate rules) but was discarding it after use. Fixed:
+`server/src/services/live-budget.ts` caches the read every tick
+(`managed_campaigns.live_budget_agorot`, migration 025) for display, and
+auto-**raises** (never lowers) the ceiling to match — closing a latent bug
+where a live budget above the stale ceiling would make the engine's own next
+`decrease_budget` proposal throw `BudgetLimitError` at execution.
+
+**Broken add-content**: root-caused to `meta_connections.page_id` being blank
+on Sharon's row — `resolveAdditionContext` requires it and fails with a
+generic "no campaign yet" message that doesn't say why. The blank value
+traces to how the row was created: hand-written SQL back on 2026-08-08, not
+through any console feature (because none exists — see
+[AIC-68](https://linear.app/pisga-app/issue/AIC-68)). Extended the admin Meta
+explorer (`server/src/meta/explorer.ts`) to read `object_story_spec.page_id`
+off a live ad's creative — the one place in the app that can recover a Page
+id without a new endpoint — used it to find GelNails' real Page id, then
+corrected the DB row directly.
+
+**Deeper gap tracked separately**: there is no admin UI to provision a real
+customer's `meta_connections`/`ad_accounts`/`managed_campaigns` rows — every
+real customer today is onboarded via hand-written SQL, which is exactly what
+produced the blank `page_id`. Filed [AIC-68](https://linear.app/pisga-app/issue/AIC-68)
+to build it; user explicitly deferred building it in this session.
+
 ### 2026-08-12 — Honest "why no recommendation" reasons (AIC-64)
 "No recommendation" was one undifferentiated `no_action` state — the customer
 saw identical copy whether the campaign was genuinely stable or the engine was

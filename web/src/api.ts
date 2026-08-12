@@ -64,6 +64,7 @@ export interface CustomerOverview {
     agreedBudgetAgorot: number; budgetPeriod: "daily" | "monthly";
     automationEnabled: boolean; deliveryOk: boolean; readyToLaunch: boolean;
     noRecReason: string | null; noRecDetail: Record<string, unknown> | null;
+    liveBudgetAgorot: number | null;
   } | null;
   subscription: {
     plan: string; status: string; setupPaid: boolean;
@@ -202,6 +203,7 @@ export interface ExplorerCreative {
   callToActionType: string | null;
   imageUrl: string | null;
   videoId: string | null;
+  pageId: string | null;
   isFlexible: boolean;
   flexibleAssetCounts: { images: number; videos: number; bodies: number; titles: number } | null;
 }

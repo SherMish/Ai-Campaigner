@@ -8,6 +8,7 @@ import { pool } from "../db/pool.js";
 import { createApp } from "../app.js";
 import { buildCustomerOverview } from "./customer-overview.js";
 import { recordNoRecReason } from "./evaluation-reason.js";
+import { recordLiveBudget } from "./live-budget.js";
 import { signAuthToken } from "../auth/tokens.js";
 import { rollingPeriods } from "../meta/scheduled-ingestion.js";
 import { PgSnapshotStore } from "../meta/snapshot-store.js";
@@ -137,6 +138,17 @@ d("customer overview (DB + HTTP)", () => {
     });
     const ov2 = await buildCustomerOverview(pool, userId);
     expect(ov2!.campaign?.noRecReason).toBeNull();
+  });
+
+  it("surfaces the live-synced budget, not the static agreed ceiling (real bug fix)", async () => {
+    const { userId, campaignId } = await seedChain("livebudget");
+    // seedChain sets agreed_budget_agorot=800; before any engine tick, null.
+    let ov = await buildCustomerOverview(pool, userId);
+    expect(ov!.campaign?.liveBudgetAgorot).toBeNull();
+
+    await recordLiveBudget({ pool, campaignId, liveBudgetAgorot: 3000 });
+    ov = await buildCustomerOverview(pool, userId);
+    expect(ov!.campaign?.liveBudgetAgorot).toBe(3000);
   });
 
   it("rejects the overview without a token", async () => {

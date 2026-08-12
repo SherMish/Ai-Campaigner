@@ -38,6 +38,10 @@ export interface ExplorerCreative {
   // operator sees it's flexible rather than a broken single creative.
   isFlexible: boolean;
   flexibleAssetCounts: { images: number; videos: number; bodies: number; titles: number } | null;
+  // The Facebook Page this creative posts as — surfaced because it's the only
+  // place in the app that reads it live; useful when meta_connections.page_id
+  // needs reconciling against what's actually running.
+  pageId: string | null;
 }
 
 export interface ExplorerAd {
@@ -128,6 +132,7 @@ interface RawCreative {
   image_url?: string;
   video_id?: string;
   thumbnail_url?: string;
+  object_story_spec?: { page_id?: string };
   asset_feed_spec?: {
     images?: unknown[];
     videos?: unknown[];
@@ -200,7 +205,7 @@ const ADSET_FIELDS =
   "targeting{age_min,age_max,genders,geo_locations,flexible_spec{interests}}";
 const AD_FIELDS =
   "id,name,adset_id,effective_status,issues_info," +
-  "creative{id,name,title,body,call_to_action_type,image_url,video_id,thumbnail_url,asset_feed_spec{images,videos,bodies,titles}}";
+  "creative{id,name,title,body,call_to_action_type,image_url,video_id,thumbnail_url,object_story_spec{page_id},asset_feed_spec{images,videos,bodies,titles}}";
 const INSIGHTS_FIELDS =
   "campaign_id,adset_id,ad_id,spend,impressions,reach,frequency,cpm,ctr,cpc,actions," +
   "quality_ranking,engagement_rate_ranking,conversion_rate_ranking";
@@ -307,6 +312,7 @@ export function normalizeCreative(raw?: RawCreative): ExplorerCreative | null {
     callToActionType: raw.call_to_action_type ?? null,
     imageUrl: raw.image_url ?? raw.thumbnail_url ?? null,
     videoId: raw.video_id ?? null,
+    pageId: raw.object_story_spec?.page_id ?? null,
     isFlexible,
     flexibleAssetCounts: isFlexible
       ? {

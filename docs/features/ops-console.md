@@ -193,6 +193,14 @@ tests drive it without a live Meta call), and degrades **honestly** via
 same honest-unavailable pattern as `buildCustomerExecutor`), `meta_error`
 (a real Graph API failure, with `errorDetail`).
 
+Each ad's creative also carries `pageId` (from `object_story_spec.page_id`) —
+added 2026-08-12 while diagnosing a real bug: `meta_connections.page_id` can
+be blank for a hand-provisioned connection (see AIC-68) with no way to
+recover the real value short of a live Meta read, since our own DB never had
+it. The explorer already reads live per-ad creative data, so this is the one
+place in the app that can answer "what Page is this campaign actually
+running as" without a new endpoint.
+
 **Fetch-on-demand, not stored.** Every open of `/admin/meta` (or its
 "רענון מ-Meta" refresh button) is a fresh live read — nothing is cached at
 rest, no new table. This is the deliberate single exception to "never a live

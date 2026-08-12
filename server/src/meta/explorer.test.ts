@@ -72,6 +72,12 @@ describe("normalizeCreative (AIC-45)", () => {
     expect(c?.flexibleAssetCounts).toBeNull();
     expect(c?.title).toBe("20% off");
     expect(c?.imageUrl).toBe("https://x/img.jpg");
+    expect(c?.pageId).toBeNull();
+  });
+
+  it("reads the Page id off object_story_spec", () => {
+    const c = normalizeCreative({ id: "crea_4", object_story_spec: { page_id: "1234567890" } });
+    expect(c?.pageId).toBe("1234567890");
   });
 
   it("recognizes a flexible/dynamic creative (asset_feed_spec with multiple assets) and counts its assets — never renders it as broken", () => {
