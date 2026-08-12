@@ -24,7 +24,7 @@ function metaFetch(state: { status: string }) {
       if (body.get("status") === "ACTIVE") state.status = "ACTIVE";
       return jsonRes({ success: true });
     }
-    if (u.includes("fields=effective_status")) return jsonRes({ effective_status: state.status });
+    if (u.includes("fields=status")) return jsonRes({ status: state.status, effective_status: state.status });
     throw new Error(`launch.integration.test: unexpected fetch ${method} ${u}`);
   });
 }

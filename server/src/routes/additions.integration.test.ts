@@ -47,9 +47,10 @@ function mockMetaFetch(existingAdSets: Array<{ id: string; name: string; status?
           })),
         });
       }
-      if (u.includes("fields=effective_status")) {
+      if (u.includes("fields=status")) {
         const id = u.split("/").pop()!.split("?")[0];
-        return jsonRes({ effective_status: statuses.get(id) ?? "PAUSED" });
+        const st = statuses.get(id) ?? "PAUSED";
+        return jsonRes({ status: st, effective_status: st });
       }
       throw new Error(`additions.integration.test: unexpected GET ${u}`);
     }

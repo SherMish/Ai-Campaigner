@@ -29,9 +29,10 @@ function mockMeta(ads: string[], adSets: string[]) {
       if (u.includes("/ads?")) {
         return jsonRes({ data: ads.map((id) => ({ id, effective_status: statuses.get(id) })) });
       }
-      if (u.includes("fields=effective_status")) {
+      if (u.includes("fields=status")) {
         const id = u.split("/").pop()!.split("?")[0];
-        return jsonRes({ effective_status: statuses.get(id) ?? "ACTIVE" });
+        const st = statuses.get(id) ?? "ACTIVE";
+        return jsonRes({ status: st, effective_status: st });
       }
       // the campaign object itself (budget probe)
       return jsonRes({ id: "meta_camp_ctl", daily_budget: "3000", effective_status: "ACTIVE" });

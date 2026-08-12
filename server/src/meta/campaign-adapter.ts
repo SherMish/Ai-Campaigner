@@ -367,9 +367,30 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // campaign ACTIVE — status is hardcoded, never a caller-supplied value,
   // mirroring the create-writes' "always PAUSED" invariant in reverse.
 
+  // ── Configured status vs effective status ───────────────────────────────
+  // These three readers back every read-back VERIFICATION in the codebase
+  // (activateCampaign, approveAddition's activateOne, manual controls), so
+  // they must return the object's OWN configured `status` — not
+  // `effective_status`, which is a COMPUTED field. Two ways that bit us:
+  //
+  //  1. Read-after-write lag. Verified live 2026-08-12: a real customer paused
+  //     a real ad, Meta applied it, but `effective_status` still read ACTIVE
+  //     moments later — so verification failed and the app told the customer
+  //     the change hadn't worked when it had. `status` updates immediately.
+  //  2. Parent state leaks in. An ad inside a paused ad set reports
+  //     `effective_status: ADSET_PAUSED` (and CAMPAIGN_PAUSED, WITH_ISSUES,
+  //     DISAPPROVED exist too), so verifying "did my ACTIVE write land" against
+  //     it would false-fail forever, even at rest.
+  //
+  // `effective_status` remains the right field for "is this actually
+  // delivering" — that's delivery-health's question (AIC-39), not this one.
+  private async configuredStatus(id: string): Promise<MetaCampaignStatus> {
+    const r = await this.get(`${id}?fields=status,effective_status`);
+    return String(r.status ?? r.effective_status ?? "");
+  }
+
   async getCampaignStatus(metaCampaignId: string): Promise<MetaCampaignStatus> {
-    const camp = await this.get(`${metaCampaignId}?fields=effective_status`);
-    return String(camp.effective_status ?? "");
+    return this.configuredStatus(metaCampaignId);
   }
 
   async activateCampaign(metaCampaignId: string): Promise<void> {
@@ -381,13 +402,11 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // the only two writes that can set an ad set / ad ACTIVE.
 
   async getAdSetStatus(adSetId: string): Promise<MetaCampaignStatus> {
-    const r = await this.get(`${adSetId}?fields=effective_status`);
-    return String(r.effective_status ?? "");
+    return this.configuredStatus(adSetId);
   }
 
   async getAdStatus(adId: string): Promise<MetaCampaignStatus> {
-    const r = await this.get(`${adId}?fields=effective_status`);
-    return String(r.effective_status ?? "");
+    return this.configuredStatus(adId);
   }
 
   async activateAdSet(adSetId: string): Promise<void> {

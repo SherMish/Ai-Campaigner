@@ -247,8 +247,8 @@ describe("GraphCampaignAdapter creative handling (AIC-51)", () => {
 });
 
 describe("GraphCampaignAdapter launch gate (AIC-53)", () => {
-  it("getCampaignStatus reads effective_status", async () => {
-    const mock = vi.fn(async (_url: string) => ({ ok: true, status: 200, json: async () => ({ effective_status: "PAUSED" }) } as unknown as Response));
+  it("getCampaignStatus returns the CONFIGURED status, not effective_status", async () => {
+    const mock = vi.fn(async (_url: string) => ({ ok: true, status: 200, json: async () => ({ status: "PAUSED", effective_status: "ACTIVE" }) } as unknown as Response));
     vi.stubGlobal("fetch", mock);
     const adapter = new GraphCampaignAdapter("tok");
 
@@ -256,7 +256,7 @@ describe("GraphCampaignAdapter launch gate (AIC-53)", () => {
 
     expect(status).toBe("PAUSED");
     const [url] = mock.mock.calls[0] as [string];
-    expect(url).toContain("meta_camp_1?fields=effective_status");
+    expect(url).toContain("fields=status,effective_status");
   });
 
   it("activateCampaign always sends status=ACTIVE, never a caller-supplied value", async () => {
@@ -282,15 +282,42 @@ describe("GraphCampaignAdapter launch gate (AIC-53)", () => {
 });
 
 describe("GraphCampaignAdapter add-to-existing-campaign (AIC-63)", () => {
-  it("getAdSetStatus / getAdStatus read effective_status", async () => {
+  it("getAdSetStatus / getAdStatus return the configured status", async () => {
     const mock = vi.fn(async (url: string) =>
-      ({ ok: true, status: 200, json: async () => ({ effective_status: String(url).includes("as_1") ? "ACTIVE" : "PAUSED" }) } as unknown as Response),
+      ({ ok: true, status: 200, json: async () => ({ status: String(url).includes("as_1") ? "ACTIVE" : "PAUSED" }) } as unknown as Response),
     );
     vi.stubGlobal("fetch", mock);
     const adapter = new GraphCampaignAdapter("tok");
 
     expect(await adapter.getAdSetStatus("as_1")).toBe("ACTIVE");
     expect(await adapter.getAdStatus("ad_1")).toBe("PAUSED");
+  });
+
+  // REGRESSION (live incident 2026-08-12): a real customer paused a real ad,
+  // Meta applied it, but `effective_status` still read ACTIVE moments later —
+  // read-back verification failed and the app told them it hadn't worked when
+  // it had. Reading the configured `status` is immediate and authoritative.
+  it("read-back is immune to effective_status lag right after a write", async () => {
+    const mock = vi.fn(async () =>
+      ({ ok: true, status: 200, json: async () => ({ status: "PAUSED", effective_status: "ACTIVE" }) } as unknown as Response),
+    );
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    expect(await adapter.getAdStatus("ad_1")).toBe("PAUSED");
+  });
+
+  // An ad inside a paused ad set reports effective_status ADSET_PAUSED even
+  // when the ad itself is ACTIVE — verifying against it would false-fail
+  // forever, not just transiently.
+  it("a parent's paused state never masks the object's own status", async () => {
+    const mock = vi.fn(async () =>
+      ({ ok: true, status: 200, json: async () => ({ status: "ACTIVE", effective_status: "ADSET_PAUSED" }) } as unknown as Response),
+    );
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    expect(await adapter.getAdStatus("ad_1")).toBe("ACTIVE");
   });
 
   it("activateAdSet always sends status=ACTIVE, never a caller-supplied value", async () => {
