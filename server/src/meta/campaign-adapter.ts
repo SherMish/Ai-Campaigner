@@ -12,6 +12,7 @@ import type {
 } from "../builder/creative-types.js";
 import type { LaunchWriter, MetaCampaignStatus } from "../launch/types.js";
 import type { AdditionWriter } from "../additions/types.js";
+import type { ControlWriter, ManualObjectStatus } from "../controls/types.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
 // Marketing API. Budgets are read/written in the account currency's MINOR unit,
@@ -22,7 +23,7 @@ import type { AdditionWriter } from "../additions/types.js";
 // one, so setDailyBudget targets the right object.
 const BASE = "https://graph.facebook.com";
 
-export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter, AdditionWriter {
+export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter, AdditionWriter, ControlWriter {
   private budgetObj = new Map<string, string>(); // campaignId → budget object id
 
   constructor(
@@ -112,17 +113,33 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   }
 
   async pauseAd(adId: string): Promise<void> {
-    await this.post(adId, { status: "PAUSED" });
+    await this.setAdStatus(adId, "PAUSED");
   }
 
   async pauseAdSet(adSetId: string): Promise<void> {
     await this.setAdSetStatus(adSetId, "PAUSED");
   }
 
-  // Set an ad set's status directly. Used by pauseAdSet and by the reversible
-  // dogfood (pause → verify → unpause) so a live test leaves zero net change.
-  async setAdSetStatus(adSetId: string, status: "ACTIVE" | "PAUSED"): Promise<void> {
+  // ── Caller-supplied status (AIC-66 manual controls) ──────────────────────
+  // These two are the ONLY writes that take a status from the caller, and they
+  // exist for exactly one reason: a human directly operating their own object
+  // (pause/resume/archive/delete), which is not an engine proposal and has no
+  // recommendation to approve. That does NOT weaken the invariants above:
+  //   - create-writes still hardcode PAUSED (AIC-50) — nothing can be born live
+  //   - activateCampaign/activateAdSet/activateAd still hardcode ACTIVE
+  //     (AIC-53/63) — the engine/approval paths cannot pass a status
+  // Anything reaching these must come from an authenticated human action that
+  // is itself the authorization (see server/src/controls/manual-controls.ts).
+  //
+  // ARCHIVED vs DELETED: archive is recoverable and keeps history; delete is
+  // permanent. The product defaults to archive and treats delete as the
+  // deliberate harder option (admin-only, confirm-to-type).
+  async setAdSetStatus(adSetId: string, status: ManualObjectStatus): Promise<void> {
     await this.post(adSetId, { status });
+  }
+
+  async setAdStatus(adId: string, status: ManualObjectStatus): Promise<void> {
+    await this.post(adId, { status });
   }
 
   // Which object carries the budget for a campaign (for logging/verification).

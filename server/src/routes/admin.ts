@@ -1,5 +1,8 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
+import { setObjectStatus, assertOwnedByCampaign } from "../controls/manual-controls.js";
+import type { ControlObjectKind, ControlWriter } from "../controls/types.js";
+import { buildAdditionWriter } from "../additions/session.js";
 import { requireAdmin, requireFullAdmin } from "../middleware/admin.js";
 import type { AuthedRequest } from "../middleware/auth.js";
 import {
@@ -79,6 +82,102 @@ adminRouter.post("/campaigns/:id/controls", async (req, res) => {
   }
 
   res.json({ ok: true, action });
+});
+
+// Manual object controls (AIC-66) — operator half. Pause/resume mirror the
+// customer's own controls; archive/delete exist ONLY here.
+//
+// Gate: `requireAdmin` (already applied to this whole router) plus
+// confirm-to-type for the destructive statuses — deliberately the same bar
+// AIC-44 set for hard-deleting an entire customer, which is a strictly bigger
+// action than archiving one ad. `requireFullAdmin` stays reserved for
+// operator-account management, as its own comment specifies.
+//
+// Archive is preferred over delete: ARCHIVED keeps history and is recoverable,
+// DELETED is not. The UI defaults to archive; delete is the deliberate harder
+// option. Either way the object then drops out of counts/needs-attention via
+// AIC-65's isManaged filtering — the write and the read-layer filter are two
+// halves of one behaviour.
+const DESTRUCTIVE: Record<string, "ARCHIVED" | "DELETED"> = { archive: "ARCHIVED", delete: "DELETED" };
+const REVERSIBLE: Record<string, "PAUSED" | "ACTIVE"> = { pause: "PAUSED", resume: "ACTIVE" };
+
+adminRouter.post("/campaigns/:id/objects/:action", async (req, res) => {
+  const action = String(req.params.action);
+  const status = REVERSIBLE[action] ?? DESTRUCTIVE[action];
+  if (!status) {
+    res.status(400).json({ error: "unknown action", allowed: [...Object.keys(REVERSIBLE), ...Object.keys(DESTRUCTIVE)] });
+    return;
+  }
+  const kind = String(req.body?.kind ?? "") as ControlObjectKind;
+  const metaObjectId = String(req.body?.metaObjectId ?? "");
+  if ((kind !== "ad" && kind !== "ad_set") || !metaObjectId) {
+    res.status(400).json({ error: "kind must be 'ad' or 'ad_set', and metaObjectId is required" });
+    return;
+  }
+
+  const camp = await pool.query<{ meta_campaign_id: string | null; name: string; business_name: string }>(
+    `SELECT mc.meta_campaign_id, mc.name, c.business_name
+     FROM managed_campaigns mc JOIN customers c ON c.id = mc.customer_id WHERE mc.id = $1`,
+    [req.params.id],
+  );
+  const campaign = camp.rows[0];
+  if (!campaign?.meta_campaign_id) {
+    res.status(404).json({ error: "campaign not found or not linked to Meta" });
+    return;
+  }
+
+  // Destructive actions require typing the object id back — the same
+  // confirm-to-type gate as customer delete (AIC-44), enforced server-side so
+  // it holds even if a client is bypassed.
+  if (DESTRUCTIVE[action] && String(req.body?.confirm ?? "").trim() !== metaObjectId) {
+    res.status(400).json({ error: "confirmation does not match the object id" });
+    return;
+  }
+
+  const writer = buildAdditionWriter() as ControlWriter | null;
+  if (!writer) {
+    res.status(503).json({ error: "Meta not configured" });
+    return;
+  }
+  if (!(await assertOwnedByCampaign(writer, campaign.meta_campaign_id, kind, metaObjectId))) {
+    res.status(404).json({ error: "object not found under this campaign" });
+    return;
+  }
+
+  const actor = await actorFor(req as AuthedRequest);
+  const result = await setObjectStatus({
+    pool, writer, campaignId: req.params.id, kind, metaObjectId, status,
+    actor: { kind: "operator", label: actor.label },
+  });
+
+  // Both logs (see the audit-log comment below): action_history already got the
+  // campaign-scoped row inside setObjectStatus; this is the console-scoped one.
+  // Best-effort — the Meta change already happened, so a logging failure must
+  // never be reported as an action failure.
+  if (result.outcome !== "failed") {
+    try {
+      await logAdminAction(pool, {
+        actorUserId: actor.userId, actorLabel: actor.label,
+        // entity_id is a UUID column, and a Meta object id isn't one — so the
+        // entity here is our own campaign, with the Meta object carried in the
+        // label/detail. That's also the cross-link to the action_history row,
+        // which records the same campaign_id + target_meta_id.
+        action: `${kind}.${action}`, entityType: kind, entityId: req.params.id,
+        entityLabel: `${campaign.business_name} — ${campaign.name} · ${metaObjectId}`,
+        beforeState: { status: result.previousStatus },
+        afterState: { status: result.newStatus ?? status },
+        detail: `Manual ${action} of ${kind} ${metaObjectId}${result.outcome === "already" ? " (already in that state)" : ""}`,
+      });
+    } catch (e) {
+      console.error("[admin] failed to log manual object control", e);
+    }
+  }
+
+  if (result.outcome === "failed") {
+    res.status(502).json({ outcome: result.outcome, detail: result.detail });
+    return;
+  }
+  res.json({ outcome: result.outcome, status: result.newStatus ?? status });
 });
 
 adminRouter.get("/campaigns", async (_req, res) => {
@@ -336,9 +435,12 @@ adminRouter.delete("/operators/:id", requireFullAdmin, async (req, res) => {
 // Full cross-entity, filterable admin audit log (AIC-47) — every write
 // AIC-44/46/47 logs, queryable by operator and by entity type/id. Distinct
 // from the customer-facing/campaign action_history (Meta changes); this is
-// console actions. No current overlap to cross-link: AIC-46 deliberately
-// didn't build operator-initiated recommendation execute, the one case that
-// would have written to both logs.
+// console actions. **AIC-66's manual object controls are the first action that
+// writes BOTH logs**: an operator pausing/archiving a real ad is simultaneously
+// a console action (audited here, entityType `ad`/`ad_set`) and a Meta campaign
+// change (action_history, so it shows in the customer's own history). Cross-
+// reference by campaign id — both logs record it — with the Meta object id in
+// this log's entity_label (entity_id is a UUID column; Meta ids are not UUIDs).
 adminRouter.get("/audit", async (req, res) => {
   const { actorUserId, entityType, entityId } = req.query as Record<string, string | undefined>;
   res.json({ entries: await listAuditLog(pool, { actorUserId, entityType, entityId }) });
