@@ -6,13 +6,7 @@ import {
   condense,
   type CondensedEntry,
 } from "./action-history.js";
-import { PgSnapshotStore } from "../meta/snapshot-store.js";
 import { getLeadQualityStatus, type LeadQualityStatus } from "./lead-quality-review.js";
-
-// Wide enough to predate any real campaign (this product's earliest
-// campaigns are all 2026) — used as the lower bound for an all-time
-// cumulative lead count (AIC-67), not a real "campaign start" lookup.
-const ALL_TIME_START = "2000-01-01";
 
 // What the logged-in customer's Home + Settings screens render from. Assembled
 // from the customer's own rows (never another customer's) + the snapshot-based
@@ -194,8 +188,9 @@ export async function buildCustomerOverview(
       live_budget_agorot: number | null;
       delivering: boolean;
       delivering_ad_count: number | null;
+      leads_to_date: number | null;
     }>(
-      `SELECT id, name, status, objective, agreed_budget_agorot, budget_period, automation_enabled, delivery_ok, launch_approved_at, meta_campaign_id, no_rec_reason, no_rec_detail, live_budget_agorot, delivering, delivering_ad_count
+      `SELECT id, name, status, objective, agreed_budget_agorot, budget_period, automation_enabled, delivery_ok, launch_approved_at, meta_campaign_id, no_rec_reason, no_rec_detail, live_budget_agorot, delivering, delivering_ad_count, leads_to_date
        FROM managed_campaigns WHERE customer_id = $1`,
       [customerId],
     ),
@@ -276,13 +271,17 @@ export async function buildCustomerOverview(
   // AIC-67: "leads to date" is all-time cumulative, not this-week's — the
   // watermark tracks net-new leads regardless of week boundaries, so there's
   // no "does the counter reset on Monday" edge case to get wrong.
+  //
+  // Read from the cached `leads_to_date` column (generation.ts's tick,
+  // leads-to-date.ts), NEVER by summing insight_snapshots: those rows are
+  // OVERLAPPING rolling-7-day windows (a new one written every day, shifted
+  // by one day), so summing them multiplies real leads by however many
+  // overlapping snapshots exist for the period — a real bug, caught live
+  // (1 real lead read back as "3 to review"). Null before the engine's first
+  // tick for this campaign — reads as 0 pending until then, same convention
+  // as deliveringAdCount/liveBudgetAgorot.
   const leadQuality = campaign
-    ? await getLeadQualityStatus(
-        pool,
-        campaign.id,
-        (await new PgSnapshotStore(pool).campaignTotals(campaign.id, ALL_TIME_START, ref.toISOString().slice(0, 10))).leads,
-        ref,
-      )
+    ? await getLeadQualityStatus(pool, campaign.id, campRes.rows[0].leads_to_date ?? 0, ref)
     : null;
 
   const recentActivity = condense(

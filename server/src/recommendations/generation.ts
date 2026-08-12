@@ -15,11 +15,19 @@ import { deriveAudienceLabels, type AdSetMeta } from "../meta/audience-label.js"
 import { upsertAdSetMeta } from "../services/audience-meta-cache.js";
 import { recordNoRecReason } from "../services/evaluation-reason.js";
 import { recordLiveBudget } from "../services/live-budget.js";
+import { recordLeadsToDate } from "../services/leads-to-date.js";
 import { OpsQueue } from "../services/ops-queue.js";
 import { consoleLogger, type Logger } from "../services/logger.js";
 
 export interface AudienceMetaReader {
   getAdSetMeta(metaCampaignId: string): Promise<AdSetMeta[]>;
+}
+
+// AIC-67 follow-up: a TRUE lifetime lead count, distinct from any
+// insight_snapshots aggregation (those rows are overlapping rolling
+// windows — see leads-to-date.ts).
+export interface LeadsReader {
+  getLifetimeLeads(metaCampaignId: string): Promise<number>;
 }
 
 // The scheduled recommendation evaluator (AIC-9). It closes the engine loop:
@@ -84,6 +92,11 @@ export async function runGenerationTick(deps: {
   // Cache the live-read daily budget for display, so the dashboard never goes
   // stale when someone changes the budget directly on Meta.
   recordLiveBudget?: (campaign: GenCampaign, liveBudgetAgorot: number) => Promise<void>;
+  // AIC-67 follow-up: cache the TRUE lifetime lead count for the lead-quality
+  // watermark. A read failure just means the watermark doesn't advance this
+  // tick — never guessed from snapshot sums.
+  leadsReader?: LeadsReader;
+  recordLeadsToDate?: (campaign: GenCampaign, leadsToDate: number) => Promise<void>;
   ref?: Date;
   logger?: Logger;
 }): Promise<GenerationSummary> {
@@ -107,6 +120,15 @@ export async function runGenerationTick(deps: {
       await deps.recordLiveBudget?.(campaign, currentBudgetAgorot);
     } catch (e) {
       log?.error(`[generation] ${campaign.id}: could not record live budget — ${(e as Error).message}`);
+    }
+
+    if (deps.leadsReader) {
+      try {
+        const leadsToDate = await deps.leadsReader.getLifetimeLeads(campaign.metaCampaignId);
+        await deps.recordLeadsToDate?.(campaign, leadsToDate);
+      } catch (e) {
+        log?.error(`[generation] ${campaign.id}: could not read/record lifetime leads — ${(e as Error).message}`);
+      }
     }
 
     // Audience labels + dynamic-creative flags + managed-ad-set filtering
@@ -221,6 +243,10 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
       },
       recordLiveBudget: async (campaign, liveBudgetAgorot) => {
         await recordLiveBudget({ pool, campaignId: campaign.id, liveBudgetAgorot });
+      },
+      leadsReader: adapter,
+      recordLeadsToDate: async (campaign, leadsToDate) => {
+        await recordLeadsToDate({ pool, campaignId: campaign.id, leadsToDate });
       },
       snapshotStore,
       recommendationStore,

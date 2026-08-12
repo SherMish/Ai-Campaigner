@@ -167,19 +167,43 @@ customer to remember they'd already counted the first 2, or double-count.
 - Service: `server/src/services/lead-quality-review.ts` —
   `getLeadQualityStatus` (derived read), `recordLeadQualityReview` (the only write)
 - Wired into `buildCustomerOverview` (`leadQuality` field) — `leadsToDate`
-  comes from `PgSnapshotStore.campaignTotals(campaignId, ALL_TIME_START, today)`,
-  an all-time cumulative count, not a rolling week
+  comes from `managed_campaigns.leads_to_date`, cached once per generation
+  tick (`GraphCampaignAdapter.getLifetimeLeads`, `services/leads-to-date.ts`)
 - Route: `POST /api/app/lead-quality { relevant }` — `services/customer-overview.ts`
 - Client: `web/src/api.ts` `postLeadQuality(relevant)`, `LeadQualityStatus`;
   screen: `LeadQualityCard` in `web/src/app/Home.tsx`
 - Storage: migration 027 — `lead_quality_reviews` (append-only event log:
-  `leads_delta`, `relevant_delta` per review action)
+  `leads_delta`, `relevant_delta` per review action); migration 028 — `leads_to_date`
 
 **Lock-in tests:** `customer-overview.integration.test.ts` ("only asks about
 the delta, watermark advances, double-counting is impossible" — the exact bug
-this replaces), `lead-quality-review.integration.test.ts` (watermark math,
-attribution-lag negative-safety, this-week rollup, migration backfill),
-`lead-quality-review.test.ts` (`mondayOf`, validation never writes on bad input).
+this replaces; "overlapping rolling-window snapshots never inflate
+leadQuality" — the real 1-lead-read-as-3 bug below), `lead-quality-review.integration.test.ts`
+(watermark math, attribution-lag negative-safety, this-week rollup, migration
+backfill), `lead-quality-review.test.ts` (`mondayOf`, validation never writes
+on bad input), `campaign-adapter.test.ts` (`getLifetimeLeads` uses
+`date_preset=maximum`, never a snapshot sum), `generation.test.ts`
+(`leadsReader`/`recordLeadsToDate` tick wiring).
+
+### `leadsToDate` must NEVER be summed from `insight_snapshots` (real bug, found live)
+
+Shipped once already computing `leadsToDate` as
+`PgSnapshotStore.campaignTotals(campaignId, ALL_TIME_START, today)` — summing
+`leads` across every campaign-grain `insight_snapshots` row. That's wrong:
+the ingestion tick writes a NEW row every day for a ROLLING 7-day window
+(`today-7..today-1`, shifting by one day per tick) — these rows OVERLAP, they
+are not disjoint weekly buckets. Summing them counts the same real leads once
+per overlapping snapshot. Caught live within minutes of shipping: a customer
+saw "1 פניות" on the main KPI and "3 לדירוג" on the lead-quality card for the
+SAME campaign with exactly 1 real lead — three daily ticks had written three
+overlapping snapshots of that one lead, and the sum was 3.
+
+Fixed the same way `delivery_ok`/`live_budget_agorot`/`delivering` already
+are: a single Meta Insights call per generation tick
+(`level=campaign&date_preset=maximum` — verified live to return a true,
+non-overlapping lifetime range without needing to know the campaign's actual
+creation date) cached onto `managed_campaigns.leads_to_date`. The UI never
+computes this itself and never sums snapshot rows for it.
 
 ### The watermark, not a cumulative field
 

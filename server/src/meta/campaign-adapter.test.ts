@@ -456,3 +456,41 @@ describe("GraphCampaignAdapter getDeliveryHealth — deliveringAdCount (AIC-71)"
     expect(health.deliveringAdCount).toBe(0);
   });
 });
+
+describe("GraphCampaignAdapter getLifetimeLeads (AIC-67 follow-up)", () => {
+  // REGRESSION (real bug, live): summing insight_snapshots' overlapping
+  // rolling-7-day windows counted the same real lead multiple times. The fix
+  // is a single date_preset=maximum call — this pins that the request never
+  // reconstructs a range from stored periods, and that leads are extracted
+  // the same way (7d-attribution action type preferred) as everywhere else.
+  it("requests date_preset=maximum at campaign level, extracts leads via the shared priority list", async () => {
+    const mock = vi.fn(async (url: string) => ({
+      ok: true, status: 200,
+      json: async () => ({
+        data: [{
+          actions: [
+            { action_type: "onsite_conversion.messaging_conversation_started_7d", value: "4" },
+            { action_type: "link_click", value: "22" },
+          ],
+        }],
+      }),
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const leads = await adapter.getLifetimeLeads("meta_camp_1");
+
+    expect(leads).toBe(4);
+    const [url] = mock.mock.calls[0] as [string];
+    expect(url).toContain("level=campaign");
+    expect(url).toContain("date_preset=maximum");
+  });
+
+  it("no actions at all → zero, not an error", async () => {
+    const mock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ data: [{}] }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    expect(await adapter.getLifetimeLeads("meta_camp_1")).toBe(0);
+  });
+});

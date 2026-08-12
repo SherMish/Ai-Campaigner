@@ -369,6 +369,41 @@ describe("runGenerationTick — recordLiveBudget", () => {
   });
 });
 
+// AIC-67 follow-up (real bug, 2026-08-12): the lead-quality watermark's
+// "leads to date" must come from a single cached lifetime read, never a sum
+// over insight_snapshots (those are overlapping rolling windows).
+describe("runGenerationTick — leadsReader/recordLeadsToDate", () => {
+  it("records the lifetime lead count on every successful tick", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await snapshots.upsert([snap({ grain: "campaign", metaObjectId: "camp", spendAgorot: 200, leads: 0, cplAgorot: null })]);
+    const recs = new InMemoryRecommendationStore();
+    let recorded: { campaignId: string; leadsToDate: number } | null = null;
+    await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(3000),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      leadsReader: { getLifetimeLeads: async () => 4 },
+      recordLeadsToDate: async (c, leadsToDate) => { recorded = { campaignId: c.id, leadsToDate }; },
+    });
+    expect(recorded).toEqual({ campaignId: "camp-1", leadsToDate: 4 });
+  });
+
+  it("a lifetime-leads read failure doesn't fail the tick", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedWeak(snapshots);
+    const recs = new InMemoryRecommendationStore();
+    const res = await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      leadsReader: { getLifetimeLeads: async () => { throw new Error("meta down"); } },
+      recordLeadsToDate: async () => { throw new Error("should never be called"); },
+    });
+    expect(res.evaluated).toBe(1);
+    expect(res.created).toBe(1);
+  });
+});
+
 describe("runGenerationTick — flexible/Advantage+ creative exclusion (AIC-36), continued", () => {
   it("a genuinely weak creative in a NON-flexible ad set still fires (control)", async () => {
     const snapshots = new InMemorySnapshotStore();

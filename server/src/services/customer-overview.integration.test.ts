@@ -183,17 +183,19 @@ d("customer overview (DB + HTTP)", () => {
   // leads NEW since their last review, never a cumulative total they have to
   // do their own mental math against. This is the real bug pin: answering
   // twice as more leads arrive must never re-count the ones already rated.
+  // leads_to_date is set directly here, NOT via snapshot upserts — it's a
+  // cached column (generation.ts's tick), never derived from summing
+  // insight_snapshots (see the regression test below for exactly why).
   it("lead quality: only asks about the delta, watermark advances, double-counting is impossible", async () => {
     const { userId, campaignId } = await seedChain("lq");
     const token = signAuthToken(userId);
-    const store = new PgSnapshotStore(pool);
 
     // No leads yet.
     let ov = await request(createApp()).get("/api/app/overview").set("Authorization", `Bearer ${token}`);
     expect(ov.body.leadQuality).toMatchObject({ pending: 0, reviewedSoFar: 0, relevantSoFar: 0 });
 
     // 5 leads to date → 5 pending.
-    await store.upsert([snap(campaignId, { spendAgorot: 5000, leads: 5, cplAgorot: 1000 })]);
+    await pool.query(`UPDATE managed_campaigns SET leads_to_date = 5 WHERE id = $1`, [campaignId]);
     ov = await request(createApp()).get("/api/app/overview").set("Authorization", `Bearer ${token}`);
     expect(ov.body.leadQuality).toMatchObject({ pending: 5, reviewedSoFar: 0 });
 
@@ -207,7 +209,7 @@ d("customer overview (DB + HTTP)", () => {
 
     // 2 more leads arrive (7 to date) — the prompt must ask about ONLY the
     // new 2, never re-surface the first 5 that were already rated.
-    await store.upsert([snap(campaignId, { spendAgorot: 7000, leads: 7, cplAgorot: 1000 })]);
+    await pool.query(`UPDATE managed_campaigns SET leads_to_date = 7 WHERE id = $1`, [campaignId]);
     ov = await request(createApp()).get("/api/app/overview").set("Authorization", `Bearer ${token}`);
     expect(ov.body.leadQuality.pending).toBe(2);
 
@@ -220,7 +222,7 @@ d("customer overview (DB + HTTP)", () => {
     expect(second.body.leadQuality).toMatchObject({ pending: 0, reviewedSoFar: 7, relevantSoFar: 4 });
 
     // relevant > pending is nonsense → 400, and nothing is recorded.
-    await store.upsert([snap(campaignId, { spendAgorot: 8000, leads: 8, cplAgorot: 1000 })]); // 1 pending
+    await pool.query(`UPDATE managed_campaigns SET leads_to_date = 8 WHERE id = $1`, [campaignId]); // 1 pending
     const bad = await request(createApp())
       .post("/api/app/lead-quality")
       .set("Authorization", `Bearer ${token}`)
@@ -238,6 +240,34 @@ d("customer overview (DB + HTTP)", () => {
       .set("Authorization", `Bearer ${token}`)
       .send({ relevant: 0 });
     expect(nothingToReview.status).toBe(400);
+  });
+
+  // REGRESSION (real bug, found live the same day AIC-67 shipped): a customer
+  // saw "1 פניות" on the main KPI but "3 לדירוג" on the lead-quality card for
+  // the SAME campaign with only 1 real lead. Root cause: the ingestion tick
+  // writes a NEW overlapping rolling-7-day snapshot row every day (shifted by
+  // one day each time), so summing `leads` across insight_snapshots counted
+  // the same real lead once per overlapping row (3 daily ticks → "3"). Pins
+  // that leadQuality.pending reads the cached leads_to_date column, and is
+  // completely unaffected by however many overlapping snapshot rows exist.
+  it("overlapping rolling-window snapshots never inflate leadQuality (the real 1-lead-read-as-3 bug)", async () => {
+    const { userId, campaignId } = await seedChain("overlap");
+    const token = signAuthToken(userId);
+    const store = new PgSnapshotStore(pool);
+
+    // Same real shape: 3 daily ticks, each writing an overlapping 7-day
+    // window that (over)laps the same single real lead.
+    await store.upsert([snap(campaignId, { periodStart: "2026-08-02", periodEnd: "2026-08-08", spendAgorot: 369, leads: 1 })]);
+    await store.upsert([snap(campaignId, { periodStart: "2026-08-03", periodEnd: "2026-08-09", spendAgorot: 369, leads: 1 })]);
+    await store.upsert([snap(campaignId, { periodStart: "2026-08-04", periodEnd: "2026-08-10", spendAgorot: 1182, leads: 1 })]);
+
+    // The engine tick would have cached the TRUE lifetime total (1) here —
+    // simulate that directly, since this test isn't exercising the Meta read.
+    await pool.query(`UPDATE managed_campaigns SET leads_to_date = 1 WHERE id = $1`, [campaignId]);
+
+    const ov = await request(createApp()).get("/api/app/overview").set("Authorization", `Bearer ${token}`);
+    // NOT 3 — the bug would have summed the three overlapping snapshot rows.
+    expect(ov.body.leadQuality.pending).toBe(1);
   });
 
   it("401 without a token", async () => {

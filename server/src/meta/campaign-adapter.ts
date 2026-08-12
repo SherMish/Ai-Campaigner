@@ -13,6 +13,7 @@ import type {
 import type { LaunchWriter, MetaCampaignStatus } from "../launch/types.js";
 import type { AdditionWriter } from "../additions/types.js";
 import type { ControlWriter, ManualObjectStatus } from "../controls/types.js";
+import { extractLeads } from "./insights.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
 // Marketing API. Budgets are read/written in the account currency's MINOR unit,
@@ -174,6 +175,20 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       }
     }
     return health;
+  }
+
+  // True lifetime lead count (AIC-67 follow-up, real bug fix). `date_preset=
+  // maximum` is a single non-overlapping window covering the campaign's
+  // entire history — verified live: it does NOT need a known campaign-start
+  // date, Meta caps it to the real data range. This must NEVER be
+  // reconstructed by summing insight_snapshots rows: the ingestion tick
+  // stores OVERLAPPING rolling-7-day windows (today-7..today-1, shifting by
+  // one day per tick), so the same real leads get counted once per
+  // overlapping row — confirmed live, 1 real lead read back as "3."
+  async getLifetimeLeads(metaCampaignId: string): Promise<number> {
+    const body = await this.get(`${metaCampaignId}/insights?level=campaign&fields=actions&date_preset=maximum`);
+    const row = (body.data as Array<{ actions?: Array<{ action_type: string; value: string }> }>)?.[0];
+    return extractLeads(row?.actions);
   }
 
   // Ad-set name + targeting (AIC-37) — the separate read that lets us derive a

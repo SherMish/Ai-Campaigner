@@ -6,6 +6,26 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — leadsToDate over-counted from overlapping snapshots (AIC-67 follow-up)
+Found live within minutes of shipping AIC-67: a customer saw "1 פניות" on the
+main KPI and "3 לדירוג" on the new lead-quality card for the same campaign
+with exactly 1 real lead. Root cause: `leadsToDate` was computed by summing
+`leads` across every campaign-grain `insight_snapshots` row for the campaign
+— but those rows are NOT disjoint. The ingestion tick writes a new snapshot
+every day for a ROLLING 7-day window (`today-7..today-1`, shifting by one day
+per tick), so overlapping snapshots re-report the same real leads. Three
+daily ticks of the same 1 lead summed to 3.
+
+Fixed the same way `delivery_ok`/`live_budget_agorot`/`delivering` already
+are: one Meta Insights call per generation tick
+(`level=campaign&date_preset=maximum`, verified live to return a true
+non-overlapping lifetime range) cached onto a new `managed_campaigns.leads_to_date`
+column (migration 028). The lead-quality read now uses that column only —
+never a live call, never a snapshot sum. Also corrected the real account's
+already-wrong value immediately rather than waiting for the next hourly tick.
+
+Full detail: [features/customer-overview.md](features/customer-overview.md).
+
 ### 2026-08-12 — Lead-quality feedback: incremental delta review, double-counting fixed (AIC-67)
 The weekly lead-quality question asked for a cumulative total ("of your N
 leads this week, how many were relevant?") with no memory of what was already
