@@ -14,6 +14,7 @@ import {
   type HomeState,
   type CampaignAudiences,
   type LaunchSummary,
+  type LeadQualityStatus,
 } from "../api";
 import { StatusPill } from "./components";
 import { useSharedOverview, invalidateOverview } from "./overview-store";
@@ -191,7 +192,7 @@ export function Home() {
           ) : null}
 
           {/* weekly feedback */}
-          {ov.campaign && <WeeklyFeedback leadsReported={leads} />}
+          {ov.leadQuality && <LeadQualityCard leadQuality={ov.leadQuality} />}
 
           {/* recent activity — real action history (empty until we act) */}
           <div className="card">
@@ -513,38 +514,75 @@ function LaunchModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function WeeklyFeedback({ leadsReported }: { leadsReported: number }) {
-  const [count, setCount] = useState(leadsReported);
+// AIC-67: incremental delta review. Only ever asks about NEW leads since the
+// last review — `pending` is server-computed from the watermark
+// (customer-overview.ts), never a client-tracked total, so there's no
+// "did I already count these?" mental math and double-counting is
+// structurally impossible: the watermark can only ever advance.
+function LeadQualityCard({ leadQuality }: { leadQuality: LeadQualityStatus }) {
+  const { pending, reviewedSoFar, leadsThisWeek, relevantThisWeek } = leadQuality;
+  // Defaults to "assume all relevant" — the customer adjusts down, same
+  // low-friction convention the old cumulative field used.
+  const [relevant, setRelevant] = useState(pending);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
 
-  if (leadsReported === 0)
+  // A fresh batch of pending leads arrived (or the watermark just advanced)
+  // — keep the stepper's default in step, but only while the customer hasn't
+  // started answering yet.
+  useEffect(() => {
+    if (!saving && !saved) setRelevant(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending]);
+
+  if (reviewedSoFar === 0 && pending === 0)
     return <div className="card"><b>{h.weeklyTitle}</b><p className="muted" style={{ marginTop: 10 }}>{h.weeklyNoLeads}</p></div>;
 
   function submit() {
     setSaving(true);
     setError(false);
-    postLeadQuality(leadsReported, Math.min(count, leadsReported))
-      .then(() => setSaved(true))
+    postLeadQuality(relevant)
+      .then(() => {
+        setSaved(true);
+        invalidateOverview(); // the watermark/status just advanced — refetch
+      })
       .catch(() => setError(true))
       .finally(() => setSaving(false));
   }
 
   return (
     <div className="card">
-      <b>{h.weeklyTitle}</b>
+      <div className="row between">
+        <b>{h.weeklyTitle}</b>
+        {!saved && (
+          <span className={`pill ${pending > 0 ? "warn" : "ok"}`} style={{ fontSize: "0.75rem" }}>
+            {pending > 0 ? `${pending} ${h.toReviewBadge}` : h.caughtUpBadge}
+          </span>
+        )}
+      </div>
+
       {saved ? (
         <div style={{ marginTop: 12 }}><StatusPill variant="ok">✓ {h.weeklyThanksTitle}</StatusPill><p className="muted" style={{ marginTop: 10 }}>{h.weeklyThanks}</p></div>
+      ) : pending === 0 ? (
+        <>
+          <p className="muted" style={{ marginTop: 10 }}>{h.caughtUpBody}</p>
+          {leadsThisWeek > 0 && (
+            <p style={{ marginTop: 8 }}>
+              <span className="muted">{h.weeklyRunningLabel}: </span>
+              <b>{relevantThisWeek} {h.relevantOfLeads} {leadsThisWeek}</b>
+            </p>
+          )}
+        </>
       ) : (
         <>
-          <p className="muted" style={{ margin: "8px 0 4px" }}>{leadsReported} {h.weeklyLeadsLine}</p>
-          <p style={{ margin: "4px 0 16px", fontWeight: 500 }}>{h.weeklyCount}</p>
+          <p className="muted" style={{ margin: "8px 0 4px" }}>{h.pendingPrefix} {pending} {h.pendingSuffix}</p>
+          <p style={{ margin: "4px 0 16px", fontWeight: 500 }}>{h.pendingQuestion}</p>
           <div className="row gap16" style={{ flexWrap: "wrap" }}>
             <div className="stepper-inline">
-              <button onClick={() => setCount((c) => Math.max(0, c - 1))}>−</button>
-              <span className="v">{count}</span>
-              <button onClick={() => setCount((c) => Math.min(leadsReported, c + 1))}>+</button>
+              <button onClick={() => setRelevant((c) => Math.max(0, c - 1))}>−</button>
+              <span className="v">{relevant}</span>
+              <button onClick={() => setRelevant((c) => Math.min(pending, c + 1))}>+</button>
             </div>
             <button className="btn btn-dark" onClick={submit} disabled={saving}>{a.save}</button>
           </div>

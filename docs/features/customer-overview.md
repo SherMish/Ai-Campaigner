@@ -155,13 +155,76 @@ used to leave the dashboard silently stale. `liveBudgetAgorot` is cached fresh
 every generation tick and is what's actually shown once the engine has ticked at
 least once for this campaign; the ceiling is only the fallback before that.
 
-## Weekly lead-quality feedback
+## Lead-quality feedback — incremental delta review (AIC-19/22, redesigned AIC-67)
 
-`POST /api/app/lead-quality { leadsReported, relevantCount }` upserts one
-`lead_quality_feedback` row for the current week (Monday-keyed), scoped to the
-caller's campaign. `relevantCount > leadsReported` → 400. On Home, `leadsReported`
-is this week's real lead count from the readout; the customer reports how many
-were relevant. Zero leads → the "no leads yet" copy instead of the form.
+**Status:** live. Replaces a cumulative-weekly single value ("of your N leads
+this week, how many were relevant?") that had a real double-counting bug: the
+denominator grew all week and the UI kept no memory of what was already
+reviewed, so answering twice in the same week (2 leads → 5 leads) forced the
+customer to remember they'd already counted the first 2, or double-count.
+
+**Source of truth:**
+- Service: `server/src/services/lead-quality-review.ts` —
+  `getLeadQualityStatus` (derived read), `recordLeadQualityReview` (the only write)
+- Wired into `buildCustomerOverview` (`leadQuality` field) — `leadsToDate`
+  comes from `PgSnapshotStore.campaignTotals(campaignId, ALL_TIME_START, today)`,
+  an all-time cumulative count, not a rolling week
+- Route: `POST /api/app/lead-quality { relevant }` — `services/customer-overview.ts`
+- Client: `web/src/api.ts` `postLeadQuality(relevant)`, `LeadQualityStatus`;
+  screen: `LeadQualityCard` in `web/src/app/Home.tsx`
+- Storage: migration 027 — `lead_quality_reviews` (append-only event log:
+  `leads_delta`, `relevant_delta` per review action)
+
+**Lock-in tests:** `customer-overview.integration.test.ts` ("only asks about
+the delta, watermark advances, double-counting is impossible" — the exact bug
+this replaces), `lead-quality-review.integration.test.ts` (watermark math,
+attribution-lag negative-safety, this-week rollup, migration backfill),
+`lead-quality-review.test.ts` (`mondayOf`, validation never writes on bad input).
+
+### The watermark, not a cumulative field
+
+`lead_quality_reviews` is append-only — every review is a new row, never an
+UPDATE. The all-time watermark (`reviewedSoFar`/`relevantSoFar`) is `SUM()`
+over that table; `pending = max(0, leadsToDate - reviewedSoFar)`. The customer
+is only ever asked about `pending` — never a total they'd have to reconstruct
+themselves — and re-rating already-reviewed leads is structurally impossible,
+not just avoided: the ROUTE computes `pending` server-side from the caller's
+own watermark and passes it straight to `recordLeadQualityReview` as
+`leadsDelta`; the client never supplies a lead count, only how many of the
+(server-determined) pending batch were relevant.
+
+`max(0, ...)` also makes attribution lag safe for free: if Meta's attribution
+window revises `leadsToDate` downward after the fact, `pending` just reads
+zero (caught up) instead of going negative — no special-casing needed.
+
+### Why "leads to date" and not "this week"
+
+The old field reset weekly (`week_start`, Monday-keyed) and asked about
+`leads this week`. The new watermark is deliberately all-time cumulative —
+new leads are always net-new since the last review, full stop, so there's no
+"does pending reset on Monday" edge case to get wrong. A "running weekly
+quality" figure (`leadsThisWeek`/`relevantThisWeek`) is still shown on Home,
+but it's a DERIVED read (reviews grouped by the calendar week of
+`reviewed_at`), never a separate thing the customer enters.
+
+### Migration forward, no data loss
+
+Migration 027 backfills one `lead_quality_reviews` row per campaign that had
+existing `lead_quality_feedback` history, summing everything ever reported as
+the initial watermark — a customer who'd already answered the old weekly form
+isn't re-asked about leads they already rated.
+
+### Deliberately out of scope
+
+The **operator's** manual lead-quality entry (`POST /admin/campaigns/:id/lead-quality`,
+`services/billing.ts` `upsertLeadQuality`) and the admin console's per-week
+table (`AdminCustomers.tsx`) are **unchanged** — still the old direct-overwrite
+`lead_quality_feedback` model. That's a distinct, already-adequate mechanism
+for the rare case of phone-reported data, and isn't what caused
+double-counting (a single deliberate operator entry, not an unaware customer
+accumulating state across sessions). The admin console's historical view does
+not yet reflect the customer's own post-migration delta reviews — a
+reasonable follow-up, not required by this fix.
 
 ## Recent activity
 

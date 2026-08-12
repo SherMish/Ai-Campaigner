@@ -6,6 +6,29 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Lead-quality feedback: incremental delta review, double-counting fixed (AIC-67)
+The weekly lead-quality question asked for a cumulative total ("of your N
+leads this week, how many were relevant?") with no memory of what was already
+reviewed — a customer answering twice in the same week (2 leads → 5 leads)
+had to remember they'd already counted the first 2, or double-count. Two
+compounding flaws: a moving denominator and no reviewed-so-far state.
+
+Replaced with an append-only review log (migration 027,
+`lead_quality_reviews`: `leads_delta`/`relevant_delta` per review action).
+The all-time watermark is `SUM()` over that table; the customer is only ever
+asked about `pending = max(0, leadsToDate - reviewedSoFar)` — computed
+SERVER-SIDE from the caller's own watermark, never client-supplied, so
+re-rating already-reviewed leads is structurally impossible, not just
+avoided. `max(0, ...)` also makes attribution lag safe for free: a
+retroactive downward revision to `leadsToDate` just reads as caught-up
+instead of going negative. Existing per-week values migrated forward as the
+initial watermark (no data loss) — a customer who'd already answered the old
+form isn't re-asked. Deliberately left the operator's manual admin-console
+entry untouched (a distinct, adequate mechanism for phone-reported data, not
+the thing that caused double-counting).
+
+Full detail: [features/customer-overview.md](features/customer-overview.md).
+
 ### 2026-08-12 — Audience details panel redesign + the real root cause of the raw-name leak (AIC-73)
 Observed live: the opt-in "הצג פירוט" panel showed the raw Meta ad-set name
 (`"IL | Ramat Gan, Givatayim | Women 18-46 | Advantage+"`, pipes and all) —

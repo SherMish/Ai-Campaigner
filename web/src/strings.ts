@@ -544,13 +544,21 @@ export const strings = {
             body: "יש לכם כרגע קהל פרסום אחד פעיל — אין עדיין עם מה להשוות כדי להמליץ על שינוי קהל.",
           },
         },
-        weeklyTitle: "משוב שבועי",
-        weeklyQ: "איך היו הפניות השבוע?",
-        weeklyCount: "כמה מהפניות שקיבלת השבוע היו רלוונטיות?",
-        weeklyLeadsLine: "פניות השבוע",
+        // AIC-67: incremental delta review — only ever asks about NEW leads
+        // since the last review (never a cumulative total the customer has
+        // to do mental math against).
+        weeklyTitle: "איכות הפניות",
         weeklyThanksTitle: "קיבלנו, תודה",
         weeklyThanks: "זה עוזר לנו להבין טוב יותר אילו פניות באמת שוות לעסק.",
-        weeklyNoLeads: "השבוע עדיין לא התקבלו פניות. אנחנו ממשיכים לעקוב לפני שממליצים על שינוי.",
+        weeklyNoLeads: "עדיין לא התקבלו פניות. אנחנו ממשיכים לעקוב לפני שממליצים על שינוי.",
+        pendingPrefix: "יש לך",
+        pendingSuffix: "פניות חדשות מאז הפעם האחרונה",
+        pendingQuestion: "כמה מהן היו רלוונטיות?",
+        caughtUpBadge: "מעודכן",
+        caughtUpBody: "אין כרגע פניות חדשות לדירוג.",
+        toReviewBadge: "לדירוג",
+        weeklyRunningLabel: "השבוע",
+        relevantOfLeads: "רלוונטיות מתוך",
         recentTitle: "מה קרה לאחרונה", recentAll: "לכל השינויים",
         recent: [
           { d: "12 באוג׳", t: "עצרנו מודעה חלשה לאחר שאישרתם." },

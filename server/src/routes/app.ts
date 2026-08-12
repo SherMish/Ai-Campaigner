@@ -2,7 +2,7 @@ import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { buildCustomerOverview } from "../services/customer-overview.js";
-import { upsertLeadQuality } from "../services/billing.js";
+import { recordLeadQualityReview, LeadQualityValidationError } from "../services/lead-quality-review.js";
 import {
   listCustomerRecommendations,
   getCustomerRecommendation,
@@ -35,37 +35,37 @@ appRouter.get("/overview", requireAuth, async (req, res) => {
   }
 });
 
-// Weekly lead-quality feedback (AIC-22). The customer reports, for the current
-// week, how many of their leads were relevant. Scoped to their own campaign.
+// Incremental lead-quality review (AIC-22, redesigned AIC-67). The customer
+// is only ever asked about NEW leads since their last review — the pending
+// count is read from the caller's OWN watermark (buildCustomerOverview),
+// never supplied by the client, so re-rating already-reviewed leads (the old
+// double-counting bug) is structurally impossible.
 appRouter.post("/lead-quality", requireAuth, async (req, res) => {
   try {
     const overview = await buildCustomerOverview(pool, (req as AuthedRequest).userId!);
-    if (!overview?.campaign) {
+    if (!overview?.campaign || !overview.leadQuality) {
       res.status(404).json({ error: "no managed campaign" });
       return;
     }
-    const { leadsReported, relevantCount, customersWon } = req.body ?? {};
-    if (
-      !Number.isInteger(leadsReported) ||
-      !Number.isInteger(relevantCount) ||
-      leadsReported < 0 ||
-      relevantCount < 0 ||
-      relevantCount > leadsReported
-    ) {
+    const { relevant } = req.body ?? {};
+    if (!Number.isInteger(relevant)) {
       res.status(400).json({ error: "invalid lead-quality figures" });
       return;
     }
-    await upsertLeadQuality(pool, {
-      campaignId: overview.campaign.id,
-      weekStart: mondayOf(new Date()),
-      leadsReported,
-      relevantCount,
-      customersWon:
-        typeof customersWon === "number" && Number.isInteger(customersWon)
-          ? customersWon
-          : null,
-    });
-    res.json({ ok: true });
+    try {
+      await recordLeadQualityReview(pool, overview.campaign.id, {
+        leadsDelta: overview.leadQuality.pending,
+        relevantDelta: relevant,
+      });
+    } catch (e) {
+      if (e instanceof LeadQualityValidationError) {
+        res.status(400).json({ error: e.message });
+        return;
+      }
+      throw e;
+    }
+    const updated = await buildCustomerOverview(pool, (req as AuthedRequest).userId!);
+    res.json({ ok: true, leadQuality: updated?.leadQuality ?? null });
   } catch (e) {
     console.error("[app] lead-quality failed", e);
     res.status(500).json({ error: "failed to save feedback" });
@@ -207,12 +207,3 @@ appRouter.post("/launch/approve", requireAuth, async (req, res) => {
     res.status(500).json({ error: "failed to approve launch" });
   }
 });
-
-// ISO date (YYYY-MM-DD) of the Monday of the given date's week.
-function mondayOf(d: Date): string {
-  const copy = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const day = copy.getUTCDay(); // 0=Sun..6=Sat
-  const diff = (day + 6) % 7; // days since Monday
-  copy.setUTCDate(copy.getUTCDate() - diff);
-  return copy.toISOString().slice(0, 10);
-}

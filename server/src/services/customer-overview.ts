@@ -6,6 +6,13 @@ import {
   condense,
   type CondensedEntry,
 } from "./action-history.js";
+import { PgSnapshotStore } from "../meta/snapshot-store.js";
+import { getLeadQualityStatus, type LeadQualityStatus } from "./lead-quality-review.js";
+
+// Wide enough to predate any real campaign (this product's earliest
+// campaigns are all 2026) — used as the lower bound for an all-time
+// cumulative lead count (AIC-67), not a real "campaign start" lookup.
+const ALL_TIME_START = "2000-01-01";
 
 // What the logged-in customer's Home + Settings screens render from. Assembled
 // from the customer's own rows (never another customer's) + the snapshot-based
@@ -65,6 +72,8 @@ export interface CustomerOverview {
     nextChargeDate: string | null;
   } | null;
   readout: CampaignReadout | null;
+  // AIC-67: incremental delta-review watermark — null when there's no campaign.
+  leadQuality: LeadQualityStatus | null;
   recentActivity: CondensedEntry[];
   pendingRecommendations: number;
   // Which kind of "needs attention" the customer sees, so Home shows the right
@@ -132,6 +141,7 @@ export async function buildCustomerOverview(
       campaign: null,
       subscription: null,
       readout: null,
+      leadQuality: null,
       recentActivity: [],
       pendingRecommendations: 0,
       attentionKind: null,
@@ -263,6 +273,18 @@ export async function buildCustomerOverview(
     ? await buildCampaignReadout(pool, campaign.id, ref)
     : null;
 
+  // AIC-67: "leads to date" is all-time cumulative, not this-week's — the
+  // watermark tracks net-new leads regardless of week boundaries, so there's
+  // no "does the counter reset on Monday" edge case to get wrong.
+  const leadQuality = campaign
+    ? await getLeadQualityStatus(
+        pool,
+        campaign.id,
+        (await new PgSnapshotStore(pool).campaignTotals(campaign.id, ALL_TIME_START, ref.toISOString().slice(0, 10))).leads,
+        ref,
+      )
+    : null;
+
   const recentActivity = condense(
     await listCustomerActionHistory(pool, customerId),
   ).slice(0, 8);
@@ -292,6 +314,7 @@ export async function buildCustomerOverview(
     campaign,
     subscription,
     readout,
+    leadQuality,
     recentActivity,
     pendingRecommendations,
     attentionKind,

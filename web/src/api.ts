@@ -47,6 +47,14 @@ export interface PeriodAgg {
   leads: number;
   cplAgorot: number | null;
 }
+// AIC-67: the incremental delta-review watermark.
+export interface LeadQualityStatus {
+  reviewedSoFar: number;
+  relevantSoFar: number;
+  pending: number;
+  leadsThisWeek: number;
+  relevantThisWeek: number;
+}
 export interface CustomerOverview {
   account: { name: string; email: string };
   customer: {
@@ -76,6 +84,7 @@ export interface CustomerOverview {
     delta: { spendPct: number | null; leadsPct: number | null; cplPct: number | null };
     perCreative: Array<{ metaObjectId: string; creativeName: string | null; deliveryStatus: string }>;
   } | null;
+  leadQuality: LeadQualityStatus | null;
   recentActivity: Array<{
     when: string; summary: string; automated: boolean; result: "success" | "failed";
   }>;
@@ -541,10 +550,13 @@ export const approveAddition = (id: string) =>
   api<{ outcome: ApproveAdditionOutcome; reason?: string }>(`/app/additions/${id}/approve`, { method: "POST" });
 
 export const getOverview = () => api<CustomerOverview>("/app/overview");
-export const postLeadQuality = (leadsReported: number, relevantCount: number) =>
-  api<{ ok: true }>("/app/lead-quality", {
+// AIC-67: `relevant` answers about the PENDING delta only — the server reads
+// how many leads are pending from the caller's own watermark, never a
+// client-supplied total, so this can never re-rate already-reviewed leads.
+export const postLeadQuality = (relevant: number) =>
+  api<{ ok: true; leadQuality: LeadQualityStatus | null }>("/app/lead-quality", {
     method: "POST",
-    body: JSON.stringify({ leadsReported, relevantCount }),
+    body: JSON.stringify({ relevant }),
   });
 
 // Integer agorot → "₪NN" (drops the decimals when whole, one place otherwise).

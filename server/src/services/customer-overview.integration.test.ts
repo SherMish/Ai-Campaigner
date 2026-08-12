@@ -179,26 +179,69 @@ d("customer overview (DB + HTTP)", () => {
     expect(res.status).toBe(401);
   });
 
-  it("saves lead-quality feedback for the caller's campaign", async () => {
+  // AIC-67: incremental delta review — the customer is only ever asked about
+  // leads NEW since their last review, never a cumulative total they have to
+  // do their own mental math against. This is the real bug pin: answering
+  // twice as more leads arrive must never re-count the ones already rated.
+  it("lead quality: only asks about the delta, watermark advances, double-counting is impossible", async () => {
     const { userId, campaignId } = await seedChain("lq");
     const token = signAuthToken(userId);
-    const ok = await request(createApp())
+    const store = new PgSnapshotStore(pool);
+
+    // No leads yet.
+    let ov = await request(createApp()).get("/api/app/overview").set("Authorization", `Bearer ${token}`);
+    expect(ov.body.leadQuality).toMatchObject({ pending: 0, reviewedSoFar: 0, relevantSoFar: 0 });
+
+    // 5 leads to date → 5 pending.
+    await store.upsert([snap(campaignId, { spendAgorot: 5000, leads: 5, cplAgorot: 1000 })]);
+    ov = await request(createApp()).get("/api/app/overview").set("Authorization", `Bearer ${token}`);
+    expect(ov.body.leadQuality).toMatchObject({ pending: 5, reviewedSoFar: 0 });
+
+    // Answer 3 of 5 relevant — watermark advances, nothing left pending.
+    const first = await request(createApp())
       .post("/api/app/lead-quality")
       .set("Authorization", `Bearer ${token}`)
-      .send({ leadsReported: 10, relevantCount: 4 });
-    expect(ok.status).toBe(200);
+      .send({ relevant: 3 });
+    expect(first.status).toBe(200);
+    expect(first.body.leadQuality).toMatchObject({ pending: 0, reviewedSoFar: 5, relevantSoFar: 3 });
 
-    const row = await pool.query(
-      `SELECT leads_reported, relevant_count FROM lead_quality_feedback WHERE campaign_id = $1`,
-      [campaignId],
-    );
-    expect(row.rows[0]).toMatchObject({ leads_reported: 10, relevant_count: 4 });
+    // 2 more leads arrive (7 to date) — the prompt must ask about ONLY the
+    // new 2, never re-surface the first 5 that were already rated.
+    await store.upsert([snap(campaignId, { spendAgorot: 7000, leads: 7, cplAgorot: 1000 })]);
+    ov = await request(createApp()).get("/api/app/overview").set("Authorization", `Bearer ${token}`);
+    expect(ov.body.leadQuality.pending).toBe(2);
 
-    // relevant > reported is nonsense → 400.
+    const second = await request(createApp())
+      .post("/api/app/lead-quality")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ relevant: 1 });
+    expect(second.status).toBe(200);
+    // Cumulative, not overwritten: 3 (first batch) + 1 (second batch) = 4.
+    expect(second.body.leadQuality).toMatchObject({ pending: 0, reviewedSoFar: 7, relevantSoFar: 4 });
+
+    // relevant > pending is nonsense → 400, and nothing is recorded.
+    await store.upsert([snap(campaignId, { spendAgorot: 8000, leads: 8, cplAgorot: 1000 })]); // 1 pending
     const bad = await request(createApp())
       .post("/api/app/lead-quality")
       .set("Authorization", `Bearer ${token}`)
-      .send({ leadsReported: 3, relevantCount: 9 });
+      .send({ relevant: 9 });
     expect(bad.status).toBe(400);
+
+    // Nothing pending → posting anyway is rejected, not silently accepted.
+    const okOne = await request(createApp())
+      .post("/api/app/lead-quality")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ relevant: 1 });
+    expect(okOne.status).toBe(200);
+    const nothingToReview = await request(createApp())
+      .post("/api/app/lead-quality")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ relevant: 0 });
+    expect(nothingToReview.status).toBe(400);
+  });
+
+  it("401 without a token", async () => {
+    const res = await request(createApp()).post("/api/app/lead-quality").send({ relevant: 1 });
+    expect(res.status).toBe(401);
   });
 });
