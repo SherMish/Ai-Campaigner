@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeMetrics, normalizeTargeting, normalizeCreative } from "./explorer.js";
+import { normalizeMetrics, normalizeTargeting, normalizeCreative, pageIdFromStoryId } from "./explorer.js";
 
 describe("normalizeMetrics (AIC-45)", () => {
   it("converts currency-unit strings to agorot and passes rankings through", () => {
@@ -103,5 +103,15 @@ describe("normalizeCreative (AIC-45)", () => {
     const c = normalizeCreative({ id: "crea_3", video_id: "v1", thumbnail_url: "https://x/thumb.jpg" });
     expect(c?.imageUrl).toBe("https://x/thumb.jpg");
     expect(c?.videoId).toBe("v1");
+  });
+});
+
+describe("pageIdFromStoryId — fallback for ad formats without object_story_spec (e.g. click-to-WhatsApp)", () => {
+  it("parses the page id out of \"{page_id}_{post_id}\"", () => {
+    expect(pageIdFromStoryId("111222333_444555666")).toBe("111222333");
+  });
+  it("returns null for undefined or a malformed id", () => {
+    expect(pageIdFromStoryId(undefined)).toBeNull();
+    expect(pageIdFromStoryId("no-underscore")).toBeNull();
   });
 });

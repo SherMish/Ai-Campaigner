@@ -147,6 +147,17 @@ interface RawAd {
   effective_status?: string;
   issues_info?: RawIssue[];
   creative?: RawCreative;
+  // "{page_id}_{post_id}" — a more universal source than creative.
+  // object_story_spec.page_id, which some formats (e.g. click-to-WhatsApp)
+  // don't populate.
+  effective_object_story_id?: string;
+}
+
+// The ad-level fallback for pageId: parse "{page_id}_{post_id}".
+export function pageIdFromStoryId(id?: string): string | null {
+  if (!id) return null;
+  const i = id.indexOf("_");
+  return i > 0 ? id.slice(0, i) : null;
 }
 
 function issuesOf(raw?: RawIssue[]): string[] {
@@ -204,7 +215,7 @@ const ADSET_FIELDS =
   "id,name,effective_status,issues_info,daily_budget,lifetime_budget,bid_strategy," +
   "targeting{age_min,age_max,genders,geo_locations,flexible_spec{interests}}";
 const AD_FIELDS =
-  "id,name,adset_id,effective_status,issues_info," +
+  "id,name,adset_id,effective_status,issues_info,effective_object_story_id," +
   "creative{id,name,title,body,call_to_action_type,image_url,video_id,thumbnail_url,object_story_spec{page_id},asset_feed_spec{images,videos,bodies,titles}}";
 const INSIGHTS_FIELDS =
   "campaign_id,adset_id,ad_id,spend,impressions,reach,frequency,cpm,ctr,cpc,actions," +
@@ -274,14 +285,22 @@ export class GraphExplorerReader implements ExplorerReader {
       bidStrategy: a.bid_strategy ?? null,
       targeting: normalizeTargeting(a.targeting),
       metrics: normalizeMetrics(adsetInsights.get(a.id)),
-      ads: (adsByAdSet.get(a.id) ?? []).map((ad) => ({
-        id: ad.id,
-        name: ad.name ?? null,
-        effectiveStatus: ad.effective_status ?? null,
-        issues: issuesOf(ad.issues_info),
-        creative: normalizeCreative(ad.creative),
-        metrics: normalizeMetrics(adInsights.get(ad.id)),
-      })),
+      ads: (adsByAdSet.get(a.id) ?? []).map((ad) => {
+        const creative = normalizeCreative(ad.creative);
+        // Some ad formats (e.g. click-to-WhatsApp) leave creative.object_story_spec
+        // empty — fall back to the ad-level effective_object_story_id ("{page}_{post}").
+        if (creative && creative.pageId === null) {
+          creative.pageId = pageIdFromStoryId(ad.effective_object_story_id);
+        }
+        return {
+          id: ad.id,
+          name: ad.name ?? null,
+          effectiveStatus: ad.effective_status ?? null,
+          issues: issuesOf(ad.issues_info),
+          creative,
+          metrics: normalizeMetrics(adInsights.get(ad.id)),
+        };
+      }),
     }));
 
     const camp = campBody as unknown as { id: string; name?: string; effective_status?: string; daily_budget?: string; lifetime_budget?: string; bid_strategy?: string };
