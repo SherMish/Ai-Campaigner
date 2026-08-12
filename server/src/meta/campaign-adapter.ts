@@ -161,6 +161,9 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     const body = await this.get(
       `${metaCampaignId}/adsets?fields=id,name,is_dynamic_creative,effective_status,targeting{age_min,age_max,genders,geo_locations},ads.limit(1){id}&limit=100`,
     );
+    // AIC-65 TEMP DIAGNOSTIC (2026-08-12): the ads.limit(1){id} sub-field is
+    // classifying a known-zero-ads ad set as managed in prod — remove once root-caused.
+    console.log("[aic-65-diag] getAdSetMeta raw:", JSON.stringify(body.data));
     return ((body.data as RawAdSetMeta[]) ?? []).map(normalizeAdSetMeta);
   }
 
