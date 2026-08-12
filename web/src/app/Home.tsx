@@ -45,7 +45,7 @@ function noRecCard(reason: string | null): { title: string; body: string; cta?: 
 }
 
 const PILL: Record<HomeState, "ok" | "info" | "neutral" | "attn"> = {
-  ok: "ok", collecting: "neutral", paused: "neutral", attention: "attn", no_campaign: "neutral", ready_to_launch: "info",
+  ok: "ok", collecting: "neutral", paused: "neutral", attention: "attn", no_campaign: "neutral", ready_to_launch: "info", stopped: "neutral",
 };
 
 // Which status-hero copy + optional CTA each real state shows. A `launch: true`
@@ -62,6 +62,8 @@ function hero(state: HomeState, attentionKind: CustomerOverview["attentionKind"]
       return { badge: h.states.readyToLaunch.badge, title: h.states.readyToLaunch.title, body: h.states.readyToLaunch.body, launch: { label: h.states.readyToLaunch.cta } };
     case "paused":
       return { badge: h.states.paused.badge, title: h.states.paused.title, body: h.states.paused.body };
+    case "stopped":
+      return { badge: h.states.stopped.badge, title: h.states.stopped.title, body: h.states.stopped.body };
     case "collecting":
       return h.states.collecting;
     case "no_campaign":
@@ -111,10 +113,15 @@ export function Home() {
   const leads = r?.current.leads ?? 0;
   const cpl = r?.current.cplAgorot ?? null;
   const spend = r?.current.spendAgorot ?? 0;
-  // De-duplicated by creative NAME (AIC-37): the same creative can run under
-  // multiple audiences (ad sets) as distinct Meta ad objects, but the customer
-  // thinks of it as one creative — the roll-up should count concepts, not rows.
-  const activeAds = new Set((r?.perCreative ?? []).map((c) => c.creativeName ?? c.metaObjectId)).size;
+  // AIC-71: `deliveringAdCount` is the engine's live per-tick count of ads
+  // that are actually deliverable right now (real ad/ad-set status) — the
+  // honest number. Before the engine's first tick for this campaign it's
+  // null, so fall back to the historical-spend count (deduplicated by
+  // creative NAME, AIC-37: the same creative can run under multiple audiences
+  // as distinct Meta ad objects, but the customer thinks of it as one).
+  const activeAds =
+    ov.campaign?.deliveringAdCount ??
+    new Set((r?.perCreative ?? []).map((c) => c.creativeName ?? c.metaObjectId)).size;
   const period = ov.campaign?.budgetPeriod === "monthly" ? L.perMonth : L.perDay;
 
   return (

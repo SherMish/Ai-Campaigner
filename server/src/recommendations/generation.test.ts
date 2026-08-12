@@ -124,8 +124,8 @@ describe("runGenerationTick — audience rule + AIC-39 delivery exclusion", () =
       snapshotStore: snapshots, recommendationStore: recs,
       recommendationService: new RecommendationService(recs), ref: REF,
       deliveryReader: { getDeliveryHealth: async () => [
-        { adSetId: "as_A", name: null, state: "delivering", reason: null },
-        { adSetId: "as_B", name: null, state: "not_delivering", reason: "Ad set not delivering" },
+        { adSetId: "as_A", name: null, state: "delivering", reason: null, deliveringAdCount: 1 },
+        { adSetId: "as_B", name: null, state: "not_delivering", reason: "Ad set not delivering", deliveringAdCount: 0 },
       ] },
       recordDelivery: async (_c, s) => { recorded = s; },
     });
@@ -177,8 +177,8 @@ describe("runGenerationTick — exclude dead/draft ad sets (AIC-65)", () => {
         adSetMeta("as_B", false, false),
       ] },
       deliveryReader: { getDeliveryHealth: async () => [
-        { adSetId: "as_A", name: null, state: "delivering", reason: null },
-        { adSetId: "as_B", name: null, state: "not_delivering", reason: "stale issue from before deletion" },
+        { adSetId: "as_A", name: null, state: "delivering", reason: null, deliveringAdCount: 1 },
+        { adSetId: "as_B", name: null, state: "not_delivering", reason: "stale issue from before deletion", deliveringAdCount: 0 },
       ] },
       recordDelivery: async (_c, s) => { recorded = s; },
     });
@@ -203,8 +203,8 @@ describe("runGenerationTick — exclude dead/draft ad sets (AIC-65)", () => {
         adSetMeta("as_dead", false, false), // dead, unmanaged
       ] },
       deliveryReader: { getDeliveryHealth: async () => [
-        { adSetId: "as_real_broken", name: null, state: "not_delivering", reason: "Ad set not delivering" },
-        { adSetId: "as_dead", name: null, state: "not_delivering", reason: "stale" },
+        { adSetId: "as_real_broken", name: null, state: "not_delivering", reason: "Ad set not delivering", deliveringAdCount: 0 },
+        { adSetId: "as_dead", name: null, state: "not_delivering", reason: "stale", deliveringAdCount: 0 },
       ] },
       recordDelivery: async (_c, s) => { recorded = s; },
     });
@@ -283,8 +283,8 @@ describe("runGenerationTick — recordNoRecReason (AIC-64)", () => {
       snapshotStore: snapshots, recommendationStore: recs,
       recommendationService: new RecommendationService(recs), ref: REF,
       deliveryReader: { getDeliveryHealth: async () => [
-        { adSetId: "as_A", name: null, state: "delivering", reason: null },
-        { adSetId: "as_B", name: null, state: "not_delivering", reason: "Ad set not delivering" },
+        { adSetId: "as_A", name: null, state: "delivering", reason: null, deliveringAdCount: 1 },
+        { adSetId: "as_B", name: null, state: "not_delivering", reason: "Ad set not delivering", deliveringAdCount: 0 },
       ] },
       recordNoRecReason: async (_c, draft) => {
         recordedReason = (draft.evidence as { reason: string }).reason;

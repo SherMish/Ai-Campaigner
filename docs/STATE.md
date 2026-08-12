@@ -6,6 +6,33 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Honest delivery state on Home: "stopped" + a real active-ad count (AIC-71)
+Real GelNails case, seen live right after AIC-66 shipped: the customer paused
+their only ad set via the new manual controls — zero delivery, zero spend —
+and Home still read **פעיל** with **1 מודעות פעילות**. Neither number ever
+reflected live Meta state: `homeState`'s `ok`/`paused` split only knew
+`managed_campaigns.status`, an operator DB flag meaning "we manage this,"
+unrelated to whether anything is actually running; the active-ad count came
+from `insight_snapshots`, i.e. historical spend, so a since-paused ad kept
+counting.
+
+Fix reuses the existing per-tick delivery-health read (AIC-39) rather than
+adding a new Meta call or a new staleness mode: `getDeliveryHealth`'s
+ad-level rollup now also counts each ad set's currently-delivering ads
+(`deliveringAdCount`), and `summarize()` exposes `delivering: deliveringAdCount
+> 0` — a fact orthogonal to `ok` (a fully, correctly paused campaign is
+`ok: true, delivering: false`, not a problem). Persisted alongside
+`delivery_ok` every tick (migration 026: `managed_campaigns.delivering`,
+`delivering_ad_count`). New `homeState = "stopped"` checks `!delivering`
+after the real delivery-problem check and before `collecting` — a campaign
+with everything paused will never accumulate data no matter how long you
+wait. Home's "מודעות פעילות" now reads `deliveringAdCount` when the engine has
+ticked at least once, falling back to the old historical count only before
+that.
+
+Full detail: [features/customer-overview.md](features/customer-overview.md),
+[features/delivery-health.md](features/delivery-health.md).
+
 ### 2026-08-12 — Manual pause/resume/archive/delete of ads + ad sets (AIC-66)
 Until now the only way an object changed state was an approved engine
 recommendation — a management product that can't manually turn an ad off was

@@ -157,11 +157,17 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
 
     // Roll AD-level issues up to their ad set: an errored/disapproved ad makes its
     // ad set not-deliver, and the error often lives at the ad grain, not the ad set.
+    // Also count each ad set's currently-delivering ads (AIC-71) — an ad-set-level
+    // ACTIVE status with every individual ad paused (AIC-66's manual pause) is
+    // "healthy" but shows nothing, which `deliveringAdCount` needs to catch even
+    // though it's not a `isProblem` case.
     const ads = await this.get(`${metaCampaignId}/ads?fields=id,adset_id,effective_status,issues_info&limit=200`);
     for (const adRow of (ads.data as Array<{ adset_id?: string } & RawAdSetDelivery>) ?? []) {
       const parent = adRow.adset_id ? byId.get(String(adRow.adset_id)) : undefined;
-      if (!parent || isProblem(parent)) continue; // ad set already flagged
+      if (!parent) continue;
       const adHealth = normalizeAdSet({ id: String(adRow.id), effective_status: adRow.effective_status, issues_info: adRow.issues_info });
+      if (adHealth.state === "delivering") parent.deliveringAdCount++;
+      if (isProblem(parent)) continue; // ad set already flagged; still counted above
       if (isProblem(adHealth)) {
         parent.state = adHealth.state;
         parent.reason = adHealth.reason;

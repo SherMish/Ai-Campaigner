@@ -12,6 +12,11 @@ export interface AdSetHealth {
   name: string | null;
   state: DeliveryState;
   reason: string | null; // plain issue summary from Meta, when not delivering
+  // AIC-71: how many ads under this ad set are themselves currently delivering
+  // (not paused, not errored)? An ad-set-level ACTIVE status with every
+  // individual ad paused (AIC-66's manual pause) shows nothing — the ad-set
+  // state alone isn't enough to know "is anyone seeing this."
+  deliveringAdCount: number;
 }
 
 // A raw ad-set row from Meta (effective_status + issues_info).
@@ -45,7 +50,9 @@ export function normalizeAdSet(row: RawAdSetDelivery): AdSetHealth {
   else if (status === "PAUSED" || status === "ADSET_PAUSED" || status === "CAMPAIGN_PAUSED") state = "paused";
   else state = "delivering";
 
-  return { adSetId: row.id, name: row.name ?? null, state, reason: state === "delivering" || state === "paused" ? null : reason };
+  // deliveringAdCount is filled in by the ad-level rollup below (campaign-adapter.ts) —
+  // this function normalizes a single row and has no ad-level knowledge.
+  return { adSetId: row.id, name: row.name ?? null, state, reason: state === "delivering" || state === "paused" ? null : reason, deliveringAdCount: 0 };
 }
 
 // A problem ad set is one actively broken (not merely paused on purpose).
@@ -57,13 +64,29 @@ export interface DeliverySummary {
   ok: boolean;
   reason: string | null; // first problem's reason
   problemAdSetIds: string[];
+  // AIC-71: is anything actually showing right now? False when every ad set
+  // is paused/errored/empty — distinct from `ok`, which only means "nothing is
+  // BROKEN" (an intentionally all-paused campaign is `ok: true, delivering:
+  // false`). Drives the customer-facing "stopped" home state.
+  delivering: boolean;
+  // Count of currently-delivering ads across delivering ad sets — the honest
+  // "מודעות פעילות" number, as opposed to ads with historical spend.
+  deliveringAdCount: number;
 }
 
 export function summarize(health: AdSetHealth[]): DeliverySummary {
   const problems = health.filter(isProblem);
+  // Only an ad set that is itself state=delivering counts its ads — an ad set
+  // leaked a paused/errored state (e.g. CAMPAIGN_PAUSED) shouldn't have its
+  // ads counted even if some individual ad row still reads ACTIVE.
+  const deliveringAdCount = health
+    .filter((h) => h.state === "delivering")
+    .reduce((sum, h) => sum + h.deliveringAdCount, 0);
   return {
     ok: problems.length === 0,
     reason: problems[0]?.reason ?? (problems[0] ? "not delivering" : null),
     problemAdSetIds: problems.map((h) => h.adSetId),
+    delivering: deliveringAdCount > 0,
+    deliveringAdCount,
   };
 }

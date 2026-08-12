@@ -11,7 +11,7 @@ import {
 // from the customer's own rows (never another customer's) + the snapshot-based
 // readout. Everything is read-only; no live Meta call at render time.
 export type AccessHealth = "ok" | "revoked" | "invalid" | "needs_reconnect";
-export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campaign" | "ready_to_launch";
+export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campaign" | "ready_to_launch" | "stopped";
 
 export interface CustomerOverview {
   account: { name: string; email: string };
@@ -50,6 +50,12 @@ export interface CustomerOverview {
     // auto-rises to match live, never auto-lowers). Null before the engine's
     // first tick for this campaign.
     liveBudgetAgorot: Agorot | null;
+    // AIC-71: is anything actually showing right now, and how many ads —
+    // computed the same tick as deliveryOk, from real ad/ad-set status, not
+    // `status` (a DB "we manage this" flag) or historical spend. Defaults to
+    // true/null until the engine's first tick for this campaign.
+    delivering: boolean;
+    deliveringAdCount: number | null;
   } | null;
   subscription: {
     plan: string;
@@ -85,6 +91,12 @@ function deriveHomeState(
   if (campaign.status === "paused") return "paused";
   if (campaign.status === "needs_attention" || campaign.status === "connection_problem")
     return "attention";
+  // AIC-71: nothing delivering isn't a problem (AIC-39 already caught real
+  // errors above) and isn't "we manage this" (campaign.status, checked above)
+  // — it's the honest "you (or nothing) turned this off" reading of live ad/
+  // ad-set status. Outranks `collecting`: a campaign with everything paused
+  // will never accumulate data no matter how long we wait.
+  if (!campaign.delivering) return "stopped";
   const hasData =
     !!readout &&
     (readout.current.spendAgorot > 0 ||
@@ -170,8 +182,10 @@ export async function buildCustomerOverview(
       no_rec_reason: string | null;
       no_rec_detail: Record<string, unknown> | null;
       live_budget_agorot: number | null;
+      delivering: boolean;
+      delivering_ad_count: number | null;
     }>(
-      `SELECT id, name, status, objective, agreed_budget_agorot, budget_period, automation_enabled, delivery_ok, launch_approved_at, meta_campaign_id, no_rec_reason, no_rec_detail, live_budget_agorot
+      `SELECT id, name, status, objective, agreed_budget_agorot, budget_period, automation_enabled, delivery_ok, launch_approved_at, meta_campaign_id, no_rec_reason, no_rec_detail, live_budget_agorot, delivering, delivering_ad_count
        FROM managed_campaigns WHERE customer_id = $1`,
       [customerId],
     ),
@@ -230,6 +244,8 @@ export async function buildCustomerOverview(
         noRecReason: campRes.rows[0].no_rec_reason,
         noRecDetail: campRes.rows[0].no_rec_detail,
         liveBudgetAgorot: campRes.rows[0].live_budget_agorot,
+        delivering: campRes.rows[0].delivering,
+        deliveringAdCount: campRes.rows[0].delivering_ad_count,
       }
     : null;
 

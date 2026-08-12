@@ -394,3 +394,65 @@ describe("GraphCampaignAdapter add-to-existing-campaign (AIC-63)", () => {
     expect(meta.find((m) => m.adSetId === "as_dead")?.isManaged).toBe(false);
   });
 });
+
+describe("GraphCampaignAdapter getDeliveryHealth — deliveringAdCount (AIC-71)", () => {
+  // Real GelNails shape: the ad set is ACTIVE and healthy (no issues_info), but
+  // the customer paused its only ad via the manual controls (AIC-66). The ad
+  // set's OWN status never reflects that — only counting each ad's real status
+  // catches it.
+  it("an ACTIVE, issue-free ad set with its only ad PAUSED counts zero delivering ads", async () => {
+    const mock = vi.fn(async (url: string) => ({
+      ok: true, status: 200,
+      json: async () =>
+        String(url).includes("/adsets?")
+          ? { data: [{ id: "as_1", name: "Set A", effective_status: "ACTIVE" }] }
+          : { data: [{ id: "ad_1", adset_id: "as_1", effective_status: "PAUSED" }] },
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const [health] = await adapter.getDeliveryHealth("meta_camp_1");
+
+    expect(health.state).toBe("delivering"); // ad set itself is healthy
+    expect(health.deliveringAdCount).toBe(0); // but nothing under it is showing
+  });
+
+  it("counts only the ads that are themselves delivering, across multiple ads", async () => {
+    const mock = vi.fn(async (url: string) => ({
+      ok: true, status: 200,
+      json: async () =>
+        String(url).includes("/adsets?")
+          ? { data: [{ id: "as_1", name: "Set A", effective_status: "ACTIVE" }] }
+          : {
+              data: [
+                { id: "ad_1", adset_id: "as_1", effective_status: "ACTIVE" },
+                { id: "ad_2", adset_id: "as_1", effective_status: "PAUSED" },
+                { id: "ad_3", adset_id: "as_1", effective_status: "ACTIVE" },
+              ],
+            },
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const [health] = await adapter.getDeliveryHealth("meta_camp_1");
+
+    expect(health.deliveringAdCount).toBe(2);
+  });
+
+  it("an errored ad still gets counted toward the rollup check without inflating deliveringAdCount", async () => {
+    const mock = vi.fn(async (url: string) => ({
+      ok: true, status: 200,
+      json: async () =>
+        String(url).includes("/adsets?")
+          ? { data: [{ id: "as_1", name: "Set A", effective_status: "ACTIVE" }] }
+          : { data: [{ id: "ad_1", adset_id: "as_1", effective_status: "ACTIVE", issues_info: [{ error_message: "Creative rejected" }] }] },
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const [health] = await adapter.getDeliveryHealth("meta_camp_1");
+
+    expect(health.state).toBe("not_delivering"); // existing AIC-39 rollup, unaffected
+    expect(health.deliveringAdCount).toBe(0);
+  });
+});

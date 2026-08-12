@@ -37,7 +37,7 @@ export class ApiError extends Error {
 // ── Customer overview (AIC-22/24) ─────────────────────────────────────────
 // Mirrors server/src/services/customer-overview.ts. Money is integer agorot.
 export type AccessHealth = "ok" | "revoked" | "invalid" | "needs_reconnect";
-export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campaign" | "ready_to_launch";
+export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campaign" | "ready_to_launch" | "stopped";
 export type CampaignStatus =
   | "under_review" | "active" | "paused" | "needs_attention"
   | "connection_problem" | "unmanaged";
@@ -65,6 +65,7 @@ export interface CustomerOverview {
     automationEnabled: boolean; deliveryOk: boolean; readyToLaunch: boolean;
     noRecReason: string | null; noRecDetail: Record<string, unknown> | null;
     liveBudgetAgorot: number | null;
+    delivering: boolean; deliveringAdCount: number | null;
   } | null;
   subscription: {
     plan: string; status: string; setupPaid: boolean;

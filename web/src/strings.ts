@@ -465,6 +465,13 @@ export const strings = {
           readyToLaunch: { badge: "מוכן להפעלה", title: "הקמפיין מוכן — נותר רק לאשר הפעלה", body: "בנינו את הקמפיין והוא עבר בדיקה, אבל הוא עדיין מושהה ולא מוציא כסף. ההפעלה מתבצעת רק באישור שלכם.", cta: "אישור והפעלה" },
           // AIC-39: a not-delivering ad set — distinct from a lost Meta connection.
           delivery: { badge: "צריך טיפול", title: "חלק מהקמפיין לא מתפרסם כרגע", body: "אחת מקבוצות הפרסום נתקלה בבעיה ואינה מציגה מודעות. אנחנו כבר על זה — ניצור קשר אם נצטרך משהו מכם. שאר הקמפיין ממשיך לרוץ.", cta: "" },
+          // AIC-71: nothing is currently delivering (usually the customer's own
+          // pause via the audience controls below) — not an error (that's
+          // `delivery` above) and not an operator management-pause (`paused`
+          // above, which needs us to resume). Distinct badge text from `paused`
+          // on purpose — same underlying "nothing running" fact, but this one
+          // the customer can undo themselves, right here.
+          stopped: { badge: "לא מתפרסם", title: "אין כרגע מודעות שמוצגות ללקוחות", body: "כל קבוצות הפרסום מושהות, כך שאין כרגע חשיפה או פניות. אפשר להפעיל מחדש בלחיצה — פתחו את פירוט הקהלים למטה.", cta: "" },
         },
         live: {
           vsPrev: "מהתקופה הקודמת",

@@ -16,7 +16,8 @@ readout builder.
 **Lock-in tests:** `server/src/services/customer-overview.integration.test.ts`
 (full-chain assembly; `homeState` = `ok` with data / `collecting` without;
 401 without a token; lead-quality write + validation; AIC-64's noRecReason
-surfacing + clearing).
+surfacing + clearing; AIC-71's `stopped` outranking `collecting` even with no
+snapshot data, and the pre-first-tick `delivering=true` default).
 
 ---
 
@@ -38,8 +39,9 @@ Derived server-side, highest-priority first:
 | state | condition |
 | --- | --- |
 | `no_campaign` | account has no linked customer/campaign yet |
-| `attention` | connection `access_health` ≠ `ok`, or campaign `needs_attention`/`connection_problem` |
-| `paused` | campaign `status = paused` |
+| `attention` | connection `access_health` ≠ `ok`, or campaign `needs_attention`/`connection_problem`, or a real delivery problem (AIC-39) |
+| `paused` | campaign `status = paused` (an operator paused OUR management of it — resuming needs us) |
+| `stopped` | nothing is currently deliverable, but nothing is broken (AIC-71) — usually the customer's own pause via the audience controls; they can resume it themselves |
 | `collecting` | campaign active but no snapshot data (no spend, no leads, no creatives) |
 | `ok` | active with data |
 
@@ -50,6 +52,37 @@ states with a real destination carry a CTA (`attention` → `/connect`,
 connection and a not-delivering ad set are different problems with different
 copy (`h.states.attention` vs `h.states.delivery`); a delivery problem shows
 no CTA (there's nothing for the customer to click — we're already on it).
+
+## Honest delivery state, not the management flag (AIC-71)
+
+`campaign.status` (`paused` above) is a DB flag meaning "are **we** managing
+this" — set only by an operator's emergency controls
+([safe-execution.md](safe-execution.md)), never by real Meta ad/ad-set state.
+Before AIC-71, `homeState` had no live-delivery signal at all: a customer who
+paused their only ad set via the manual controls (AIC-66) still saw `ok` /
+"פעיל" with a stale active-ad count, because nothing in the derivation asked
+"is anything actually showing right now."
+
+`stopped` fixes that using the SAME per-tick cached read as `deliveryOk`
+(AIC-39, [delivery-health.md](delivery-health.md)) — no new Meta call,
+no new staleness mode: `campaign.delivering` / `campaign.deliveringAdCount`
+are computed by `summarize()` from real ad/ad-set `effective_status`, counting
+ads that are themselves currently deliverable, not merely "the ad set has no
+error." `deriveHomeState` checks `!campaign.delivering` AFTER the real
+delivery-problem check (so a genuine error still routes to `attention`, never
+`stopped`) and BEFORE `collecting` — a campaign with everything paused will
+never accumulate data no matter how long you wait, so `stopped` must outrank
+"still collecting."
+
+Both default to `true` / `null` until the engine's first tick for a campaign
+(mirroring `deliveryOk`/`liveBudgetAgorot`), so a brand-new campaign correctly
+reads `collecting`, never a false `stopped`.
+
+On Home, the "מודעות פעילות" (active ads) count now reads
+`campaign.deliveringAdCount` when it's non-null, falling back to the old
+historical-spend count (deduplicated by creative name, AIC-37) only before
+the first tick — the same honesty fix applied to the count, not just the
+headline state.
 
 ## Why there's no recommendation (AIC-64)
 

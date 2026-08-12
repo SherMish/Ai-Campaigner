@@ -9,7 +9,7 @@ one to pause.
 **Source of truth:**
 - Normalizer: `server/src/meta/delivery-health.ts` (`getDeliveryHealth` reader interface, `normalizeAdSet`, `summarize`)
 - Adapter: `server/src/meta/campaign-adapter.ts` `getDeliveryHealth` (fetches `effective_status` + `issues_info`)
-- Persistence + ops: `server/src/services/delivery-monitor.ts`; columns on `managed_campaigns` (migration 014: `delivery_ok`, `delivery_reason`, `delivery_checked_at`)
+- Persistence + ops: `server/src/services/delivery-monitor.ts`; columns on `managed_campaigns` (migration 014: `delivery_ok`, `delivery_reason`, `delivery_checked_at`; migration 026: `delivering`, `delivering_ad_count`, AIC-71)
 - Wired in the engine tick: `server/src/recommendations/generation.ts`
 - Customer surface: `customer-overview.ts` (`campaign.deliveryOk`, `attentionKind`) → Home
 - Dead/draft ad-set detection (AIC-65): `server/src/meta/audience-label.ts` (`AdSetMeta.isManaged`),
@@ -17,12 +17,16 @@ one to pause.
   (customer view filter), `server/src/meta/explorer.ts` (`ExplorerAdSet.isManaged`, operator badge)
 
 **Lock-in tests:** `delivery-health.test.ts` (normalize + summarize, incl.
-deleted/archived-wins-over-stale-issues), `delivery-monitor.integration.test.ts`
-(persist + ops dedupe + recover), `generation.test.ts` (errored ad set excluded
+deleted/archived-wins-over-stale-issues; AIC-71's `delivering`/`deliveringAdCount`
+cases), `campaign-adapter.test.ts` (AIC-71's ad-level rollup counting, incl.
+the "ACTIVE ad set, paused ad" GelNails case), `delivery-monitor.integration.test.ts`
+(persist + ops dedupe + recover; AIC-71's `delivering` persisted independent of
+`ok`, no ops item), `generation.test.ts` (errored ad set excluded
 from the audience rule; dead/draft ad set excluded from counts and never
 flagged, AIC-65), `audience-label.test.ts` (`isManaged` classification),
 `campaign-audiences.integration.test.ts` (dead ad set never shown to the
-customer), `customer-overview.integration.test.ts` (delivery → attention).
+customer), `customer-overview.integration.test.ts` (delivery → attention;
+AIC-71's `stopped` state).
 
 ---
 
@@ -48,7 +52,30 @@ never-published draft (see below) that Meta doesn't always reclassify
 either — see "Excluding dead/draft ad sets" below for the companion fix.
 
 `not_delivering` + `disapproved` are **problems**; `paused` is not. `summarize`
-folds the list into `{ ok, reason, problemAdSetIds }`.
+folds the list into `{ ok, reason, problemAdSetIds, delivering, deliveringAdCount }`.
+
+## `delivering` is a different question than `ok` (AIC-71)
+
+`ok` only means "nothing is BROKEN." A campaign whose ad sets are all
+intentionally paused (a customer's own manual pause, AIC-66) is `ok: true` —
+no error, nothing for the ops queue — but also shows nothing to anyone. The
+customer dashboard needs that second fact, so `getDeliveryHealth`'s ad-level
+rollup (the same loop that promotes an errored ad's problem to its ad set)
+also counts each ad set's `deliveringAdCount`: how many of its ads are
+themselves `state: "delivering"` — not paused, not errored. An ad set whose
+own status ACTIVE with every individual ad paused correctly counts zero, even
+though the ad set itself reports no problem. `summarize().delivering` is
+`deliveringAdCount > 0`, and only ads under an ad set that is ITSELF
+`state: "delivering"` are counted — an ad set that inherited a paused/errored
+state (e.g. `CAMPAIGN_PAUSED`) never counts its ads even if an individual ad
+row still reads ACTIVE.
+
+Persisted every tick via `recordCampaignDelivery` (same call as `delivery_ok`,
+no extra Meta read) into `managed_campaigns.delivering` /
+`delivering_ad_count`, and consumed by `deriveHomeState`
+([customer-overview.md](customer-overview.md)) for the `stopped` home state
+and the honest "מודעות פעילות" count — replacing a DB "we manage this" flag
+and historical spend, respectively, neither of which reflected live reality.
 
 ## In the engine tick (after ingestion, per campaign)
 

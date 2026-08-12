@@ -58,3 +58,41 @@ describe("summarize", () => {
     expect(s.reason).toBe("Creative rejected");
   });
 });
+
+// AIC-71: `delivering` is a different question than `ok` — a fully, correctly
+// paused campaign is `ok: true` (nothing broken) but `delivering: false`
+// (nothing showing). normalizeAdSet never sets deliveringAdCount itself (it
+// has no ad-level knowledge — that's the adapter's ad rollup, tested in
+// campaign-adapter.test.ts), so these construct AdSetHealth directly.
+describe("summarize — delivering (AIC-71)", () => {
+  it("ad set is ACTIVE but every ad under it is paused → not delivering, still ok", () => {
+    const s = summarize([{ adSetId: "a", name: null, state: "delivering", reason: null, deliveringAdCount: 0 }]);
+    expect(s.ok).toBe(true); // not a problem — nobody's ads are erroring
+    expect(s.delivering).toBe(false);
+    expect(s.deliveringAdCount).toBe(0);
+  });
+
+  it("at least one delivering ad under a delivering ad set → delivering, counted", () => {
+    const s = summarize([
+      { adSetId: "a", name: null, state: "delivering", reason: null, deliveringAdCount: 2 },
+      { adSetId: "b", name: null, state: "paused", reason: null, deliveringAdCount: 0 },
+    ]);
+    expect(s.delivering).toBe(true);
+    expect(s.deliveringAdCount).toBe(2);
+  });
+
+  it("an ad set whose own state leaked to paused (e.g. CAMPAIGN_PAUSED) never counts its ads", () => {
+    // Real shape: an ad row can still read ACTIVE while its parent ad set's
+    // effective_status reports CAMPAIGN_PAUSED — the ad set's OWN state must
+    // gate whether its ads count, not the raw per-ad number.
+    const s = summarize([{ adSetId: "a", name: null, state: "paused", reason: null, deliveringAdCount: 3 }]);
+    expect(s.delivering).toBe(false);
+    expect(s.deliveringAdCount).toBe(0);
+  });
+
+  it("everything paused → nothing delivering, all-empty campaign never falsely counts", () => {
+    const s = summarize([]);
+    expect(s.delivering).toBe(false);
+    expect(s.deliveringAdCount).toBe(0);
+  });
+});

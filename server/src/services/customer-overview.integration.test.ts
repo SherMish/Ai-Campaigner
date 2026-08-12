@@ -117,6 +117,29 @@ d("customer overview (DB + HTTP)", () => {
     expect(ov!.campaign?.deliveryOk).toBe(false);
   });
 
+  // AIC-71: real GelNails case — customer paused their only ad set (AIC-66),
+  // nothing is broken (delivery_ok stays true, no ops item), but nothing is
+  // delivering either. `stopped` must outrank `collecting`: this campaign will
+  // never accumulate data no matter how long we wait, so "still collecting" is
+  // actively misleading here.
+  it("surfaces 'stopped' when nothing is broken but nothing is delivering — even with no snapshot data", async () => {
+    const { userId, campaignId } = await seedChain("stopped");
+    await pool.query(`UPDATE managed_campaigns SET delivering = false, delivering_ad_count = 0 WHERE id = $1`, [campaignId]);
+    const ov = await buildCustomerOverview(pool, userId);
+    expect(ov!.homeState).toBe("stopped");
+    expect(ov!.campaign?.delivering).toBe(false);
+    expect(ov!.campaign?.deliveringAdCount).toBe(0);
+    expect(ov!.attentionKind).toBeNull(); // not a delivery PROBLEM (AIC-39) — deliberate, not broken
+  });
+
+  it("defaults delivering=true before the engine's first tick, so a brand-new campaign still reads 'collecting'", async () => {
+    const { userId } = await seedChain("predefault");
+    const ov = await buildCustomerOverview(pool, userId);
+    expect(ov!.campaign?.delivering).toBe(true);
+    expect(ov!.campaign?.deliveringAdCount).toBeNull();
+    expect(ov!.homeState).toBe("collecting");
+  });
+
   it("surfaces the engine's no-rec reason (AIC-64)", async () => {
     const { userId, campaignId } = await seedChain("norec");
     const draft: RecommendationDraft = {

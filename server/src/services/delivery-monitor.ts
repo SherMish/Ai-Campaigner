@@ -24,9 +24,10 @@ export async function recordCampaignDelivery(deps: {
 
   await pool.query(
     `UPDATE managed_campaigns
-     SET delivery_ok = $2, delivery_reason = $3, delivery_checked_at = now()
+     SET delivery_ok = $2, delivery_reason = $3, delivery_checked_at = now(),
+         delivering = $4, delivering_ad_count = $5
      WHERE id = $1`,
-    [campaignId, summary.ok, summary.ok ? null : summary.reason],
+    [campaignId, summary.ok, summary.ok ? null : summary.reason, summary.delivering, summary.deliveringAdCount],
   );
 
   if (!summary.ok && wasOk) {
