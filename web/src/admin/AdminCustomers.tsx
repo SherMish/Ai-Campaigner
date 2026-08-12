@@ -39,6 +39,8 @@ interface CustomerDetail extends CustomerRow {
   contactEmail: string;
   nextChargeDate: string | null;
   openOpsItems: number;
+  noRecReason: string | null;
+  noRecDetail: Record<string, unknown> | null;
 }
 
 interface OpsItem {
@@ -64,6 +66,28 @@ interface HistoryEntry { when: string; summary: string; automated: boolean; resu
 
 const money = (agorot: number | null) => (agorot === null ? a.noData : formatShekel(agorot));
 const pct = (p: number | null) => (p === null ? a.noData : `${p > 0 ? "+" : ""}${p}%`);
+
+// AIC-64: the exact gate/threshold that blocked, so the operator can act or
+// explain — not just a label. Numbers come straight from the engine's own
+// computation (rules.ts), never re-derived here.
+function noRecDetailLine(reason: string, detail: Record<string, unknown> | null): string | null {
+  if (!detail) return null;
+  const num = (k: string) => Number(detail[k] ?? 0);
+  switch (reason) {
+    case "budget_below_threshold":
+      return `${money(num("currentBudgetAgorot"))}/יום × 7 = ${money(num("maxWindowSpendAgorot"))} < נדרש ${money(num("requiredSpendAgorot"))}`;
+    case "collecting":
+      return `${num("daysSoFar")}/${num("daysNeeded")} ימים · ${num("deliveryDaysSoFar")}/${num("deliveryDaysNeeded")} ימי הפצה · ${num("leadsSoFar")}/${num("leadsNeeded")} פניות`;
+    case "delivery_blocked": {
+      const ids = Array.isArray(detail.problemAdSetIds) ? (detail.problemAdSetIds as string[]) : [];
+      return ids.length ? `ad set: ${ids.join(", ")}` : null;
+    }
+    case "single_ad_set":
+      return `${num("adSetCount")} קהלים עם נתונים`;
+    default:
+      return null;
+  }
+}
 
 const EMPTY_FORM: CustomerWriteFields = {
   businessName: "", category: "", mainService: "", geoArea: "", primaryCustomer: "",
@@ -407,6 +431,16 @@ export function AdminCustomers() {
                 <div className="summary-row"><span className="k">{t.subscription}</span><span>{detail.subscriptionStatus ?? t.none}{detail.nextChargeDate ? ` · ${detail.nextChargeDate}` : ""}</span></div>
               </div>
             </div>
+          )}
+
+          {detail?.campaignId && detail.noRecReason && (
+            <p className="muted" style={{ margin: "0 0 14px" }}>
+              {t.noRecTitle} {t.noRecReason[detail.noRecReason] ?? detail.noRecReason}
+              {(() => {
+                const line = noRecDetailLine(detail.noRecReason, detail.noRecDetail);
+                return line ? ` (${line})` : "";
+              })()}
+            </p>
           )}
 
           {selected.campaignId && selected.campaignStatus === "under_review" && (

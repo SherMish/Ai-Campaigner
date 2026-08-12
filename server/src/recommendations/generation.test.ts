@@ -174,6 +174,79 @@ describe("runGenerationTick — flexible/Advantage+ creative exclusion (AIC-36)"
     expect(cached).toEqual([adSetMeta("as_flex", true)]);
   });
 
+});
+
+// AIC-64: the engine caches WHY it had nothing to propose, so the dashboard/ops
+// console can show a real reason instead of a blank "no recommendation."
+describe("runGenerationTick — recordNoRecReason (AIC-64)", () => {
+  it("records collecting for thin evidence with a healthy budget", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await snapshots.upsert([
+      snap({ grain: "campaign", metaObjectId: "camp", spendAgorot: 200, leads: 0, cplAgorot: null }),
+    ]);
+    const recs = new InMemoryRecommendationStore();
+    let recorded: { campaignId: string; reason: string } | null = null;
+    await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      recordNoRecReason: async (c, draft) => {
+        recorded = { campaignId: c.id, reason: (draft.evidence as { reason: string }).reason };
+      },
+    });
+    expect(recorded).toEqual({ campaignId: "camp-1", reason: "collecting" });
+  });
+
+  it("records delivery_blocked when a not-delivering ad set was excluded from evidence", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedAudience(snapshots);
+    const recs = new InMemoryRecommendationStore();
+    let recordedReason: string | null = null;
+    await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      deliveryReader: { getDeliveryHealth: async () => [
+        { adSetId: "as_A", name: null, state: "delivering", reason: null },
+        { adSetId: "as_B", name: null, state: "not_delivering", reason: "Ad set not delivering" },
+      ] },
+      recordNoRecReason: async (_c, draft) => {
+        recordedReason = (draft.evidence as { reason: string }).reason;
+      },
+    });
+    expect(recordedReason).toBe("delivery_blocked");
+  });
+
+  it("clears the reason (calls with an acting draft) when a recommendation IS proposed", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedWeak(snapshots);
+    const recs = new InMemoryRecommendationStore();
+    let recordedType: string | null = null;
+    await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      recordNoRecReason: async (_c, draft) => { recordedType = draft.type; },
+    });
+    expect(recordedType).toBe("pause_creative");
+  });
+
+  it("a failure recording the reason doesn't fail the tick", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedWeak(snapshots);
+    const recs = new InMemoryRecommendationStore();
+    const res = await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      recordNoRecReason: async () => { throw new Error("db down"); },
+    });
+    expect(res.evaluated).toBe(1);
+    expect(res.created).toBe(1);
+  });
+});
+
+describe("runGenerationTick — flexible/Advantage+ creative exclusion (AIC-36), continued", () => {
   it("a genuinely weak creative in a NON-flexible ad set still fires (control)", async () => {
     const snapshots = new InMemorySnapshotStore();
     await seedFlexibleCreative(snapshots);

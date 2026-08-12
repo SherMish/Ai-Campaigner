@@ -44,6 +44,16 @@ export const strings = {
       leadQuality: "איכות פניות",
       empty: "הרשימה ריקה.",
       openMetaExplorer: "נתוני Meta המלאים ←",
+      // AIC-64: the precise reason the engine last had nothing to propose —
+      // operator-facing, so jargon/numbers are fine (unlike the customer copy).
+      noRecTitle: "אין המלצה כרגע —",
+      noRecReason: {
+        stable: "יציב, אין מה להמליץ",
+        collecting: "עדיין אוסף נתונים",
+        budget_below_threshold: "תקציב מתחת לסף הזיהוי",
+        delivery_blocked: "קבוצת מודעות לא מתפרסמת",
+        single_ad_set: "קהל אחד בלבד — אין השוואה",
+      } as Record<string, string>,
     },
 
     // Admin console shell + nav (AIC-43)
@@ -466,6 +476,23 @@ export const strings = {
         viewApprove: "לצפייה ולאישור",
         noActionTitle: "אין כרגע משהו שצריך לעשות",
         noAction: "אנחנו ממשיכים לעקוב אחר הקמפיין.",
+        // AIC-64: WHY there's no recommendation — distinct, honest copy per
+        // engine reason, so "stable" and "still collecting data" never look
+        // the same. Falls back to noActionTitle/noAction above when the
+        // engine hasn't classified a reason yet (e.g. before its first tick).
+        noRec: {
+          stable: { title: "אין כרגע משהו שצריך לעשות", body: "הקמפיין יציב, אין כרגע צורך בשינוי." },
+          collecting: { title: "עדיין אוספים נתונים", body: "עוד קצת פעילות ונוכל להמליץ בביטחון." },
+          budgetBelowThreshold: {
+            title: "התקציב לא מספיק כדי לזהות מגמות",
+            body: "בתקציב הנוכחי אנחנו לא יכולים לזהות מה עובד ומה לא. שווה לשקול להעלות אותו.",
+            cta: "לבקשת העלאת תקציב",
+          },
+          singleAdSet: {
+            title: "אין כרגע משהו שצריך לעשות",
+            body: "יש לכם כרגע קהל פרסום אחד פעיל — אין עדיין עם מה להשוות כדי להמליץ על שינוי קהל.",
+          },
+        },
         weeklyTitle: "משוב שבועי",
         weeklyQ: "איך היו הפניות השבוע?",
         weeklyCount: "כמה מהפניות שקיבלת השבוע היו רלוונטיות?",

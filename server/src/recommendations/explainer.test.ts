@@ -61,9 +61,16 @@ describe("explainer number fidelity", () => {
     }
   });
 
-  it("distinguishes stable vs insufficient-evidence no_action", () => {
-    expect(explain(rec({ type: "no_action", evidence: { reason: "stable" } }))).toContain("יציב");
-    expect(explain(rec({ type: "no_action", evidence: { reason: "insufficient_evidence" } }))).toContain("מספיק מידע");
+  it("distinguishes each no_action reason (AIC-64) — never the same message", () => {
+    const texts = [
+      "stable", "collecting", "budget_below_threshold", "delivery_blocked", "single_ad_set",
+    ].map((reason) => explain(rec({ type: "no_action", evidence: { reason } })));
+    expect(new Set(texts).size).toBe(texts.length);
+    expect(texts[0]).toContain("יציב");
+    expect(texts[1]).toContain("מספיק מידע");
+    expect(texts[2]).toContain("תקציב");
+    expect(texts[3]).toContain("מתפרסמת");
+    expect(texts[4]).toContain("קהל אחד");
   });
 
   it("renders a weekly status summary with the figures passed in", () => {

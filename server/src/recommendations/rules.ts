@@ -64,18 +64,38 @@ export interface CampaignEvidence {
   flexibleCreativeAdSetIds?: Set<string>;
   currentBudgetAgorot: number; // daily budget
   deliveryDays: number;
+  // Ad sets AIC-39 excluded from this evidence because they aren't delivering
+  // (buildCampaignEvidence's excludeAdSetIds, threaded through) — carried here
+  // so a resulting no_action can honestly say WHY evidence is thin, instead of
+  // looking identical to "just needs more time" (AIC-64).
+  deliveryProblemAdSetIds?: string[];
 }
 
-// Internal reason codes carried on a no_action draft. The customer-facing Hebrew
-// is rendered by the explainer (AIC-10) from these codes.
-export type NoActionReason = "insufficient_evidence" | "stable";
+// Internal reason codes carried on a no_action draft (AIC-64). The customer-
+// facing Hebrew is rendered from these in web/src/strings.ts (`home.noRec`);
+// the ops-console detail is rendered from `detail` in AdminCustomers.tsx.
+// `insufficient_evidence` split into three distinguishable reasons: `collecting`
+// (just needs more calendar time), `budget_below_threshold` (structurally can't
+// ever gather enough evidence at this budget — no amount of time fixes it), and
+// `delivery_blocked` (an ad set is excluded, so evidence is artificially thin).
+export type NoActionReason =
+  | "stable"
+  | "collecting"
+  | "budget_below_threshold"
+  | "delivery_blocked"
+  | "single_ad_set";
 
-function noAction(campaignId: string, reason: NoActionReason, rationale: string): RecommendationDraft {
+function noAction(
+  campaignId: string,
+  reason: NoActionReason,
+  rationale: string,
+  detail: Record<string, unknown> = {},
+): RecommendationDraft {
   return {
     campaignId,
     type: "no_action",
     targetMetaId: null,
-    evidence: { reason },
+    evidence: { reason, detail },
     currentBudgetAgorot: null,
     proposedBudgetAgorot: null,
     maxSpendImpactAgorot: null,
@@ -91,6 +111,61 @@ function hasMinimumEvidence(ev: CampaignEvidence): boolean {
     ev.deliveryDays >= t.MIN_DELIVERY_DAYS &&
     ev.current.leads >= t.MIN_CAMPAIGN_LEADS
   );
+}
+
+// The smallest agorot spend an acting rule ever judges on (MIN_CREATIVE_SPEND_AGOROT,
+// ₪150 — cheaper than the ₪300 audience gate). At 7 days of the campaign's own
+// daily budget, if even that can't be reached, no rule can EVER fire — raising
+// the budget is the only fix, more calendar time never helps (AIC-64).
+function isBudgetBelowThreshold(dailyBudgetAgorot: number): boolean {
+  return dailyBudgetAgorot * 7 < RULE_THRESHOLDS.MIN_CREATIVE_SPEND_AGOROT;
+}
+
+function evidenceGapDetail(ev: CampaignEvidence): Record<string, unknown> {
+  const t = RULE_THRESHOLDS;
+  return {
+    daysSoFar: ev.current.days,
+    daysNeeded: t.MIN_DAYS_DATA,
+    deliveryDaysSoFar: ev.deliveryDays,
+    deliveryDaysNeeded: t.MIN_DELIVERY_DAYS,
+    leadsSoFar: ev.current.leads,
+    leadsNeeded: t.MIN_CAMPAIGN_LEADS,
+  };
+}
+
+function budgetDetail(ev: CampaignEvidence): Record<string, unknown> {
+  return {
+    currentBudgetAgorot: ev.currentBudgetAgorot,
+    maxWindowSpendAgorot: ev.currentBudgetAgorot * 7,
+    requiredSpendAgorot: RULE_THRESHOLDS.MIN_CREATIVE_SPEND_AGOROT,
+  };
+}
+
+function deliveryDetail(ev: CampaignEvidence): Record<string, unknown> {
+  return { problemAdSetIds: ev.deliveryProblemAdSetIds ?? [] };
+}
+
+// Classify WHY there's no recommendation this tick (AIC-64) — called both when
+// the minimum-evidence gate fails and when the gate passes but no rule fires.
+// Priority: a delivery problem is usually the root cause of thin evidence (and
+// worth surfacing even once evidence is otherwise fine), so it outranks the
+// budget/collecting distinction; a structurally-too-low budget outranks "just
+// needs more time" because more time never fixes it.
+function classifyNoAction(ev: CampaignEvidence): { reason: NoActionReason; rationale: string; detail: Record<string, unknown> } {
+  if (ev.deliveryProblemAdSetIds?.length) {
+    return { reason: "delivery_blocked", rationale: "ad set(s) excluded from evidence — not delivering", detail: deliveryDetail(ev) };
+  }
+  if (!hasMinimumEvidence(ev)) {
+    if (isBudgetBelowThreshold(ev.currentBudgetAgorot)) {
+      return { reason: "budget_below_threshold", rationale: "7-day max spend below the smallest actionable threshold", detail: budgetDetail(ev) };
+    }
+    return { reason: "collecting", rationale: "below minimum-evidence gate", detail: evidenceGapDetail(ev) };
+  }
+  const adSetCount = ev.adsets?.length ?? 0;
+  if (adSetCount < 2) {
+    return { reason: "single_ad_set", rationale: "only one audience with data; can't compare", detail: { adSetCount } };
+  }
+  return { reason: "stable", rationale: "stable; no change warranted", detail: {} };
 }
 
 // ── Rules (each returns a draft or null) ──────────────────────────────────────
@@ -291,16 +366,16 @@ const RULES: Array<(ev: CampaignEvidence) => RecommendationDraft | null> = [
 ];
 
 // Evaluate one campaign → exactly one draft. Below the evidence gate, or when no
-// rule fires, returns a no_action draft with an internal reason code.
+// rule fires, returns a no_action draft with a structured reason code (AIC-64).
 export function evaluateCampaign(ev: CampaignEvidence): RecommendationDraft {
-  if (!hasMinimumEvidence(ev)) {
-    return noAction(ev.campaignId, "insufficient_evidence", "below minimum-evidence gate");
+  if (hasMinimumEvidence(ev)) {
+    for (const rule of RULES) {
+      const draft = rule(ev);
+      if (draft) return draft;
+    }
   }
-  for (const rule of RULES) {
-    const draft = rule(ev);
-    if (draft) return draft;
-  }
-  return noAction(ev.campaignId, "stable", "stable; no change warranted");
+  const { reason, rationale, detail } = classifyNoAction(ev);
+  return noAction(ev.campaignId, reason, rationale, detail);
 }
 
 export const __rulesForTest = {
@@ -310,4 +385,6 @@ export const __rulesForTest = {
   decreaseBudget,
   increaseBudget,
   hasMinimumEvidence,
+  classifyNoAction,
+  isBudgetBelowThreshold,
 };

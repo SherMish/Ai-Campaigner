@@ -63,6 +63,7 @@ export interface CustomerOverview {
     id: string; name: string; status: CampaignStatus; objective: string;
     agreedBudgetAgorot: number; budgetPeriod: "daily" | "monthly";
     automationEnabled: boolean; deliveryOk: boolean; readyToLaunch: boolean;
+    noRecReason: string | null; noRecDetail: Record<string, unknown> | null;
   } | null;
   subscription: {
     plan: string; status: string; setupPaid: boolean;

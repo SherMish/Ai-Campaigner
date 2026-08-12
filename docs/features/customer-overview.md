@@ -15,7 +15,8 @@ readout builder.
 
 **Lock-in tests:** `server/src/services/customer-overview.integration.test.ts`
 (full-chain assembly; `homeState` = `ok` with data / `collecting` without;
-401 without a token; lead-quality write + validation).
+401 without a token; lead-quality write + validation; AIC-64's noRecReason
+surfacing + clearing).
 
 ---
 
@@ -49,6 +50,19 @@ states with a real destination carry a CTA (`attention` → `/connect`,
 connection and a not-delivering ad set are different problems with different
 copy (`h.states.attention` vs `h.states.delivery`); a delivery problem shows
 no CTA (there's nothing for the customer to click — we're already on it).
+
+## Why there's no recommendation (AIC-64)
+
+When `homeState` is `ok` or `collecting`, Home's reassurance card no longer
+shows one generic message — `campaign.noRecReason`/`noRecDetail` (cached by
+the engine on `managed_campaigns`, see [RULES.md](../RULES.md#why-theres-no-recommendation-aic-64))
+picks distinct copy per reason (`stable`/`collecting`/`budget_below_threshold`/
+`single_ad_set`, `web/src/strings.ts` → `home.noRec`), with a raise-budget CTA
+to `/app/settings` for `budget_below_threshold`. `delivery_blocked` never
+reaches this card — `deriveHomeState` already routes a delivery problem to
+`attention` first, so the two surfaces can't disagree. `noRecReason` is
+`null` before the engine's first tick for a campaign; the card falls back to
+the original generic copy in that case.
 
 ## Opt-in audience details (AIC-37)
 

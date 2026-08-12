@@ -20,6 +20,26 @@ const h = a.home;
 const L = h.live;
 const D = h.details;
 
+// AIC-64: distinct, honest copy for WHY there's no recommendation, keyed by the
+// engine's reason. `delivery_blocked` is deliberately absent — a delivery
+// problem already routes homeState to "attention" before this card ever
+// renders (see deriveHomeState), so it would never reach here.
+function noRecCard(reason: string | null): { title: string; body: string; cta?: { to: string; label: string } } {
+  switch (reason) {
+    case "collecting":
+      return h.noRec.collecting;
+    case "budget_below_threshold":
+      return { ...h.noRec.budgetBelowThreshold, cta: { to: "/app/settings", label: h.noRec.budgetBelowThreshold.cta } };
+    case "single_ad_set":
+      return h.noRec.singleAdSet;
+    case "stable":
+      return h.noRec.stable;
+    default:
+      // Engine hasn't classified a reason yet (e.g. before its first tick).
+      return { title: h.noActionTitle, body: h.noAction };
+  }
+}
+
 const PILL: Record<HomeState, "ok" | "info" | "neutral" | "attn"> = {
   ok: "ok", collecting: "neutral", paused: "neutral", attention: "attn", no_campaign: "neutral", ready_to_launch: "info",
 };
@@ -147,10 +167,16 @@ export function Home() {
               </div>
             </div>
           ) : (state === "ok" || state === "collecting") ? (
-            <div className="card">
-              <StatusPill variant="ok">{h.noActionTitle}</StatusPill>
-              <p className="muted" style={{ marginTop: 12 }}>{h.noAction}</p>
-            </div>
+            (() => {
+              const nr = noRecCard(ov.campaign?.noRecReason ?? null);
+              return (
+                <div className="card">
+                  <StatusPill variant="ok">{nr.title}</StatusPill>
+                  <p className="muted" style={{ marginTop: 12 }}>{nr.body}</p>
+                  {nr.cta && <Link className="btn btn-outline btn-sm" style={{ marginTop: 12 }} to={nr.cta.to}>{nr.cta.label}</Link>}
+                </div>
+              );
+            })()
           ) : null}
 
           {/* weekly feedback */}

@@ -86,9 +86,15 @@ delivery/spend/queue; test-customer exclusion from conversion; auth).
 (subscription status, connection health, campaign status, agreed budget, open-rec
 count) assembled from the real tables. `getCustomerDetail(pool, id)` adds the full
 business info, contact, next-charge date, the outstanding proposed recommendation,
-and open ops-item count. Routes: `GET /api/admin/customers`,
-`GET /api/admin/customers/:id`. Reads only; role-gated. Source:
-`server/src/services/customers.js`. Tests: `customers.integration.test.ts`.
+open ops-item count, and — when there's no outstanding recommendation —
+`noRecReason`/`noRecDetail` (AIC-64): the precise gate/threshold the engine's
+last tick blocked on, so the operator can answer "is the agent actually
+looking at this account?" precisely, not just "no." Rendered in
+`AdminCustomers.tsx`'s drill-down with the exact numbers (e.g. `₪10/יום × 7 =
+₪70 < נדרש ₪150`) — see [RULES.md](../RULES.md#why-theres-no-recommendation-aic-64).
+Routes: `GET /api/admin/customers`, `GET /api/admin/customers/:id`. Reads
+only; role-gated. Source: `server/src/services/customers.js`. Tests:
+`customers.integration.test.ts`.
 
 ## Customer CRUD + admin audit log (AIC-44)
 

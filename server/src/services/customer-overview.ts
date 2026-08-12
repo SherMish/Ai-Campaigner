@@ -40,6 +40,10 @@ export interface CustomerOverview {
     // AIC-53: review-approved (status='active') but the customer hasn't
     // approved activation yet — the campaign is still PAUSED on Meta.
     readyToLaunch: boolean;
+    // AIC-64: why the engine's last tick had nothing to propose — null before
+    // the engine has ever run, or when an acting recommendation exists instead.
+    noRecReason: string | null;
+    noRecDetail: Record<string, unknown> | null;
   } | null;
   subscription: {
     plan: string;
@@ -157,8 +161,10 @@ export async function buildCustomerOverview(
       delivery_ok: boolean;
       launch_approved_at: Date | null;
       meta_campaign_id: string | null;
+      no_rec_reason: string | null;
+      no_rec_detail: Record<string, unknown> | null;
     }>(
-      `SELECT id, name, status, objective, agreed_budget_agorot, budget_period, automation_enabled, delivery_ok, launch_approved_at, meta_campaign_id
+      `SELECT id, name, status, objective, agreed_budget_agorot, budget_period, automation_enabled, delivery_ok, launch_approved_at, meta_campaign_id, no_rec_reason, no_rec_detail
        FROM managed_campaigns WHERE customer_id = $1`,
       [customerId],
     ),
@@ -214,6 +220,8 @@ export async function buildCustomerOverview(
           campRes.rows[0].status === "active" &&
           campRes.rows[0].launch_approved_at === null &&
           campRes.rows[0].meta_campaign_id !== null,
+        noRecReason: campRes.rows[0].no_rec_reason,
+        noRecDetail: campRes.rows[0].no_rec_detail,
       }
     : null;
 

@@ -2,6 +2,7 @@ import type pg from "pg";
 import type { InsightsPeriod } from "../meta/types.js";
 import type { SnapshotStore } from "../meta/snapshot-store.js";
 import type { MetaReader } from "../execution/safe-executor.js";
+import type { RecommendationDraft } from "./types.js";
 import { GraphCampaignAdapter } from "../meta/campaign-adapter.js";
 import { PgSnapshotStore } from "../meta/snapshot-store.js";
 import { PgRecommendationStore, type RecommendationStore } from "./recommendation-store.js";
@@ -12,6 +13,7 @@ import { summarize, type DeliveryReader, type DeliverySummary } from "../meta/de
 import { recordCampaignDelivery } from "../services/delivery-monitor.js";
 import { deriveAudienceLabels, type AdSetMeta } from "../meta/audience-label.js";
 import { upsertAdSetMeta } from "../services/audience-meta-cache.js";
+import { recordNoRecReason } from "../services/evaluation-reason.js";
 import { OpsQueue } from "../services/ops-queue.js";
 import { consoleLogger, type Logger } from "../services/logger.js";
 
@@ -75,6 +77,9 @@ export async function runGenerationTick(deps: {
   // labels and cache them (via recordAudienceMeta) for the customer surface.
   audienceMetaReader?: AudienceMetaReader;
   recordAudienceMeta?: (campaign: GenCampaign, adsets: AdSetMeta[]) => Promise<void>;
+  // AIC-64: cache WHY this tick had nothing to propose (or clear it when
+  // something did), so the dashboard/ops console can show a real reason.
+  recordNoRecReason?: (campaign: GenCampaign, draft: RecommendationDraft) => Promise<void>;
   ref?: Date;
   logger?: Logger;
 }): Promise<GenerationSummary> {
@@ -148,6 +153,11 @@ export async function runGenerationTick(deps: {
       summary.created++;
       log?.info(`[generation] ${campaign.id}: proposed ${result.freshDraft.type}`);
     }
+    try {
+      await deps.recordNoRecReason?.(campaign, result.freshDraft);
+    } catch (e) {
+      log?.error(`[generation] ${campaign.id}: could not record no-rec reason — ${(e as Error).message}`);
+    }
   }
 
   return summary;
@@ -176,6 +186,9 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
       audienceMetaReader: adapter,
       recordAudienceMeta: async (campaign, adsets) => {
         await upsertAdSetMeta(pool, campaign.id, adsets);
+      },
+      recordNoRecReason: async (campaign, draft) => {
+        await recordNoRecReason({ pool, campaignId: campaign.id, draft });
       },
       snapshotStore,
       recommendationStore,

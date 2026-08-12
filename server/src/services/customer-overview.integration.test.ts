@@ -7,10 +7,12 @@ import request from "supertest";
 import { pool } from "../db/pool.js";
 import { createApp } from "../app.js";
 import { buildCustomerOverview } from "./customer-overview.js";
+import { recordNoRecReason } from "./evaluation-reason.js";
 import { signAuthToken } from "../auth/tokens.js";
 import { rollingPeriods } from "../meta/scheduled-ingestion.js";
 import { PgSnapshotStore } from "../meta/snapshot-store.js";
 import type { SnapshotUpsert } from "../meta/insights.js";
+import type { RecommendationDraft } from "../recommendations/types.js";
 
 const HAS_DB = !!process.env.DATABASE_URL;
 const d = HAS_DB ? describe : describe.skip;
@@ -112,6 +114,29 @@ d("customer overview (DB + HTTP)", () => {
     expect(ov!.homeState).toBe("attention");
     expect(ov!.attentionKind).toBe("delivery");
     expect(ov!.campaign?.deliveryOk).toBe(false);
+  });
+
+  it("surfaces the engine's no-rec reason (AIC-64)", async () => {
+    const { userId, campaignId } = await seedChain("norec");
+    const draft: RecommendationDraft = {
+      campaignId, type: "no_action", targetMetaId: null,
+      evidence: { reason: "budget_below_threshold", detail: { currentBudgetAgorot: 1000, maxWindowSpendAgorot: 7000, requiredSpendAgorot: 15000 } },
+      currentBudgetAgorot: null, proposedBudgetAgorot: null, maxSpendImpactAgorot: null, rationale: "test",
+    };
+    await recordNoRecReason({ pool, campaignId, draft });
+
+    const ov = await buildCustomerOverview(pool, userId);
+    expect(ov!.campaign?.noRecReason).toBe("budget_below_threshold");
+    expect(ov!.campaign?.noRecDetail).toMatchObject({ maxWindowSpendAgorot: 7000 });
+
+    // An acting draft clears it back to null — nothing to explain once a
+    // recommendation exists.
+    await recordNoRecReason({
+      pool, campaignId,
+      draft: { campaignId, type: "decrease_budget", targetMetaId: null, evidence: {}, currentBudgetAgorot: 1000, proposedBudgetAgorot: 800, maxSpendImpactAgorot: -200, rationale: "test" },
+    });
+    const ov2 = await buildCustomerOverview(pool, userId);
+    expect(ov2!.campaign?.noRecReason).toBeNull();
   });
 
   it("rejects the overview without a token", async () => {

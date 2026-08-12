@@ -6,6 +6,28 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Honest "why no recommendation" reasons (AIC-64)
+"No recommendation" was one undifferentiated `no_action` state — the customer
+saw identical copy whether the campaign was genuinely stable or the engine was
+structurally blind at the current budget. Grounded in a real diagnosis this
+session (GelNails: ₪10/day budget → 7-day rolling window maxes at ₪70, under
+every rule's spend gate — no amount of *time* fixes that, only raising the
+budget does): `classifyNoAction` (`server/src/recommendations/rules.ts`) now
+splits the old `insufficient_evidence` into five priority-ordered reasons —
+`delivery_blocked`, `budget_below_threshold` (newly computed: 7×daily budget
+vs the smallest actionable rule threshold), `collecting`, `single_ad_set`,
+`stable` — never the same message for genuinely different situations.
+
+Cached per campaign (`managed_campaigns.no_rec_reason`/`no_rec_detail`,
+migration 024) every generation tick, mirroring the `delivery_ok`/
+`delivery_reason` pattern (AIC-39) rather than a new table, since it's current
+per-campaign state, not an event log. Customer dashboard shows distinct
+honest Hebrew per reason with a raise-budget CTA where actionable
+(`web/src/app/Home.tsx`); the ops console's customer-detail panel shows the
+operator the exact numbers that blocked (`web/src/admin/AdminCustomers.tsx`).
+
+Full detail: [RULES.md](RULES.md#why-theres-no-recommendation-aic-64).
+
 ### 2026-08-12 — Add ad / ad set to an existing managed campaign (AIC-63)
 The builder only ever handles a customer's *first* campaign
 (`resolveBuilderContext` 409s once one exists). Until now that meant

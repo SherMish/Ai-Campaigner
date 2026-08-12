@@ -73,6 +73,11 @@ export interface CustomerDetail extends CustomerListRow {
     maxSpendImpactAgorot: number | null;
   } | null;
   openOpsItems: number;
+  // AIC-64: the precise gate/threshold the engine blocked on, when there's no
+  // outstanding recommendation to show instead — the operator's "is the agent
+  // actually looking at this account?" answer.
+  noRecReason: string | null;
+  noRecDetail: Record<string, unknown> | null;
 }
 
 // Full per-customer view assembled from the real tables (AIC-16).
@@ -83,7 +88,8 @@ export async function getCustomerDetail(
   const list = await pool.query(
     `SELECT c.*, s.status AS subscription_status, s.setup_paid, s.next_charge_date,
             conn.access_health,
-            mc.id AS campaign_id, mc.name AS campaign_name, mc.status AS campaign_status, mc.agreed_budget_agorot
+            mc.id AS campaign_id, mc.name AS campaign_name, mc.status AS campaign_status, mc.agreed_budget_agorot,
+            mc.no_rec_reason, mc.no_rec_detail
      FROM customers c
      LEFT JOIN subscriptions s       ON s.customer_id = c.id
      LEFT JOIN meta_connections conn ON conn.customer_id = c.id
@@ -149,5 +155,7 @@ export async function getCustomerDetail(
     nextChargeDate: c.next_charge_date ? new Date(c.next_charge_date).toISOString().slice(0, 10) : null,
     outstandingRecommendation: outstanding,
     openOpsItems: openOps,
+    noRecReason: c.no_rec_reason ?? null,
+    noRecDetail: c.no_rec_detail ?? null,
   };
 }

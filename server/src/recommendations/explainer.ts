@@ -20,7 +20,10 @@ export const EXPLAINER_HE = {
       ? `הקהל ${label} מביא פניות ביקר משמעותית מהקהל האחר. אנחנו ממליצים לעצור אותו ולהפנות את התקציב לקהל שמביא תוצאות טובות יותר.`
       : `אחד הקהלים בקמפיין מביא פניות בעלות גבוהה משמעותית מהקהל השני. אנחנו ממליצים לעצור אותו ולהפנות את התקציב לקהל שמביא תוצאות טובות יותר.`,
   stable: () => `הקמפיין יציב ואין כרגע שינוי שאנחנו ממליצים לבצע.`,
-  insufficient: () => `אין כרגע מספיק מידע שמצדיק שינוי. נמשיך לעקוב.`,
+  collecting: () => `אין כרגע מספיק מידע שמצדיק שינוי. נמשיך לעקוב.`,
+  budgetBelowThreshold: () => `בתקציב הנוכחי אנחנו לא יכולים לזהות מה עובד. שווה לשקול להעלות אותו.`,
+  deliveryBlocked: () => `אחת מקבוצות הפרסום לא מתפרסמת כרגע, כך שאין לנו עדיין תמונה מלאה.`,
+  singleAdSet: () => `הקמפיין יציב. יש כרגע קהל אחד פעיל, כך שאין עם מה להשוות כדי להמליץ על שינוי קהל.`,
   weeklyStable: (leads: string, avgCpl: string) =>
     `השבוע התקבלו ${leads} פניות בעלות ממוצעת של ${avgCpl}. הביצועים יציבים ואין כרגע צורך בשינוי.`,
 } as const;
@@ -78,9 +81,18 @@ export function explain(rec: RecommendationRecord): string {
     case "replace_creative":
       return EXPLAINER_HE.replaceCreative();
     case "no_action":
-      return rec.evidence.reason === "insufficient_evidence"
-        ? EXPLAINER_HE.insufficient()
-        : EXPLAINER_HE.stable();
+      switch (rec.evidence.reason) {
+        case "collecting":
+          return EXPLAINER_HE.collecting();
+        case "budget_below_threshold":
+          return EXPLAINER_HE.budgetBelowThreshold();
+        case "delivery_blocked":
+          return EXPLAINER_HE.deliveryBlocked();
+        case "single_ad_set":
+          return EXPLAINER_HE.singleAdSet();
+        default:
+          return EXPLAINER_HE.stable();
+      }
   }
 }
 

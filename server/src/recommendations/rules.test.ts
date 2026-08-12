@@ -27,25 +27,77 @@ function cr(id: string, spend: number, leads: number, cpl: number | null): Creat
 }
 
 describe("minimum-evidence gate (doing nothing is valid)", () => {
-  it("returns no_action/insufficient_evidence below the day gate", () => {
+  it("returns no_action/collecting below the day gate", () => {
     const d = evaluateCampaign(baseEvidence({ current: { spendAgorot: 20000, leads: 20, cplAgorot: 1000, days: 2 } }));
     expect(d.type).toBe("no_action");
-    expect(d.evidence.reason).toBe("insufficient_evidence");
+    expect(d.evidence.reason).toBe("collecting");
   });
 
-  it("returns no_action below the campaign-leads gate", () => {
+  it("returns no_action/collecting below the campaign-leads gate", () => {
     const d = evaluateCampaign(baseEvidence({ current: { spendAgorot: 70000, leads: T.MIN_CAMPAIGN_LEADS - 1, cplAgorot: 3500, days: 7 } }));
-    expect(d.evidence.reason).toBe("insufficient_evidence");
+    expect(d.evidence.reason).toBe("collecting");
   });
 
-  it("returns no_action below the delivery-days gate (learning phase)", () => {
+  it("returns no_action/collecting below the delivery-days gate (learning phase)", () => {
     const d = evaluateCampaign(baseEvidence({ deliveryDays: 2 }));
-    expect(d.evidence.reason).toBe("insufficient_evidence");
+    expect(d.evidence.reason).toBe("collecting");
   });
 
-  it("stable + healthy campaign yields no_action/stable, not a manufactured change", () => {
+  it("healthy campaign yields no_action, not a manufactured change (exact reason covered below, AIC-64)", () => {
     const d = evaluateCampaign(baseEvidence());
     expect(d.type).toBe("no_action");
+  });
+});
+
+describe("no_action reason classification (AIC-64)", () => {
+  it("budget_below_threshold when 7×daily budget can't reach the smallest rule threshold, even with thin data", () => {
+    // GelNails-shaped: ₪10/day budget → 7×1000 = 7000 agorot, well under
+    // MIN_CREATIVE_SPEND_AGOROT (15000) — no amount of extra time fixes this.
+    const d = evaluateCampaign(
+      baseEvidence({ currentBudgetAgorot: 1000, current: { spendAgorot: 700, leads: 1, cplAgorot: 700, days: 2 } }),
+    );
+    expect(d.evidence.reason).toBe("budget_below_threshold");
+    expect((d.evidence.detail as Record<string, unknown>).maxWindowSpendAgorot).toBe(7000);
+  });
+
+  it("collecting (not budget_below_threshold) when data is thin but the budget could reach the threshold in time", () => {
+    const d = evaluateCampaign(
+      baseEvidence({ currentBudgetAgorot: 7000, current: { spendAgorot: 2000, leads: 1, cplAgorot: 2000, days: 1 } }),
+    );
+    expect(d.evidence.reason).toBe("collecting");
+  });
+
+  it("delivery_blocked when an ad set was excluded from evidence, even if data would otherwise pass the gate", () => {
+    const d = evaluateCampaign(baseEvidence({ deliveryProblemAdSetIds: ["as_broken"] }));
+    expect(d.evidence.reason).toBe("delivery_blocked");
+    expect((d.evidence.detail as Record<string, unknown>).problemAdSetIds).toEqual(["as_broken"]);
+  });
+
+  it("delivery_blocked outranks budget_below_threshold when both are true", () => {
+    const d = evaluateCampaign(
+      baseEvidence({
+        currentBudgetAgorot: 1000,
+        current: { spendAgorot: 700, leads: 1, cplAgorot: 700, days: 2 },
+        deliveryProblemAdSetIds: ["as_broken"],
+      }),
+    );
+    expect(d.evidence.reason).toBe("delivery_blocked");
+  });
+
+  it("single_ad_set when the gate passes, no rule fires, and there's only one audience with data", () => {
+    const d = evaluateCampaign(baseEvidence({ adsets: [{ adSetId: "as_1", spendAgorot: 70000, leads: 20, cplAgorot: 3500, deliveryStatus: "active" }] }));
+    expect(d.evidence.reason).toBe("single_ad_set");
+  });
+
+  it("stable (not single_ad_set) when ≥2 audiences have data and nothing fires", () => {
+    const d = evaluateCampaign(
+      baseEvidence({
+        adsets: [
+          { adSetId: "as_1", spendAgorot: 70000, leads: 20, cplAgorot: 3500, deliveryStatus: "active" },
+          { adSetId: "as_2", spendAgorot: 70000, leads: 20, cplAgorot: 3500, deliveryStatus: "active" },
+        ],
+      }),
+    );
     expect(d.evidence.reason).toBe("stable");
   });
 });

@@ -52,7 +52,10 @@ part; thresholds and rule priority are documented in [../RULES.md](../RULES.md).
 `rule-evaluator.ts` assembles the evidence (current/previous window totals +
 per-creative rows), runs `evaluateCampaign`, and persists an acting draft as a
 `proposed` rec — **deduped** against existing proposed recs (same type+target) so
-repeat ticks don't pile up, and `no_action` is never stored as a row.
+repeat ticks don't pile up, and `no_action` is never stored as a `recommendations`
+row. Its structured reason IS cached, separately, per campaign (AIC-64 —
+`managed_campaigns.no_rec_reason`, see [../RULES.md](../RULES.md#why-theres-no-recommendation-aic-64))
+so the dashboard/ops console can show WHY without re-running evaluation.
 
 Source: `server/src/recommendations/rules.ts`, `rule-evaluator.ts`. Tests:
 `rules.test.ts` (each rule fires when it should and, crucially, does **not** on

@@ -51,6 +51,7 @@ export async function buildCampaignEvidence(
     flexibleCreativeAdSetIds,
     currentBudgetAgorot: campaign.currentBudgetAgorot,
     deliveryDays: curTotals.spendAgorot > 0 ? days : 0,
+    deliveryProblemAdSetIds: excluded.size > 0 ? [...excluded] : undefined,
   };
 }
 

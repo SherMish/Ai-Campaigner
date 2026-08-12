@@ -3,8 +3,10 @@
 **Status:** live — deterministic rules v1 (AIC-9). The LLM boundary section is
 filled by AIC-10.
 
-**Source of truth:** `server/src/recommendations/rules.ts` (thresholds + rules),
-`server/src/recommendations/rule-evaluator.ts` (evidence assembly + persistence).
+**Source of truth:** `server/src/recommendations/rules.ts` (thresholds + rules +
+no-rec reason classification), `server/src/recommendations/rule-evaluator.ts`
+(evidence assembly + persistence), `server/src/services/evaluation-reason.ts`
+(caches the reason per campaign, AIC-64).
 **Lock-in tests:** `rules.test.ts`, `rules.adset.test.ts`, `rule-evaluator.test.ts`,
 `generation.test.ts`, `audience-label.test.ts`.
 
@@ -26,8 +28,49 @@ Every acting rule requires all of:
 | `MIN_DELIVERY_DAYS` | 3 | give delivery time to leave the learning phase |
 | `MIN_CAMPAIGN_LEADS` | 5 | a campaign needs some volume before we act |
 
-Below the gate → `no_action` with reason `insufficient_evidence`. Gate met but no
-rule fires → `no_action` with reason `stable`.
+Below the gate, or gate met but no rule fires, the evaluator emits `no_action` —
+never silently the same message twice (AIC-64). See below.
+
+### Why there's no recommendation (AIC-64)
+
+"No recommendation" used to be one undifferentiated `no_action` — the customer
+saw the identical reassurance whether the campaign was genuinely stable or the
+engine was structurally blind at the current budget. `classifyNoAction`
+(`rules.ts`) now picks one of five reasons, in priority order:
+
+| Reason | When | Actionable? |
+| --- | --- | --- |
+| `delivery_blocked` | An ad set was excluded from evidence (AIC-39) — checked FIRST, even if the gate would otherwise pass, since a delivery problem is usually the root cause of thin data | fix the delivery problem |
+| `budget_below_threshold` | `dailyBudgetAgorot × 7 < MIN_CREATIVE_SPEND_AGOROT` — the campaign's own 7-day rolling window can never reach the cheapest rule's spend gate, so no amount of *time* fixes it | raise the budget |
+| `collecting` | Below the minimum-evidence gate (days/delivery-days/leads), but the budget COULD reach it with more time | wait |
+| `single_ad_set` | Gate passed, no rule fired, and fewer than 2 ad sets have audience-comparison data (so `pause_underperforming_audience` structurally can't compare) — informational, not a problem | none needed |
+| `stable` | Gate passed, no rule fired, ≥2 ad sets compared | none needed |
+
+`budget_below_threshold` is the AIC-64 headline case: at GelNails' real ₪10/day
+budget, 7 × ₪10 = ₪70/week — under `MIN_CREATIVE_SPEND_AGOROT` (₪150), so
+`pause_weak_creative`/`replace_creative` can **never** fire, regardless of how
+long the campaign runs. `collecting` and `budget_below_threshold` were
+previously the same code (`insufficient_evidence`) — splitting them is the
+difference between an honest "wait" and an honest "this needs a decision."
+
+**Where it's cached.** The reason a tick computes is written to
+`managed_campaigns.no_rec_reason`/`no_rec_detail`/`no_rec_checked_at`
+(migration 024, `server/src/services/evaluation-reason.ts`) every generation
+tick — cleared back to `NULL` when an acting recommendation exists instead.
+Mirrors `delivery_ok`/`delivery_reason` (AIC-39): the engine writes, the
+dashboard and ops console read, with no live evaluation at render time.
+
+**Customer surface**: `web/src/app/Home.tsx`'s no-action card picks distinct
+Hebrew copy per reason (`strings.ts` → `home.noRec`), with a CTA to
+`/app/settings` for `budget_below_threshold`. `delivery_blocked` never reaches
+this card — `deriveHomeState` (`customer-overview.ts`) already routes a
+delivery problem to the `attention` state before this branch is reached, so
+the two surfaces are never in conflict.
+
+**Ops surface**: the operator's customer-detail panel
+(`web/src/admin/AdminCustomers.tsx`) shows the precise reason plus the exact
+numbers from `no_rec_detail` (e.g. `₪10/יום × 7 = ₪70 < נדרש ₪150`) — sourced
+from `getCustomerDetail` (`server/src/services/customers.ts`).
 
 ## Rules v1 (evaluated in priority order)
 

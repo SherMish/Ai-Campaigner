@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { InMemorySnapshotStore } from "../meta/snapshot-store.js";
 import { InMemoryRecommendationStore } from "./recommendation-store.js";
-import { evaluateAndPersist } from "./rule-evaluator.js";
+import { evaluateAndPersist, buildCampaignEvidence } from "./rule-evaluator.js";
 import type { SnapshotUpsert } from "../meta/insights.js";
 
 const CUR = { start: "2026-07-26", end: "2026-08-01" };
@@ -90,5 +90,26 @@ describe("evaluateAndPersist", () => {
     expect(result.draft.type).toBe("no_action");
     expect(result.created).toBe(false);
     expect(recs.records.size).toBe(0);
+  });
+});
+
+// AIC-64: the excluded-ad-set signal (AIC-39) must reach evaluateCampaign's
+// reason classification, not just silently thin the evidence.
+describe("buildCampaignEvidence — deliveryProblemAdSetIds (AIC-64)", () => {
+  it("carries the excluded ad set ids through when some are excluded", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await snapshots.upsert([snap({ grain: "campaign", metaObjectId: "camp" })]);
+    const ev = await buildCampaignEvidence(
+      snapshots, { id: "camp-1", currentBudgetAgorot: 7000 }, CUR, PREV,
+      new Set(["as_bad"]),
+    );
+    expect(ev.deliveryProblemAdSetIds).toEqual(["as_bad"]);
+  });
+
+  it("is undefined when nothing was excluded", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await snapshots.upsert([snap({ grain: "campaign", metaObjectId: "camp" })]);
+    const ev = await buildCampaignEvidence(snapshots, { id: "camp-1", currentBudgetAgorot: 7000 }, CUR, PREV);
+    expect(ev.deliveryProblemAdSetIds).toBeUndefined();
   });
 });
