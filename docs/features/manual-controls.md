@@ -172,16 +172,44 @@ only half the fix when the frontend caches its own read separately.
 customer surface with per-ad-set and per-ad rows carrying real Meta ids, so the
 controls live there. Copy in `strings.he.app.home.controls`.
 
-**Live status, deliberately.** Opening the panel also calls
+**Live status, deliberately.** Opening the panel calls
 `GET /api/app/controls/state` — one live Meta read of ACTIVE/PAUSED per object.
 The readout surfaces (`customer-overview`, `campaign-audiences`) stay DB-only by
 design, but a *cached* status would render a button that lies about what it
 does. One live call behind an explicit user action is the same rule that
-justifies the ops explorer's live reads (AIC-45). After any change the state is
-re-read rather than assumed.
+justifies the ops explorer's live reads (AIC-45).
 
 Pausing an ad set stops every ad under it — the UI says so before the click
 rather than letting the customer discover it.
+
+## After a write, trust the write — don't re-read a lagging field (AIC-70)
+
+Real bug, 2026-08-12: a customer clicked resume, the write succeeded and was
+read-back verified, and the row still showed paused until a manual page
+refresh. Root cause was in `GraphCampaignAdapter.getCampaignState` (backs
+`GET /api/app/controls/state`): it built the per-object status map from
+`effective_status`, a Meta-computed field with read-after-write lag, while a
+separate fix (commit `556cbcb`) had already corrected the three read-back
+verifiers (`getCampaignStatus`/`getAdSetStatus`/`getAdStatus`) to read `status`
+instead. `getCampaignState` was the fourth consumer that fix missed —
+`status` is what was just set (instant, authoritative for intent);
+`effective_status` stays correct for "is it actually delivering" (AIC-39's
+question), which is a genuinely different question this method doesn't need
+to answer.
+
+The frontend compounded it: `onToggle` (`Home.tsx`) called `getControlState()`
+again right after the write, so even a correct backend would occasionally
+render Meta's not-yet-caught-up answer. Fixed by trusting the write's own
+result instead of re-reading: `POST /pause`/`/resume` already returns the
+verified `newStatus`, so `onToggle` applies it straight to the row's local
+`ctl` state and shows an inline "הושהה"/"הופעל" confirmation — no re-fetch, no
+dependence on `effective_status` freshness, no manual refresh required.
+
+**Not done**: the ticket's proposed systemic fix — named accessors
+(`intentStatus`/`deliveryStatus`) so every future consumer picks one
+deliberately instead of touching the raw fields, plus a sweep of existing
+consumers — is real remaining scope, left for a dedicated pass rather than
+folded into this bug fix.
 
 ## Operator surface
 

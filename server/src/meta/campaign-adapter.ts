@@ -80,6 +80,15 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     return String(json.id);
   }
 
+  // AIC-70 (real bug, 2026-08-12): this method backs the customer's per-row
+  // pause/resume display, read right after a manual write. `effective_status`
+  // is a COMPUTED field with read-after-write lag — the same class of bug
+  // commit 556cbcb fixed for the read-back verifiers (getCampaignStatus /
+  // getAdSetStatus / getAdStatus, all below). This was the missed fourth
+  // consumer: a customer could resume an ad, get read-back-verified success,
+  // and still see it as paused here until Meta's computed field caught up.
+  // `status` is what was just set — instant, authoritative for "what did I
+  // set", which is exactly the question this method answers.
   async getCampaignState(metaCampaignId: string): Promise<LiveCampaignState> {
     const camp = await this.get(`${metaCampaignId}?fields=daily_budget,effective_status,name`);
     let budgetObjId = metaCampaignId;
@@ -87,11 +96,11 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
 
     // Always read ad sets: for their statuses (the audience rule + pause_adset
     // verify) and, when the campaign has no CBO budget, the ad-set-level budget.
-    const adsetsBody = await this.get(`${metaCampaignId}/adsets?fields=id,daily_budget,effective_status&limit=100`);
+    const adsetsBody = await this.get(`${metaCampaignId}/adsets?fields=id,daily_budget,status&limit=100`);
     const adsets = (adsetsBody.data as Array<Record<string, unknown>>) ?? [];
     const adSetStatuses: Record<string, "active" | "paused"> = {};
     for (const a of adsets) {
-      adSetStatuses[String(a.id)] = a.effective_status === "ACTIVE" ? "active" : "paused";
+      adSetStatuses[String(a.id)] = a.status === "ACTIVE" ? "active" : "paused";
     }
     if (!(dailyBudgetAgorot > 0)) {
       const withBudget = adsets.find((a) => a.daily_budget != null);
@@ -102,10 +111,10 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     }
     this.budgetObj.set(metaCampaignId, budgetObjId);
 
-    const ads = await this.get(`${metaCampaignId}/ads?fields=id,effective_status&limit=100`);
+    const ads = await this.get(`${metaCampaignId}/ads?fields=id,status&limit=100`);
     const adStatuses: Record<string, "active" | "paused"> = {};
     for (const ad of (ads.data as Array<Record<string, unknown>>) ?? []) {
-      adStatuses[String(ad.id)] = ad.effective_status === "ACTIVE" ? "active" : "paused";
+      adStatuses[String(ad.id)] = ad.status === "ACTIVE" ? "active" : "paused";
     }
     return { dailyBudgetAgorot: dailyBudgetAgorot > 0 ? dailyBudgetAgorot : 0, adStatuses, adSetStatuses };
   }

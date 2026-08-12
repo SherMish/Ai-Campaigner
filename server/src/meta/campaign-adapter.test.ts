@@ -457,6 +457,39 @@ describe("GraphCampaignAdapter getDeliveryHealth — deliveringAdCount (AIC-71)"
   });
 });
 
+describe("GraphCampaignAdapter getCampaignState — status vs effective_status (AIC-70)", () => {
+  // Real bug, 2026-08-12: a customer clicked "resume ad", the write succeeded
+  // and was read-back verified, but the UI's next read of THIS method still
+  // showed it paused — because effective_status lags the write while `status`
+  // (what was just set) does not. commit 556cbcb fixed the three read-back
+  // verifiers (getCampaignStatus/getAdSetStatus/getAdStatus) to read `status`;
+  // this method was the missed fourth consumer.
+  it("reports the object's own status (intent), not the lagging effective_status", async () => {
+    const mock = vi.fn(async (url: string) => ({
+      ok: true, status: 200,
+      json: async () => {
+        const u = String(url);
+        if (u.includes("/adsets?")) {
+          // status is already ACTIVE (just resumed); effective_status hasn't
+          // caught up yet and still reports PAUSED.
+          return { data: [{ id: "as_1", daily_budget: null, status: "ACTIVE", effective_status: "PAUSED" }] };
+        }
+        if (u.includes("/ads?")) {
+          return { data: [{ id: "ad_1", status: "PAUSED", effective_status: "ACTIVE" }] };
+        }
+        return { daily_budget: "3000", status: "ACTIVE", effective_status: "ACTIVE", name: "Camp" };
+      },
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const state = await adapter.getCampaignState("meta_camp_1");
+
+    expect(state.adSetStatuses.as_1).toBe("active"); // trusts status, not the stale effective_status
+    expect(state.adStatuses.ad_1).toBe("paused");
+  });
+});
+
 describe("GraphCampaignAdapter getLifetimeLeads (AIC-67 follow-up)", () => {
   // REGRESSION (real bug, live): summing insight_snapshots' overlapping
   // rolling-7-day windows counted the same real lead multiple times. The fix

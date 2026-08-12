@@ -6,6 +6,21 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Manual pause/resume: fix the lagging-read bug, add success feedback (AIC-70)
+Real bug: a customer clicked resume, the write succeeded and was read-back
+verified, and the row kept showing paused until a manual refresh.
+`GraphCampaignAdapter.getCampaignState` (backs `GET /api/app/controls/state`)
+was the one consumer commit `556cbcb` missed when it fixed the three
+read-back verifiers to read `status` instead of the lagging, Meta-computed
+`effective_status` — fixed the same way here. `onToggle` (`Home.tsx`) no
+longer re-fetches state after a write either; it trusts the verified
+`newStatus` the write already returned and shows an inline success
+confirmation, which didn't exist before (silence was the only outcome of a
+successful action). Test-first: a unit test reproduces the exact lagging-read
+scenario before the fix. Board sweep also closed 7 stale Linear tickets
+(AIC-51/52/53/55/63/67/73) whose work had already shipped this session but
+wasn't reflected there.
+
 ### 2026-08-12 — Range switcher + weekly graph: exact design match
 Follow-up to the range-switcher ship below. The first pass approximated the
 switcher's look; corrected against the extracted reference markup: track

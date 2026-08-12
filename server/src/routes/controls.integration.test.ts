@@ -24,12 +24,14 @@ function mockMeta(ads: string[], adSets: string[]) {
     if ((init?.method ?? "GET") === "GET") {
       // getCampaignState — campaign + its ad sets + its ads
       if (u.includes("/adsets?")) {
-        return jsonRes({ data: adSets.map((id) => ({ id, effective_status: statuses.get(id) })) });
+        // AIC-70: getCampaignState reads `status` (intent), not the lagging
+        // `effective_status` — both included here since real Meta returns both.
+        return jsonRes({ data: adSets.map((id) => ({ id, status: statuses.get(id), effective_status: statuses.get(id) })) });
       }
       if (u.includes("/ads?")) {
         // adset_id defaults to the (single) seeded ad set — every test in
         // this file uses exactly one, matching the real campaign shape.
-        return jsonRes({ data: ads.map((id) => ({ id, adset_id: adSets[0], effective_status: statuses.get(id) })) });
+        return jsonRes({ data: ads.map((id) => ({ id, adset_id: adSets[0], status: statuses.get(id), effective_status: statuses.get(id) })) });
       }
       if (u.includes("fields=status")) {
         const id = u.split("/").pop()!.split("?")[0];

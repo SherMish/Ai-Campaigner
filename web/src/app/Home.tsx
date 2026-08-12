@@ -373,27 +373,37 @@ export function Home() {
 // element in the row after the title. Reading order should be
 // "what is this → how is it doing → (quietly) what can I do".
 function PauseLink({
-  kind, metaObjectId, paused, busy, onToggle,
+  kind, metaObjectId, paused, busy, justSucceeded, onToggle,
 }: {
   kind: "ad" | "ad_set";
   metaObjectId: string;
   paused: boolean;
   busy: boolean;
+  // AIC-70: this row's action just completed successfully — show a brief
+  // confirmation instead of silence (which read as "did my click work?").
+  justSucceeded: boolean;
   onToggle: (kind: "ad" | "ad_set", id: string, pause: boolean) => void;
 }) {
   const label = kind === "ad_set"
     ? (paused ? CT.resumeAdSet : CT.pauseAdSet)
     : (paused ? CT.resumeAd : CT.pauseAd);
   return (
-    <button
-      className="link"
-      disabled={busy}
-      style={{ background: "none", border: "none", padding: "6px 2px", fontSize: "0.82rem", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}
-      title={kind === "ad_set" && !paused ? CT.adSetNote : paused ? CT.resumeNote : undefined}
-      onClick={(e) => { e.stopPropagation(); onToggle(kind, metaObjectId, !paused); }}
-    >
-      {busy ? CT.working : label}
-    </button>
+    <span className="row gap8" style={{ alignItems: "center" }}>
+      {justSucceeded && !busy && (
+        <span className="muted" style={{ fontSize: "0.78rem", color: "var(--green)" }}>
+          {paused ? CT.pausedNow : CT.resumedNow}
+        </span>
+      )}
+      <button
+        className="link"
+        disabled={busy}
+        style={{ background: "none", border: "none", padding: "6px 2px", fontSize: "0.82rem", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}
+        title={kind === "ad_set" && !paused ? CT.adSetNote : paused ? CT.resumeNote : undefined}
+        onClick={(e) => { e.stopPropagation(); onToggle(kind, metaObjectId, !paused); }}
+      >
+        {busy ? CT.working : label}
+      </button>
+    </span>
   );
 }
 
@@ -464,6 +474,9 @@ function AudienceDetails({ activeAds }: { activeAds: number }) {
   const [media, setMedia] = useState<Map<string, AdMedia>>(new Map());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [ctlFailed, setCtlFailed] = useState(false);
+  // AIC-70: which row just succeeded, so the confirmation renders right where
+  // the change happened. Cleared as soon as another action starts.
+  const [successId, setSuccessId] = useState<string | null>(null);
 
   function toggle() {
     const next = !open;
@@ -495,9 +508,21 @@ function AudienceDetails({ activeAds }: { activeAds: number }) {
   async function onToggle(kind: "ad" | "ad_set", id: string, pause: boolean) {
     setBusyId(id);
     setCtlFailed(false);
+    setSuccessId(null);
     try {
-      await setObjectPaused(kind, id, pause);
-      setCtl(await getControlState()); // re-read Meta's truth, don't assume
+      const result = await setObjectPaused(kind, id, pause);
+      // AIC-70: write straight from the verified result instead of re-reading
+      // `/state` — that read hits Meta's `effective_status`, which lags a
+      // just-applied write. We already know the true new status (setObjectPaused
+      // read-back-verified it server-side); trusting it here is what makes the
+      // row update immediately instead of occasionally showing the pre-write
+      // state until a manual refresh.
+      setCtl((prev) => {
+        const base = prev ?? { adStatuses: {}, adSetStatuses: {} };
+        const key = kind === "ad" ? "adStatuses" : "adSetStatuses";
+        return { ...base, [key]: { ...base[key], [id]: result.status === "ACTIVE" ? "active" : "paused" } };
+      });
+      setSuccessId(id);
       // The server already recomputes homeState/delivering synchronously on
       // this write (AIC-71 follow-up) — invalidate the shared overview so the
       // headline "מצב" and מודעות פעילות count pick it up now, not on the
@@ -571,7 +596,8 @@ function AudienceDetails({ activeAds }: { activeAds: number }) {
                       {ctl && (
                         <PauseLink
                           kind="ad_set" metaObjectId={aud.adSetId}
-                          paused={audPaused} busy={busyId === aud.adSetId} onToggle={onToggle}
+                          paused={audPaused} busy={busyId === aud.adSetId}
+                          justSucceeded={successId === aud.adSetId} onToggle={onToggle}
                         />
                       )}
                     </div>
@@ -607,7 +633,8 @@ function AudienceDetails({ activeAds }: { activeAds: number }) {
                                     {ctl && (
                                       <PauseLink
                                         kind="ad" metaObjectId={c.metaObjectId}
-                                        paused={adPaused} busy={busyId === c.metaObjectId} onToggle={onToggle}
+                                        paused={adPaused} busy={busyId === c.metaObjectId}
+                                        justSucceeded={successId === c.metaObjectId} onToggle={onToggle}
                                       />
                                     )}
                                   </div>

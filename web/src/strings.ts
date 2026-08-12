@@ -518,6 +518,11 @@ export const strings = {
           // An ad set carries every ad under it — say so plainly before they click.
           adSetNote: "השהיית קהל עוצרת את כל המודעות שרצות אליו.",
           resumeNote: "הפעלה מחדש מחזירה את ההוצאה על האובייקט הזה.",
+          // AIC-70: a successful pause/resume used to produce silence — the row
+          // still looked untouched, which invited a second click. Shown inline,
+          // right where the change happened, not a global toast.
+          pausedNow: "הושהה",
+          resumedNow: "הופעל",
         },
         details: {
           show: "הצג פירוט",
