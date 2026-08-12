@@ -6,6 +6,16 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Real blocker found: "use existing post" ad creation needs our Meta app in Live mode
+Live usage: creating an ad creative from an existing IG/FB post failed with a
+raw 502. The real error underneath (`code 100, subcode 1885183`): "Ads
+creative post was created by an app that is in development mode. It must be
+in public to create this ad." Our Meta app is still in Development mode.
+Only the existing-post path (`object_story_id`) is gated — a fresh
+image/video upload builds its own creative object and is unaffected. Not a
+code bug; no code fix exists. Requires an operator to toggle App Mode →
+Live in developers.facebook.com (documented in [META_SETUP.md](META_SETUP.md)).
+
 ### 2026-08-12 — Manual pause/resume: fix the lagging-read bug, add success feedback (AIC-70)
 Real bug: a customer clicked resume, the write succeeded and was read-back
 verified, and the row kept showing paused until a manual refresh.

@@ -80,6 +80,15 @@ regenerating the token and updating the Railway secret.**
 - Create/confirm the **Meta app** (business type) the System User token belongs to,
   with the **Marketing API** product added.
 - Record the **App ID** (public) and keep the **App Secret** as a secret.
+- **App Mode must be Live, not Development** — found live 2026-08-12: creating an
+  ad creative from an *existing* Page post (`object_story_id`, the "use an
+  existing post" flow) fails with `code 100, subcode 1885183` — "Ads creative
+  post was created by an app that is in development mode. It must be in public
+  to create this ad." — while our app is in Development mode. Fresh
+  image/video uploads (`createCreativeFromUpload`, its own `object_story_spec`)
+  are unaffected; only the existing-post path is gated. Toggle App Mode →
+  Live in developers.facebook.com (may require Basic Settings — privacy policy
+  URL, icon, category — to be filled in first).
 
 ### 2. System User + token **[operator]**
 - Business settings → **Users → System Users** → add a System User (admin role for
