@@ -72,6 +72,11 @@ export interface ExplorerAdSet {
   targeting: ExplorerTargeting;
   metrics: ExplorerMetrics;
   ads: ExplorerAd[];
+  // The WhatsApp-destination ad set's promoted_object.page_id (set by our own
+  // createAdSet, campaign-adapter.ts) — the reliable source for this account
+  // type; creative-level object_story_spec/effective_object_story_id are
+  // empty for click-to-WhatsApp ads.
+  pageId: string | null;
 }
 
 export interface ExplorerCampaign {
@@ -122,6 +127,7 @@ interface RawAdSet {
   lifetime_budget?: string;
   bid_strategy?: string;
   targeting?: RawTargeting;
+  promoted_object?: { page_id?: string };
 }
 interface RawCreative {
   id?: string;
@@ -212,7 +218,7 @@ export function normalizeTargeting(raw?: RawTargeting): ExplorerTargeting {
 const GRAPH_BASE = "https://graph.facebook.com";
 
 const ADSET_FIELDS =
-  "id,name,effective_status,issues_info,daily_budget,lifetime_budget,bid_strategy," +
+  "id,name,effective_status,issues_info,daily_budget,lifetime_budget,bid_strategy,promoted_object," +
   "targeting{age_min,age_max,genders,geo_locations,flexible_spec{interests}}";
 const AD_FIELDS =
   "id,name,adset_id,effective_status,issues_info,effective_object_story_id," +
@@ -285,6 +291,7 @@ export class GraphExplorerReader implements ExplorerReader {
       bidStrategy: a.bid_strategy ?? null,
       targeting: normalizeTargeting(a.targeting),
       metrics: normalizeMetrics(adsetInsights.get(a.id)),
+      pageId: a.promoted_object?.page_id ?? null,
       ads: (adsByAdSet.get(a.id) ?? []).map((ad) => {
         const creative = normalizeCreative(ad.creative);
         // Some ad formats (e.g. click-to-WhatsApp) leave creative.object_story_spec

@@ -226,6 +226,7 @@ export interface ExplorerAdSet {
   targeting: { ageMin: number | null; ageMax: number | null; genders: string[]; geoCountries: string[]; interests: string[] };
   metrics: ExplorerMetrics;
   ads: ExplorerAd[];
+  pageId: string | null;
 }
 export interface ExplorerCampaign {
   id: string;

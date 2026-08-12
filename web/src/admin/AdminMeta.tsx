@@ -98,6 +98,7 @@ function AdSetCard({ adSet }: { adSet: ExplorerAdSet }) {
         {m.age} {t.ageMin ?? "–"}–{t.ageMax ?? "–"} · {m.gender} {t.genders.join(", ")} · {m.geo} {t.geoCountries.join(", ") || a.noData}
         {t.interests.length > 0 && <> · {m.interests}: {t.interests.join(", ")}</>}
       </p>
+      {adSet.pageId && <p className="muted" style={{ fontSize: "0.78rem" }}>{m.pageLabel}: {adSet.pageId}</p>}
 
       <MetricGrid metrics={adSet.metrics} />
 
