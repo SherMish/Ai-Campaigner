@@ -50,10 +50,9 @@ export function Sidebar() {
 
   return (
     <aside className="ap-side">
-      <div className="ap-brand"><img src="/favicon-dark.png" alt="" className="ap-brand-icon" />Ads Manager</div>
+      <div className="ap-brand">Ads Manager<img src="/favicon-dark.png" alt="" className="ap-brand-icon" /></div>
 
       <div className="ap-nav-section">
-        <div className="ap-nav-label">{a.nav.sectionManage}</div>
         <NavLink end to="/app" className={cls}>
           <span className="ic"><LayoutGrid size={18} /></span><span>{a.home.navHome}</span>
         </NavLink>
@@ -71,7 +70,6 @@ export function Sidebar() {
       </div>
 
       <div className="ap-nav-section">
-        <div className="ap-nav-label">{a.nav.sectionHelp}</div>
         <NavLink to="/app/settings" className={cls}>
           <span className="ic"><LifeBuoy size={18} /></span><span>{a.home.navSettings}</span>
         </NavLink>

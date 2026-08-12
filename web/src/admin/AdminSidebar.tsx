@@ -14,7 +14,7 @@ export function AdminSidebar() {
 
   return (
     <aside className="ap-side">
-      <div className="ap-brand"><img src="/favicon-dark.png" alt="" className="ap-brand-icon" />{n.brand}</div>
+      <div className="ap-brand">{n.brand}<img src="/favicon-dark.png" alt="" className="ap-brand-icon" /></div>
 
       <div className="ap-nav-section">
         <div className="ap-nav-label">{n.brandSub}</div>
