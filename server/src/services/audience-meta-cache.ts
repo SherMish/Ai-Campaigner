@@ -30,6 +30,19 @@ export async function upsertAdSetMeta(
       [a.adSetId, campaignId, a.name, a.ageMin, a.ageMax, a.genders, a.geoSummary, a.isDynamicCreative],
     );
   }
+  // AIC-65: prune any cached ad set no longer in the managed list — e.g. one
+  // that became a deleted/never-published draft since the last tick. Without
+  // this, upsert-only leaves a stale row forever (an INSERT/UPDATE never
+  // removes anything not passed in) — the real bug caught verifying this
+  // ticket live: GelNails' dead ad set stayed cached and visible until this
+  // prune ran, even after the exclusion logic itself was deployed and working.
+  const keepIds = adsets.map((a) => a.adSetId);
+  await pool.query(
+    keepIds.length > 0
+      ? `DELETE FROM ad_set_meta WHERE campaign_id = $1 AND meta_ad_set_id <> ALL($2::text[])`
+      : `DELETE FROM ad_set_meta WHERE campaign_id = $1`,
+    keepIds.length > 0 ? [campaignId, keepIds] : [campaignId],
+  );
 }
 
 export interface StoredAdSetMeta {

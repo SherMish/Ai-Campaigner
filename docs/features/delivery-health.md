@@ -98,6 +98,12 @@ splits `allAdsets` into managed vs `unmanagedAdSetIds`, and:
   `ad_set_meta` (and therefore the customer's opt-in audience view, AIC-37)
   never contains a dead ad set, even though its historical `insight_snapshots`
   rows still exist (ingestion isn't filtered — see the note below);
+- **`upsertAdSetMeta` also PRUNES** any cached row no longer in the current
+  managed list (`DELETE ... WHERE meta_ad_set_id <> ALL(...)`) — caught live
+  verifying this exact ticket: the exclusion logic alone left GelNails' dead
+  ad set sitting in `ad_set_meta` forever, since an upsert-only write never
+  removes a row it wasn't given. Without the prune, a dead ad set that had
+  EVER been cached before this ticket would keep showing up indefinitely.
 - merges `unmanagedAdSetIds` into the exclusion set passed to
   `buildCampaignEvidence`, same as a real delivery problem, so the audience
   rule (AIC-36) and creative rule never see it — **but** kept in a SEPARATE
