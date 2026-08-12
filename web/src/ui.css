@@ -231,10 +231,12 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 .ap-brand .d { color: var(--orange); }
 /* The icon's own dark card is nearly the same color as this sidebar's ink
    background, so without separation that half of the mark visually vanishes
-   into it — the ring gives it an edge against any background behind it. */
+   into it. A drop-shadow (not a border) traces the actual PNG silhouette —
+   no rectangle, no added rounding, just enough of a halo for the dark card
+   to read as its own shape against the sidebar. */
 .ap-brand-icon {
   width: 24px; height: 24px; display: block; flex-shrink: 0;
-  border-radius: 6px; box-shadow: 0 0 0 1px rgba(247, 242, 234, 0.18);
+  filter: drop-shadow(0 0 1px rgba(247, 242, 234, 0.55)) drop-shadow(0 0 2px rgba(247, 242, 234, 0.3));
 }
 .ap-nav-section { padding: 6px 0; }
 .ap-nav-label { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(247,242,234,0.38); padding: 8px 22px 6px; }
