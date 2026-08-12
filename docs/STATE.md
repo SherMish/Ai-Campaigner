@@ -6,6 +6,31 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Meta setup runbook rewritten around the three layers of access
+Investigating why add-content (AIC-63) couldn't be fixed produced a much more
+useful finding than the bug itself: **Meta access is three independent layers**,
+and Business Settings can look entirely correct while the backend has zero
+access. (1) asset shared to our Business Portfolio — customer's action;
+(2) asset assigned to our System User — our action, a *separate* step;
+(3) the token carries the matching scopes — **frozen at token-generation time**.
+
+Layer 3 is the trap: our token was minted with `ads_management, ads_read,
+business_management` only. Assigning Page assets later does not retroactively
+add `pages_*` scopes, so every Page call keeps failing with `(#100) … requires
+the 'pages_read_engagement' permission` no matter how correct layers 1–2 look.
+Adding a new asset type means regenerating the token and rotating the Railway
+secret.
+
+[META_SETUP.md](META_SETUP.md) now records our real identifiers (Business
+Portfolio **`2491237118040524`** "AI Campaigner" — previously undocumented
+anywhere, which cost a live round-trip; app `1762330388097443`; System User
+`122103498795426897`), a step-by-step per-customer onboarding runbook with the
+exact tasks to grant per asset, a copy-paste verification block that tests each
+layer separately, and a symptom→layer→fix table. Also documents the hard-won
+ordering rule: **confirm the Page is readable before writing `page_id`** — a
+`page_id` the backend can't read flips the connection to `revoked` and silently
+stops the recommendation engine (AIC-69).
+
 ### 2026-08-12 — Exclude deleted/archived/draft ad sets (AIC-65)
 GelNails' "second ad set" turned out to be a never-published draft: real
 historical spend (an ad that ran and was later removed), but `effective_status`

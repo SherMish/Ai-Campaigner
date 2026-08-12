@@ -33,6 +33,46 @@ Advanced Access, no review — which unblocks P0.1–P0.3 immediately.
 
 ---
 
+## Our identifiers (verified live 2026-08-12)
+
+Record these once; the onboarding call needs the first one verbatim.
+
+| Thing | Value |
+| --- | --- |
+| **Business Portfolio** (give this to customers) | **`2491237118040524`** — name: **"AI Campaigner"** |
+| Meta app | `1762330388097443` — name: "AI Campaigner" |
+| System User | `122103498795426897` — name: **"AdPilot backend"** |
+
+> ⚠️ **Naming trap.** The Business Portfolio and the app share the name "AI
+> Campaigner", but a customer adds a **partner by Business Portfolio ID**, not by
+> name. Give them the number. (Historic note: older docs/memory recorded the
+> System User as `61592806930741` and once mis-identified the portfolio as
+> `467328257419676` / "Liam Aboros" — that one is the **customer-side** business
+> that owns Pisga's ad account `act_2181076988590009`, not ours. Use the table.)
+
+---
+
+## The three layers of access (all three must be satisfied)
+
+This is the part that bit us in production. Meta access is **not** one switch — it
+is three independent layers, and the Business Settings UI can look completely
+correct while the backend still has zero access:
+
+| # | Layer | Who does it | Verify with |
+| --- | --- | --- | --- |
+| 1 | Asset **shared to our Business Portfolio** | the **customer**, in *their* Business Settings | `GET /{business}/client_pages` (or `client_ad_accounts`) |
+| 2 | Asset **assigned to the System User** inside our portfolio | **us** | `GET /me/accounts` (Pages) |
+| 3 | Token carries the right **scopes** | **us**, *at token-generation time* | `GET /debug_token` |
+
+**Layer 3 is the trap.** A System User token's scopes are **frozen when the token
+is minted**. Assigning new asset *types* later (e.g. adding Page access to a token
+originally minted for ads only) does **not** retroactively add scopes — the token
+keeps failing with `(#100) … requires the 'pages_read_engagement' permission`
+forever, no matter how correct layers 1 and 2 look. **Adding a new asset type means
+regenerating the token and updating the Railway secret.**
+
+---
+
 ## One-time setup
 
 ### 1. Business Portfolio + Meta app **[operator]**
@@ -46,16 +86,24 @@ Advanced Access, no review — which unblocks P0.1–P0.3 immediately.
   P0 operations).
 - **Generate token** for that System User, selecting our app, with scopes:
   - `ads_read` — pull campaigns + Insights
-  - `ads_management` — apply approved changes (status/budget)
-  - `business_management` — manage asset assignments where needed
-  - add `pages_read_engagement` / `instagram_basic` (or current equivalents) when
-    creative operations require Page/IG access
+  - `ads_management` — apply approved changes (status/budget), create campaigns/ad
+    sets/ads
+  - `business_management` — read/manage asset assignments
+  - **`pages_show_list`** — required for `/me/accounts` to return Pages at all
+  - **`pages_read_engagement`** — required for the connection health check's direct
+    `GET /{page_id}` read
+  - `instagram_basic` (or current equivalent) when IG creatives are touched
+- **Tick the Page scopes even if Page features aren't live yet.** Minting an
+  ads-only token and adding Pages later costs a full token regeneration + secret
+  rotation (see the layer-3 trap above) — that is exactly what happened on
+  2026-08-12 and it broke a customer-facing feature.
 - Copy the token **once** — store it as a secret immediately (see §4).
 
 ### 3. Asset assignment **[operator]**
 For each managed customer (and for Pisga first):
 1. The customer grants our Business partner access to: **ad account** (+ **Page**,
-   **Instagram** where creatives are touched).
+   **Instagram** where creatives are touched). See the per-customer runbook below
+   for the exact clicks.
 2. In our Business settings, **assign** each shared asset to the **System User**
    with the task level we need (manage campaigns / view performance).
 3. Record the asset IDs (`act_…`, page id, ig id) — these become the
@@ -80,17 +128,131 @@ Set in Railway (and mirrored in `server/.env.example` as placeholders):
 | --- | --- |
 | `META_APP_ID` | Our Meta app id (public) |
 | `META_APP_SECRET` | App secret (secret) |
-| `META_SYSTEM_USER_TOKEN` | System User token, `ads_read`+`ads_management` (secret) |
+| `META_SYSTEM_USER_TOKEN` | System User token — `ads_read`+`ads_management`+`business_management`, **plus `pages_show_list`+`pages_read_engagement`** for Page-dependent features (secret). Scopes are frozen at generation; adding an asset type later requires a new token. |
 | `META_GRAPH_VERSION` | Graph API version, e.g. `v21.0` |
 
 ---
 
+---
+
+## Per-customer onboarding (the call)
+
+Manual, human-led. No customer-facing OAuth in P0.
+
+**Before the call, have ready:** our Business Portfolio ID **`2491237118040524`**.
+
+**Customer needs:** a Meta Business with an active ad account, a Facebook Page (+
+WhatsApp number connected to it, for WhatsApp-lead ads), and admin on their own
+Business Settings.
+
+### 1. Customer grants partner access **[customer, their Business Settings]**
+Business Settings → **Partners** → **Add** → *"Give a partner access to your assets"*
+→ enter **`2491237118040524`**.
+
+Then share, with these tasks:
+
+| Asset | Minimum task | Why |
+| --- | --- | --- |
+| **Ad account** (required) | Manage campaigns / Advertise | read Insights, apply approved budget + status changes |
+| **Page** (required for WhatsApp-lead ads + add-content) | **Advertise**, plus enough to *read* the Page — grant **Manage** if the health check can't read it with Advertise alone | ad creation references the Page (`promoted_object.page_id`); the connection health check reads the Page directly |
+| **Instagram** (if IG creatives are used) | as applicable | IG creative operations |
+
+⚠️ **Sharing the ad account alone is not enough.** That was GelNails' state for
+months: ads ran fine, but every Page-dependent feature (add-content, AIC-63) was
+silently broken and the connection health check correctly reported the gap the
+moment `page_id` was filled in.
+
+Also confirm their **WhatsApp number is linked to the Page**.
+
+### 2. We assign the shared assets to the System User **[operator, our Business Settings]**
+The shared assets now appear under **Partners** in the AI Campaigner portfolio
+(`2491237118040524`).
+
+Users → **System Users** → **"AdPilot backend"** → **Assign Assets** → select the
+ad account **and the Page** → grant the tasks → Save.
+*(Equivalent path: Accounts → Pages → the Page → Assigned Users → add "AdPilot backend".)*
+
+⚠️ **This is a separate step from step 1.** A Page shared to the business but not
+assigned to the System User is invisible to the backend.
+
+### 3. Confirm the token covers the asset types **[operator]**
+Run the verification block below. If the Page checks fail with
+`requires the 'pages_read_engagement' permission` **even though steps 1–2 are done**,
+the token predates Page support → **regenerate it** (§2) with `pages_show_list` +
+`pages_read_engagement` and update `META_SYSTEM_USER_TOKEN` in Railway.
+
+### 4. Add them in the AI Campaigner console **[operator]**
+Create the customer (business info, offer, budget, contact) and link their ad
+account + campaign.
+
+> **Known gap:** there is currently **no console UI** for provisioning the
+> `meta_connections` / `ad_accounts` / `managed_campaigns` rows — today this is
+> hand-written SQL against prod, which is how a blank `page_id` shipped unnoticed.
+> Tracked in [AIC-68](https://linear.app/pisga-app/issue/AIC-68), which also covers
+> validating Page reachability at save time instead of discovering it later.
+
+### 5. Verify
+Ingestion pulls their campaign within a tick — spend / leads / CPL appear in the
+admin readout. Health ≠ `ok` → a grant or assignment is incomplete; re-run the
+checks below.
+
+---
+
+## Verifying access (copy-paste)
+
+Read-only. `TOKEN` = the System User token; run from the repo root.
+
+```bash
+TOKEN=$(grep '^META_SYSTEM_USER_TOKEN=' server/.env | cut -d= -f2-); VER=v21.0
+
+# Layer 3 — what scopes does this token actually carry?
+curl -s "https://graph.facebook.com/$VER/debug_token?input_token=$TOKEN" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Layer 1 — did the customer's share land in OUR portfolio?
+curl -s "https://graph.facebook.com/$VER/2491237118040524/client_pages?fields=id,name" \
+  -H "Authorization: Bearer $TOKEN"
+curl -s "https://graph.facebook.com/$VER/2491237118040524/client_ad_accounts?fields=id,name" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Layer 2 — can the System User actually reach the Page?
+curl -s "https://graph.facebook.com/$VER/me/accounts?fields=id,name,tasks" \
+  -H "Authorization: Bearer $TOKEN"
+
+# The exact call the connection health check makes (must return the Page, not error 100)
+curl -s "https://graph.facebook.com/$VER/<PAGE_ID>?fields=id,name" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Ad account reachable?
+curl -s "https://graph.facebook.com/$VER/act_<AD_ACCOUNT_ID>?fields=name,account_status,business" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Reading the results**
+
+| Symptom | Layer at fault | Fix |
+| --- | --- | --- |
+| `client_pages` empty | 1 | customer hasn't shared the Page — redo step 1 |
+| `client_pages` has it, `/me/accounts` empty, Page read → error 100 | 2 **or** 3 | assign the Page to the System User (step 2); if already assigned, the token lacks Page scopes → regenerate (step 3) |
+| `debug_token` scopes lack `pages_*` | 3 | regenerate the token; asset assignment alone will never fix this |
+| Page read succeeds | ✅ | safe to set `meta_connections.page_id` |
+
+**Order matters:** confirm the Page read succeeds *before* writing `page_id` into
+`meta_connections`. A `page_id` the backend can't read flips the whole connection to
+`revoked` (worst-health-wins), which removes the campaign from
+`listEligibleForGeneration` and **silently stops the recommendation engine** — a far
+worse outcome than the feature that needed `page_id`. See
+[AIC-69](https://linear.app/pisga-app/issue/AIC-69).
+
 ## Verification checklist (operator, after setup)
-- [ ] System User token minted and stored as a Railway secret (not in repo/client).
+- [ ] System User token minted **with Page scopes** and stored as a Railway secret
+      (not in repo/client).
 - [ ] Pisga's own ad account assigned to the System User and **confirmed readable**
       (campaigns + Insights return) — this is the AIC-1 read check on our own account.
-- [ ] Page + Instagram assigned and access confirmed (or the specific limitation
-      written down).
+- [ ] Page shared (layer 1) **and** assigned to the System User (layer 2) **and**
+      readable with the current token (layer 3) — all three verified with the block
+      above, not assumed from the Business Settings UI.
+- [ ] Instagram assigned and access confirmed (or the specific limitation written down).
 - [ ] Token-lifecycle expectations understood: revocable; the app detects + surfaces
       loss (AIC-5).
 
