@@ -78,13 +78,17 @@ function AdCard({ ad }: { ad: ExplorerAd }) {
 }
 
 function AdSetCard({ adSet }: { adSet: ExplorerAdSet }) {
-  const problem = adSet.issues.length > 0;
+  // AIC-65: a deleted/never-published ad set is never a "problem" to flag —
+  // its leftover issues_info (if any) is stale noise from before it died.
+  const problem = adSet.isManaged && adSet.issues.length > 0;
   const t = adSet.targeting;
   return (
-    <div className={"op-node" + (problem ? " op-problem" : "")}>
+    <div className={"op-node" + (problem ? " op-problem" : "")} style={adSet.isManaged ? undefined : { opacity: 0.55 }}>
       <div className="op-node-head">
         <b style={{ fontSize: "1.02rem" }}>{adSet.name ?? adSet.id}</b>
-        <span className="pill neutral" style={{ padding: "2px 10px", fontSize: "0.76rem" }}>{adSet.effectiveStatus ?? a.noData}</span>
+        <span className="pill neutral" style={{ padding: "2px 10px", fontSize: "0.76rem" }}>
+          {adSet.isManaged ? (adSet.effectiveStatus ?? a.noData) : m.deletedBadge}
+        </span>
       </div>
       {problem && adSet.issues.map((iss, i) => <div key={i} className="op-issue">{iss}</div>)}
 

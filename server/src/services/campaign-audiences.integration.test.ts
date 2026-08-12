@@ -104,6 +104,24 @@ d("campaign audiences (DB + HTTP)", () => {
     expect(labels).toEqual(["Winter Promo A", "Winter Promo B"]);
   });
 
+  it("excludes an ad set with historical spend but no meta-cache row (AIC-65: a dead/draft ad set never cached)", async () => {
+    const { userId, campaignId } = await seedChain("dead");
+    const store = new PgSnapshotStore(pool);
+    await store.upsert([
+      snap(campaignId, { grain: "adset", metaObjectId: "as_real", spendAgorot: 40000, leads: 20, cplAgorot: 2000 }),
+      // as_dead has real historical spend (the GelNails shape) but generation.ts
+      // never caches a dead/draft ad set's meta row — simulate that directly.
+      snap(campaignId, { grain: "adset", metaObjectId: "as_dead", spendAgorot: 235, leads: 0, cplAgorot: null }),
+    ]);
+    await upsertAdSetMeta(pool, campaignId, [
+      { adSetId: "as_real", name: "Women 18-46", ageMin: 18, ageMax: 46, genders: "female", geoSummary: "", isDynamicCreative: false },
+    ]);
+
+    const result = await buildCampaignAudiences(pool, userId);
+    expect(result?.audiences).toHaveLength(1);
+    expect(result?.audiences[0].adSetId).toBe("as_real");
+  });
+
   it("rejects the endpoint without a token, and returns null for a user with no campaign", async () => {
     const noToken = await request(createApp()).get("/api/app/audiences");
     expect(noToken.status).toBe(401);

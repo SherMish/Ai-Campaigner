@@ -159,7 +159,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // at customer render time.
   async getAdSetMeta(metaCampaignId: string): Promise<AdSetMeta[]> {
     const body = await this.get(
-      `${metaCampaignId}/adsets?fields=id,name,is_dynamic_creative,effective_status,targeting{age_min,age_max,genders,geo_locations}&limit=100`,
+      `${metaCampaignId}/adsets?fields=id,name,is_dynamic_creative,effective_status,targeting{age_min,age_max,genders,geo_locations},ads.limit(1){id}&limit=100`,
     );
     return ((body.data as RawAdSetMeta[]) ?? []).map(normalizeAdSetMeta);
   }

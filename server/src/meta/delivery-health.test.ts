@@ -21,6 +21,21 @@ describe("normalizeAdSet (AIC-39)", () => {
     expect(h.state).toBe("paused");
     expect(isProblem(h)).toBe(false);
   });
+
+  it("DELETED with leftover issues_info → still paused, never flagged (AIC-65)", () => {
+    // Real GelNails shape: a deleted ad set can carry stale issues_info from
+    // before it was deleted. Deleted must win — "gone is gone."
+    const h = normalizeAdSet({ id: "a", effective_status: "DELETED", issues_info: [{ error_summary: "Page Is Unpublished For Ad" }] });
+    expect(h.state).toBe("paused");
+    expect(h.reason).toBeNull();
+    expect(isProblem(h)).toBe(false);
+  });
+
+  it("ARCHIVED with leftover issues_info → still paused, never flagged (AIC-65)", () => {
+    const h = normalizeAdSet({ id: "a", effective_status: "ARCHIVED", issues_info: [{ error_message: "Creative rejected" }] });
+    expect(h.state).toBe("paused");
+    expect(isProblem(h)).toBe(false);
+  });
 });
 
 describe("summarize", () => {

@@ -77,6 +77,11 @@ export interface ExplorerAdSet {
   // type; creative-level object_story_spec/effective_object_story_id are
   // empty for click-to-WhatsApp ads.
   pageId: string | null;
+  // AIC-65: false for a deleted/archived ad set, or one with zero ads (a
+  // never-published draft — effective_status can still say ACTIVE for these,
+  // Meta doesn't always reclassify it). Rendered clearly marked in the
+  // operator view; never counted or shown as a normal active ad set.
+  isManaged: boolean;
 }
 
 export interface ExplorerCampaign {
@@ -292,6 +297,7 @@ export class GraphExplorerReader implements ExplorerReader {
       targeting: normalizeTargeting(a.targeting),
       metrics: normalizeMetrics(adsetInsights.get(a.id)),
       pageId: a.promoted_object?.page_id ?? null,
+      isManaged: a.effective_status !== "DELETED" && a.effective_status !== "ARCHIVED" && (adsByAdSet.get(a.id) ?? []).length > 0,
       ads: (adsByAdSet.get(a.id) ?? []).map((ad) => {
         const creative = normalizeCreative(ad.creative);
         // Some ad formats (e.g. click-to-WhatsApp) leave creative.object_story_spec

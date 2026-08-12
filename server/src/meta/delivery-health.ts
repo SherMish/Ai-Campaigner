@@ -36,10 +36,13 @@ export function normalizeAdSet(row: RawAdSetDelivery): AdSetHealth {
   const reason = issues[0]?.error_summary || issues[0]?.error_message || null;
 
   let state: DeliveryState;
-  if (status === "DISAPPROVED" || status === "WITH_ISSUES") state = "disapproved";
+  // AIC-65: deleted/archived checked FIRST, before issues_info — a leftover
+  // issue from before the ad set was deleted must never override "gone is
+  // gone." A deleted ad set not delivering is expected, never a problem.
+  if (status === "ARCHIVED" || status === "DELETED") state = "paused";
+  else if (status === "DISAPPROVED" || status === "WITH_ISSUES") state = "disapproved";
   else if (issues.length > 0) state = "not_delivering";
-  else if (status === "PAUSED" || status === "ADSET_PAUSED" || status === "CAMPAIGN_PAUSED" || status === "ARCHIVED" || status === "DELETED")
-    state = "paused";
+  else if (status === "PAUSED" || status === "ADSET_PAUSED" || status === "CAMPAIGN_PAUSED") state = "paused";
   else state = "delivering";
 
   return { adSetId: row.id, name: row.name ?? null, state, reason: state === "delivering" || state === "paused" ? null : reason };

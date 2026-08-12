@@ -136,6 +136,82 @@ describe("runGenerationTick — audience rule + AIC-39 delivery exclusion", () =
   });
 });
 
+// Real bug (2026-08-12): GelNails' second ad set is a deleted/never-published
+// draft with historical snapshot rows — it was being treated as a real
+// audience (false 2-ad-set count) AND flagged as a needs-attention delivery
+// problem, when a deleted object not delivering is expected, not a problem.
+describe("runGenerationTick — exclude dead/draft ad sets (AIC-65)", () => {
+  it("a deleted/draft ad set is excluded from the audience count, even with real historical spend", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedAudience(snapshots); // as_A real, as_B has spend but is actually dead
+    const recs = new InMemoryRecommendationStore();
+    let recordedReason: string | null = null;
+    const res = await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      audienceMetaReader: { getAdSetMeta: async () => [
+        adSetMeta("as_A", false, true),
+        adSetMeta("as_B", false, false), // AIC-65: dead — effective_status ACTIVE, zero ads
+      ] },
+      recordNoRecReason: async (_c, draft) => { recordedReason = (draft.evidence as { reason: string }).reason; },
+    });
+    // as_B excluded → only one real audience → can't compare → can't pause.
+    expect([...recs.records.values()].some((r) => r.type === "pause_adset")).toBe(false);
+    // Excluding a dead object is NOT a delivery problem — never delivery_blocked.
+    expect(recordedReason).not.toBe("delivery_blocked");
+    expect(res.deliveryProblems).toBe(0);
+  });
+
+  it("a dead ad set's leftover not-delivering issue never raises a needs-attention item", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedAudience(snapshots);
+    const recs = new InMemoryRecommendationStore();
+    let recorded: DeliverySummary | null = null;
+    await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      audienceMetaReader: { getAdSetMeta: async () => [
+        adSetMeta("as_A", false, true),
+        adSetMeta("as_B", false, false),
+      ] },
+      deliveryReader: { getDeliveryHealth: async () => [
+        { adSetId: "as_A", name: null, state: "delivering", reason: null },
+        { adSetId: "as_B", name: null, state: "not_delivering", reason: "stale issue from before deletion" },
+      ] },
+      recordDelivery: async (_c, s) => { recorded = s; },
+    });
+    expect(recorded).toMatchObject({ ok: true, problemAdSetIds: [] });
+  });
+
+  it("regression: a genuinely real not-delivering ad set is STILL flagged (not swept up by the dead-ad-set filter)", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await snapshots.upsert([
+      snap({ grain: "campaign", metaObjectId: "camp", spendAgorot: 80000, leads: 25, cplAgorot: 3200 }),
+      snap({ grain: "adset", metaObjectId: "as_real_broken", spendAgorot: 40000, leads: 5, cplAgorot: 8000 }),
+      snap({ grain: "adset", metaObjectId: "as_dead", spendAgorot: 235, leads: 0, cplAgorot: null }),
+    ]);
+    const recs = new InMemoryRecommendationStore();
+    let recorded: DeliverySummary | null = null;
+    await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      audienceMetaReader: { getAdSetMeta: async () => [
+        adSetMeta("as_real_broken", false, true), // real ad set, managed
+        adSetMeta("as_dead", false, false), // dead, unmanaged
+      ] },
+      deliveryReader: { getDeliveryHealth: async () => [
+        { adSetId: "as_real_broken", name: null, state: "not_delivering", reason: "Ad set not delivering" },
+        { adSetId: "as_dead", name: null, state: "not_delivering", reason: "stale" },
+      ] },
+      recordDelivery: async (_c, s) => { recorded = s; },
+    });
+    expect(recorded).toMatchObject({ ok: false, problemAdSetIds: ["as_real_broken"] });
+  });
+});
+
 // A weak-looking creative that lives under an ad set Meta reports as running
 // Dynamic/Advantage+ creative (AIC-36) — the tick must fetch is_dynamic_creative
 // via the audienceMetaReader and thread it all the way into the rule so it never
@@ -149,8 +225,8 @@ async function seedFlexibleCreative(store: InMemorySnapshotStore) {
   ]);
 }
 
-function adSetMeta(adSetId: string, isDynamicCreative: boolean): AdSetMeta {
-  return { adSetId, name: adSetId, ageMin: null, ageMax: null, genders: "all", geoSummary: "", isDynamicCreative, status: "active" };
+function adSetMeta(adSetId: string, isDynamicCreative: boolean, isManaged = true): AdSetMeta {
+  return { adSetId, name: adSetId, ageMin: null, ageMax: null, genders: "all", geoSummary: "", isDynamicCreative, status: "active", isManaged };
 }
 
 describe("runGenerationTick — flexible/Advantage+ creative exclusion (AIC-36)", () => {

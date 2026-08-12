@@ -119,6 +119,18 @@ ad set (and its creatives) from the evidence — so this rule only ever compares
 genuinely-delivering audiences and never proposes pausing a broken one. That
 exclusion is what made the rule safe to run live.
 
+**Dead/draft ad sets are excluded too, but not as a "delivery problem"
+(AIC-65).** A deleted/archived ad set, or one that was never published (zero
+ads — `effective_status` can still say `ACTIVE`), is excluded from `ev.adsets`
+the same way as a real delivery problem, but tracked separately
+(`AdSetMeta.isManaged`, `runGenerationTick`'s `unmanagedAdSetIds`) so
+[AIC-64](features/recommendation-engine.md)'s `classifyNoAction` never calls
+it `delivery_blocked` — a dead object isn't a delivery problem. This is what
+GelNails' real "second ad set" turned out to be: a never-published draft with
+leftover historical spend, inflating the audience count to a phantom 2 when
+there's really just 1. See
+[delivery-health.md](features/delivery-health.md#excluding-deaddraft-ad-sets-not-just-unhealthy-ones-aic-65).
+
 **Dynamic/Advantage+ creative is skipped, never compared (AIC-36).** When an ad
 set mixes multiple images/videos/bodies/titles per impression (Meta's Dynamic
 Creative, aka "Advantage+ creative" — the account-level default for new ad

@@ -109,16 +109,43 @@ export async function runGenerationTick(deps: {
       log?.error(`[generation] ${campaign.id}: could not record live budget — ${(e as Error).message}`);
     }
 
+    // Audience labels + dynamic-creative flags + managed-ad-set filtering
+    // (AIC-65): fetch ad-set metadata FIRST (before delivery-health), so a
+    // deleted/archived/never-published-draft ad set (isManaged=false — the
+    // real GelNails case: effective_status ACTIVE but zero ads) is known
+    // before delivery-health runs, and never counted as a real ad set, never
+    // cached, never labeled. A read failure just means no label/exclusion
+    // this tick (rules fall back to the raw id).
+    let adSetLabels: Map<string, string> | undefined;
+    let flexibleCreativeAdSetIds: Set<string> | undefined;
+    let unmanagedAdSetIds = new Set<string>();
+    if (deps.audienceMetaReader) {
+      try {
+        const allAdsets = await deps.audienceMetaReader.getAdSetMeta(campaign.metaCampaignId);
+        const managedAdsets = allAdsets.filter((a) => a.isManaged);
+        unmanagedAdSetIds = new Set(allAdsets.filter((a) => !a.isManaged).map((a) => a.adSetId));
+        adSetLabels = deriveAudienceLabels(managedAdsets);
+        flexibleCreativeAdSetIds = new Set(managedAdsets.filter((a) => a.isDynamicCreative).map((a) => a.adSetId));
+        await deps.recordAudienceMeta?.(campaign, managedAdsets);
+      } catch (e) {
+        log?.error(`[generation] ${campaign.id}: audience-meta read failed — ${(e as Error).message}`);
+      }
+    }
+
     // Delivery health: record it + exclude any not-delivering ad set from the
-    // evidence. A health-read failure doesn't block generation (exclude nothing).
-    let excludeAdSetIds: Set<string> | undefined;
+    // evidence. A health-read failure doesn't block generation (exclude
+    // nothing). Dead/draft ad sets (unmanagedAdSetIds, just computed above)
+    // are dropped from the health check entirely — a deleted ad set not
+    // delivering is expected, never a needs-attention item (AIC-65).
+    let deliveryProblemAdSetIds: Set<string> | undefined;
     if (deps.deliveryReader) {
       try {
         const health = await deps.deliveryReader.getDeliveryHealth(campaign.metaCampaignId);
-        const del = summarize(health);
+        const realHealth = health.filter((h) => !unmanagedAdSetIds.has(h.adSetId));
+        const del = summarize(realHealth);
         if (!del.ok) {
           summary.deliveryProblems++;
-          excludeAdSetIds = new Set(del.problemAdSetIds);
+          deliveryProblemAdSetIds = new Set(del.problemAdSetIds);
           log?.info(`[generation] ${campaign.id}: delivery problem — ${del.reason} [${del.problemAdSetIds.join(", ")}]`);
         }
         await deps.recordDelivery?.(campaign, del);
@@ -127,21 +154,10 @@ export async function runGenerationTick(deps: {
       }
     }
 
-    // Audience labels + dynamic-creative flags: fetch + cache ad-set metadata,
-    // derive labels. A read failure just means no label this tick (rules fall
-    // back to the raw id) and no flexible-creative exclusion this tick.
-    let adSetLabels: Map<string, string> | undefined;
-    let flexibleCreativeAdSetIds: Set<string> | undefined;
-    if (deps.audienceMetaReader) {
-      try {
-        const adsets = await deps.audienceMetaReader.getAdSetMeta(campaign.metaCampaignId);
-        adSetLabels = deriveAudienceLabels(adsets);
-        flexibleCreativeAdSetIds = new Set(adsets.filter((a) => a.isDynamicCreative).map((a) => a.adSetId));
-        await deps.recordAudienceMeta?.(campaign, adsets);
-      } catch (e) {
-        log?.error(`[generation] ${campaign.id}: audience-meta read failed — ${(e as Error).message}`);
-      }
-    }
+    // Evidence excludes BOTH real delivery problems and unmanaged ad sets —
+    // but only the former is a "delivery problem" for AIC-64's no-rec reason
+    // (classifyNoAction), so the two stay separate all the way through.
+    const excludeAdSetIds = new Set([...(deliveryProblemAdSetIds ?? []), ...unmanagedAdSetIds]);
 
     const result = await refreshRecommendations({
       snapshotStore,
@@ -151,7 +167,11 @@ export async function runGenerationTick(deps: {
       current,
       previous,
       expiresAt: null,
-      excludeAdSetIds,
+      excludeAdSetIds: excludeAdSetIds.size > 0 ? excludeAdSetIds : undefined,
+      // Explicit, even when empty: buildCampaignEvidence falls back to the
+      // FULL exclude set (delivery ∪ unmanaged) when this is omitted, which
+      // would wrongly call an unmanaged-only exclusion "delivery_blocked".
+      deliveryProblemAdSetIds: deliveryProblemAdSetIds ?? new Set(),
       adSetLabels,
       flexibleCreativeAdSetIds,
     });

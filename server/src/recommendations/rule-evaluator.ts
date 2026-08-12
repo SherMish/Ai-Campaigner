@@ -28,6 +28,12 @@ export async function buildCampaignEvidence(
   // untouched to the rules; pause_weak_creative skips these, the audience rule
   // (which reads ev.adsets, not ev.creatives) is unaffected.
   flexibleCreativeAdSetIds?: Set<string>,
+  // The subset of excludeAdSetIds that's a REAL delivery problem (AIC-39), as
+  // opposed to a deleted/archived/never-published ad set (AIC-65) — narrower
+  // than excludeAdSetIds on purpose, so AIC-64's classifyNoAction never calls
+  // a dead-object exclusion "delivery_blocked". Defaults to excludeAdSetIds
+  // itself when omitted, preserving pre-AIC-65 callers' behavior.
+  deliveryProblemAdSetIds?: Set<string>,
 ): Promise<CampaignEvidence> {
   const [curTotals, prevTotals, curCreatives, prevCreatives, curAdsets] = await Promise.all([
     store.campaignTotals(campaign.id, current.start, current.end),
@@ -51,7 +57,10 @@ export async function buildCampaignEvidence(
     flexibleCreativeAdSetIds,
     currentBudgetAgorot: campaign.currentBudgetAgorot,
     deliveryDays: curTotals.spendAgorot > 0 ? days : 0,
-    deliveryProblemAdSetIds: excluded.size > 0 ? [...excluded] : undefined,
+    deliveryProblemAdSetIds: (() => {
+      const d = deliveryProblemAdSetIds ?? excluded;
+      return d.size > 0 ? [...d] : undefined;
+    })(),
   };
 }
 

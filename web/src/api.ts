@@ -227,6 +227,7 @@ export interface ExplorerAdSet {
   metrics: ExplorerMetrics;
   ads: ExplorerAd[];
   pageId: string | null;
+  isManaged: boolean;
 }
 export interface ExplorerCampaign {
   id: string;

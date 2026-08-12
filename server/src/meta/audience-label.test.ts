@@ -24,8 +24,34 @@ describe("normalizeAdSetMeta", () => {
   });
 });
 
+describe("normalizeAdSetMeta — isManaged (AIC-65: exclude dead/draft ad sets)", () => {
+  it("is managed by default (no ads field requested, no deleted/archived status)", () => {
+    expect(normalizeAdSetMeta({ id: "as_1", effective_status: "ACTIVE" }).isManaged).toBe(true);
+  });
+
+  it("is NOT managed when effective_status is DELETED or ARCHIVED", () => {
+    expect(normalizeAdSetMeta({ id: "as_1", effective_status: "DELETED" }).isManaged).toBe(false);
+    expect(normalizeAdSetMeta({ id: "as_1", effective_status: "ARCHIVED" }).isManaged).toBe(false);
+  });
+
+  it("is NOT managed when ACTIVE but has zero ads — the real GelNails case (never-published draft)", () => {
+    const m = normalizeAdSetMeta({ id: "as_1", effective_status: "ACTIVE", ads: { data: [] } });
+    expect(m.isManaged).toBe(false);
+  });
+
+  it("is managed when it has at least one ad", () => {
+    const m = normalizeAdSetMeta({ id: "as_1", effective_status: "ACTIVE", ads: { data: [{ id: "ad_1" }] } });
+    expect(m.isManaged).toBe(true);
+  });
+
+  it("a merely PAUSED ad set (customer's own deliberate pause) is still managed", () => {
+    const m = normalizeAdSetMeta({ id: "as_1", effective_status: "PAUSED", ads: { data: [{ id: "ad_1" }] } });
+    expect(m.isManaged).toBe(true);
+  });
+});
+
 function meta(o: Partial<AdSetMeta> & Pick<AdSetMeta, "adSetId">): AdSetMeta {
-  return { name: "", ageMin: null, ageMax: null, genders: "all", geoSummary: "", isDynamicCreative: false, status: "active", ...o };
+  return { name: "", ageMin: null, ageMax: null, genders: "all", geoSummary: "", isDynamicCreative: false, status: "active", isManaged: true, ...o };
 }
 
 describe("deriveAudienceLabels — never show a raw ad-set name or 'ad set N' when something structured differs", () => {

@@ -20,6 +20,9 @@ export interface RawAdSetMeta {
       regions?: Array<{ name?: string }>;
     };
   } | null;
+  // AIC-65: at least one ad, requested as ads.limit(1){id} — the cheapest way
+  // to tell "a never-published draft" from a real ad set without a full count.
+  ads?: { data?: Array<{ id: string }> } | null;
 }
 
 export interface AdSetMeta {
@@ -36,6 +39,16 @@ export interface AdSetMeta {
   // AIC-63: whether a new ad added to this (already-existing) ad set would
   // actually deliver once approved, or whether the ad set itself is paused.
   status: "active" | "paused";
+  // AIC-65: false for a deleted/archived ad set, or a never-published draft
+  // with zero ads — a real GelNails case: `effective_status` still reports
+  // ACTIVE (Meta doesn't always reclassify a deleted ad set), but it has no
+  // ads and can't deliver. Callers must exclude these everywhere: counts,
+  // labels, delivery-health, the audience rule, the customer dashboard.
+  isManaged: boolean;
+}
+
+function isDeletedOrArchived(status?: string | null): boolean {
+  return status === "DELETED" || status === "ARCHIVED";
 }
 
 const GENDER_HE: Record<AdSetMeta["genders"], string> = {
@@ -54,6 +67,11 @@ export function normalizeAdSetMeta(row: RawAdSetMeta): AdSetMeta {
     ...(t.geo_locations?.regions ?? []).map((r) => r.name).filter(Boolean),
     ...(t.geo_locations?.countries ?? []),
   ] as string[];
+  // A "no ads" signal only counts when the field was actually requested and
+  // returned an empty list — if `ads` is absent entirely, we don't know
+  // either way, so don't penalize (never falsely exclude a real ad set just
+  // because a caller didn't ask for this field).
+  const isDraftWithNoAds = row.ads != null && (row.ads.data?.length ?? 0) === 0;
   return {
     adSetId: row.id,
     name: row.name ?? "",
@@ -63,6 +81,7 @@ export function normalizeAdSetMeta(row: RawAdSetMeta): AdSetMeta {
     geoSummary: places.slice(0, 2).join(", "),
     isDynamicCreative: row.is_dynamic_creative === true,
     status: row.effective_status === "ACTIVE" ? "active" : "paused",
+    isManaged: !isDeletedOrArchived(row.effective_status) && !isDraftWithNoAds,
   };
 }
 

@@ -6,6 +6,30 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-12 — Exclude deleted/archived/draft ad sets (AIC-65)
+GelNails' "second ad set" turned out to be a never-published draft: real
+historical spend (an ad that ran and was later removed), but `effective_status`
+still reports `ACTIVE` with zero ads today. The product was treating it as a
+real, managed ad set everywhere — a false 2-ad-set count, a false
+needs-attention item from its leftover `issues_info`, a confused audience
+rule, and a `delivery_blocked` no-rec reason (AIC-64) that was really "this
+object doesn't exist."
+
+`AdSetMeta.isManaged` (`audience-label.ts`) is now false for a deleted/
+archived `effective_status`, or for zero ads (`getAdSetMeta` now requests
+`ads.limit(1){id}`). `runGenerationTick` fetches ad-set metadata first each
+tick, excludes unmanaged ad sets from delivery-health, the audience/creative
+rule evidence, the cached labels (so the customer's opt-in audience view
+never shows it), and the audience count — tracked SEPARATELY from real
+delivery problems so AIC-64's `delivery_blocked` reason is never
+misattributed to a dead object. Also fixed a real ordering bug in
+`delivery-health.ts`: a deleted ad set's stale leftover `issues_info` was
+checked before the deleted/archived branch, so it could still be flagged.
+Ops explorer (AIC-45) still shows a dead ad set for operator visibility, but
+clearly marked "נמחק / לא פורסם," never as active or a problem.
+
+Full detail: [delivery-health.md](features/delivery-health.md#excluding-deaddraft-ad-sets-not-just-unhealthy-ones-aic-65).
+
 ### 2026-08-12 — Two real bugs found by Sharon dogfooding: stale budget + broken add-content
 Sharon (real customer + operator) reported the dashboard showing ₪10/day after
 raising the real Meta budget to ₪30, and "הוספת תוכן" claiming she had no

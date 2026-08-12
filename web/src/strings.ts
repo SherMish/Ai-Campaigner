@@ -160,6 +160,9 @@ export const strings = {
       flexibleTitles: "כותרות",
       noCreative: "אין קריאייטיב מקושר.",
       pageLabel: "עמוד",
+      // AIC-65: a deleted/never-published ad set — shown clearly as such, not
+      // as a normal active ad set and never as a problem.
+      deletedBadge: "נמחק / לא פורסם",
       metrics: {
         spend: "הוצאה", impressions: "חשיפות", reach: "הגעה", frequency: "תדירות",
         cpm: "CPM", ctr: "CTR", cpc: "CPC", leads: "פניות", cpl: "עלות לפנייה",

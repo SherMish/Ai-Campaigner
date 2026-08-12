@@ -55,19 +55,25 @@ export async function buildCampaignAudiences(
   ]);
 
   const metaById = new Map(meta.map((m) => [m.adSetId, m]));
-  const asMetaList: AdSetMeta[] = adsetStats.map((a) => {
-    const m = metaById.get(a.adSetId);
+  // AIC-65: the cache (upsertAdSetMeta) only ever stores MANAGED ad sets now
+  // — a deleted/archived/never-published one has no meta row here even if
+  // its historical spend still shows up in adsetStats (Insights, unfiltered).
+  // Drop those rather than render them with blank labels.
+  const managedAdsetStats = adsetStats.filter((a) => metaById.has(a.adSetId));
+  const asMetaList: AdSetMeta[] = managedAdsetStats.map((a) => {
+    const m = metaById.get(a.adSetId)!;
     return {
       adSetId: a.adSetId,
-      name: m?.name ?? "",
-      ageMin: m?.ageMin ?? null,
-      ageMax: m?.ageMax ?? null,
-      genders: m?.genders ?? "all",
-      geoSummary: m?.geoSummary ?? "",
-      isDynamicCreative: m?.isDynamicCreative ?? false,
+      name: m.name ?? "",
+      ageMin: m.ageMin ?? null,
+      ageMax: m.ageMax ?? null,
+      genders: m.genders ?? "all",
+      geoSummary: m.geoSummary ?? "",
+      isDynamicCreative: m.isDynamicCreative ?? false,
       // Not tracked by the cache (audience_meta_cache) and unused by
       // deriveAudienceLabels — this view never surfaces an ad set's status.
       status: "active",
+      isManaged: true, // filtered above — only managed ad sets reach here
     };
   });
   const labels = deriveAudienceLabels(asMetaList);
@@ -87,7 +93,7 @@ export async function buildCampaignAudiences(
     creativesByAdSet.set(key, list);
   }
 
-  const audiences: AudienceRow[] = adsetStats.map((a) => ({
+  const audiences: AudienceRow[] = managedAdsetStats.map((a) => ({
     adSetId: a.adSetId,
     label: labels.get(a.adSetId) ?? metaById.get(a.adSetId)?.name ?? a.adSetId,
     spendAgorot: a.spendAgorot,

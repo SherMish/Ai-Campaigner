@@ -8,11 +8,14 @@ import type { AdSetMeta } from "../meta/audience-label.js";
 // which never surfaces it) — narrowed so callers/tests don't need to supply
 // a field this function ignores. AIC-63's live ad-set picker reads status
 // fresh from Meta instead, since a cached value could be stale by the time
-// a customer picks where to add an ad.
+// a customer picks where to add an ad. isManaged isn't persisted either
+// (AIC-65) — the caller (generation.ts) filters to managed-only BEFORE
+// calling this, so every row in the cache is managed by construction; there
+// is deliberately no way to cache a dead/draft ad set.
 export async function upsertAdSetMeta(
   pool: pg.Pool,
   campaignId: string,
-  adsets: Omit<AdSetMeta, "status">[],
+  adsets: Omit<AdSetMeta, "status" | "isManaged">[],
 ): Promise<void> {
   for (const a of adsets) {
     await pool.query(
