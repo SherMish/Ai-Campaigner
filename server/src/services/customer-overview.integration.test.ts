@@ -23,7 +23,10 @@ const { current, previous } = rollingPeriods();
 function snap(campaignId: string, o: Partial<SnapshotUpsert>): SnapshotUpsert {
   return {
     campaignId, grain: "campaign", metaObjectId: "meta_camp_ov", parentMetaId: null,
-    creativeName: null, periodStart: current.start, periodEnd: current.end,
+    // A single DAY inside the current window — campaign totals are summed, and
+    // summing must only see disjoint rows (migration 030). Creative-grain rows
+    // still match creativeStats' containment predicate.
+    creativeName: null, periodStart: current.start, periodEnd: current.start,
     spendAgorot: 0, leads: 0, cplAgorot: null, impressions: 0, linkClicks: 0,
     deliveryStatus: "active", raw: {}, ...o,
   };
@@ -77,7 +80,7 @@ d("customer overview (DB + HTTP)", () => {
     await store.upsert([
       snap(campaignId, { spendAgorot: 18000, leads: 6, cplAgorot: 3000 }),
       snap(campaignId, { grain: "creative", metaObjectId: "cr_ov_1", creativeName: "A", spendAgorot: 18000, leads: 6, cplAgorot: 3000 }),
-      snap(campaignId, { periodStart: previous.start, periodEnd: previous.end, spendAgorot: 15000, leads: 5, cplAgorot: 3000 }),
+      snap(campaignId, { periodStart: previous.start, periodEnd: previous.start, spendAgorot: 15000, leads: 5, cplAgorot: 3000 }),
     ]);
 
     const ov = await buildCustomerOverview(pool, userId);

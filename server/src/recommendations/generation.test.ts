@@ -14,11 +14,19 @@ const CUR = { start: "2026-07-26", end: "2026-08-01" };
 const PREV = { start: "2026-07-19", end: "2026-07-25" };
 
 function snap(o: Partial<SnapshotUpsert> & Pick<SnapshotUpsert, "grain">): SnapshotUpsert {
-  return {
+  const r: SnapshotUpsert = {
     campaignId: "camp-1", metaObjectId: "x", parentMetaId: null, creativeName: null,
     periodStart: CUR.start, periodEnd: CUR.end, spendAgorot: 0, leads: 0, cplAgorot: null,
     impressions: 0, linkClicks: 0, deliveryStatus: "active", raw: {}, ...o,
   };
+  // Campaign-grain rows are SUMMED over the window, so they must be disjoint
+  // per-day rows — that's what real ingestion writes, and what campaignTotals
+  // reads via the insight_snapshot_daily view (migration 030). Collapsing to a
+  // single day inside the window expresses the window's totals without the
+  // overlap that made the engine read 8 leads where the customer had 4.
+  // Creative/ad-set grains are selected per object rather than summed over
+  // time, so they keep the rolling window they're really ingested with.
+  return r.grain === "campaign" ? { ...r, periodEnd: r.periodStart } : r;
 }
 
 // A weak creative (cr_weak) that the rules should flag for a pause.
@@ -319,6 +327,50 @@ describe("runGenerationTick — recordNoRecReason (AIC-64)", () => {
     });
     expect(res.evaluated).toBe(1);
     expect(res.created).toBe(1);
+  });
+
+  // REGRESSION (real, found 2026-08-13 against production). The customer's
+  // dashboard read "הכל עובד כרגיל" (all working normally / `stable`) while the
+  // campaign had only 4 leads against a MIN_CAMPAIGN_LEADS gate of 5.
+  //
+  // Root cause was NOT the classifier — it was the evidence. Ingestion writes a
+  // rolling 7-day campaign row AND per-day rows covering the same days, and
+  // campaignTotals summed both, so the engine saw exactly 2x (8 leads). That
+  // inflation passed a gate the real figure fails, and `stable` is the
+  // fall-through once the gate passes and no rule fires.
+  //
+  // `stable` and `collecting` are opposite messages to a customer: one says
+  // "nothing needs doing", the other "we don't know enough yet". Seeds the real
+  // production shape — overlapping rolling + daily rows — and pins the honest
+  // classification.
+  it("an overlapping rolling row never inflates evidence past the gate (stable vs collecting)", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await snapshots.upsert([
+      // The rolling 7-day row ingestion writes: 4 real leads. `snap` collapses
+      // campaign rows to a day, so build this one explicitly to keep the overlap.
+      {
+        campaignId: "camp-1", grain: "campaign", metaObjectId: "camp", parentMetaId: null,
+        creativeName: null, periodStart: CUR.start, periodEnd: CUR.end,
+        spendAgorot: 3921, leads: 4, cplAgorot: 980,
+        impressions: 0, linkClicks: 0, deliveryStatus: "active", raw: {},
+      },
+      // ...and the per-day rows for the same days — the SAME 4 leads, not 4 more.
+      snap({ grain: "campaign", metaObjectId: "camp", periodStart: "2026-07-28", spendAgorot: 369, leads: 1, cplAgorot: 369 }),
+      snap({ grain: "campaign", metaObjectId: "camp", periodStart: "2026-07-30", spendAgorot: 813, leads: 0, cplAgorot: null }),
+      snap({ grain: "campaign", metaObjectId: "camp", periodStart: "2026-07-31", spendAgorot: 2739, leads: 3, cplAgorot: 913 }),
+    ]);
+    const recs = new InMemoryRecommendationStore();
+    let reason: string | null = null;
+    await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(3000), // ₪30/day: 7×3000 clears the budget gate
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      recordNoRecReason: async (_c, draft) => { reason = (draft.evidence as { reason: string }).reason; },
+    });
+
+    // 4 real leads < MIN_CAMPAIGN_LEADS (5) → honestly still collecting.
+    // Before the fix this read `stable` off 8 phantom leads.
+    expect(reason).toBe("collecting");
   });
 });
 

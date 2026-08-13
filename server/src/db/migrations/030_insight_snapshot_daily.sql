@@ -1,0 +1,33 @@
+-- `insight_snapshots` holds two kinds of row with DIFFERENT semantics, and
+-- nothing stopped a naive SUM() from mixing them:
+--
+--   * rolling-window rows  — period_start < period_end (e.g. a 7-day window),
+--     written every ingestion tick, so consecutive ticks OVERLAP each other.
+--   * per-day rows         — period_start = period_end, disjoint by construction
+--     (added for the day/week/month/all-time switcher).
+--
+-- Summing across both double-counts, because a rolling row and the per-day rows
+-- covering the same days both land inside the same query window.
+--
+-- This bit us TWICE. Migration 028 fixed it for lifetime leads ("1 real lead read
+-- as 3") and its comment even documented the hazard — but
+-- `PgSnapshotStore.campaignTotals` was a second consumer that fix missed. Found
+-- 2026-08-13 against production: the engine's own evidence read exactly 2x the
+-- truth (8 leads where the customer had 4), which passed a MIN_CAMPAIGN_LEADS
+-- gate the real figure should have failed, so the dashboard told the customer
+-- "הכל עובד כרגיל" (all fine) when the honest answer was "still collecting".
+--
+-- A read-side filter is not a fix — it is a rule every future consumer has to
+-- REMEMBER, and the feature layer (AIC-75) plus outcome measurement (AIC-76) are
+-- both new aggregation code over this exact table. So make the correct thing the
+-- only reachable thing, the same instinct as AIC-70's intent-vs-delivery status
+-- accessors: aggregate over this VIEW, never over the table.
+--
+--   RULE: any SUM over time reads insight_snapshot_daily.
+--
+-- Per-object row SELECTs at creative/adset grain (creativeStats/adsetStats) are
+-- NOT affected and deliberately keep reading the table: those grains have no
+-- per-day rows at all, and they select rows rather than summing over time, so
+-- they were never ambiguous.
+CREATE VIEW insight_snapshot_daily AS
+  SELECT * FROM insight_snapshots WHERE period_start = period_end;

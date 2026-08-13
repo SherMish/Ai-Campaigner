@@ -127,9 +127,14 @@ export class PgSnapshotStore implements SnapshotStore {
       spend: string | null;
       leads: string | null;
     }>(
+      // Sums the DAILY VIEW, never the table — a rolling-window row and the
+      // per-day rows covering the same days would both fall inside this window
+      // and double-count (migration 030; the engine really read 8 leads where
+      // the customer had 4). The view makes that arithmetically impossible
+      // rather than relying on every caller to remember a filter.
       `SELECT COALESCE(SUM(spend_agorot),0) AS spend,
               COALESCE(SUM(leads),0)        AS leads
-       FROM insight_snapshots
+       FROM insight_snapshot_daily
        WHERE campaign_id = $1 AND grain = 'campaign'
          AND period_start >= $2 AND period_end <= $3`,
       [campaignId, start, end],
@@ -240,6 +245,10 @@ export class InMemorySnapshotStore implements SnapshotStore {
       if (
         r.campaignId === campaignId &&
         r.grain === "campaign" &&
+        // Mirrors the insight_snapshot_daily view (migration 030): disjoint
+        // per-day rows only, so an overlapping rolling-window row can never be
+        // summed alongside the days it covers.
+        r.periodStart === r.periodEnd &&
         r.periodStart >= start &&
         r.periodEnd <= end
       ) {

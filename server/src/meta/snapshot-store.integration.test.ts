@@ -76,14 +76,49 @@ d("PgSnapshotStore (DB)", () => {
     await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
   });
 
-  it("campaignTotals sums campaign-grain rows in a window", async () => {
+  it("campaignTotals sums the disjoint daily rows in a window", async () => {
     const { campaignId, customerId } = await makeCampaign();
     const store = new PgSnapshotStore(pool);
     await store.upsert([
-      snap(campaignId, { metaObjectId: "c", periodStart: "2026-07-27", periodEnd: "2026-08-02", spendAgorot: 18000, leads: 6, cplAgorot: 3000 }),
+      snap(campaignId, { metaObjectId: "c", periodStart: "2026-07-28", periodEnd: "2026-07-28", spendAgorot: 12000, leads: 4, cplAgorot: 3000 }),
+      snap(campaignId, { metaObjectId: "c", periodStart: "2026-07-30", periodEnd: "2026-07-30", spendAgorot: 6000, leads: 2, cplAgorot: 3000 }),
     ]);
     const totals = await store.campaignTotals(campaignId, "2026-07-27", "2026-08-02");
     expect(totals).toMatchObject({ spendAgorot: 18000, leads: 6, cplAgorot: 3000 });
+
+    await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
+  });
+
+  // REGRESSION (real, found 2026-08-13 against production data). Ingestion writes
+  // BOTH a rolling 7-day campaign-grain row AND disjoint per-day rows covering the
+  // same days (ingestion-service.ts). campaignTotals' containment predicate
+  // (period_start >= start AND period_end <= end) matched BOTH, so the engine's
+  // evidence read exactly 2x the truth — 8 leads where the customer really had 4.
+  //
+  // That inflation passed a MIN_CAMPAIGN_LEADS gate the real figure should have
+  // failed, so the customer was told "הכל עובד כרגיל" (all fine / `stable`) when
+  // the honest state was `collecting`. Same overlapping-window class as the
+  // leads_to_date bug (migration 028, "1 lead read as 3") — this was a SECOND
+  // consumer that fix missed. Summing now goes through the insight_snapshot_daily
+  // view (migration 030), so a SUM is disjoint by construction rather than by
+  // remembering to filter.
+  it("never double-counts a rolling window row that overlaps its own daily rows", async () => {
+    const { campaignId, customerId } = await makeCampaign();
+    const store = new PgSnapshotStore(pool);
+    await store.upsert([
+      // the rolling 7-day row ingestion writes...
+      snap(campaignId, { metaObjectId: "roll", periodStart: "2026-07-27", periodEnd: "2026-08-02", spendAgorot: 3921, leads: 4, cplAgorot: 980 }),
+      // ...and the per-day rows covering the exact same days, same real spend/leads
+      snap(campaignId, { metaObjectId: "roll", periodStart: "2026-07-29", periodEnd: "2026-07-29", spendAgorot: 369, leads: 1, cplAgorot: 369 }),
+      snap(campaignId, { metaObjectId: "roll", periodStart: "2026-07-31", periodEnd: "2026-07-31", spendAgorot: 813, leads: 0, cplAgorot: null }),
+      snap(campaignId, { metaObjectId: "roll", periodStart: "2026-08-01", periodEnd: "2026-08-01", spendAgorot: 2739, leads: 3, cplAgorot: 913 }),
+    ]);
+
+    const totals = await store.campaignTotals(campaignId, "2026-07-27", "2026-08-02");
+
+    // The truth, counted once — NOT 8 leads / 7842 agorot.
+    expect(totals.leads).toBe(4);
+    expect(totals.spendAgorot).toBe(3921);
 
     await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
   });

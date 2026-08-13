@@ -24,8 +24,12 @@ function snap(campaignId: string, o: Partial<SnapshotUpsert>): SnapshotUpsert {
     metaObjectId: "meta_camp_1",
     parentMetaId: null,
     creativeName: null,
+    // A single DAY inside the current window, not the whole window: campaign
+    // totals are summed, and summing must only see disjoint rows (migration
+    // 030 / insight_snapshot_daily). Creative-grain rows still match the
+    // containment predicate creativeStats uses, so this default serves both.
     periodStart: current.start,
-    periodEnd: current.end,
+    periodEnd: current.start,
     spendAgorot: 0,
     leads: 0,
     cplAgorot: null,
@@ -88,7 +92,8 @@ d("dogfood readout (DB + HTTP)", () => {
       // previous period campaign total for the delta
       snap(campaignId, {
         periodStart: previous.start,
-        periodEnd: previous.end,
+        periodEnd: previous.start, // single day inside the previous window
+
         spendAgorot: 15000,
         leads: 5,
         cplAgorot: 3000,

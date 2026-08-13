@@ -8,7 +8,7 @@ const CUR = { start: "2026-07-26", end: "2026-08-01" };
 const PREV = { start: "2026-07-19", end: "2026-07-25" };
 
 function snap(o: Partial<SnapshotUpsert> & Pick<SnapshotUpsert, "grain">): SnapshotUpsert {
-  return {
+  const r: SnapshotUpsert = {
     campaignId: "camp-1",
     metaObjectId: "x",
     parentMetaId: null,
@@ -24,6 +24,9 @@ function snap(o: Partial<SnapshotUpsert> & Pick<SnapshotUpsert, "grain">): Snaps
     raw: {},
     ...o,
   };
+  // Campaign-grain rows are summed, so they must be disjoint per-day rows —
+  // see the same note in generation.test.ts (migration 030).
+  return r.grain === "campaign" ? { ...r, periodEnd: r.periodStart } : r;
 }
 
 async function seedWeakCreative(store: InMemorySnapshotStore) {

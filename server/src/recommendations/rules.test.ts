@@ -207,4 +207,136 @@ describe("increase_budget", () => {
     );
     expect(["increase_budget"]).not.toContain(d.type);
   });
+
+  // Asymmetry vs decrease_budget (below): decreaseBudget explicitly bails on
+  // prev===0; increaseBudget has no such guard. Harmless today only because
+  // increaseBudget never divides by prev — it compares via <=/</>. Pinning so
+  // a feature-layer refactor doesn't accidentally "fix" this into a behaviour
+  // change: with prev CPL 0 and leads improving, it fires.
+  it("fires off a zero previous CPL via the leads axis (no prev===0 guard, unlike decrease_budget)", () => {
+    const d = evaluateCampaign(
+      baseEvidence({
+        current: { spendAgorot: 70000, leads: 21, cplAgorot: 0, days: 7 },
+        previous: { spendAgorot: 70000, leads: 20, cplAgorot: 0, days: 7 },
+      }),
+    );
+    expect(d.type).toBe("increase_budget");
+  });
+});
+
+describe("decrease_budget — the prev===0 guard increase_budget lacks", () => {
+  it("does NOT fire on a zero previous CPL, even with a nominal CPL rise", () => {
+    const d = evaluateCampaign(
+      baseEvidence({
+        current: { spendAgorot: 70000, leads: 20, cplAgorot: 100, days: 7 },
+        previous: { spendAgorot: 70000, leads: 20, cplAgorot: 0, days: 7 },
+      }),
+    );
+    expect(d.type).not.toBe("decrease_budget");
+  });
+});
+
+// Behaviour that's real today but has NO test pinning it — characterized here
+// BEFORE the AIC-75 feature-layer refactor so "no behaviour change" is checkable,
+// not just asserted. Every case below quotes the exact mechanism from rules.ts.
+describe("engine internals (characterization — pin before the feature-layer refactor)", () => {
+  // rules.ts:360-366 — RULES array order is the ONLY precedence mechanism.
+  // Build evidence where pauseWeakCreative AND decreaseBudget would both fire;
+  // the earlier array entry must win.
+  it("first-match-wins across rule TYPES: a weak creative pre-empts a budget decrease it would otherwise trigger", () => {
+    const d = evaluateCampaign(
+      baseEvidence({
+        current: { spendAgorot: 70000, leads: 14, cplAgorot: 5000, days: 7 }, // would fire decrease_budget alone
+        previous: { spendAgorot: 70000, leads: 20, cplAgorot: 3500, days: 7 },
+        creatives: [cr("cr_a", 25000, 10, 2500), cr("cr_b", 24000, 9, 2667), cr("cr_weak", 18000, 1, 18000)],
+      }),
+    );
+    expect(d.type).toBe("pause_creative"); // not decrease_budget, despite CPL having risen materially
+    expect(d.targetMetaId).toBe("cr_weak");
+  });
+
+  // rules.ts:218-229 — byAdSet is a Map built by iterating ev.creatives in
+  // order, and `for (const group of byAdSet.values())` returns the FIRST
+  // group (by insertion order) that produces a draft. Insertion order = the
+  // order creatives arrive in the evidence — which the store populates
+  // spend-desc, so in production this means "the highest-spending ad set's
+  // group is examined first." Two groups, both containing a qualifying weak
+  // creative: the one appearing FIRST in ev.creatives must win, not
+  // "whichever is objectively weakest."
+  it("ad-set group order = ev.creatives array order: the first group with a match wins, not the worst overall", () => {
+    const d = evaluateCampaign(
+      baseEvidence({
+        creatives: [
+          // Group "as_1" listed first — its weak creative is only just past
+          // the 2x threshold (bestPeerCpl 2500 × 2 = 5000).
+          { metaObjectId: "as1_a", adSetId: "as_1", creativeName: "as1_a", spendAgorot: 25000, leads: 10, cplAgorot: 2500, deliveryStatus: "active" },
+          { metaObjectId: "as1_weak", adSetId: "as_1", creativeName: "as1_weak", spendAgorot: 18000, leads: 1, cplAgorot: 5000, deliveryStatus: "active" },
+          // Group "as_2" listed second — its weak creative is FAR worse in
+          // absolute terms, but array order means it's never reached.
+          { metaObjectId: "as2_a", adSetId: "as_2", creativeName: "as2_a", spendAgorot: 25000, leads: 10, cplAgorot: 2500, deliveryStatus: "active" },
+          { metaObjectId: "as2_weak", adSetId: "as_2", creativeName: "as2_weak", spendAgorot: 18000, leads: 1, cplAgorot: 50000, deliveryStatus: "active" },
+        ],
+      }),
+    );
+    expect(d.type).toBe("pause_creative");
+    expect(d.targetMetaId).toBe("as1_weak"); // the first GROUP's candidate, not the globally-worst one
+  });
+
+  // rules.ts:186-189 — the sort comparator `(b.cplAgorot ?? Infinity) - (a.cplAgorot ?? Infinity)`
+  // means a null-CPL creative (spent, zero leads) sorts as INFINITELY worse
+  // than any finite CPL, so it's picked over a merely-expensive peer.
+  it("a null-CPL (spent, zero-lead) creative outranks a finite-but-bad CPL as \"weakest\"", () => {
+    const d = evaluateCampaign(
+      baseEvidence({
+        creatives: [
+          cr("cr_a", 25000, 10, 2500), // sets bestPeerCpl = 2500
+          cr("cr_bad", 20000, 1, 20000), // finite, 8x — clears the 2x bar
+          cr("cr_dead", 16000, 0, null), // null — sorts as worse than ANY finite value
+        ],
+      }),
+    );
+    expect(d.type).toBe("pause_creative");
+    expect(d.targetMetaId).toBe("cr_dead");
+  });
+
+  // rules.ts:181-183 vs :243-245 — a DOCUMENTED asymmetry, not a bug: the
+  // creative rule's peer baseline (`performers`) is drawn from ALL creatives
+  // with leads>0, not from `withData` (the spend-gated set) — so a tiny-spend
+  // creative CAN set bestPeerCpl. The audience rule's baseline is drawn from
+  // `withData` — a tiny-spend ad set CANNOT set the audience baseline.
+  it("creative rule: an under-spend creative CAN set the peer baseline that judges others", () => {
+    const d = evaluateCampaign(
+      baseEvidence({
+        creatives: [
+          // Never reaches MIN_CREATIVE_SPEND_AGOROT (15000) — excluded from
+          // `withData` (the pause candidates) but NOT from `performers` (the
+          // baseline), so its cheap CPL still sets bestPeerCpl = 100.
+          cr("cr_tiny", 500, 5, 100),
+          // 150 < 100×2 (200) — stays healthy against the tiny baseline.
+          cr("cr_a", 25000, 10, 150),
+          // 2500 ≥ 100×2 — weak ONLY because the baseline came from cr_tiny;
+          // against a normal peer (cr_a, 150) it would need to be ≥300 to fire.
+          cr("cr_now_weak", 20000, 8, 2500),
+        ],
+      }),
+    );
+    expect(d.type).toBe("pause_creative");
+    expect(d.targetMetaId).toBe("cr_now_weak");
+  });
+
+  it("audience rule: an under-spend ad set CANNOT set the audience baseline (mirrors the asymmetry above)", () => {
+    const d = evaluateCampaign(
+      baseEvidence({
+        adsets: [
+          // Below AUDIENCE_MIN_SPEND_AGOROT (30000) — excluded from `withData`
+          // entirely, so unlike the creative-rule case above, this cheap CPL
+          // can never become the baseline.
+          { adSetId: "as_tiny", spendAgorot: 500, leads: 1, cplAgorot: 500, deliveryStatus: "active" },
+          { adSetId: "as_a", spendAgorot: 35000, leads: 10, cplAgorot: 3500, deliveryStatus: "active" },
+          { adSetId: "as_b", spendAgorot: 35000, leads: 9, cplAgorot: 3888, deliveryStatus: "active" },
+        ],
+      }),
+    );
+    expect(d.type).not.toBe("pause_adset"); // as_a/as_b are close; as_tiny is invisible to this rule
+  });
 });

@@ -58,15 +58,20 @@ describe("IngestionService.ingestCampaign", () => {
     expect(store.rows.size).toBe(1);
   });
 
+  // Seeds SINGLE-DAY rows inside each window rather than one rolling row per
+  // window. Window totals are summed, and summing must only ever see disjoint
+  // rows (migration 030 / insight_snapshot_daily) — a rolling row overlapping
+  // its own days is exactly what made the engine read double.
   it("computes period-over-period totals", async () => {
     const client = new FakeMetaClient();
     const store = new InMemorySnapshotStore();
     const svc = new IngestionService(store, client);
+    const day = (d: string) => ({ start: d, end: d });
 
     client.setInsights("meta_camp_1", campaignRows("180.00", "5"));
-    await svc.ingestCampaign({ id: "camp-1", metaCampaignId: "meta_camp_1" }, PERIOD);
+    await svc.ingestCampaign({ id: "camp-1", metaCampaignId: "meta_camp_1" }, day("2026-07-28"));
     client.setInsights("meta_camp_1", campaignRows("200.00", "4"));
-    await svc.ingestCampaign({ id: "camp-1", metaCampaignId: "meta_camp_1" }, PREV);
+    await svc.ingestCampaign({ id: "camp-1", metaCampaignId: "meta_camp_1" }, day("2026-07-21"));
 
     const cmp = await svc.periodComparison("camp-1", PERIOD, PREV);
     expect(cmp.current).toMatchObject({ spendAgorot: 18000, leads: 5, cplAgorot: 3600 });
