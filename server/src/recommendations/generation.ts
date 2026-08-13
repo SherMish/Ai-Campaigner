@@ -16,11 +16,20 @@ import { upsertAdSetMeta } from "../services/audience-meta-cache.js";
 import { recordNoRecReason } from "../services/evaluation-reason.js";
 import { recordLiveBudget } from "../services/live-budget.js";
 import { recordLeadsToDate } from "../services/leads-to-date.js";
+import { getLatestEngineActionByType } from "../services/action-history.js";
 import { OpsQueue } from "../services/ops-queue.js";
 import { consoleLogger, type Logger } from "../services/logger.js";
 
 export interface AudienceMetaReader {
   getAdSetMeta(metaCampaignId: string): Promise<AdSetMeta[]>;
+}
+
+// AIC-77b: which recommendation TYPES this campaign's engine last executed
+// successfully, and when — pure DB read (no Meta call), so this stays a
+// separate injected dep from MetaReader/DeliveryReader/etc rather than
+// stretching one of those interfaces to cover something unrelated to Meta.
+export interface CooldownReader {
+  getLatestEngineActionByType(campaignId: string): Promise<Record<string, Date>>;
 }
 
 // AIC-67 follow-up: a TRUE lifetime lead count, distinct from any
@@ -112,6 +121,11 @@ export async function runGenerationTick(deps: {
   // tick — never guessed from snapshot sums.
   leadsReader?: LeadsReader;
   recordLeadsToDate?: (campaign: GenCampaign, leadsToDate: number, spendToDate?: number) => Promise<void>;
+  // AIC-77b: when provided, a class (creative/audience/budget) that executed
+  // successfully within COOLDOWN_DAYS is suppressed — see rules.ts's
+  // resolveCooldownClasses. A read failure just means no cooldown applies
+  // this tick, same fail-open shape as every other optional reader here.
+  cooldownReader?: CooldownReader;
   ref?: Date;
   logger?: Logger;
 }): Promise<GenerationSummary> {
@@ -124,8 +138,17 @@ export async function runGenerationTick(deps: {
 
   for (const campaign of campaigns) {
     let currentBudgetAgorot: number;
+    // AIC-77b: getCampaignState already reads adStatuses/adSetStatuses every
+    // tick — previously discarded after reading only dailyBudgetAgorot. Now
+    // threaded into evidence so the engine never proposes pausing an ad
+    // that's already paused (by us, or manually via AIC-66).
+    let adStatuses: Record<string, "active" | "paused"> = {};
+    let adSetStatuses: Record<string, "active" | "paused"> = {};
     try {
-      currentBudgetAgorot = (await reader.getCampaignState(campaign.metaCampaignId)).dailyBudgetAgorot;
+      const state = await reader.getCampaignState(campaign.metaCampaignId);
+      currentBudgetAgorot = state.dailyBudgetAgorot;
+      adStatuses = state.adStatuses;
+      adSetStatuses = state.adSetStatuses;
     } catch (e) {
       summary.skipped++;
       log?.error(`[generation] ${campaign.id}: could not read live budget — ${(e as Error).message}`);
@@ -198,11 +221,25 @@ export async function runGenerationTick(deps: {
     // (classifyNoAction), so the two stay separate all the way through.
     const excludeAdSetIds = new Set([...(deliveryProblemAdSetIds ?? []), ...unmanagedAdSetIds]);
 
+    let lastActionAtByType: Record<string, Date> | undefined;
+    if (deps.cooldownReader) {
+      try {
+        lastActionAtByType = await deps.cooldownReader.getLatestEngineActionByType(campaign.id);
+      } catch (e) {
+        log?.error(`[generation] ${campaign.id}: cooldown read failed — ${(e as Error).message}`);
+      }
+    }
+
     const result = await refreshRecommendations({
       snapshotStore,
       recommendationStore,
       recommendationService,
-      campaign: { id: campaign.id, currentBudgetAgorot, thresholdOverrides: campaign.thresholdOverrides },
+      campaign: {
+        id: campaign.id,
+        currentBudgetAgorot,
+        thresholdOverrides: campaign.thresholdOverrides,
+        lastActionAtByType,
+      },
       current,
       previous,
       expiresAt: null,
@@ -213,6 +250,9 @@ export async function runGenerationTick(deps: {
       deliveryProblemAdSetIds: deliveryProblemAdSetIds ?? new Set(),
       adSetLabels,
       flexibleCreativeAdSetIds,
+      adStatuses,
+      adSetStatuses,
+      now: deps.ref,
     });
 
     summary.evaluated++;
@@ -264,6 +304,9 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
       leadsReader: adapter,
       recordLeadsToDate: async (campaign, leadsToDate, spendToDate) => {
         await recordLeadsToDate({ pool, campaignId: campaign.id, leadsToDate, spendToDate });
+      },
+      cooldownReader: {
+        getLatestEngineActionByType: (campaignId) => getLatestEngineActionByType(pool, campaignId),
       },
       snapshotStore,
       recommendationStore,

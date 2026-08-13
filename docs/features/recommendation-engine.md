@@ -65,6 +65,19 @@ math. See [../FEATURES.md](../FEATURES.md) for the full metric catalogue; the
 refactor onto it made no behaviour change (pinned by characterization tests in
 `rules.test.ts` written before the refactor).
 
+**Cooldown (AIC-77b).** After an engine-authored action executes, the same
+class (creative/audience/budget) is suppressed for `COOLDOWN_DAYS` — a rule
+that would fire is tried anyway (a different, non-cooling class still takes
+precedence), and `cooling_down` is reported only when something genuinely
+would have fired and every candidate was suppressed. Sourced from
+`action_history` (`recommendation_id IS NOT NULL AND result = 'success'`
+distinguishes an engine execution from a manual AIC-66 control), threaded
+through `EvaluableCampaign.lastActionAtByType` exactly like AIC-77a's
+`thresholdOverrides`. **Also already-paused objects are excluded from
+evidence** (`isJudgeable`, [../FEATURES.md](../FEATURES.md)) — the engine
+never proposes pausing an ad Meta already reports as paused. Full mechanism
+in [../RULES.md](../RULES.md#precedence--cooldown-aic-77b).
+
 Source: `server/src/recommendations/rules.ts`, `features.ts`, `rule-evaluator.ts`.
 Tests: `rules.test.ts` (each rule fires when it should and, crucially, does
 **not** on thin evidence), `features.test.ts`, `rule-evaluator.test.ts`.

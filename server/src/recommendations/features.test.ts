@@ -6,6 +6,7 @@ import {
   shareOfCampaignSpend,
   daysActive,
   deliveryDaysActive,
+  isJudgeable,
   bestPeerCpl,
   groupCreativesByAdSet,
   periodOverPeriodDeltaPct,
@@ -82,6 +83,20 @@ describe("daysActive / deliveryDaysActive", () => {
   it("deliveryDaysActive requires spend specifically — a lead with no spend that day doesn't count as delivery", () => {
     const daily = [day("2026-07-26", 0, 1), day("2026-07-27", 1000, 0)];
     expect(deliveryDaysActive(daily)).toBe(1);
+  });
+});
+
+describe("isJudgeable (AIC-77b — the centrally-owned already-paused exclusion)", () => {
+  it("excludes an object Meta explicitly reports as paused", () => {
+    expect(isJudgeable("paused")).toBe(false);
+  });
+
+  it("an active object is judgeable", () => {
+    expect(isJudgeable("active")).toBe(true);
+  });
+
+  it("absence of status is judgeable, not excluded — 'we don't know' is never 'we know it's paused'", () => {
+    expect(isJudgeable(undefined)).toBe(true);
   });
 });
 

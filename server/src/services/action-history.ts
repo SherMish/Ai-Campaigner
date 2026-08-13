@@ -97,6 +97,30 @@ export async function listCustomerActionHistory(
   return rows.map(rowToEntry);
 }
 
+// AIC-77b: one row per recommendation type — the most recent SUCCESSFUL
+// ENGINE-AUTHORED execution of it for this campaign, regardless of how old.
+// `recommendation_id IS NOT NULL` is the verified discriminator: every other
+// action_history writer (manual AIC-66 controls, builder, launch) hardcodes
+// the literal NULL in its SQL, so no non-engine row can ever match this.
+// `result = 'success'` excludes a failed Meta write, which must never start
+// a cooldown. Bounded to ≤ the number of RecommendationTypes (currently 5)
+// per campaign via DISTINCT ON — the caller (rules.ts's resolveCooldownClasses)
+// compares each timestamp against its own resolved COOLDOWN_DAYS and `now`,
+// so this reader doesn't need to know the cutoff at all.
+export async function getLatestEngineActionByType(
+  pool: pg.Pool,
+  campaignId: string,
+): Promise<Record<string, Date>> {
+  const { rows } = await pool.query<{ action_type: string; occurred_at: Date }>(
+    `SELECT DISTINCT ON (action_type) action_type, occurred_at
+     FROM action_history
+     WHERE campaign_id = $1 AND recommendation_id IS NOT NULL AND result = 'success'
+     ORDER BY action_type, occurred_at DESC`,
+    [campaignId],
+  );
+  return Object.fromEntries(rows.map((r) => [r.action_type, r.occurred_at]));
+}
+
 // Jargon-free projection for the customer surface (P0.5 reuse).
 export function condense(entries: ActionHistoryEntry[]): CondensedEntry[] {
   return entries.map((e) => ({

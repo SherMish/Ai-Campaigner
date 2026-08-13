@@ -53,6 +53,7 @@ export const strings = {
         budget_below_threshold: "תקציב מתחת לסף הזיהוי",
         delivery_blocked: "קבוצת מודעות לא מתפרסמת",
         single_ad_set: "קהל אחד בלבד — אין השוואה",
+        cooling_down: "בתקופת צינון לאחר שינוי אחרון", // AIC-77b
       } as Record<string, string>,
     },
 
@@ -602,6 +603,15 @@ export const strings = {
           singleAdSet: {
             title: "אין כרגע משהו שצריך לעשות",
             body: "יש לכם כרגע קהל פרסום אחד פעיל — אין עדיין עם מה להשוות כדי להמליץ על שינוי קהל.",
+          },
+          // AIC-77b: after an executed change, the engine waits a few days
+          // before proposing another change of the same kind — long enough
+          // to actually see whether the last change worked. This is the
+          // honest "we're watching" signal, not a placeholder — a real
+          // reason the card renders (homeState is still "ok" here).
+          coolingDown: {
+            title: "עוקבים אחרי השינוי האחרון",
+            body: "ביצענו שינוי בקמפיין לאחרונה ונותנים לו כמה ימים להשפיע לפני שנבדוק שוב אם צריך לשנות עוד.",
           },
           // Shown only when today already has activity but the engine hasn't
           // acted. Without it, seeing "3 פניות היום" next to "עדיין אוספים

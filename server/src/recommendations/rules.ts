@@ -1,4 +1,5 @@
 import type { RecommendationDraft } from "./types.js";
+import type { RecommendationType } from "@aic/shared";
 import { bestPeerCpl, groupCreativesByAdSet, spendWithoutLead } from "./features.js";
 
 // ── Minimum-evidence gates ("doing nothing is valid") ─────────────────────────
@@ -21,6 +22,14 @@ export const RULE_THRESHOLDS = {
   AUDIENCE_MIN_SPEND_AGOROT: 30000, // ₪300 per audience before comparing
   AUDIENCE_MIN_LEADS: 5, // the winning audience must have real volume
   AUDIENCE_CPL_MULTIPLIER: 2.0, // worse audience = CPL ≥ 2× the best audience
+  // AIC-77b: after an engine-authored action of a class executes, suppress
+  // re-proposing that class for this many days — the engine shouldn't
+  // recommend against an outcome it hasn't had time to measure yet. 7 =
+  // Meta's documented learning-phase length, an external fact, not a
+  // preference. A 14th threshold key (not a fixed constant) so it inherits
+  // resolveThresholds' per-account override for free, same as every other
+  // value here — see docs/RULES.md.
+  COOLDOWN_DAYS: 7,
 } as const;
 
 // A resolved, mutable-shaped set of thresholds — what every rule function
@@ -124,12 +133,75 @@ export interface CampaignEvidence {
 // (just needs more calendar time), `budget_below_threshold` (structurally can't
 // ever gather enough evidence at this budget — no amount of time fixes it), and
 // `delivery_blocked` (an ad set is excluded, so evidence is artificially thin).
+// `cooling_down` (AIC-77b): a rule genuinely WOULD have fired, but its class
+// executed recently and is still within COOLDOWN_DAYS — reported ONLY when a
+// rule actually would have fired and was suppressed (see evaluateCampaign);
+// never a placeholder when nothing was warranted anyway.
 export type NoActionReason =
   | "stable"
   | "collecting"
   | "budget_below_threshold"
   | "delivery_blocked"
-  | "single_ad_set";
+  | "single_ad_set"
+  | "cooling_down";
+
+// ── Cooldown (AIC-77b) ──────────────────────────────────────────────────────
+// Which "class" a recommendation type belongs to — cooldown suppresses at
+// this granularity (campaign-wide, not per-target): pausing creative A shifts
+// spend to its siblings, so judging B on pre-change evidence is stale in a
+// new place. `no_action` has no class — it can never itself be suppressed.
+export type RuleClass = "creative" | "audience" | "budget";
+export function ruleClassOf(type: RecommendationType): RuleClass | null {
+  switch (type) {
+    case "pause_creative":
+    case "replace_creative":
+      return "creative";
+    case "pause_adset":
+      return "audience";
+    case "decrease_budget":
+    case "increase_budget":
+      return "budget";
+    default:
+      return null;
+  }
+}
+
+// Which classes are currently cooling down for one campaign: for each class
+// with a recent successful engine-authored execution (`lastActionAtByType`,
+// one entry per RecommendationType — see services/action-history.ts's
+// getLatestEngineActionByType), true iff `now` is still within
+// `cooldownDays` of it. Pure — the DB read and the "now" both happen in the
+// caller, so this is trivially testable without a clock or a database.
+export function resolveCooldownClasses(
+  lastActionAtByType: Record<string, Date> | null | undefined,
+  cooldownDays: number,
+  now: Date,
+): Set<RuleClass> {
+  const classes = new Set<RuleClass>();
+  if (!lastActionAtByType) return classes;
+  const cutoffMs = now.getTime() - cooldownDays * 24 * 60 * 60 * 1000;
+  for (const [type, at] of Object.entries(lastActionAtByType)) {
+    if (at.getTime() < cutoffMs) continue; // outside the window — not cooling
+    const cls = ruleClassOf(type as RecommendationType);
+    if (cls) classes.add(cls);
+  }
+  return classes;
+}
+
+function cooldownDetail(
+  suppressedType: RecommendationType,
+  lastActionAtByType: Record<string, Date>,
+  thresholds: RuleThresholds,
+): Record<string, unknown> {
+  const at = lastActionAtByType[suppressedType];
+  const resumesAt = at ? new Date(at.getTime() + thresholds.COOLDOWN_DAYS * 24 * 60 * 60 * 1000) : null;
+  return {
+    suppressedType,
+    cooldownDays: thresholds.COOLDOWN_DAYS,
+    lastActionAt: at?.toISOString() ?? null,
+    resumesAt: resumesAt?.toISOString() ?? null,
+  };
+}
 
 function noAction(
   campaignId: string,
@@ -429,17 +501,57 @@ const RULES: Array<(ev: CampaignEvidence, thresholds: RuleThresholds) => Recomme
   increaseBudget,
 ];
 
+// Bundles what evaluateCampaign needs to know about cooldown (AIC-77b): which
+// classes are currently cooling down (resolveCooldownClasses, above — already
+// resolved by the caller, which has `now` and the DB read), and the raw
+// per-type timestamps so a suppressed draft's detail block can say when it
+// resumes. Optional — omitting it (every pre-77b test, evaluateCampaign(ev)
+// or evaluateCampaign(ev, thresholds)) means cooldown never applies, byte-
+// identical to before.
+export interface CooldownContext {
+  classes: Set<RuleClass>;
+  lastActionAtByType: Record<string, Date>;
+}
+
 // Evaluate one campaign → exactly one draft. Below the evidence gate, or when no
 // rule fires, returns a no_action draft with a structured reason code (AIC-64).
 // `thresholds` defaults to the global constant — every existing caller (and all
 // tests) that doesn't pass one keeps working unchanged (AIC-77a). Callers that
 // resolve per-account thresholds (rule-evaluator.ts, staleness.ts) pass the
 // resolved set explicitly via `resolveThresholds`.
-export function evaluateCampaign(ev: CampaignEvidence, thresholds: RuleThresholds = RULE_THRESHOLDS): RecommendationDraft {
+//
+// Cooldown (AIC-77b) does NOT simply skip a cooling-down rule — it keeps
+// trying LOWER-priority rules first (a genuinely different, non-cooling class
+// can still fire and take precedence), and only reports `cooling_down` if
+// something WOULD have fired and every firing candidate was suppressed. If
+// nothing would have fired regardless of cooldown, the reason stays
+// stable/collecting — claiming "cooling down" when there was nothing to do
+// would be a different dishonesty.
+export function evaluateCampaign(
+  ev: CampaignEvidence,
+  thresholds: RuleThresholds = RULE_THRESHOLDS,
+  cooldown?: CooldownContext,
+): RecommendationDraft {
   if (hasMinimumEvidence(ev, thresholds)) {
+    let suppressed: RecommendationDraft | null = null;
     for (const rule of RULES) {
       const draft = rule(ev, thresholds);
-      if (draft) return draft;
+      if (!draft) continue;
+      const cls = ruleClassOf(draft.type);
+      if (cls && cooldown?.classes.has(cls)) {
+        if (!suppressed) suppressed = draft; // keep the highest-priority one
+        continue;
+      }
+      return draft;
+    }
+    if (suppressed) {
+      const detail = cooldownDetail(suppressed.type, cooldown!.lastActionAtByType, thresholds);
+      return noAction(
+        ev.campaignId,
+        "cooling_down",
+        `${suppressed.type} would fire but its class changed recently — cooling down`,
+        detail,
+      );
     }
   }
   const { reason, rationale, detail } = classifyNoAction(ev, thresholds);

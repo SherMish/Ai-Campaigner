@@ -6,6 +6,52 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-14 — AIC-77b: cooldown + already-paused exclusion + precedence docs
+Two provable flaws, both reachable the moment the engine fires its first
+recommendation ever (`recommendations` had zero rows; every one of production
+`action_history`'s 12 rows was a manual AIC-66 control). (1) An **executed**
+recommendation was invisible to the dedup check (`listProposed` filters
+`state = 'proposed'`), so the engine re-proposed the identical change on the
+very next tick. (2) No rule filtered on live delivery status, so an ad
+already paused (by us, or manually) still carried its historical spend and
+stayed eligible to be flagged "weak" — on the only live account, whose real
+`action_history` is entirely manual pauses, the single most likely first
+recommendation was "pause this ad you already paused."
+
+Fixed both. **Cooldown**: a 14th `RULE_THRESHOLDS` key, `COOLDOWN_DAYS`
+(default 7, Meta's learning-phase length), resolvable per account through
+the same `resolveThresholds` mechanism AIC-77a shipped. After an
+engine-authored action executes, its class (creative/audience/budget) is
+suppressed for that many days — tried, not skipped: a genuinely different
+class still fires and takes precedence; `cooling_down` is reported only when
+something would have fired and every candidate was suppressed, never as a
+placeholder. Sourced from `action_history`
+(`getLatestEngineActionByType`, new in `services/action-history.ts`) —
+`recommendation_id IS NOT NULL AND result = 'success'` is a verified
+engine/manual discriminator (every non-engine writer hardcodes `NULL`).
+Threaded through `EvaluableCampaign.lastActionAtByType`, the same carrier
+AIC-77a used for `thresholdOverrides`, so both callers of `evaluateCampaign`
+inherit it automatically. New `no_rec_reason` value `cooling_down` required
+widening the migration-024 CHECK constraint (migration 032) — confirmed the
+one step that fails *silently* if skipped (the write sits inside a
+swallowing try/catch). **Already-paused exclusion**: `isJudgeable`
+(`features.ts`) — Meta's live `adStatuses`/`adSetStatuses`
+(`getCampaignState`, already fetched every tick for the budget, previously
+discarded) applied once in `buildCampaignEvidence`, so every rule inherits
+it. `insight_snapshots.delivery_status` was verified NOT to be a usable
+status source (empty for nearly every ad/adset-grain row in production).
+**Precedence**: verified already structurally true (first-match-wins +
+staleness's replace-on-divergence guarantee exactly one proposed rec per
+campaign) — only the rationale needed documenting.
+
+Test-first for the paused-ad bug, per the repo's rule. 15 new tests (rules/
+staleness/generation/features unit + action-history DB integration); full
+suite green (304 unit tests, 34/36 integration files — only the 2 known
+pre-existing flakes), typecheck clean, web build clean. Docs:
+[RULES.md](RULES.md#precedence--cooldown-aic-77b),
+[FEATURES.md](FEATURES.md#judgeable--the-centrally-owned-already-paused-exclusion-aic-77b),
+[DATA_MODEL.md](DATA_MODEL.md), [recommendation-engine.md](features/recommendation-engine.md).
+
 ### 2026-08-14 — AIC-77a: configurable per-account rule thresholds
 `RULE_THRESHOLDS` (`rules.ts`) is no longer a single frozen global — every
 threshold now resolves per campaign via `resolveThresholds`: an explicit

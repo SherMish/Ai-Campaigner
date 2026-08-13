@@ -67,6 +67,26 @@ export function deliveryDaysActive(daily: DailyPoint[]): number {
   return daily.filter((d) => d.spendAgorot > 0).length;
 }
 
+// ── Judgeable — the centrally-owned already-paused exclusion (AIC-77b) ─────────
+// The third instance of one family (AIC-65 deleted objects, AIC-71 stale
+// status flag, now this): the engine reasoning over an object whose real
+// state it hasn't checked. `insight_snapshots.delivery_status` is NOT a
+// reliable status source (verified against production: it's the empty
+// string for nearly every ad/adset-grain row) — the real signal is Meta's
+// live status, already fetched every tick by getCampaignState
+// (execution/safe-executor.ts) and previously discarded after reading only
+// dailyBudgetAgorot. Owned HERE, applied ONCE in buildCampaignEvidence, so
+// every rule inherits it rather than each remembering its own guard — the
+// exact fix for why the last two instances of this family kept recurring.
+//
+// Absence of status is judgeable, not excluded: an unknown/missing status
+// (test doubles, or any snapshot-only object Meta hasn't been asked about)
+// is "we don't know", never "we know it's paused". Only an explicit
+// "paused" excludes.
+export function isJudgeable(status: "active" | "paused" | undefined): boolean {
+  return status !== "paused";
+}
+
 // ── Peer / sibling comparison ────────────────────────────────────────────────
 // One parameterized function replacing the two independently-inlined
 // duplicates in rules.ts (rules.ts:181-183 creative, :243-248 audience). The

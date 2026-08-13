@@ -102,6 +102,23 @@ describe("runGenerationTick", () => {
     expect([...recs.records.values()].filter((r) => r.state === "proposed")).toHaveLength(1);
   });
 
+  // AIC-77b: proves the real wiring, not just staleness.ts's filtering logic —
+  // getCampaignState's adStatuses (already fetched every tick, previously
+  // discarded after reading only the budget) must actually reach the rules
+  // through runGenerationTick's own plumbing.
+  it("does not propose pausing a creative the live Meta reader reports as paused", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedWeak(snapshots); // cr_weak fires pause_creative under okReader()
+    const recs = new InMemoryRecommendationStore();
+    const pausedReader: MetaReader = {
+      getCampaignState: async () => ({ dailyBudgetAgorot: 7000, adStatuses: { cr_weak: "paused" }, adSetStatuses: {} }),
+    };
+
+    const res = await tick([CAMP], pausedReader, snapshots, recs);
+    expect(res).toMatchObject({ evaluated: 1, created: 0 });
+    expect([...recs.records.values()]).toHaveLength(0);
+  });
+
   it("stable/thin evidence yields no recommendation", async () => {
     const snapshots = new InMemorySnapshotStore();
     await snapshots.upsert([

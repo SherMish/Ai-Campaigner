@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   evaluateCampaign,
   resolveThresholds,
+  ruleClassOf,
+  resolveCooldownClasses,
   RULE_THRESHOLDS as T,
   type CampaignEvidence,
   type CreativeStat,
@@ -407,5 +409,121 @@ describe("evaluateCampaign(ev, thresholds) — per-account overrides change the 
     const d = evaluateCampaign(ev, loose);
     expect(d.type).toBe("pause_creative");
     expect(d.targetMetaId).toBe("cr_weak");
+  });
+});
+
+describe("ruleClassOf (AIC-77b)", () => {
+  it("maps each acting recommendation type to its cooldown class", () => {
+    expect(ruleClassOf("pause_creative")).toBe("creative");
+    expect(ruleClassOf("replace_creative")).toBe("creative");
+    expect(ruleClassOf("pause_adset")).toBe("audience");
+    expect(ruleClassOf("decrease_budget")).toBe("budget");
+    expect(ruleClassOf("increase_budget")).toBe("budget");
+  });
+
+  it("no_action has no class — it can never itself be suppressed", () => {
+    expect(ruleClassOf("no_action")).toBeNull();
+  });
+});
+
+describe("resolveCooldownClasses (AIC-77b)", () => {
+  const NOW = new Date("2026-08-14T00:00:00Z");
+
+  it("a recent successful engine action puts its class in cooldown", () => {
+    const classes = resolveCooldownClasses(
+      { pause_creative: new Date("2026-08-10T00:00:00Z") }, // 4 days ago
+      7,
+      NOW,
+    );
+    expect(classes).toEqual(new Set(["creative"]));
+  });
+
+  it("an action older than COOLDOWN_DAYS is no longer cooling down", () => {
+    const classes = resolveCooldownClasses(
+      { pause_creative: new Date("2026-08-01T00:00:00Z") }, // 13 days ago
+      7,
+      NOW,
+    );
+    expect(classes.size).toBe(0);
+  });
+
+  it("exactly at the cutoff is still cooling (inclusive boundary)", () => {
+    const sevenDaysAgo = new Date(NOW.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const classes = resolveCooldownClasses({ pause_creative: sevenDaysAgo }, 7, NOW);
+    expect(classes.has("creative")).toBe(true);
+  });
+
+  it("null/undefined/empty input is an empty set, never throws", () => {
+    expect(resolveCooldownClasses(null, 7, NOW)).toEqual(new Set());
+    expect(resolveCooldownClasses(undefined, 7, NOW)).toEqual(new Set());
+    expect(resolveCooldownClasses({}, 7, NOW)).toEqual(new Set());
+  });
+
+  it("multiple recent classes all cool down independently", () => {
+    const classes = resolveCooldownClasses(
+      {
+        pause_creative: new Date("2026-08-12T00:00:00Z"),
+        decrease_budget: new Date("2026-08-13T00:00:00Z"),
+        pause_adset: new Date("2026-08-01T00:00:00Z"), // outside the window
+      },
+      7,
+      NOW,
+    );
+    expect(classes).toEqual(new Set(["creative", "budget"]));
+  });
+});
+
+describe("evaluateCampaign — cooldown suppression (AIC-77b)", () => {
+  const weakCreativeEv = () =>
+    baseEvidence({
+      creatives: [cr("cr_a", 25000, 10, 2500), cr("cr_b", 24000, 9, 2667), cr("cr_weak", 18000, 1, 18000)],
+    });
+
+  it("with no cooldown context, behaviour is identical to before (backward compatible)", () => {
+    const d = evaluateCampaign(weakCreativeEv());
+    expect(d.type).toBe("pause_creative");
+  });
+
+  it("a rule that WOULD fire is suppressed when its class is cooling down, and reports cooling_down", () => {
+    const d = evaluateCampaign(weakCreativeEv(), T, {
+      classes: new Set(["creative"]),
+      lastActionAtByType: { pause_creative: new Date("2026-08-10T00:00:00Z") },
+    });
+    expect(d.type).toBe("no_action");
+    expect(d.evidence.reason).toBe("cooling_down");
+    expect((d.evidence.detail as Record<string, unknown>).suppressedType).toBe("pause_creative");
+  });
+
+  it("a DIFFERENT class not in cooldown still fires normally", () => {
+    const d = evaluateCampaign(weakCreativeEv(), T, {
+      classes: new Set(["budget"]), // creative is unaffected
+      lastActionAtByType: { decrease_budget: new Date("2026-08-10T00:00:00Z") },
+    });
+    expect(d.type).toBe("pause_creative");
+  });
+
+  it("when nothing would have fired anyway, cooldown never invents a reason — stays collecting/stable", () => {
+    // Thin evidence: no rule can fire regardless of cooldown.
+    const thin = baseEvidence({ current: { spendAgorot: 20000, leads: 2, cplAgorot: 10000, days: 2 } });
+    const d = evaluateCampaign(thin, T, {
+      classes: new Set(["creative", "audience", "budget"]), // everything cooling — irrelevant here
+      lastActionAtByType: { pause_creative: new Date("2026-08-10T00:00:00Z") },
+    });
+    expect(d.evidence.reason).not.toBe("cooling_down");
+    expect(d.evidence.reason).toBe("collecting");
+  });
+
+  it("a stable campaign (gate passes, nothing warranted) also never reports cooling_down", () => {
+    const stable = baseEvidence({
+      adsets: [
+        { adSetId: "as_1", spendAgorot: 70000, leads: 20, cplAgorot: 3500, deliveryStatus: "active" },
+        { adSetId: "as_2", spendAgorot: 70000, leads: 20, cplAgorot: 3500, deliveryStatus: "active" },
+      ],
+    }); // healthy, fires no rule, ≥2 ad sets
+    const d = evaluateCampaign(stable, T, {
+      classes: new Set(["creative", "audience", "budget"]),
+      lastActionAtByType: { pause_creative: new Date("2026-08-10T00:00:00Z") },
+    });
+    expect(d.evidence.reason).toBe("stable");
   });
 });

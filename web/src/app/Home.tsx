@@ -42,6 +42,8 @@ function noRecCard(reason: string | null): { title: string; body: string; cta?: 
       return { ...h.noRec.budgetBelowThreshold, cta: { to: "/app/settings", label: h.noRec.budgetBelowThreshold.cta } };
     case "single_ad_set":
       return h.noRec.singleAdSet;
+    case "cooling_down":
+      return h.noRec.coolingDown;
     case "stable":
       return h.noRec.stable;
     default:

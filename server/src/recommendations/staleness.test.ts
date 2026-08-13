@@ -152,3 +152,117 @@ describe("refreshRecommendations (staleness/expiry)", () => {
     expect(after.createdId).toBeDefined();
   });
 });
+
+// AIC-77b real bug: no rule filtered on live delivery status, so an ad Meta
+// already reports as paused (by us or by the operator, AIC-66) still carried
+// its historical spend/leads and stayed eligible to be flagged "weak" —
+// the engine proposing to pause an ad that's already paused. On the only
+// live account, whose entire action_history is manual pauses, this was the
+// single most likely first-ever recommendation.
+describe("refreshRecommendations — already-paused exclusion (AIC-77b)", () => {
+  it("does NOT propose pausing a creative Meta already reports as paused", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedWeak(snapshots, 1, 18000); // cr_weak fires pause_creative under default deps()
+    const recs = new InMemoryRecommendationStore();
+    const d = {
+      ...deps(snapshots, recs),
+      adStatuses: { cr_weak: "paused" as const },
+    };
+
+    const result = await refreshRecommendations(d);
+    // Not just "doesn't target cr_weak" — no OTHER creative is weak in this
+    // fixture either, so the honest outcome is no_action, not a different pause.
+    expect(result.freshDraft.type).toBe("no_action");
+    expect(result.createdId).toBeUndefined();
+  });
+
+  it("still proposes pausing a DIFFERENT creative that is genuinely active and weak", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedWeak(snapshots, 1, 18000); // cr_weak is the weak one
+    const recs = new InMemoryRecommendationStore();
+    const d = {
+      ...deps(snapshots, recs),
+      // cr_a is active and fine — excluding it (it isn't even a candidate)
+      // must not suppress the real, still-live weak creative.
+      adStatuses: { cr_a: "active" as const },
+    };
+
+    const result = await refreshRecommendations(d);
+    expect(result.freshDraft.type).toBe("pause_creative");
+    expect(result.freshDraft.targetMetaId).toBe("cr_weak");
+  });
+
+  it("an unknown/missing status is judgeable, not excluded — absence is not 'paused'", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedWeak(snapshots, 1, 18000);
+    const recs = new InMemoryRecommendationStore();
+    const d = deps(snapshots, recs); // no adStatuses at all — the pre-existing shape
+
+    const result = await refreshRecommendations(d);
+    expect(result.freshDraft.type).toBe("pause_creative");
+    expect(result.freshDraft.targetMetaId).toBe("cr_weak");
+  });
+});
+
+// AIC-77b: proves cooldown reaches the real production path
+// (refreshRecommendations), not just evaluateCampaign's pure logic.
+describe("refreshRecommendations — cooldown (AIC-77b)", () => {
+  const NOW = new Date("2026-08-14T00:00:00Z");
+
+  it("suppresses a rule whose class executed successfully within COOLDOWN_DAYS, reports cooling_down", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedWeak(snapshots, 1, 18000); // fires pause_creative without cooldown
+    const recs = new InMemoryRecommendationStore();
+    const d = {
+      ...deps(snapshots, recs),
+      campaign: {
+        id: "camp-1",
+        currentBudgetAgorot: 7000,
+        lastActionAtByType: { pause_creative: new Date("2026-08-10T00:00:00Z") }, // 4 days ago
+      },
+      now: NOW,
+    };
+
+    const result = await refreshRecommendations(d);
+    expect(result.freshDraft.type).toBe("no_action");
+    expect(result.freshDraft.evidence.reason).toBe("cooling_down");
+    expect(result.createdId).toBeUndefined();
+  });
+
+  it("does not suppress once the cooldown window has passed", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedWeak(snapshots, 1, 18000);
+    const recs = new InMemoryRecommendationStore();
+    const d = {
+      ...deps(snapshots, recs),
+      campaign: {
+        id: "camp-1",
+        currentBudgetAgorot: 7000,
+        lastActionAtByType: { pause_creative: new Date("2026-08-01T00:00:00Z") }, // 13 days ago
+      },
+      now: NOW,
+    };
+
+    const result = await refreshRecommendations(d);
+    expect(result.freshDraft.type).toBe("pause_creative");
+  });
+
+  it("a per-account COOLDOWN_DAYS override (AIC-77a's mechanism) shortens the window", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedWeak(snapshots, 1, 18000);
+    const recs = new InMemoryRecommendationStore();
+    const d = {
+      ...deps(snapshots, recs),
+      campaign: {
+        id: "camp-1",
+        currentBudgetAgorot: 7000,
+        thresholdOverrides: { COOLDOWN_DAYS: 2 },
+        lastActionAtByType: { pause_creative: new Date("2026-08-10T00:00:00Z") }, // 4 days ago — outside a 2-day window
+      },
+      now: NOW,
+    };
+
+    const result = await refreshRecommendations(d);
+    expect(result.freshDraft.type).toBe("pause_creative"); // 2-day cooldown already elapsed
+  });
+});

@@ -48,19 +48,42 @@ one name, once, tested on its own.
 | `groupCreativesByAdSet` | `(creatives, flexibleAdSetIds?) → Map<adSetId, CreativeStat[]>` | Named version of the grouping `pause_weak_creative` used to build inline. Preserves insertion order exactly — creatives arrive spend-desc from the store, and that order is load-bearing for which group the rule examines first (pinned in `rules.test.ts`). |
 | `periodOverPeriodDeltaPct` | re-export of `services/readout.ts`'s `deltaPct` | Available for a future evidence field or AIC-76's outcome comparison. **Not** wired into any rule's gate today — see [why deltaPct isn't in the gates](#why-periodoverperioddeltapct-isnt-wired-into-a-rule-gate). |
 | `leadQualityRate` | `(reviewedLeads, relevantLeads) → ratio \| null` | Pure function over the AIC-67 watermark counts (`services/lead-quality-review.ts` owns fetching them). Not wired into a rule's evidence yet — no current rule reasons over lead quality — but AIC-76 and a future rule have one correct definition to call instead of reinventing the division. |
+| `isJudgeable` | `(status: "active" \| "paused" \| undefined) → boolean` | AIC-77b. The centrally-owned already-paused exclusion — see [below](#judgeable--the-centrally-owned-already-paused-exclusion-aic-77b). |
+
+### `isJudgeable` — the centrally-owned already-paused exclusion (AIC-77b)
+
+The third instance of one family — AIC-65 (deleted objects counted as real),
+AIC-71 (status read from a stale flag), now this — all "the engine reasoning
+over an object whose real state it hadn't checked." No rule ever filtered on
+live delivery status, so an ad Meta already reports as paused still carried
+its historical spend/leads and stayed eligible to be flagged "weak" — the
+engine proposing to pause what's already paused. `insight_snapshots.delivery_status`
+is **not** the status source (verified against production: empty for nearly
+every ad/adset-grain row) — the real signal is Meta's live status
+(`getCampaignState`'s `adStatuses`/`adSetStatuses`), already fetched every
+tick for the budget and previously discarded. `isJudgeable` is applied
+**once**, inside `buildCampaignEvidence` (`rule-evaluator.ts`), so every rule
+inherits the exclusion instead of each remembering its own guard — the fix
+for why the last two instances of this family kept recurring. Absence of
+status is judgeable, not excluded: an unknown/missing status (a test double,
+or any object Meta hasn't been asked about) is "we don't know", never "we
+know it's paused" — only an explicit `"paused"` excludes.
 
 ### Known gaps (not built in this pass)
 
 - **No `impressions`/`frequency` feature.** The AIC-75 ticket's starting set
   named these; no current rule reasons over them, so nothing was built —
   add when a rule actually needs one, rather than speculatively.
-- **Delivered/dead-object exclusion (AIC-65/AIC-39) happens upstream, not in
-  this module.** `buildCampaignEvidence` (`rule-evaluator.ts`) filters out
-  not-delivering and dead/archived ad sets *before* evidence reaches a
-  feature or a rule — this module's functions receive already-filtered
-  input and don't re-implement that filter themselves. Correct in effect,
-  but worth knowing if you're looking for the exclusion logic here and not
-  finding it.
+- **Dead/draft-object and delivery-problem exclusion (AIC-65/AIC-39) still
+  happens upstream, via a different mechanism than `isJudgeable`.**
+  `buildCampaignEvidence` (`rule-evaluator.ts`) filters out not-delivering
+  and dead/archived ad sets via a passed-in `excludeAdSetIds` set (fetched
+  from delivery-health + ad-set metadata, not from `getCampaignState`) —
+  a genuinely different signal from the live active/paused status
+  `isJudgeable` reads, so it stays a separate mechanism rather than being
+  folded into `isJudgeable`. Both are applied in the same function, at the
+  same point, for the same reason (evidence assembly is the one place every
+  rule's input passes through) — they're just two different upstream facts.
 - **Not every rule's evidence is populated from a named feature.**
   `decreaseBudget`/`increaseBudget`/`replaceCreative` still compare
   `current`/`previous` CPL directly (unrounded) rather than through

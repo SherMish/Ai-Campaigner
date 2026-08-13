@@ -101,6 +101,19 @@ redundant rolling campaign row (it's still written every tick, just no longer
 read for aggregation) — a follow-up ticket, after confirming nothing else
 legitimately reads it.
 
+### Enum-shaped TEXT columns need a migration to widen, every time
+
+`managed_campaigns.no_rec_reason` (migration 024) is `TEXT` with a `CHECK`
+listing the valid values by name — the convention this schema uses instead
+of a DB `ENUM` type, so adding a value doesn't need a DDL type migration...
+except the CHECK itself still needs one: `ALTER TABLE ... DROP CONSTRAINT`
+then re-`ADD CONSTRAINT` with the wider list (migration 013 did this first,
+for `recommendations.type`; migration 032 did it for `no_rec_reason`'s new
+`cooling_down` value, AIC-77b). **Skipping this migration fails silently** —
+the app-level write happens inside a try/catch that logs and continues
+(`generation.ts`'s `recordNoRecReason` call), so a forgotten CHECK-widen
+doesn't crash anything, it just quietly never persists the new value, forever.
+
 ## Migrations
 
 `001_init` creates the `_migrations` ledger. `002`–`007` create the entities in

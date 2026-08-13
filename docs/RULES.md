@@ -40,13 +40,17 @@ never silently the same message twice (AIC-64). See below.
 "No recommendation" used to be one undifferentiated `no_action` — the customer
 saw the identical reassurance whether the campaign was genuinely stable or the
 engine was structurally blind at the current budget. `classifyNoAction`
-(`rules.ts`) now picks one of five reasons, in priority order:
+(`rules.ts`) now picks one of six reasons, in priority order — `cooling_down`
+(AIC-77b) is decided inside `evaluateCampaign` itself, before falling through
+to `classifyNoAction`, since it's the one reason that depends on a rule
+having actually fired (see [Cooldown](#cooldown-aic-77b) below):
 
 | Reason | When | Actionable? |
 | --- | --- | --- |
 | `delivery_blocked` | An ad set was excluded from evidence (AIC-39) — checked FIRST, even if the gate would otherwise pass, since a delivery problem is usually the root cause of thin data | fix the delivery problem |
 | `budget_below_threshold` | `dailyBudgetAgorot × 7 < MIN_CREATIVE_SPEND_AGOROT` — the campaign's own 7-day rolling window can never reach the cheapest rule's spend gate, so no amount of *time* fixes it | raise the budget |
 | `collecting` | Below the minimum-evidence gate (days/delivery-days/leads), but the budget COULD reach it with more time | wait |
+| `cooling_down` | Gate passed and a rule genuinely WOULD have fired, but its class executed successfully within `COOLDOWN_DAYS` — reported ONLY when something would have fired and was suppressed, never as a placeholder | wait for the cooldown to elapse |
 | `single_ad_set` | Gate passed, no rule fired, and fewer than 2 ad sets have audience-comparison data (so `pause_underperforming_audience` structurally can't compare) — informational, not a problem | none needed |
 | `stable` | Gate passed, no rule fired, ≥2 ad sets compared | none needed |
 
@@ -68,17 +72,24 @@ here: see [DATA_MODEL.md](DATA_MODEL.md#the-disjoint-daily-view-migration-030).
 
 **Where it's cached.** The reason a tick computes is written to
 `managed_campaigns.no_rec_reason`/`no_rec_detail`/`no_rec_checked_at`
-(migration 024, `server/src/services/evaluation-reason.ts`) every generation
-tick — cleared back to `NULL` when an acting recommendation exists instead.
-Mirrors `delivery_ok`/`delivery_reason` (AIC-39): the engine writes, the
-dashboard and ops console read, with no live evaluation at render time.
+(migration 024, widened by migration 032 to accept `cooling_down`,
+`server/src/services/evaluation-reason.ts`) every generation tick — cleared
+back to `NULL` when an acting recommendation exists instead. Mirrors
+`delivery_ok`/`delivery_reason` (AIC-39): the engine writes, the dashboard and
+ops console read, with no live evaluation at render time. **A new reason
+value always needs its own migration** — the column has a CHECK constraint
+listing the valid values by name; widening it without a migration fails
+*silently* inside `generation.ts`'s swallowing try/catch (the tick logs and
+continues, the reason is just never cached).
 
 **Customer surface**: `web/src/app/Home.tsx`'s no-action card picks distinct
 Hebrew copy per reason (`strings.ts` → `home.noRec`), with a CTA to
 `/app/settings` for `budget_below_threshold`. `delivery_blocked` never reaches
 this card — `deriveHomeState` (`customer-overview.ts`) already routes a
 delivery problem to the `attention` state before this branch is reached, so
-the two surfaces are never in conflict.
+the two surfaces are never in conflict. `cooling_down` **does** reach this
+card (the campaign is still `homeState: "ok"`) with real copy — "we're
+watching the last change" is an honest progress signal, not a placeholder.
 
 **Ops surface**: the operator's customer-detail panel
 (`web/src/admin/AdminCustomers.tsx`) shows the precise reason plus the exact
@@ -172,6 +183,20 @@ a live Meta call at render time. See
 [customer-overview.md](features/customer-overview.md#opt-in-audience-details-aic-37)
 for the customer-facing opt-in details view this same label feeds.
 
+**Already-paused objects are excluded (AIC-77b).** No rule ever filtered on
+live delivery status, so an ad or ad set Meta already reports as paused
+(paused by us, or manually via [manual-controls.md](features/manual-controls.md))
+still carried its historical spend/leads in the window and stayed eligible to
+be flagged "weak" — the engine proposing to pause something already paused.
+`insight_snapshots.delivery_status` is **not** the status source (verified
+against production: empty for nearly every ad/adset-grain row) — the real
+signal is Meta's live status, already fetched every tick by
+`getCampaignState` for the budget and previously discarded.
+`isJudgeable` ([FEATURES.md](FEATURES.md#judgeable--the-centrally-owned-already-paused-exclusion-aic-77b))
+owns the exclusion once, centrally, applied in `buildCampaignEvidence` —
+every rule inherits it. Absence of status is judgeable, not excluded:
+"we don't know" is never "we know it's paused."
+
 ### v1 approximations (documented, refined later)
 - Trend rules compare the **current window vs the previous window** (not daily
   granularity) — sufficient for v1; daily snapshots are a later refinement.
@@ -245,6 +270,92 @@ account budgets; `evaluateCampaign(ev, thresholds)` — a stricter/looser
 override changes the outcome), `rule-evaluator.test.ts`/`staleness.test.ts`
 (the override reaches the rules end-to-end through the real call chain),
 `customer-admin.integration.test.ts` (round-trip, rejection, audit).
+
+## Precedence & cooldown (AIC-77b)
+
+**Status:** live.
+
+### Precedence — already true, now documented
+
+Precedence is *implicit in array index* (`RULES` in `rules.ts`) with no
+separate conflict-resolution mechanism — and that turns out to already be
+sufficient, verified structurally rather than assumed: `evaluateCampaign`
+returns **exactly one** draft per tick (first-match-wins), and
+[staleness](#staleness)'s replace-on-divergence expires any `proposed` rec
+the fresh draft no longer matches. Together that guarantees there is never
+more than one `proposed` recommendation per campaign — "one primary
+recommendation, superseded when a different action becomes warranted" is
+already the system's behaviour, not a gap this ticket needed to close.
+
+**Rationale for the order** (targeted fixes → the audience fix → blunt
+budget moves → scaling last): fix the creative before cutting budget — the
+creative is the specific cause, the budget a campaign-wide symptom of it.
+Fixing the audience split is a bigger move than fixing one creative, so it
+comes after. Cutting budget is a retreat, tried before the last resort of
+scaling — scaling a campaign that hasn't been fixed multiplies whatever's
+wrong with it instead of curing it.
+
+### Cooldown — genuinely new
+
+After an engine-authored action executes, the same **class** of change is
+suppressed for `COOLDOWN_DAYS` (a 14th `RULE_THRESHOLDS` key — see
+[Configurable thresholds](#configurable-thresholds-aic-77a) above — default
+**7**, Meta's documented learning-phase length, not a preference; resolvable
+per account like every other threshold) so the engine never recommends
+against an outcome it hasn't had time to measure yet.
+
+**Classes are campaign-wide, not per-target:** `creative` =
+`pause_creative`+`replace_creative`; `audience` = `pause_adset`; `budget` =
+`decrease_budget`+`increase_budget` (`ruleClassOf`, `rules.ts`). Campaign-
+wide because pausing creative A redistributes spend to its siblings — judging
+sibling B on pre-change evidence is stale in a new place, the same mistake
+as before, just relocated.
+
+**Source: `action_history`, no new table.**
+`getLatestEngineActionByType(pool, campaignId)`
+(`server/src/services/action-history.ts`) returns the most recent
+**successful, engine-authored** execution per recommendation type:
+`recommendation_id IS NOT NULL AND result = 'success'`.
+`recommendation_id IS NOT NULL` is a verified discriminator — every
+non-engine writer (manual [AIC-66](features/manual-controls.md) controls,
+the builder, launch) hardcodes the literal `NULL` in its SQL, so no other
+code path can ever produce a row that looks engine-authored.
+**Not `human_involved`** — that field does *not* discriminate (every acting
+recommendation is customer-approved, so engine rows are `true` too).
+`result = 'success'` excludes a failed Meta write, which must never start a
+cooldown. The cutoff is computed in TypeScript and compared client-side
+(`resolveCooldownClasses`, `rules.ts`) — this codebase has no SQL date
+arithmetic anywhere; the reader returns raw timestamps, the caller decides
+"how recent is recent" once thresholds are resolved.
+
+**How it reaches the rules:** `EvaluableCampaign.lastActionAtByType` — the
+same carrier as `thresholdOverrides` (AIC-77a), for the same reason: both
+callers of `evaluateCampaign` (`rule-evaluator.ts`, `staleness.ts`) inherit
+it automatically instead of one silently missing it, the exact "missed
+consumer" class of bug AIC-70 and AIC-75 both hit. `generation.ts` fetches it
+per campaign via an injected `cooldownReader` (mirroring `deliveryReader`/
+`leadsReader`) — a read failure just means no cooldown applies that tick,
+the same fail-open shape as every other optional reader there.
+
+**Suppression is not a skip — it's tried, then deferred.**
+`evaluateCampaign(ev, thresholds, cooldown)` doesn't remove a cooling-down
+rule from consideration; it keeps trying **lower-priority** rules first, so
+a genuinely different, non-cooling class can still fire and take precedence.
+Only when every rule that *would* fire belongs to a cooling class does it
+report `cooling_down` — carrying the suppressed type, the cooldown length,
+and when it resumes. **If nothing would have fired regardless of cooldown,
+the reason stays `stable`/`collecting`** — claiming "cooling down" when
+there was nothing to do would be a different dishonesty than the one this
+mechanism exists to prevent.
+
+**Lock-in tests:** `rules.test.ts` (`ruleClassOf`, `resolveCooldownClasses`
+in isolation — window boundary, multiple classes, null/empty input;
+`evaluateCampaign` — suppression + `cooling_down`, a different class still
+fires, nothing-would-fire never invents the reason), `staleness.test.ts`
+(the real production path end-to-end, including a per-account
+`COOLDOWN_DAYS` override), `action-history.integration.test.ts`
+(`getLatestEngineActionByType` against the real schema: engine-only,
+successful-only, latest-per-type).
 
 ## Staleness
 A `proposed` recommendation expires when its evidence **materially diverges**,

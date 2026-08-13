@@ -99,6 +99,10 @@ function noRecDetailLine(reason: string, detail: Record<string, unknown> | null)
     }
     case "single_ad_set":
       return `${num("adSetCount")} קהלים עם נתונים`;
+    case "cooling_down": {
+      const resumesAt = typeof detail.resumesAt === "string" ? detail.resumesAt.slice(0, 10) : null;
+      return `${detail.suppressedType} · ${num("cooldownDays")} ימי צינון${resumesAt ? ` · חוזר ${resumesAt}` : ""}`;
+    }
     default:
       return null;
   }

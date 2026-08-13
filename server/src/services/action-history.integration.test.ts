@@ -4,7 +4,7 @@ import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import request from "supertest";
 import { pool } from "../db/pool.js";
 import { createApp } from "../app.js";
-import { listCampaignActionHistory, condense } from "./action-history.js";
+import { listCampaignActionHistory, condense, getLatestEngineActionByType } from "./action-history.js";
 
 const HAS_DB = !!process.env.DATABASE_URL;
 const d = HAS_DB ? describe : describe.skip;
@@ -56,6 +56,52 @@ d("action history surface (DB + HTTP)", () => {
     expect(full.body.entries).toHaveLength(2);
     const cond = await request(createApp()).get(`/api/admin/campaigns/${campaignId}/history?condensed=true`).set("Authorization", ADMIN);
     expect(cond.body.entries[0].summary).toBe("החלפת קריאייטיב");
+
+    await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
+  });
+
+  // AIC-77b: the cooldown query's real discriminator, against the real schema.
+  it("getLatestEngineActionByType: engine-only, successful-only, latest-per-type", async () => {
+    const { campaignId, customerId } = await makeCampaign();
+    const rec = await pool.query<{ id: string }>(
+      `INSERT INTO recommendations (campaign_id, type) VALUES ($1,'pause_creative') RETURNING id`,
+      [campaignId],
+    );
+    const recId = rec.rows[0].id;
+
+    // 1. An OLDER engine-authored success for pause_creative...
+    await pool.query(
+      `INSERT INTO action_history (campaign_id, recommendation_id, what, action_type, human_involved, result, occurred_at)
+       VALUES ($1,$2,'paused cr_old','pause_creative', true, 'success', now() - interval '10 days')`,
+      [campaignId, recId],
+    );
+    // 2. ...and a NEWER one — getLatestEngineActionByType must return this one, not #1.
+    await pool.query(
+      `INSERT INTO action_history (campaign_id, recommendation_id, what, action_type, human_involved, result, occurred_at)
+       VALUES ($1,$2,'paused cr_new','pause_creative', true, 'success', now() - interval '2 days')`,
+      [campaignId, recId],
+    );
+    // 3. A MANUAL control (recommendation_id NULL, the real AIC-66 shape) —
+    //    must never be mistaken for an engine action, however recent.
+    await pool.query(
+      `INSERT INTO action_history (campaign_id, what, action_type, human_involved, result, occurred_at)
+       VALUES ($1,'manual pause','pause_ad_set', true, 'success', now())`,
+      [campaignId],
+    );
+    // 4. A FAILED engine-authored execution — must never start a cooldown.
+    await pool.query(
+      `INSERT INTO action_history (campaign_id, recommendation_id, what, action_type, human_involved, result, occurred_at)
+       VALUES ($1,$2,'budget write failed','decrease_budget', true, 'failed', now())`,
+      [campaignId, recId],
+    );
+
+    const latest = await getLatestEngineActionByType(pool, campaignId);
+
+    expect(Object.keys(latest).sort()).toEqual(["pause_creative"]); // only the qualifying type
+    // The NEWER (2 days ago) row, not the older (10 days ago) one.
+    expect(latest.pause_creative.getTime()).toBeGreaterThan(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    expect(latest.pause_ad_set).toBeUndefined(); // manual — no recommendation_id
+    expect(latest.decrease_budget).toBeUndefined(); // failed
 
     await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
   });

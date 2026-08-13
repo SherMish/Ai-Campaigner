@@ -3,7 +3,13 @@ import type { SnapshotStore } from "../meta/snapshot-store.js";
 import type { RecommendationStore } from "./recommendation-store.js";
 import type { RecommendationRecord, RecommendationDraft } from "./types.js";
 import { evaluateCampaign, resolveThresholds, type CampaignEvidence, type RuleThresholds } from "./rules.js";
-import { daysActive, deliveryDaysActive } from "./features.js";
+import { daysActive, deliveryDaysActive, isJudgeable } from "./features.js";
+
+// Meta's live per-object status (execution/safe-executor.ts's LiveCampaignState,
+// already normalized to this shape) — the reliable status source. NOT
+// insight_snapshots.delivery_status (verified against production: empty for
+// nearly every ad/adset-grain row).
+type LiveStatusMap = Record<string, "active" | "paused">;
 
 export interface EvaluableCampaign {
   id: string;
@@ -12,6 +18,14 @@ export interface EvaluableCampaign {
   // resolved against the global defaults + budget-relative formula via
   // resolveThresholds before the rules run. Omitted/null = no overrides.
   thresholdOverrides?: Partial<RuleThresholds> | null;
+  // AIC-77b: one entry per RecommendationType — the most recent successful
+  // ENGINE-authored execution of it for this campaign (see
+  // services/action-history.ts's getLatestEngineActionByType). Resolved
+  // against COOLDOWN_DAYS + `now` via resolveCooldownClasses before the
+  // rules run, exactly how thresholdOverrides is resolved above — the same
+  // carrier for the same reason: both callers of evaluateCampaign inherit it
+  // automatically instead of one silently missing it.
+  lastActionAtByType?: Record<string, Date> | null;
 }
 
 // Assemble the evidence a campaign's rules need, from the snapshot store.
@@ -37,6 +51,14 @@ export async function buildCampaignEvidence(
   // a dead-object exclusion "delivery_blocked". Defaults to excludeAdSetIds
   // itself when omitted, preserving pre-AIC-65 callers' behavior.
   deliveryProblemAdSetIds?: Set<string>,
+  // AIC-77b: Meta's live per-ad/-ad-set status (getCampaignState, already
+  // fetched every tick for the budget — previously discarded). An object
+  // Meta reports as already paused is dropped from evidence entirely, the
+  // same shape as excludeAdSetIds — so the engine never proposes pausing
+  // what's already paused (by us, or manually via AIC-66). Missing/unknown
+  // status is judgeable, not excluded (isJudgeable, features.ts).
+  adStatuses?: LiveStatusMap,
+  adSetStatuses?: LiveStatusMap,
 ): Promise<CampaignEvidence> {
   const [curTotals, prevTotals, curCreatives, prevCreatives, curAdsets, curDaily, prevDaily] = await Promise.all([
     store.campaignTotals(campaign.id, current.start, current.end),
@@ -52,15 +74,22 @@ export async function buildCampaignEvidence(
     store.dailySeries(campaign.id, previous.start, previous.end),
   ]);
   const excluded = excludeAdSetIds ?? new Set<string>();
-  const keepCreative = (c: { adSetId?: string | null }) => !c.adSetId || !excluded.has(c.adSetId);
+  const keepCreative = (c: { metaObjectId: string; adSetId?: string | null }) =>
+    (!c.adSetId || !excluded.has(c.adSetId)) && isJudgeable(adStatuses?.[c.metaObjectId]);
+  const keepAdset = (a: { adSetId: string }) => !excluded.has(a.adSetId) && isJudgeable(adSetStatuses?.[a.adSetId]);
   return {
     campaignId: campaign.id,
     current: { ...curTotals, days: daysActive(curDaily) },
     previous: { ...prevTotals, days: daysActive(prevDaily) },
     creatives: curCreatives.filter(keepCreative),
+    // Previous-window rows are only ever looked up BY an id already present in
+    // ev.creatives (replaceCreative's prevById.get(cur.metaObjectId)) — an
+    // already-paused creative is excluded from `creatives` above, so its
+    // previous-window row is naturally unreachable without filtering it here
+    // too, mirroring the same reasoning excludeAdSetIds already relies on.
     creativesPrevious: prevCreatives.filter(keepCreative),
     adsets: curAdsets
-      .filter((a) => !excluded.has(a.adSetId))
+      .filter(keepAdset)
       .map((a) => ({ ...a, label: adSetLabels?.get(a.adSetId) })),
     flexibleCreativeAdSetIds,
     currentBudgetAgorot: campaign.currentBudgetAgorot,
