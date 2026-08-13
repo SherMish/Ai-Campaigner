@@ -81,6 +81,21 @@ describe("refreshRecommendations (staleness/expiry)", () => {
     expect([...recs.records.values()].filter((r) => r.state === "proposed")).toHaveLength(1);
   });
 
+  it("a per-account threshold override (AIC-77a) reaches refreshRecommendations end-to-end", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedWeak(snapshots, 1, 18000); // fires pause_creative under the default deps() below
+    const recs = new InMemoryRecommendationStore();
+    const d = {
+      ...deps(snapshots, recs),
+      campaign: { id: "camp-1", currentBudgetAgorot: 7000, thresholdOverrides: { MIN_CAMPAIGN_LEADS: 999 } },
+    };
+
+    const result = await refreshRecommendations(d);
+    expect(result.freshDraft.type).toBe("no_action");
+    expect(result.freshDraft.evidence.reason).toBe("collecting");
+    expect(result.createdId).toBeUndefined();
+  });
+
   it("evidence diverged (weak creative recovered) → the rec expires", async () => {
     const snapshots = new InMemorySnapshotStore();
     await seedWeak(snapshots, 1, 18000);

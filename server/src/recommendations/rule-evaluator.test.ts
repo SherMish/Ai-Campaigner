@@ -99,6 +99,28 @@ describe("evaluateAndPersist", () => {
     expect(recs.records.size).toBe(1);
   });
 
+  it("a per-account threshold override (AIC-77a) reaches the rules end-to-end", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedWeakCreative(snapshots);
+    const recs = new InMemoryRecommendationStore();
+
+    // Same evidence that fires pause_creative by default (above) — an absurdly
+    // strict override on this campaign alone must suppress it, proving
+    // evaluateAndPersist actually resolves + passes campaign.thresholdOverrides
+    // through to evaluateCampaign, not just that resolveThresholds works in isolation.
+    const result = await evaluateAndPersist({
+      snapshotStore: snapshots,
+      recommendationStore: recs,
+      campaign: { id: "camp-1", currentBudgetAgorot: 7000, thresholdOverrides: { MIN_CAMPAIGN_LEADS: 999 } },
+      current: CUR,
+      previous: PREV,
+    });
+
+    expect(result.draft.type).toBe("no_action");
+    expect(result.draft.evidence.reason).toBe("collecting");
+    expect(result.created).toBe(false);
+  });
+
   it("returns no_action without storing a row when evidence is thin", async () => {
     const snapshots = new InMemorySnapshotStore();
     await snapshots.upsert([

@@ -183,6 +183,10 @@ export interface CustomerWriteFields {
   isTest?: boolean;
   onboardingStatus?: string;
   agreedBudgetAgorot?: number;
+  // Per-account rule-threshold overrides (AIC-77a), sparse — only the keys
+  // being overridden. Mirrors server/src/recommendations/rules.ts's
+  // RULE_THRESHOLDS keys; the server validates and rejects unknown ones.
+  thresholdOverrides?: Record<string, number>;
 }
 export interface AuditEntry {
   id: string;

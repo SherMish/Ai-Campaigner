@@ -1,16 +1,18 @@
 # Recommendation rules & the LLM boundary
 
-**Status:** live — deterministic rules v1 (AIC-9). The LLM boundary section is
-filled by AIC-10.
+**Status:** live — deterministic rules v1 (AIC-9), configurable per-account
+thresholds (AIC-77a). The LLM boundary section is filled by AIC-10.
 
-**Source of truth:** `server/src/recommendations/rules.ts` (thresholds + rules +
-no-rec reason classification), `server/src/recommendations/features.ts` (the
-named metrics the rules call — see [FEATURES.md](FEATURES.md)),
-`server/src/recommendations/rule-evaluator.ts` (evidence assembly +
-persistence), `server/src/services/evaluation-reason.ts` (caches the reason
-per campaign, AIC-64).
+**Source of truth:** `server/src/recommendations/rules.ts` (thresholds +
+`resolveThresholds` + rules + no-rec reason classification),
+`server/src/recommendations/features.ts` (the named metrics the rules call —
+see [FEATURES.md](FEATURES.md)), `server/src/recommendations/rule-evaluator.ts`
+(evidence + threshold resolution + persistence), `server/src/services/customer-admin.ts`
+(threshold override writes + validation), `server/src/services/evaluation-reason.ts`
+(caches the reason per campaign, AIC-64).
 **Lock-in tests:** `rules.test.ts`, `rules.adset.test.ts`, `features.test.ts`,
-`rule-evaluator.test.ts`, `generation.test.ts`, `audience-label.test.ts`.
+`rule-evaluator.test.ts`, `staleness.test.ts`, `generation.test.ts`,
+`audience-label.test.ts`, `customer-admin.integration.test.ts`.
 
 ---
 
@@ -182,6 +184,67 @@ window's *length* (always 7) and a binary 7-or-0, so `MIN_DAYS_DATA`/
 per-day counts (`features.ts`'s `daysActive`/`deliveryDaysActive`, reading
 `insight_snapshot_daily` via `SnapshotStore.dailySeries`) — see
 [FEATURES.md](FEATURES.md#the-two-v1-approximations-this-replaced).
+
+## Configurable thresholds (AIC-77a)
+
+**Status:** live — `RULE_THRESHOLDS` is no longer the only value the rules ever
+see. Every threshold **resolves** per campaign, in order:
+
+1. **Account override** (`managed_campaigns.threshold_overrides`, a sparse
+   JSONB — only the keys an operator explicitly set) — wins outright, no
+   further adjustment. An explicit ops decision is never second-guessed by a
+   formula.
+2. **Budget-relative formula** — for the two minimum-evidence *spend* gates
+   only (`MIN_CREATIVE_SPEND_AGOROT`, `AUDIENCE_MIN_SPEND_AGOROT`):
+   `max(global default, 1.5 × the campaign's own daily budget)`. Every other
+   threshold (day counts, % moves, multipliers, peer counts) is never
+   budget-relative — scaling a percentage or a count by budget doesn't mean
+   anything.
+3. **Global default** (`RULE_THRESHOLDS[key]`, unchanged) — everything else.
+
+**Why only those two keys get the formula.** The concrete problem: a flat
+₪150 minimum-spend gate is trivially cleared on day one by a ₪300/day
+account, so `pause_weak_creative` judges a creative on almost no real signal
+— "hair-triggered." The `max()` floor means every existing small/medium
+account's behaviour is **byte-identical** to before (the global default
+already exceeds the relative figure until budget gets large); a big-budget
+account now needs proportionally more real spend before judgment, not a
+manually-tuned override per customer.
+
+**Deliberately NOT built: a per-category default tier.** The ticket's
+original language ("per account → per category → global default") overstated
+the need — `customers.category` (already used for AIC-49 audience defaults)
+gets no rule-threshold job here, because no rule currently has evidence that
+different verticals need different gate values. Adding one would mean
+inventing numbers, the same failure mode as a confidence score calibrated
+against zero outcomes. The resolution chain above is written so a category
+tier slots in later as one function change, once AIC-76 produces real
+evidence a vertical actually needs one — not before.
+
+**Source of truth:** `resolveThresholds` (`server/src/recommendations/rules.ts`)
+— every rule function takes an explicit `thresholds: RuleThresholds` parameter
+(defaulted to `RULE_THRESHOLDS`, so every pre-AIC-77a call site keeps working
+unchanged); `rule-evaluator.ts::evaluateAndPersist` and
+`staleness.ts::refreshRecommendations` — the two places `evaluateCampaign` is
+called — each resolve thresholds from `EvaluableCampaign.thresholdOverrides`
+before calling it.
+
+**Editing overrides:** the admin customer edit form
+(`web/src/admin/AdminCustomers.tsx`), one number input per threshold key
+(blank = no override, placeholder shows the resolved effective value),
+grouped the same way as [Rules v1](#rules-v1-evaluated-in-priority-order)
+above (evidence gates / creative / audience / budget). Writes go through the
+same `customer-admin.ts::updateCustomer` path as `agreedBudgetAgorot` — same
+`managed_campaigns` write-and-propagate shape, same `customer.edit` audit log
+entry, validated (unknown key / non-finite value rejected, all-or-nothing)
+before any write.
+
+**Lock-in tests:** `rules.test.ts` (`resolveThresholds` in isolation: override
+wins, formula applies only to the two spend keys, a no-op at typical small-
+account budgets; `evaluateCampaign(ev, thresholds)` — a stricter/looser
+override changes the outcome), `rule-evaluator.test.ts`/`staleness.test.ts`
+(the override reaches the rules end-to-end through the real call chain),
+`customer-admin.integration.test.ts` (round-trip, rejection, audit).
 
 ## Staleness
 A `proposed` recommendation expires when its evidence **materially diverges**,

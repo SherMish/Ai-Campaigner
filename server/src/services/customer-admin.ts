@@ -1,6 +1,7 @@
 import type pg from "pg";
 import type { ControlService } from "../execution/control-service.js";
 import { logAdminAction, type Actor } from "./admin-audit.js";
+import { RULE_THRESHOLDS } from "../recommendations/rules.js";
 
 // Customer lifecycle management (AIC-44): create / edit / deactivate / delete.
 // Expands the read-only AIC-16 view into the operator's actual daily tool for
@@ -25,6 +26,23 @@ export interface CustomerWriteFields {
    * live on every safety check — no cache to invalidate, so this propagates
    * to the engine's spend limit immediately. */
   agreedBudgetAgorot?: number;
+  /** Per-account overrides for the recommendation engine's rule thresholds
+   * (AIC-77a) — sparse, only the keys being overridden. Written straight to
+   * managed_campaigns.threshold_overrides, which rule-evaluator.ts/staleness.ts
+   * resolve on every generation tick via resolveThresholds(). Validated against
+   * RULE_THRESHOLDS's known keys before any write (see updateCustomer). */
+  thresholdOverrides?: Record<string, number>;
+}
+
+// Rejects an unknown key or a non-finite value before any write happens — an
+// admin edit is all-or-nothing, never a partial write with a silently-dropped
+// bad entry.
+function validateThresholdOverrides(overrides: Record<string, number>): string | null {
+  for (const [key, value] of Object.entries(overrides)) {
+    if (!(key in RULE_THRESHOLDS)) return `unknown threshold key: "${key}"`;
+    if (typeof value !== "number" || !Number.isFinite(value)) return `"${key}" must be a finite number`;
+  }
+  return null;
 }
 
 export type WriteResult = { ok: true } | { ok: false; error: string };
@@ -82,6 +100,13 @@ export async function updateCustomer(
   const b = before.rows[0];
   if (!b) return { ok: false, error: "customer not found" };
 
+  // Validated BEFORE any write — an admin edit is all-or-nothing, never a
+  // partial write with a silently-dropped bad threshold key.
+  if (fields.thresholdOverrides != null) {
+    const err = validateThresholdOverrides(fields.thresholdOverrides);
+    if (err) return { ok: false, error: err };
+  }
+
   await pool.query(
     `UPDATE customers SET
        business_name     = COALESCE($2, business_name),
@@ -126,6 +151,18 @@ export async function updateCustomer(
     budgetPropagated = (r.rowCount ?? 0) > 0;
   }
 
+  // Same propagate-by-writing-the-column-the-engine-reads shape as the budget
+  // block above (AIC-77a) — resolveThresholds() reads this on every generation
+  // tick, no cache to invalidate.
+  let thresholdsPropagated = false;
+  if (fields.thresholdOverrides != null) {
+    const r = await pool.query(
+      `UPDATE managed_campaigns SET threshold_overrides = $2 WHERE customer_id = $1`,
+      [customerId, JSON.stringify(fields.thresholdOverrides)],
+    );
+    thresholdsPropagated = (r.rowCount ?? 0) > 0;
+  }
+
   const after = await pool.query(`SELECT * FROM customers WHERE id = $1`, [customerId]);
   const a = after.rows[0];
 
@@ -134,6 +171,13 @@ export async function updateCustomer(
       ? budgetPropagated
         ? ` · agreed budget → ${fields.agreedBudgetAgorot} agorot`
         : ` · agreed budget change requested but no managed campaign exists yet`
+      : "";
+
+  const thresholdNote =
+    fields.thresholdOverrides != null
+      ? thresholdsPropagated
+        ? ` · threshold overrides → ${JSON.stringify(fields.thresholdOverrides)}`
+        : ` · threshold override change requested but no managed campaign exists yet`
       : "";
 
   await logAdminAction(pool, {
@@ -145,7 +189,7 @@ export async function updateCustomer(
     entityLabel: a.business_name,
     beforeState: b,
     afterState: a,
-    detail: `Edited "${a.business_name}"${budgetNote}`,
+    detail: `Edited "${a.business_name}"${budgetNote}${thresholdNote}`,
   });
   return { ok: true };
 }

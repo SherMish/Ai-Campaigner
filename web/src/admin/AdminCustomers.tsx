@@ -12,6 +12,16 @@ const t = strings.he.ops;
 const a = strings.he.admin;
 const cc = strings.he.customerCrud;
 
+// The 13 recommendation-engine thresholds (AIC-77a, server/src/recommendations/
+// rules.ts's RULE_THRESHOLDS), grouped for the edit form the same way they're
+// grouped in RULES.md — one editable number input per key, blank = no override.
+const THRESHOLD_GROUPS: Array<{ label: string; keys: string[] }> = [
+  { label: cc.thresholds.groupEvidence, keys: ["MIN_DAYS_DATA", "MIN_DELIVERY_DAYS", "MIN_CAMPAIGN_LEADS"] },
+  { label: cc.thresholds.groupCreative, keys: ["MIN_CREATIVE_SPEND_AGOROT", "PAUSE_MIN_PEERS", "PAUSE_WEAK_CPL_MULTIPLIER", "REPLACE_DECAY_MULTIPLIER"] },
+  { label: cc.thresholds.groupAudience, keys: ["AUDIENCE_MIN_SPEND_AGOROT", "AUDIENCE_MIN_LEADS", "AUDIENCE_CPL_MULTIPLIER"] },
+  { label: cc.thresholds.groupBudget, keys: ["BUDGET_CPL_RISE_PCT", "BUDGET_INCREASE_STEP", "BUDGET_DECREASE_STEP"] },
+];
+
 interface CustomerRow {
   id: string;
   businessName: string;
@@ -41,6 +51,11 @@ interface CustomerDetail extends CustomerRow {
   openOpsItems: number;
   noRecReason: string | null;
   noRecDetail: Record<string, unknown> | null;
+  // AIC-77a: this account's explicit overrides (sparse) and the fully-resolved
+  // effective set (override → budget-relative formula → global default) —
+  // resolveThresholds() already ran server-side, this is display-ready.
+  thresholdOverrides: Record<string, number>;
+  effectiveThresholds: Record<string, number>;
 }
 
 interface OpsItem {
@@ -142,6 +157,8 @@ export function AdminCustomers() {
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<CustomerWriteFields>({});
   const [budgetShekels, setBudgetShekels] = useState("");
+  // One string per threshold key, controlled inputs — blank = no override.
+  const [thresholdForm, setThresholdForm] = useState<Record<string, string>>({});
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -238,6 +255,11 @@ export function AdminCustomers() {
       isTest: detail.isTest,
     });
     setBudgetShekels(detail.agreedBudgetAgorot != null ? String(detail.agreedBudgetAgorot / 100) : "");
+    // Only overridden keys get a pre-filled value — everything else starts
+    // blank, showing its resolved default via the input's placeholder.
+    const seeded: Record<string, string> = {};
+    for (const key of Object.keys(detail.thresholdOverrides)) seeded[key] = String(detail.thresholdOverrides[key]);
+    setThresholdForm(seeded);
     setEditing(true);
     setSaveError(null);
   }
@@ -251,6 +273,16 @@ export function AdminCustomers() {
       const n = Number(budgetShekels);
       if (!Number.isNaN(n) && n >= 0) fields.agreedBudgetAgorot = Math.round(n * 100);
     }
+    // Rebuilt fresh from the form every save — a cleared field is simply
+    // absent, which the server treats as "no override" (falls back to the
+    // formula/global default), not a partial no-op.
+    const thresholdOverrides: Record<string, number> = {};
+    for (const [key, raw] of Object.entries(thresholdForm)) {
+      if (raw.trim() === "") continue;
+      const n = Number(raw);
+      if (!Number.isNaN(n)) thresholdOverrides[key] = n;
+    }
+    fields.thresholdOverrides = thresholdOverrides;
     try {
       await updateCustomer(selected.id, fields);
       setEditing(false);
@@ -408,6 +440,33 @@ export function AdminCustomers() {
                   <input type="number" min="0" step="1" value={budgetShekels} onChange={(e) => setBudgetShekels(e.target.value)} />
                 </div>
               ) : <p className="muted" style={{ fontSize: "0.85rem" }}>{a.noCampaigns}</p>}
+
+              {detail.campaignId && (
+                <div style={{ marginTop: 16 }}>
+                  <p className="muted" style={{ fontSize: "0.85rem", marginBottom: 2 }}><strong>{cc.thresholds.title}</strong></p>
+                  <p className="muted" style={{ fontSize: "0.78rem", marginBottom: 8 }}>{cc.thresholds.hint}</p>
+                  {THRESHOLD_GROUPS.map((group) => (
+                    <div key={group.label} style={{ marginBottom: 10 }}>
+                      <p className="muted" style={{ fontSize: "0.78rem", fontWeight: 600, marginBottom: 4 }}>{group.label}</p>
+                      <div className="grid-2">
+                        {group.keys.map((key) => (
+                          <div className="field" key={key} style={{ maxWidth: 260 }}>
+                            <label style={{ fontSize: "0.82rem" }}>{cc.thresholds[key as keyof typeof cc.thresholds] as string}</label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={thresholdForm[key] ?? ""}
+                              placeholder={String(detail.effectiveThresholds[key] ?? "")}
+                              onChange={(e) => setThresholdForm((f) => ({ ...f, [key]: e.target.value }))}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {saveError && <p style={{ color: "var(--orange)", fontSize: "0.85rem" }}>{saveError}</p>}
               <div style={{ marginTop: 12 }}>
                 <button type="submit" className="btn btn-primary btn-sm" disabled={saveBusy} style={{ marginInlineEnd: 8 }}>{saveBusy ? cc.saving : cc.save}</button>
@@ -429,6 +488,16 @@ export function AdminCustomers() {
                 <div className="summary-row"><span className="k">{cc.fieldContactPhone}</span><span>{detail.contactPhone || a.noData}</span></div>
                 <div className="summary-row"><span className="k">{cc.fieldContactEmail}</span><span>{detail.contactEmail || a.noData}</span></div>
                 <div className="summary-row"><span className="k">{t.subscription}</span><span>{detail.subscriptionStatus ?? t.none}{detail.nextChargeDate ? ` · ${detail.nextChargeDate}` : ""}</span></div>
+                {detail.campaignId && (
+                  <div className="summary-row">
+                    <span className="k">{cc.thresholds.title}</span>
+                    <span>
+                      {Object.keys(detail.thresholdOverrides).length === 0
+                        ? cc.thresholds.summaryNone
+                        : cc.thresholds.summaryActive(Object.keys(detail.thresholdOverrides).length)}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}

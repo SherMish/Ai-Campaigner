@@ -125,6 +125,33 @@ export const strings = {
         "customer.reactivate": "הופעל מחדש",
         "customer.delete": "נמחק",
       } as Record<string, string>,
+      // Per-account overrides for the recommendation engine's thresholds
+      // (AIC-77a). Blank field = no override (falls back to the resolved
+      // default shown in the placeholder — account override → budget-relative
+      // formula for the two spend gates → global default).
+      thresholds: {
+        title: "סף רגישות המנוע (מתקדם)",
+        hint: "שדה ריק = אין חריגה, המנוע משתמש בערך המחושב (המוצג כטקסט עזר).",
+        groupEvidence: "סף נתונים מינימלי",
+        groupCreative: "כלל מודעה חלשה",
+        groupAudience: "כלל קהל חלש",
+        groupBudget: "שינויי תקציב",
+        MIN_DAYS_DATA: "ימי נתונים מינימליים",
+        MIN_DELIVERY_DAYS: "ימי הפצה מינימליים",
+        MIN_CAMPAIGN_LEADS: "פניות מינימליות בקמפיין",
+        MIN_CREATIVE_SPEND_AGOROT: "הוצאה מינימלית למודעה (אגורות)",
+        PAUSE_MIN_PEERS: "מודעות מקבילות נדרשות להשוואה",
+        PAUSE_WEAK_CPL_MULTIPLIER: "מכפיל עלות-פנייה לזיהוי מודעה חלשה",
+        REPLACE_DECAY_MULTIPLIER: "מכפיל התדרדרות להחלפת מודעה",
+        AUDIENCE_MIN_SPEND_AGOROT: "הוצאה מינימלית לקהל (אגורות)",
+        AUDIENCE_MIN_LEADS: "פניות מינימליות לקהל המוביל",
+        AUDIENCE_CPL_MULTIPLIER: "מכפיל עלות-פנייה לזיהוי קהל חלש",
+        BUDGET_CPL_RISE_PCT: "עליית עלות-פנייה להורדת תקציב (%, לדוגמה 0.25 = 25%)",
+        BUDGET_INCREASE_STEP: "אחוז הגדלת תקציב (לדוגמה 0.15 = 15%)",
+        BUDGET_DECREASE_STEP: "אחוז הפחתת תקציב (לדוגמה 0.2 = 20%)",
+        summaryNone: "אין חריגות — המנוע פועל לפי ברירת המחדל.",
+        summaryActive: (n: number) => `${n} חריגות פעילות מברירת המחדל.`,
+      },
     },
 
     // Full Meta data explorer (AIC-45) — the unrestricted internal deep view.

@@ -2,12 +2,16 @@ import type { InsightsPeriod } from "../meta/types.js";
 import type { SnapshotStore } from "../meta/snapshot-store.js";
 import type { RecommendationStore } from "./recommendation-store.js";
 import type { RecommendationRecord, RecommendationDraft } from "./types.js";
-import { evaluateCampaign, type CampaignEvidence } from "./rules.js";
+import { evaluateCampaign, resolveThresholds, type CampaignEvidence, type RuleThresholds } from "./rules.js";
 import { daysActive, deliveryDaysActive } from "./features.js";
 
 export interface EvaluableCampaign {
   id: string;
   currentBudgetAgorot: number;
+  // Per-account overrides (AIC-77a, managed_campaigns.threshold_overrides) —
+  // resolved against the global defaults + budget-relative formula via
+  // resolveThresholds before the rules run. Omitted/null = no overrides.
+  thresholdOverrides?: Partial<RuleThresholds> | null;
 }
 
 // Assemble the evidence a campaign's rules need, from the snapshot store.
@@ -93,7 +97,8 @@ export async function evaluateAndPersist(deps: {
 }): Promise<EvaluationResult> {
   const { snapshotStore, recommendationStore, campaign, current, previous } = deps;
   const evidence = await buildCampaignEvidence(snapshotStore, campaign, current, previous);
-  const draft = evaluateCampaign(evidence);
+  const thresholds = resolveThresholds(campaign.thresholdOverrides, campaign.currentBudgetAgorot);
+  const draft = evaluateCampaign(evidence, thresholds);
 
   if (draft.type === "no_action") {
     return { draft, created: false };

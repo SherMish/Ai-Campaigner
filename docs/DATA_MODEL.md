@@ -36,7 +36,7 @@ when `DATABASE_URL` is unset.
 | `subscriptions` | Manual billing: setup/monthly agorot, status, next charge | `customer_id` (1:1) |
 | `meta_connections` | Partner-access + System User linkage; `access_health` (ok/revoked/invalid/needs_reconnect); per-asset grants | `customer_id` (1:1) |
 | `ad_accounts` | Managed ad account under a connection | `connection_id` |
-| `managed_campaigns` | The one managed campaign per customer; status, agreed budget (agorot), `automation_enabled` brake. Supported shape: **1 campaign → N ad sets → 3–5 creatives** (see note below) | `customer_id` (1:1), `ad_account_id` |
+| `managed_campaigns` | The one managed campaign per customer; status, agreed budget (agorot), `automation_enabled` brake, per-account rule-threshold overrides (`threshold_overrides` JSONB, sparse, AIC-77a — see [RULES.md](RULES.md#configurable-thresholds-aic-77a)). Supported shape: **1 campaign → N ad sets → 3–5 creatives** (see note below) | `customer_id` (1:1), `ad_account_id` |
 | `insight_snapshots` | Normalized Insights at campaign/adset/ad/creative grain; spend, leads, CPL (agorot); internal impressions/clicks | `campaign_id`; UNIQUE `(campaign_id, grain, meta_object_id, period_start, period_end)` |
 | `recommendations` | Proposed action + type + evidence + state machine + expiry | `campaign_id` |
 | `action_history` | Append-only audit: what / previous / new / why / who / human / when | `campaign_id`, `recommendation_id` |

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   evaluateCampaign,
+  resolveThresholds,
   RULE_THRESHOLDS as T,
   type CampaignEvidence,
   type CreativeStat,
@@ -338,5 +339,73 @@ describe("engine internals (characterization — pin before the feature-layer re
       }),
     );
     expect(d.type).not.toBe("pause_adset"); // as_a/as_b are close; as_tiny is invisible to this rule
+  });
+});
+
+describe("resolveThresholds (AIC-77a — configurable thresholds)", () => {
+  it("at a typical small/medium budget, every threshold resolves to the plain global default (no behaviour change)", () => {
+    const resolved = resolveThresholds(null, 7000); // ₪70/day, same as baseEvidence()
+    expect(resolved).toEqual(T);
+  });
+
+  it("a large budget scales UP only the two minimum-evidence spend gates, nothing else", () => {
+    const resolved = resolveThresholds(null, 30000); // ₪300/day — the "hair-triggered studio"
+    expect(resolved.MIN_CREATIVE_SPEND_AGOROT).toBe(45000); // 1.5 × 30000, exceeds the 15000 floor
+    expect(resolved.AUDIENCE_MIN_SPEND_AGOROT).toBe(45000); // 1.5 × 30000, exceeds the 30000 floor
+    // Every other key is untouched by budget — scaling a %, a count, or a
+    // multiplier by budget wouldn't mean anything.
+    const { MIN_CREATIVE_SPEND_AGOROT, AUDIENCE_MIN_SPEND_AGOROT, ...rest } = resolved;
+    const { MIN_CREATIVE_SPEND_AGOROT: _a, AUDIENCE_MIN_SPEND_AGOROT: _b, ...expectedRest } = T;
+    expect(rest).toEqual(expectedRest);
+  });
+
+  it("an explicit account override wins outright over the budget-relative formula", () => {
+    const resolved = resolveThresholds({ MIN_CREATIVE_SPEND_AGOROT: 5000 }, 30000);
+    // Formula alone would push this to 45000 (see above) — the override says
+    // an operator decided otherwise, and that decision is never second-guessed.
+    expect(resolved.MIN_CREATIVE_SPEND_AGOROT).toBe(5000);
+    expect(resolved.AUDIENCE_MIN_SPEND_AGOROT).toBe(45000); // unrelated key, formula still applies
+  });
+
+  it("an override on a non-budget-relative key applies directly, everything else stays default", () => {
+    const resolved = resolveThresholds({ MIN_DAYS_DATA: 1 }, 7000);
+    expect(resolved.MIN_DAYS_DATA).toBe(1);
+    expect(resolved.MIN_CAMPAIGN_LEADS).toBe(T.MIN_CAMPAIGN_LEADS);
+  });
+
+  it("silently ignores an unknown key and a non-finite value — a bad row must never crash evaluation", () => {
+    const resolved = resolveThresholds(
+      { NOT_A_REAL_THRESHOLD: 999, MIN_DAYS_DATA: Number.NaN } as never,
+      7000,
+    );
+    expect(resolved).toEqual(T);
+    expect((resolved as Record<string, unknown>).NOT_A_REAL_THRESHOLD).toBeUndefined();
+  });
+});
+
+describe("evaluateCampaign(ev, thresholds) — per-account overrides change the outcome (AIC-77a)", () => {
+  it("a stricter override PREVENTS a rule that fires under the global default", () => {
+    const ev = baseEvidence({
+      creatives: [cr("cr_a", 25000, 10, 2500), cr("cr_b", 24000, 9, 2667), cr("cr_weak", 18000, 1, 18000)],
+    });
+    expect(evaluateCampaign(ev).type).toBe("pause_creative"); // default thresholds: fires
+
+    const strict = resolveThresholds({ MIN_CAMPAIGN_LEADS: 25 }, ev.currentBudgetAgorot); // ev has 20 leads
+    const d = evaluateCampaign(ev, strict);
+    expect(d.type).toBe("no_action");
+    expect(d.evidence.reason).toBe("collecting");
+  });
+
+  it("a looser override LETS a rule fire that the global default's gate would have blocked", () => {
+    const ev = baseEvidence({
+      current: { spendAgorot: 70000, leads: T.MIN_CAMPAIGN_LEADS - 1, cplAgorot: 3684, days: 7 },
+      creatives: [cr("cr_a", 25000, 10, 2500), cr("cr_b", 24000, 9, 2667), cr("cr_weak", 18000, 1, 18000)],
+    });
+    expect(evaluateCampaign(ev).evidence.reason).toBe("collecting"); // default: below the leads gate
+
+    const loose = resolveThresholds({ MIN_CAMPAIGN_LEADS: 1 }, ev.currentBudgetAgorot);
+    const d = evaluateCampaign(ev, loose);
+    expect(d.type).toBe("pause_creative");
+    expect(d.targetMetaId).toBe("cr_weak");
   });
 });

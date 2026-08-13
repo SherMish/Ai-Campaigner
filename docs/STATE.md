@@ -6,6 +6,33 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-14 — AIC-77a: configurable per-account rule thresholds
+`RULE_THRESHOLDS` (`rules.ts`) is no longer a single frozen global — every
+threshold now resolves per campaign via `resolveThresholds`: an explicit
+account override (`managed_campaigns.threshold_overrides`, migration 031)
+wins outright; the two minimum-evidence spend gates
+(`MIN_CREATIVE_SPEND_AGOROT`, `AUDIENCE_MIN_SPEND_AGOROT`) additionally scale
+up with a large campaign's own daily budget (`max(default, 1.5× daily
+budget)`) so a ₪300/day account isn't judged on the same flat ₪150 a
+₪30/day account is; everything else stays the flat global default. Every
+rule function takes an explicit `thresholds` parameter defaulted to
+`RULE_THRESHOLDS`, so every pre-existing test across `rules.test.ts`,
+`rules.adset.test.ts`, `rule-evaluator.test.ts`, `staleness.test.ts`,
+`generation.test.ts`, `features.test.ts` (101 tests total, including 9 new
+for this change) passes unchanged — zero behaviour change for any call site
+that doesn't explicitly pass a resolved `thresholds` object. Deliberately did
+**not** build a per-category default tier (the
+ticket's original "per account → per category → global default" language) —
+no rule has evidence yet that a business vertical needs different gates;
+revisit once AIC-76 produces real outcomes. Admin UI: 13 grouped threshold
+fields on the customer edit form (`AdminCustomers.tsx`), reusing the exact
+`agreedBudgetAgorot` write-and-audit pattern (`customer-admin.ts`). Verified
+live (throwaway admin account + customer, cleaned up after): override set →
+persisted → survives reload → correctly shown as inherited-vs-overridden in
+the placeholder → cleared → falls back to the resolved default. Docs:
+[RULES.md](RULES.md#configurable-thresholds-aic-77a),
+[DATA_MODEL.md](DATA_MODEL.md), [ops-console.md](features/ops-console.md).
+
 ### 2026-08-13 — AIC-75d/e: feature layer (features.ts) — rules refactored onto named functions, zero behaviour change
 Added `server/src/recommendations/features.ts`: named, independently-tested
 functions (`campaignCpl`/`adCpl`, `spendWithoutLead`, `shareOfCampaignSpend`,

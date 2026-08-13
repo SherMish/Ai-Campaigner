@@ -109,6 +109,9 @@ side the operator actually needs for manual onboarding and support:
   straight to `managed_campaigns.agreed_budget_agorot` — the SAME column
   `execution/budget.ts` reads live on every safety check, so a budget edit
   propagates to the engine's spend limit immediately, no cache to invalidate.
+  Same shape for `thresholdOverrides` (AIC-77a) → `managed_campaigns.threshold_overrides`,
+  read by `resolveThresholds` (see [../RULES.md](../RULES.md#configurable-thresholds-aic-77a))
+  — validated against the known threshold keys before any write, all-or-nothing.
 - **Deactivate / reactivate** (`customers.is_active`, `deactivated_at` —
   migration 016) — the default, reversible path for a churned/paused account.
   Deactivating ties into AIC-14's emergency controls: if a managed campaign

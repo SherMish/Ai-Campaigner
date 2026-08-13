@@ -84,6 +84,46 @@ d("customer CRUD (DB + HTTP)", () => {
     expect(edit?.detail).toContain("9000");
   });
 
+  it("edits threshold overrides (AIC-77a) and propagates + audits the same way as the budget field", async () => {
+    const { id } = await createCustomer(pool, ACTOR, { businessName: "__it_crud_thresholds" });
+    const campaignId = await seedCampaign(id, 5000);
+
+    const r = await updateCustomer(pool, ACTOR, id, {
+      thresholdOverrides: { MIN_CAMPAIGN_LEADS: 3, AUDIENCE_MIN_SPEND_AGOROT: 10000 },
+    });
+    expect(r.ok).toBe(true);
+
+    const { rows: campRows } = await pool.query(`SELECT threshold_overrides FROM managed_campaigns WHERE id = $1`, [campaignId]);
+    expect(campRows[0].threshold_overrides).toEqual({ MIN_CAMPAIGN_LEADS: 3, AUDIENCE_MIN_SPEND_AGOROT: 10000 });
+
+    const entries = await listAuditLog(pool, { entityId: id });
+    const edit = entries.find((e) => e.action === "customer.edit" && e.detail?.includes("threshold"));
+    expect(edit?.detail).toContain("MIN_CAMPAIGN_LEADS");
+  });
+
+  it("rejects an unknown threshold key — nothing is written, not even other fields in the same call", async () => {
+    const { id } = await createCustomer(pool, ACTOR, { businessName: "__it_crud_bad_threshold_key", category: "original" });
+    const campaignId = await seedCampaign(id, 5000);
+
+    const r = await updateCustomer(pool, ACTOR, id, {
+      category: "should-not-apply",
+      thresholdOverrides: { NOT_A_REAL_THRESHOLD: 5 } as never,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain("NOT_A_REAL_THRESHOLD");
+
+    const { rows: custRows } = await pool.query(`SELECT category FROM customers WHERE id = $1`, [id]);
+    expect(custRows[0].category).toBe("original"); // the whole edit was rejected, not partially applied
+    const { rows: campRows } = await pool.query(`SELECT threshold_overrides FROM managed_campaigns WHERE id = $1`, [campaignId]);
+    expect(campRows[0].threshold_overrides).toEqual({});
+  });
+
+  it("rejects a non-finite threshold value", async () => {
+    const { id } = await createCustomer(pool, ACTOR, { businessName: "__it_crud_bad_threshold_value" });
+    const r = await updateCustomer(pool, ACTOR, id, { thresholdOverrides: { MIN_CAMPAIGN_LEADS: Number.NaN } });
+    expect(r.ok).toBe(false);
+  });
+
   it("404s an edit on a customer that doesn't exist", async () => {
     const r = await updateCustomer(pool, ACTOR, "00000000-0000-0000-0000-000000000000", { category: "x" });
     expect(r.ok).toBe(false);

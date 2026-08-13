@@ -44,6 +44,8 @@ export interface GenCampaign {
   id: string;
   metaCampaignId: string;
   customerId: string | null;
+  // Per-account rule threshold overrides (AIC-77a, managed_campaigns.threshold_overrides).
+  thresholdOverrides?: Record<string, number> | null;
 }
 
 export interface GenerationSummary {
@@ -58,8 +60,13 @@ export interface GenerationSummary {
 // Meta campaign, and a healthy connection. Execution-frozen still generates
 // (freeze blocks execution, not proposals — PRD §23); unmanaged/paused/off do not.
 export async function listEligibleForGeneration(pool: pg.Pool): Promise<GenCampaign[]> {
-  const { rows } = await pool.query<{ id: string; meta_campaign_id: string; customer_id: string | null }>(
-    `SELECT mc.id, mc.meta_campaign_id, mc.customer_id
+  const { rows } = await pool.query<{
+    id: string;
+    meta_campaign_id: string;
+    customer_id: string | null;
+    threshold_overrides: Record<string, number>;
+  }>(
+    `SELECT mc.id, mc.meta_campaign_id, mc.customer_id, mc.threshold_overrides
      FROM managed_campaigns mc
      JOIN meta_connections conn ON conn.customer_id = mc.customer_id
      WHERE mc.status = 'active'
@@ -67,7 +74,12 @@ export async function listEligibleForGeneration(pool: pg.Pool): Promise<GenCampa
        AND mc.meta_campaign_id IS NOT NULL
        AND conn.access_health = 'ok'`,
   );
-  return rows.map((r) => ({ id: r.id, metaCampaignId: r.meta_campaign_id, customerId: r.customer_id }));
+  return rows.map((r) => ({
+    id: r.id,
+    metaCampaignId: r.meta_campaign_id,
+    customerId: r.customer_id,
+    thresholdOverrides: r.threshold_overrides,
+  }));
 }
 
 // Evaluate a fixed set of campaigns. Pure over its deps (the reader + stores are
@@ -190,7 +202,7 @@ export async function runGenerationTick(deps: {
       snapshotStore,
       recommendationStore,
       recommendationService,
-      campaign: { id: campaign.id, currentBudgetAgorot },
+      campaign: { id: campaign.id, currentBudgetAgorot, thresholdOverrides: campaign.thresholdOverrides },
       current,
       previous,
       expiresAt: null,

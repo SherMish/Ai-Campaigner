@@ -23,6 +23,51 @@ export const RULE_THRESHOLDS = {
   AUDIENCE_CPL_MULTIPLIER: 2.0, // worse audience = CPL ≥ 2× the best audience
 } as const;
 
+// A resolved, mutable-shaped set of thresholds — what every rule function
+// actually reads. `RULE_THRESHOLDS` is the global default; `resolveThresholds`
+// (AIC-77a, below) produces the per-campaign effective set.
+export type RuleThresholds = Record<keyof typeof RULE_THRESHOLDS, number>;
+
+// ── Configurable thresholds (AIC-77a) ──────────────────────────────────────────
+// The two minimum-evidence SPEND gates — how much must be spent on one
+// object before the engine trusts evidence about it — scale up with a large
+// campaign's own daily budget. The flat global default (₪150 / ₪300) was
+// calibrated around a small/medium account; a ₪300/day account would clear
+// ₪150 of spend on a single creative within hours, judging it on almost no
+// signal. `Math.max` with the global default means this is a pure no-op for
+// every account whose relative figure doesn't exceed it — today's small
+// accounts see byte-identical behaviour. Every other threshold (day counts,
+// % moves, multipliers, peer counts) stays flat: scaling a percentage or a
+// count by budget doesn't mean anything. See docs/RULES.md.
+const BUDGET_RELATIVE_MULTIPLIER = 1.5; // ~1.5 days of the campaign's own budget
+const BUDGET_RELATIVE_KEYS = ["MIN_CREATIVE_SPEND_AGOROT", "AUDIENCE_MIN_SPEND_AGOROT"] as const;
+
+// Resolves the EFFECTIVE thresholds for one campaign: an explicit per-account
+// override (managed_campaigns.threshold_overrides) always wins outright — an
+// operator's explicit decision is never second-guessed by a formula; the two
+// budget-relative keys above apply next; everything else is the flat global
+// default. `overrides` is trusted to already be validated (customer-admin.ts
+// rejects unknown keys / non-finite values at write time) — this function is
+// still defensive about it (silently ignores anything malformed) because it
+// runs on every generation tick and a bad row must never crash evaluation.
+export function resolveThresholds(
+  overrides: Partial<RuleThresholds> | null | undefined,
+  dailyBudgetAgorot: number,
+): RuleThresholds {
+  const resolved = { ...RULE_THRESHOLDS } as RuleThresholds;
+  for (const key of BUDGET_RELATIVE_KEYS) {
+    resolved[key] = Math.max(RULE_THRESHOLDS[key], Math.round(BUDGET_RELATIVE_MULTIPLIER * dailyBudgetAgorot));
+  }
+  if (overrides) {
+    for (const [key, value] of Object.entries(overrides)) {
+      if (key in RULE_THRESHOLDS && typeof value === "number" && Number.isFinite(value)) {
+        (resolved as Record<string, number>)[key] = value;
+      }
+    }
+  }
+  return resolved;
+}
+
 export interface CreativeStat {
   metaObjectId: string;
   adSetId?: string | null; // the parent ad set — compare creatives within it
@@ -105,8 +150,8 @@ function noAction(
 }
 
 // Global gate shared by every acting rule. Below it, nothing fires.
-function hasMinimumEvidence(ev: CampaignEvidence): boolean {
-  const t = RULE_THRESHOLDS;
+function hasMinimumEvidence(ev: CampaignEvidence, thresholds: RuleThresholds = RULE_THRESHOLDS): boolean {
+  const t = thresholds;
   return (
     ev.current.days >= t.MIN_DAYS_DATA &&
     ev.deliveryDays >= t.MIN_DELIVERY_DAYS &&
@@ -118,12 +163,12 @@ function hasMinimumEvidence(ev: CampaignEvidence): boolean {
 // ₪150 — cheaper than the ₪300 audience gate). At 7 days of the campaign's own
 // daily budget, if even that can't be reached, no rule can EVER fire — raising
 // the budget is the only fix, more calendar time never helps (AIC-64).
-function isBudgetBelowThreshold(dailyBudgetAgorot: number): boolean {
-  return dailyBudgetAgorot * 7 < RULE_THRESHOLDS.MIN_CREATIVE_SPEND_AGOROT;
+function isBudgetBelowThreshold(dailyBudgetAgorot: number, thresholds: RuleThresholds = RULE_THRESHOLDS): boolean {
+  return dailyBudgetAgorot * 7 < thresholds.MIN_CREATIVE_SPEND_AGOROT;
 }
 
-function evidenceGapDetail(ev: CampaignEvidence): Record<string, unknown> {
-  const t = RULE_THRESHOLDS;
+function evidenceGapDetail(ev: CampaignEvidence, thresholds: RuleThresholds = RULE_THRESHOLDS): Record<string, unknown> {
+  const t = thresholds;
   return {
     daysSoFar: ev.current.days,
     daysNeeded: t.MIN_DAYS_DATA,
@@ -134,11 +179,11 @@ function evidenceGapDetail(ev: CampaignEvidence): Record<string, unknown> {
   };
 }
 
-function budgetDetail(ev: CampaignEvidence): Record<string, unknown> {
+function budgetDetail(ev: CampaignEvidence, thresholds: RuleThresholds = RULE_THRESHOLDS): Record<string, unknown> {
   return {
     currentBudgetAgorot: ev.currentBudgetAgorot,
     maxWindowSpendAgorot: ev.currentBudgetAgorot * 7,
-    requiredSpendAgorot: RULE_THRESHOLDS.MIN_CREATIVE_SPEND_AGOROT,
+    requiredSpendAgorot: thresholds.MIN_CREATIVE_SPEND_AGOROT,
   };
 }
 
@@ -152,15 +197,18 @@ function deliveryDetail(ev: CampaignEvidence): Record<string, unknown> {
 // worth surfacing even once evidence is otherwise fine), so it outranks the
 // budget/collecting distinction; a structurally-too-low budget outranks "just
 // needs more time" because more time never fixes it.
-function classifyNoAction(ev: CampaignEvidence): { reason: NoActionReason; rationale: string; detail: Record<string, unknown> } {
+function classifyNoAction(
+  ev: CampaignEvidence,
+  thresholds: RuleThresholds = RULE_THRESHOLDS,
+): { reason: NoActionReason; rationale: string; detail: Record<string, unknown> } {
   if (ev.deliveryProblemAdSetIds?.length) {
     return { reason: "delivery_blocked", rationale: "ad set(s) excluded from evidence — not delivering", detail: deliveryDetail(ev) };
   }
-  if (!hasMinimumEvidence(ev)) {
-    if (isBudgetBelowThreshold(ev.currentBudgetAgorot)) {
-      return { reason: "budget_below_threshold", rationale: "7-day max spend below the smallest actionable threshold", detail: budgetDetail(ev) };
+  if (!hasMinimumEvidence(ev, thresholds)) {
+    if (isBudgetBelowThreshold(ev.currentBudgetAgorot, thresholds)) {
+      return { reason: "budget_below_threshold", rationale: "7-day max spend below the smallest actionable threshold", detail: budgetDetail(ev, thresholds) };
     }
-    return { reason: "collecting", rationale: "below minimum-evidence gate", detail: evidenceGapDetail(ev) };
+    return { reason: "collecting", rationale: "below minimum-evidence gate", detail: evidenceGapDetail(ev, thresholds) };
   }
   const adSetCount = ev.adsets?.length ?? 0;
   if (adSetCount < 2) {
@@ -174,8 +222,12 @@ function classifyNoAction(ev: CampaignEvidence): { reason: NoActionReason; ratio
 // Within one ad set, find a creative that spent meaningfully more than its peers
 // for far fewer leads. Comparing WITHIN an ad set is the AIC-36 fix — the same
 // creative under two audiences must never be pitted against itself.
-function weakestInGroup(campaignId: string, creatives: CreativeStat[]): RecommendationDraft | null {
-  const t = RULE_THRESHOLDS;
+function weakestInGroup(
+  campaignId: string,
+  creatives: CreativeStat[],
+  thresholds: RuleThresholds = RULE_THRESHOLDS,
+): RecommendationDraft | null {
+  const t = thresholds;
   const withData = creatives.filter((c) => c.spendAgorot >= t.MIN_CREATIVE_SPEND_AGOROT);
   if (withData.length < t.PAUSE_MIN_PEERS) return null;
 
@@ -221,10 +273,10 @@ function weakestInGroup(campaignId: string, creatives: CreativeStat[]): Recommen
 // (single-ad-set campaigns behave exactly as before). Ad sets running Dynamic/
 // Advantage+ creative are skipped entirely (AIC-36) — Meta's per-asset CPL for
 // those isn't reliable enough to pit "peers" against each other.
-function pauseWeakCreative(ev: CampaignEvidence): RecommendationDraft | null {
+function pauseWeakCreative(ev: CampaignEvidence, thresholds: RuleThresholds = RULE_THRESHOLDS): RecommendationDraft | null {
   const byAdSet = groupCreativesByAdSet(ev.creatives, ev.flexibleCreativeAdSetIds);
   for (const group of byAdSet.values()) {
-    const draft = weakestInGroup(ev.campaignId, group);
+    const draft = weakestInGroup(ev.campaignId, group, thresholds);
     if (draft) return draft;
   }
   return null;
@@ -234,8 +286,11 @@ function pauseWeakCreative(ev: CampaignEvidence): RecommendationDraft | null {
 // materially worse than the best over enough data, propose pausing it. Under CBO
 // the campaign budget then shifts to the winner — a real delivery change, so it's
 // approval-gated (AIC-23 → AIC-12). Stricter gate than the creative rule.
-function pauseUnderperformingAudience(ev: CampaignEvidence): RecommendationDraft | null {
-  const t = RULE_THRESHOLDS;
+function pauseUnderperformingAudience(
+  ev: CampaignEvidence,
+  thresholds: RuleThresholds = RULE_THRESHOLDS,
+): RecommendationDraft | null {
+  const t = thresholds;
   const adsets = ev.adsets ?? [];
   const withData = adsets.filter((a) => a.spendAgorot >= t.AUDIENCE_MIN_SPEND_AGOROT);
   if (withData.length < 2) return null; // need ≥ 2 audiences to compare
@@ -284,8 +339,8 @@ function pauseUnderperformingAudience(ev: CampaignEvidence): RecommendationDraft
 }
 
 // Replace a creative whose own performance has decayed vs its previous window.
-function replaceCreative(ev: CampaignEvidence): RecommendationDraft | null {
-  const t = RULE_THRESHOLDS;
+function replaceCreative(ev: CampaignEvidence, thresholds: RuleThresholds = RULE_THRESHOLDS): RecommendationDraft | null {
+  const t = thresholds;
   if (!ev.creativesPrevious?.length) return null;
   const prevById = new Map(ev.creativesPrevious.map((c) => [c.metaObjectId, c]));
 
@@ -314,8 +369,8 @@ function replaceCreative(ev: CampaignEvidence): RecommendationDraft | null {
 }
 
 // Decrease budget when CPL has risen materially window-over-window.
-function decreaseBudget(ev: CampaignEvidence): RecommendationDraft | null {
-  const t = RULE_THRESHOLDS;
+function decreaseBudget(ev: CampaignEvidence, thresholds: RuleThresholds = RULE_THRESHOLDS): RecommendationDraft | null {
+  const t = thresholds;
   const cur = ev.current.cplAgorot;
   const prev = ev.previous.cplAgorot;
   if (cur === null || prev === null || prev === 0) return null;
@@ -335,8 +390,8 @@ function decreaseBudget(ev: CampaignEvidence): RecommendationDraft | null {
 }
 
 // Increase budget when CPL is stable-or-improving and volume is healthy/growing.
-function increaseBudget(ev: CampaignEvidence): RecommendationDraft | null {
-  const t = RULE_THRESHOLDS;
+function increaseBudget(ev: CampaignEvidence, thresholds: RuleThresholds = RULE_THRESHOLDS): RecommendationDraft | null {
+  const t = thresholds;
   const cur = ev.current.cplAgorot;
   const prev = ev.previous.cplAgorot;
   if (cur === null || prev === null) return null;
@@ -366,7 +421,7 @@ function increaseBudget(ev: CampaignEvidence): RecommendationDraft | null {
 // errored/not-delivering ad sets from the evidence (buildCampaignEvidence's
 // excludeAdSetIds) — so the rule only ever compares genuinely-delivering
 // audiences and never proposes pausing a broken one.
-const RULES: Array<(ev: CampaignEvidence) => RecommendationDraft | null> = [
+const RULES: Array<(ev: CampaignEvidence, thresholds: RuleThresholds) => RecommendationDraft | null> = [
   pauseWeakCreative,
   replaceCreative,
   pauseUnderperformingAudience,
@@ -376,14 +431,18 @@ const RULES: Array<(ev: CampaignEvidence) => RecommendationDraft | null> = [
 
 // Evaluate one campaign → exactly one draft. Below the evidence gate, or when no
 // rule fires, returns a no_action draft with a structured reason code (AIC-64).
-export function evaluateCampaign(ev: CampaignEvidence): RecommendationDraft {
-  if (hasMinimumEvidence(ev)) {
+// `thresholds` defaults to the global constant — every existing caller (and all
+// tests) that doesn't pass one keeps working unchanged (AIC-77a). Callers that
+// resolve per-account thresholds (rule-evaluator.ts, staleness.ts) pass the
+// resolved set explicitly via `resolveThresholds`.
+export function evaluateCampaign(ev: CampaignEvidence, thresholds: RuleThresholds = RULE_THRESHOLDS): RecommendationDraft {
+  if (hasMinimumEvidence(ev, thresholds)) {
     for (const rule of RULES) {
-      const draft = rule(ev);
+      const draft = rule(ev, thresholds);
       if (draft) return draft;
     }
   }
-  const { reason, rationale, detail } = classifyNoAction(ev);
+  const { reason, rationale, detail } = classifyNoAction(ev, thresholds);
   return noAction(ev.campaignId, reason, rationale, detail);
 }
 

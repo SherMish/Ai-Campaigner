@@ -1,5 +1,6 @@
 import type pg from "pg";
 import type { AccessHealth, CampaignStatus, SubscriptionStatus } from "@aic/shared";
+import { resolveThresholds, type RuleThresholds } from "../recommendations/rules.js";
 
 // One row of the operator's customer list — status at a glance.
 export interface CustomerListRow {
@@ -78,6 +79,13 @@ export interface CustomerDetail extends CustomerListRow {
   // actually looking at this account?" answer.
   noRecReason: string | null;
   noRecDetail: Record<string, unknown> | null;
+  // AIC-77a: this account's explicit rule-threshold overrides (sparse — only
+  // overridden keys), and the fully-resolved effective set (override →
+  // budget-relative formula → global default) the engine actually evaluates
+  // against right now, so the admin edit form can show which values are
+  // inherited vs overridden without re-deriving the resolution chain itself.
+  thresholdOverrides: Record<string, number>;
+  effectiveThresholds: RuleThresholds;
 }
 
 // Full per-customer view assembled from the real tables (AIC-16).
@@ -89,7 +97,7 @@ export async function getCustomerDetail(
     `SELECT c.*, s.status AS subscription_status, s.setup_paid, s.next_charge_date,
             conn.access_health,
             mc.id AS campaign_id, mc.name AS campaign_name, mc.status AS campaign_status, mc.agreed_budget_agorot,
-            mc.no_rec_reason, mc.no_rec_detail
+            mc.no_rec_reason, mc.no_rec_detail, mc.threshold_overrides, mc.live_budget_agorot
      FROM customers c
      LEFT JOIN subscriptions s       ON s.customer_id = c.id
      LEFT JOIN meta_connections conn ON conn.customer_id = c.id
@@ -157,5 +165,11 @@ export async function getCustomerDetail(
     openOpsItems: openOps,
     noRecReason: c.no_rec_reason ?? null,
     noRecDetail: c.no_rec_detail ?? null,
+    thresholdOverrides: c.threshold_overrides ?? {},
+    // Mirrors "Budget shown = liveBudgetAgorot ?? agreedBudgetAgorot"
+    // (customer-overview.md) — the live-synced figure the engine actually
+    // evaluates against, falling back to the agreed ceiling before the
+    // engine's first tick.
+    effectiveThresholds: resolveThresholds(c.threshold_overrides, c.live_budget_agorot ?? c.agreed_budget_agorot ?? 0),
   };
 }

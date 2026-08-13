@@ -3,7 +3,7 @@ import type { SnapshotStore } from "../meta/snapshot-store.js";
 import type { RecommendationStore } from "./recommendation-store.js";
 import type { RecommendationService } from "./recommendation-service.js";
 import type { RecommendationRecord, RecommendationDraft } from "./types.js";
-import { evaluateCampaign } from "./rules.js";
+import { evaluateCampaign, resolveThresholds } from "./rules.js";
 import { buildCampaignEvidence, type EvaluableCampaign } from "./rule-evaluator.js";
 
 // A proposed recommendation is still valid iff the same gated rules, run on
@@ -48,7 +48,8 @@ export async function refreshRecommendations(deps: {
     snapshotStore, campaign, deps.current, deps.previous,
     deps.excludeAdSetIds, deps.adSetLabels, deps.flexibleCreativeAdSetIds, deps.deliveryProblemAdSetIds,
   );
-  const fresh = evaluateCampaign(evidence);
+  const thresholds = resolveThresholds(campaign.thresholdOverrides, campaign.currentBudgetAgorot);
+  const fresh = evaluateCampaign(evidence, thresholds);
 
   const proposed = await recommendationStore.listProposed(campaign.id);
   const expiredIds: string[] = [];
