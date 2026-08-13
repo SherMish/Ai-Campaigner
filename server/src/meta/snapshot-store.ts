@@ -206,15 +206,15 @@ export class PgSnapshotStore implements SnapshotStore {
 
   async dailySeries(campaignId: string, start: string, end: string): Promise<DailyPoint[]> {
     const { rows } = await this.pool.query<{ d: string; spend_agorot: number; leads: number }>(
-      // period_start = period_end is what makes a row a single DAY. Without
-      // it this would also sweep up the overlapping rolling-7-day rows and
-      // multiply every total.
+      // Reads insight_snapshot_daily (migration 030), not the table — this
+      // query already filtered to period_start = period_end by hand before
+      // the view existed; now it goes through the same single door every
+      // other windowed SUM does.
       `SELECT to_char(period_start, 'YYYY-MM-DD') AS d,
               SUM(spend_agorot)::int AS spend_agorot,
               SUM(leads)::int        AS leads
-       FROM insight_snapshots
+       FROM insight_snapshot_daily
        WHERE campaign_id = $1 AND grain = 'campaign'
-         AND period_start = period_end
          AND period_start >= $2 AND period_start <= $3
        GROUP BY period_start
        ORDER BY period_start ASC`,

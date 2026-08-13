@@ -3,6 +3,7 @@ import type { SnapshotStore } from "../meta/snapshot-store.js";
 import type { RecommendationStore } from "./recommendation-store.js";
 import type { RecommendationRecord, RecommendationDraft } from "./types.js";
 import { evaluateCampaign, type CampaignEvidence } from "./rules.js";
+import { daysActive, deliveryDaysActive } from "./features.js";
 
 export interface EvaluableCampaign {
   id: string;
@@ -10,8 +11,6 @@ export interface EvaluableCampaign {
 }
 
 // Assemble the evidence a campaign's rules need, from the snapshot store.
-// deliveryDays is a v1 approximation (the current window length when there's
-// spend) — a true learning-phase-exit signal from Meta is a later refinement.
 export async function buildCampaignEvidence(
   store: SnapshotStore,
   campaign: EvaluableCampaign,
@@ -35,20 +34,25 @@ export async function buildCampaignEvidence(
   // itself when omitted, preserving pre-AIC-65 callers' behavior.
   deliveryProblemAdSetIds?: Set<string>,
 ): Promise<CampaignEvidence> {
-  const [curTotals, prevTotals, curCreatives, prevCreatives, curAdsets] = await Promise.all([
+  const [curTotals, prevTotals, curCreatives, prevCreatives, curAdsets, curDaily, prevDaily] = await Promise.all([
     store.campaignTotals(campaign.id, current.start, current.end),
     store.campaignTotals(campaign.id, previous.start, previous.end),
     store.creativeStats(campaign.id, current.start, current.end),
     store.creativeStats(campaign.id, previous.start, previous.end),
     store.adsetStats(campaign.id, current.start, current.end),
+    // Real days-with-data (features.ts) — replaces the v1 approximation that
+    // used window LENGTH (always 7 for the rolling window, so MIN_DAYS_DATA
+    // could never fail a one-day-old campaign) and a binary 7-or-0 for
+    // deliveryDays. Reads insight_snapshot_daily via dailySeries.
+    store.dailySeries(campaign.id, current.start, current.end),
+    store.dailySeries(campaign.id, previous.start, previous.end),
   ]);
   const excluded = excludeAdSetIds ?? new Set<string>();
   const keepCreative = (c: { adSetId?: string | null }) => !c.adSetId || !excluded.has(c.adSetId);
-  const days = periodDays(current);
   return {
     campaignId: campaign.id,
-    current: { ...curTotals, days },
-    previous: { ...prevTotals, days: periodDays(previous) },
+    current: { ...curTotals, days: daysActive(curDaily) },
+    previous: { ...prevTotals, days: daysActive(prevDaily) },
     creatives: curCreatives.filter(keepCreative),
     creativesPrevious: prevCreatives.filter(keepCreative),
     adsets: curAdsets
@@ -56,17 +60,12 @@ export async function buildCampaignEvidence(
       .map((a) => ({ ...a, label: adSetLabels?.get(a.adSetId) })),
     flexibleCreativeAdSetIds,
     currentBudgetAgorot: campaign.currentBudgetAgorot,
-    deliveryDays: curTotals.spendAgorot > 0 ? days : 0,
+    deliveryDays: deliveryDaysActive(curDaily),
     deliveryProblemAdSetIds: (() => {
       const d = deliveryProblemAdSetIds ?? excluded;
       return d.size > 0 ? [...d] : undefined;
     })(),
   };
-}
-
-function periodDays(p: InsightsPeriod): number {
-  const day = 24 * 60 * 60 * 1000;
-  return Math.round((Date.parse(p.end) - Date.parse(p.start)) / day) + 1;
 }
 
 // True when an equivalent proposed recommendation already exists (same type +

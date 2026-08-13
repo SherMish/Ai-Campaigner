@@ -6,6 +6,51 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-13 — AIC-75d/e: feature layer (features.ts) — rules refactored onto named functions, zero behaviour change
+Added `server/src/recommendations/features.ts`: named, independently-tested
+functions (`campaignCpl`/`adCpl`, `spendWithoutLead`, `shareOfCampaignSpend`,
+`daysActive`/`deliveryDaysActive`, `bestPeerCpl`, `groupCreativesByAdSet`,
+`periodOverPeriodDeltaPct`, `leadQualityRate`) replacing math that used to be
+written inline, and in two cases duplicated, inside `rules.ts`'s rule bodies.
+Wired `daysActive`/`deliveryDaysActive` into `rule-evaluator.ts`, replacing the
+two v1 approximations (window-length-as-days, binary delivery) noted in
+`RULES.md` since AIC-9. Refactored `pauseWeakCreative`/`weakestInGroup`/
+`pauseUnderperformingAudience` to call the named functions instead of
+reimplementing them — **no behaviour change**: 6 characterization tests
+(`rules.test.ts`) pinned the exact existing precedence/tie-break/asymmetry
+behaviour before the refactor, and all 27 pass unchanged after. New
+`features.test.ts` (27 tests: zero-lead, zero-spend, single-sibling,
+partial-window cases) plus the full existing suite (273 unit + 34/36
+integration files, the 2 remaining failures pre-existing and unrelated) stay
+green. Verified against real production data (read-only): the real
+under-evaluation campaign now correctly evaluates to `current: {spendAgorot:
+3921, leads: 4, days: 3}`, `no_action` / `collecting` — the real per-day gate
+counts (not the old length-7 approximation) working correctly on a real
+partial-history campaign. Docs: new [FEATURES.md](FEATURES.md), updated
+[RULES.md](RULES.md), [features/recommendation-engine.md](features/recommendation-engine.md).
+
+### 2026-08-13 — AIC-75a/b: real double-count bug fixed — disjoint-daily view + honest `collecting` (not `stable`)
+Found while starting AIC-75/77 (Engine V2): `PgSnapshotStore.campaignTotals`'s
+window `SUM()` matched both a rolling 7-day campaign row and the disjoint
+per-day rows covering the same days — the exact overlapping-window class
+already fixed once for `leads_to_date` (migration 028), missed here. A real
+production campaign's engine evidence read **8 leads / ₪78.42** against a
+truth of **4 leads / ₪39.21**. The doubled figure (8) passed `MIN_CAMPAIGN_LEADS`
+(5) where the true figure (4) should have failed it, so the campaign's cached
+`no_rec_reason` read `stable` ("הכל עובד כרגיל") when the honest state was
+`collecting`. Fixed structurally, not with a read-side filter: new view
+`insight_snapshot_daily` (migration 030) exposes only disjoint rows;
+`campaignTotals`/`dailySeries` now read the view — see
+[DATA_MODEL.md](DATA_MODEL.md#the-disjoint-daily-view-migration-030). Blast
+radius checked before fixing: operator readout was also doubled; customer
+dashboard KPIs were **not** affected (already reading the disjoint
+`dailySeries` from the AIC-55 ranges work); zero stored recommendation
+`evidence` blocks were affected (the `recommendations` table has never had a
+row — this is why AIC-77/76 are sequenced after AIC-75, not before). Test-first:
+`snapshot-store.integration.test.ts`'s new regression test seeds a rolling row
+alongside its own overlapping daily rows and asserts the sum reads the real
+total, not double it; confirmed failing (`expected 8 to be 4`) before the fix.
+
 ### 2026-08-12 — Real terms-of-use + privacy-policy pages, linked from footer + signup
 Built `web/public/terms.html` and `web/public/privacy.html` from the real
 lawyer-provided documents (not placeholder text), normalized to the

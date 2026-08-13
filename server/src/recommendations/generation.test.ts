@@ -29,10 +29,39 @@ function snap(o: Partial<SnapshotUpsert> & Pick<SnapshotUpsert, "grain">): Snaps
   return r.grain === "campaign" ? { ...r, periodEnd: r.periodStart } : r;
 }
 
+// Splits an aggregate CURRENT-window campaign total into 3 distinct days
+// inside CUR, so daysActive/deliveryDaysActive (features.ts — real per-day
+// counts, not window length) clear MIN_DAYS_DATA/MIN_DELIVERY_DAYS the same
+// way real ingestion does for an established campaign. A single-day fixture
+// used to pass this gate too, back when `days` was a window-length
+// approximation (see rule-evaluator.ts's deleted periodDays()); now it
+// genuinely only has 1 day of data and correctly reads "collecting".
+function campaignDailyRows(totalSpendAgorot: number, totalLeads: number): SnapshotUpsert[] {
+  const dates = ["2026-07-27", "2026-07-29", "2026-07-31"];
+  const spends = [
+    Math.round(totalSpendAgorot / 3),
+    Math.round(totalSpendAgorot / 3),
+    0,
+  ];
+  spends[2] = totalSpendAgorot - spends[0] - spends[1];
+  const leadsArr = [Math.round(totalLeads / 3), Math.round(totalLeads / 3), 0];
+  leadsArr[2] = totalLeads - leadsArr[0] - leadsArr[1];
+  return dates.map((periodStart, i) =>
+    snap({
+      grain: "campaign",
+      metaObjectId: "camp",
+      periodStart,
+      spendAgorot: spends[i],
+      leads: leadsArr[i],
+      cplAgorot: leadsArr[i] > 0 ? Math.round(spends[i] / leadsArr[i]) : null,
+    }),
+  );
+}
+
 // A weak creative (cr_weak) that the rules should flag for a pause.
 async function seedWeak(store: InMemorySnapshotStore) {
   await store.upsert([
-    snap({ grain: "campaign", metaObjectId: "camp", spendAgorot: 68000, leads: 20, cplAgorot: 3400 }),
+    ...campaignDailyRows(68000, 20),
     snap({ grain: "creative", metaObjectId: "cr_a", spendAgorot: 25000, leads: 10, cplAgorot: 2500 }),
     snap({ grain: "creative", metaObjectId: "cr_b", spendAgorot: 24000, leads: 9, cplAgorot: 2667 }),
     snap({ grain: "creative", metaObjectId: "cr_weak", spendAgorot: 18000, leads: 1, cplAgorot: 18000 }),
@@ -99,7 +128,7 @@ describe("runGenerationTick", () => {
 // on B unless B is excluded for a delivery problem (AIC-39).
 async function seedAudience(store: InMemorySnapshotStore) {
   await store.upsert([
-    snap({ grain: "campaign", metaObjectId: "camp", spendAgorot: 80000, leads: 25, cplAgorot: 3200 }),
+    ...campaignDailyRows(80000, 25),
     snap({ grain: "campaign", metaObjectId: "camp", periodStart: PREV.start, periodEnd: PREV.end, spendAgorot: 80000, leads: 25, cplAgorot: 3200 }),
     snap({ grain: "adset", metaObjectId: "as_A", spendAgorot: 40000, leads: 20, cplAgorot: 2000 }),
     snap({ grain: "adset", metaObjectId: "as_B", spendAgorot: 40000, leads: 5, cplAgorot: 8000 }),
@@ -226,7 +255,7 @@ describe("runGenerationTick — exclude dead/draft ad sets (AIC-65)", () => {
 // proposes pausing "peers" Meta itself can't reliably attribute.
 async function seedFlexibleCreative(store: InMemorySnapshotStore) {
   await store.upsert([
-    snap({ grain: "campaign", metaObjectId: "camp", spendAgorot: 68000, leads: 20, cplAgorot: 3400 }),
+    ...campaignDailyRows(68000, 20),
     snap({ grain: "campaign", metaObjectId: "camp", periodStart: PREV.start, periodEnd: PREV.end, spendAgorot: 68000, leads: 20, cplAgorot: 3400 }),
     snap({ grain: "creative", metaObjectId: "cr_a", parentMetaId: "as_flex", spendAgorot: 25000, leads: 10, cplAgorot: 2500 }),
     snap({ grain: "creative", metaObjectId: "cr_weak", parentMetaId: "as_flex", spendAgorot: 18000, leads: 1, cplAgorot: 18000 }),

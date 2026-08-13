@@ -4,11 +4,13 @@
 filled by AIC-10.
 
 **Source of truth:** `server/src/recommendations/rules.ts` (thresholds + rules +
-no-rec reason classification), `server/src/recommendations/rule-evaluator.ts`
-(evidence assembly + persistence), `server/src/services/evaluation-reason.ts`
-(caches the reason per campaign, AIC-64).
-**Lock-in tests:** `rules.test.ts`, `rules.adset.test.ts`, `rule-evaluator.test.ts`,
-`generation.test.ts`, `audience-label.test.ts`.
+no-rec reason classification), `server/src/recommendations/features.ts` (the
+named metrics the rules call — see [FEATURES.md](FEATURES.md)),
+`server/src/recommendations/rule-evaluator.ts` (evidence assembly +
+persistence), `server/src/services/evaluation-reason.ts` (caches the reason
+per campaign, AIC-64).
+**Lock-in tests:** `rules.test.ts`, `rules.adset.test.ts`, `features.test.ts`,
+`rule-evaluator.test.ts`, `generation.test.ts`, `audience-label.test.ts`.
 
 ---
 
@@ -52,6 +54,15 @@ budget, 7 × ₪10 = ₪70/week — under `MIN_CREATIVE_SPEND_AGOROT` (₪150), 
 long the campaign runs. `collecting` and `budget_below_threshold` were
 previously the same code (`insufficient_evidence`) — splitting them is the
 difference between an honest "wait" and an honest "this needs a decision."
+
+**Real bug, found and fixed (AIC-75):** `ev.current.leads` was silently
+**double-counted** — `PgSnapshotStore.campaignTotals`'s window query matched
+both a rolling 7-day campaign row and the disjoint daily rows covering the
+same days, so 4 real leads read as 8. `MIN_CAMPAIGN_LEADS` (5) passed on the
+doubled figure when the true count should have failed it, so the gate was
+skipped and evaluation fell through to `stable` — "הכל עובד כרגיל" — on a
+campaign that was really still `collecting`. Fixed at the data layer, not
+here: see [DATA_MODEL.md](DATA_MODEL.md#the-disjoint-daily-view-migration-030).
 
 **Where it's cached.** The reason a tick computes is written to
 `managed_campaigns.no_rec_reason`/`no_rec_detail`/`no_rec_checked_at`
@@ -162,10 +173,15 @@ for the customer-facing opt-in details view this same label feeds.
 ### v1 approximations (documented, refined later)
 - Trend rules compare the **current window vs the previous window** (not daily
   granularity) — sufficient for v1; daily snapshots are a later refinement.
-- `deliveryDays` is approximated from the current window length; a true learning-
-  phase-exit signal from Meta is not yet ingested.
 - Budget rules use **relative movement** (window-over-window), not an absolute CPL
   target (no target-CPL field exists yet).
+
+**Fixed (AIC-75):** `days` and `deliveryDays` used to be approximated from the
+window's *length* (always 7) and a binary 7-or-0, so `MIN_DAYS_DATA`/
+`MIN_DELIVERY_DAYS` could never fail a brand-new campaign. Both are now real
+per-day counts (`features.ts`'s `daysActive`/`deliveryDaysActive`, reading
+`insight_snapshot_daily` via `SnapshotStore.dailySeries`) — see
+[FEATURES.md](FEATURES.md#the-two-v1-approximations-this-replaced).
 
 ## Staleness
 A `proposed` recommendation expires when its evidence **materially diverges**,

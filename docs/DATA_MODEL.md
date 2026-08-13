@@ -60,6 +60,47 @@ surfacing (AIC-37).
   See [METRICS.md](METRICS.md) when ingestion (AIC-6) lands.
 - **CPL** = `spend_agorot / leads` (NULL when `leads = 0`).
 
+### The disjoint-daily view (migration 030)
+
+`insight_snapshots` holds **two shapes of row for the same campaign-grain
+data**: a rolling 7-day window (`period_start = today-7, period_end = today-1`,
+rewritten every ingestion tick) and, since AIC-55, disjoint per-day rows
+(`period_start = period_end`, one per calendar day). Both are real rows for
+real days — a `SUM()` over a plain window predicate
+(`period_start >= $2 AND period_end <= $3`) matches **both**, because the
+rolling row's range contains the daily rows underneath it. That's not
+hypothetical: it's the exact bug that made 1 real lead read as 3 on the
+lead-quality card ([customer-overview.md](features/customer-overview.md#leadstodate-must-never-be-summed-from-insight_snapshots-real-bug-found-live))
+and, found again in the same class at a second call site (AIC-75), made 4
+real leads read as 8 in the recommendation engine's evidence.
+
+**The fix is structural, not a filter to remember.** `insight_snapshot_daily`
+is a view exposing only the disjoint rows:
+
+```sql
+CREATE VIEW insight_snapshot_daily AS
+  SELECT * FROM insight_snapshots WHERE period_start = period_end;
+```
+
+**Rule: any aggregation over a time range reads the view, never the table.**
+`PgSnapshotStore.campaignTotals` and `.dailySeries` both read
+`insight_snapshot_daily`; a `SUM()` over the view is arithmetically incapable
+of double-counting, because the rolling rows it would double-count against
+simply aren't in it. `creativeStats`/`adsetStats` are **deliberately
+unaffected** — those grains have no daily rows written for them at all (only
+`campaign` grain gets the daily `time_increment=1` ingestion call), so they
+select rows within a window rather than summing over time, and were never
+ambiguous the way a `SUM()` is.
+
+This is the same move as AIC-70's `intentStatus()`/`deliveryStatus()`
+accessors: a read-side filter every future consumer has to *remember* is a
+landmine; a view makes the right query the only reachable one.
+
+**Not yet done, deliberately deferred:** stopping the *write* of the now-
+redundant rolling campaign row (it's still written every tick, just no longer
+read for aggregation) — a follow-up ticket, after confirming nothing else
+legitimately reads it.
+
 ## Migrations
 
 `001_init` creates the `_migrations` ledger. `002`–`007` create the entities in

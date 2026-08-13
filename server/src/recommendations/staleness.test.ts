@@ -20,11 +20,33 @@ function snap(o: Partial<SnapshotUpsert> & Pick<SnapshotUpsert, "grain">): Snaps
   return r.grain === "campaign" ? { ...r, periodEnd: r.periodStart } : r;
 }
 
+// Splits an aggregate CURRENT-window campaign total into 3 distinct days
+// inside CUR, so daysActive/deliveryDaysActive (features.ts — real per-day
+// counts, not window length) clear MIN_DAYS_DATA/MIN_DELIVERY_DAYS. See the
+// same helper in generation.test.ts.
+function campaignDailyRows(totalSpendAgorot: number, totalLeads: number): SnapshotUpsert[] {
+  const dates = ["2026-07-27", "2026-07-29", "2026-07-31"];
+  const spends = [Math.round(totalSpendAgorot / 3), Math.round(totalSpendAgorot / 3), 0];
+  spends[2] = totalSpendAgorot - spends[0] - spends[1];
+  const leadsArr = [Math.round(totalLeads / 3), Math.round(totalLeads / 3), 0];
+  leadsArr[2] = totalLeads - leadsArr[0] - leadsArr[1];
+  return dates.map((periodStart, i) =>
+    snap({
+      grain: "campaign",
+      metaObjectId: "camp",
+      periodStart,
+      spendAgorot: spends[i],
+      leads: leadsArr[i],
+      cplAgorot: leadsArr[i] > 0 ? Math.round(spends[i] / leadsArr[i]) : null,
+    }),
+  );
+}
+
 // Snapshots with cr_weak as a clear pause candidate.
 async function seedWeak(store: InMemorySnapshotStore, weakLeads: number, weakCpl: number | null) {
   store.rows.clear();
   await store.upsert([
-    snap({ grain: "campaign", metaObjectId: "camp", spendAgorot: 68000, leads: 20, cplAgorot: 3400 }),
+    ...campaignDailyRows(68000, 20),
     snap({ grain: "creative", metaObjectId: "cr_a", spendAgorot: 25000, leads: 10, cplAgorot: 2500 }),
     snap({ grain: "creative", metaObjectId: "cr_b", spendAgorot: 24000, leads: 9, cplAgorot: 2667 }),
     snap({ grain: "creative", metaObjectId: "cr_weak", spendAgorot: 18000, leads: weakLeads, cplAgorot: weakCpl }),
@@ -104,7 +126,7 @@ describe("refreshRecommendations (staleness/expiry)", () => {
     // Now: no weak creative, but campaign CPL rose sharply → decrease_budget.
     snapshots.rows.clear();
     await snapshots.upsert([
-      snap({ grain: "campaign", metaObjectId: "camp", spendAgorot: 70000, leads: 14, cplAgorot: 5000 }),
+      ...campaignDailyRows(70000, 14),
       snap({ grain: "creative", metaObjectId: "cr_a", spendAgorot: 35000, leads: 7, cplAgorot: 5000 }),
       snap({ grain: "creative", metaObjectId: "cr_b", spendAgorot: 35000, leads: 7, cplAgorot: 5000 }),
       snap({ grain: "campaign", metaObjectId: "camp", periodStart: PREV.start, periodEnd: PREV.end, spendAgorot: 70000, leads: 20, cplAgorot: 3500 }),

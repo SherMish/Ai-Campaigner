@@ -57,9 +57,17 @@ row. Its structured reason IS cached, separately, per campaign (AIC-64 —
 `managed_campaigns.no_rec_reason`, see [../RULES.md](../RULES.md#why-theres-no-recommendation-aic-64))
 so the dashboard/ops console can show WHY without re-running evaluation.
 
-Source: `server/src/recommendations/rules.ts`, `rule-evaluator.ts`. Tests:
-`rules.test.ts` (each rule fires when it should and, crucially, does **not** on
-thin evidence), `rule-evaluator.test.ts`.
+**The feature layer (AIC-75).** The rules don't compute their own metrics —
+`rules.ts` calls named, independently-tested functions from
+`recommendations/features.ts` (peer-CPL comparison, ad-set grouping,
+spend-without-lead, real per-day activity counts) instead of inlining that
+math. See [../FEATURES.md](../FEATURES.md) for the full metric catalogue; the
+refactor onto it made no behaviour change (pinned by characterization tests in
+`rules.test.ts` written before the refactor).
+
+Source: `server/src/recommendations/rules.ts`, `features.ts`, `rule-evaluator.ts`.
+Tests: `rules.test.ts` (each rule fires when it should and, crucially, does
+**not** on thin evidence), `features.test.ts`, `rule-evaluator.test.ts`.
 
 ## Staleness / expiry (AIC-11)
 

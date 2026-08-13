@@ -1,4 +1,5 @@
 import type { RecommendationDraft } from "./types.js";
+import { bestPeerCpl, groupCreativesByAdSet, spendWithoutLead } from "./features.js";
 
 // ── Minimum-evidence gates ("doing nothing is valid") ─────────────────────────
 // The gates matter more than the rules. A rule that fires on one lead of data is
@@ -178,14 +179,21 @@ function weakestInGroup(campaignId: string, creatives: CreativeStat[]): Recommen
   const withData = creatives.filter((c) => c.spendAgorot >= t.MIN_CREATIVE_SPEND_AGOROT);
   if (withData.length < t.PAUSE_MIN_PEERS) return null;
 
-  const performers = creatives.filter((c) => c.leads > 0 && c.cplAgorot !== null);
-  if (performers.length === 0) return null;
-  const bestPeerCpl = Math.min(...performers.map((c) => c.cplAgorot as number));
+  // The creative rule's baseline is NOT spend-gated (unlike the audience rule
+  // below) — a cheap-but-real peer can still set the bar. See features.ts.
+  const bestCpl = bestPeerCpl(creatives, null);
+  if (bestCpl === null) return null;
 
-  // Weakest = highest CPL (nulls = spent-with-no-leads treated as worst).
+  // Weakest = highest CPL (spent-without-a-lead treated as worst).
   const weak = withData
-    .filter((c) => c.cplAgorot === null || (c.cplAgorot as number) >= bestPeerCpl * t.PAUSE_WEAK_CPL_MULTIPLIER)
-    .filter((c) => c.cplAgorot === null || (c.cplAgorot as number) > bestPeerCpl)
+    .filter(
+      (c) =>
+        spendWithoutLead(c.spendAgorot, c.leads, t.MIN_CREATIVE_SPEND_AGOROT) ||
+        (c.cplAgorot as number) >= bestCpl * t.PAUSE_WEAK_CPL_MULTIPLIER,
+    )
+    .filter(
+      (c) => spendWithoutLead(c.spendAgorot, c.leads, t.MIN_CREATIVE_SPEND_AGOROT) || (c.cplAgorot as number) > bestCpl,
+    )
     .sort((a, b) => (b.cplAgorot ?? Infinity) - (a.cplAgorot ?? Infinity))[0];
   if (!weak) return null;
 
@@ -199,12 +207,12 @@ function weakestInGroup(campaignId: string, creatives: CreativeStat[]): Recommen
       spendAgorot: weak.spendAgorot,
       leads: weak.leads,
       cplAgorot: weak.cplAgorot,
-      bestPeerCplAgorot: bestPeerCpl,
+      bestPeerCplAgorot: bestCpl,
     },
     currentBudgetAgorot: null,
     proposedBudgetAgorot: null,
     maxSpendImpactAgorot: 0, // pausing only reduces spend
-    rationale: `creative ${weak.metaObjectId} spent ${weak.spendAgorot} for ${weak.leads} lead(s); best peer CPL ${bestPeerCpl}`,
+    rationale: `creative ${weak.metaObjectId} spent ${weak.spendAgorot} for ${weak.leads} lead(s); best peer CPL ${bestCpl}`,
   };
 }
 
@@ -214,15 +222,7 @@ function weakestInGroup(campaignId: string, creatives: CreativeStat[]): Recommen
 // Advantage+ creative are skipped entirely (AIC-36) — Meta's per-asset CPL for
 // those isn't reliable enough to pit "peers" against each other.
 function pauseWeakCreative(ev: CampaignEvidence): RecommendationDraft | null {
-  const flexible = ev.flexibleCreativeAdSetIds ?? new Set<string>();
-  const byAdSet = new Map<string, CreativeStat[]>();
-  for (const c of ev.creatives) {
-    const k = c.adSetId ?? "__none__";
-    if (flexible.has(k)) continue;
-    const group = byAdSet.get(k);
-    if (group) group.push(c);
-    else byAdSet.set(k, [c]);
-  }
+  const byAdSet = groupCreativesByAdSet(ev.creatives, ev.flexibleCreativeAdSetIds);
   for (const group of byAdSet.values()) {
     const draft = weakestInGroup(ev.campaignId, group);
     if (draft) return draft;
@@ -240,16 +240,25 @@ function pauseUnderperformingAudience(ev: CampaignEvidence): RecommendationDraft
   const withData = adsets.filter((a) => a.spendAgorot >= t.AUDIENCE_MIN_SPEND_AGOROT);
   if (withData.length < 2) return null; // need ≥ 2 audiences to compare
 
+  // Unlike the creative rule, the audience baseline IS spend-gated — pausing a
+  // whole audience is a bigger move (see AUDIENCE_MIN_SPEND_AGOROT above).
+  // withData is already gated, so no further gate here (null).
   const performers = withData.filter((a) => a.leads > 0 && a.cplAgorot !== null);
-  if (performers.length === 0) return null;
-  const bestCpl = Math.min(...performers.map((a) => a.cplAgorot as number));
+  const bestCpl = bestPeerCpl(withData, null);
+  if (bestCpl === null) return null;
   const bestAdset = performers.find((a) => (a.cplAgorot as number) === bestCpl)!;
   // The winner must have real volume, so we're not scaling into a fluke.
   if (bestAdset.leads < t.AUDIENCE_MIN_LEADS) return null;
 
   const worst = withData
-    .filter((a) => a.cplAgorot === null || (a.cplAgorot as number) >= bestCpl * t.AUDIENCE_CPL_MULTIPLIER)
-    .filter((a) => a.cplAgorot === null || (a.cplAgorot as number) > bestCpl)
+    .filter(
+      (a) =>
+        spendWithoutLead(a.spendAgorot, a.leads, t.AUDIENCE_MIN_SPEND_AGOROT) ||
+        (a.cplAgorot as number) >= bestCpl * t.AUDIENCE_CPL_MULTIPLIER,
+    )
+    .filter(
+      (a) => spendWithoutLead(a.spendAgorot, a.leads, t.AUDIENCE_MIN_SPEND_AGOROT) || (a.cplAgorot as number) > bestCpl,
+    )
     .sort((a, b) => (b.cplAgorot ?? Infinity) - (a.cplAgorot ?? Infinity))[0];
   if (!worst) return null;
 
