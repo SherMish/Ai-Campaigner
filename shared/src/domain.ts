@@ -51,6 +51,10 @@ export const RECOMMENDATION_TYPE = [
   "decrease_budget",
   "replace_creative",
   "no_action",
+  // AIC-86: advisory only — never a Meta write. Fires when there aren't enough
+  // comparable creatives to judge one against another; the CTA sends the
+  // customer to the existing add-ad flow instead of the approve/execute gate.
+  "add_creatives_for_comparison",
 ] as const;
 export type RecommendationType = (typeof RECOMMENDATION_TYPE)[number];
 

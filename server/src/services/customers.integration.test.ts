@@ -25,10 +25,10 @@ d("customers view (DB + HTTP)", () => {
     const camp = await pool.query<{ id: string }>(`INSERT INTO managed_campaigns (customer_id, ad_account_id, status, agreed_budget_agorot) VALUES ($1,$2,'active',10000) RETURNING id`, [customerId, acct.rows[0].id]);
     await pool.query(`INSERT INTO recommendations (campaign_id, type, state, rationale) VALUES ($1,'increase_budget','proposed','x')`, [camp.rows[0].id]);
     await pool.query(`INSERT INTO ops_queue_items (customer_id, type, severity) VALUES ($1,'support_request','medium')`, [customerId]);
-    // AIC-64: the precise no-rec reason should reach the operator's detail view.
+    // AIC-64/85: the precise no-rec reason should reach the operator's detail view.
     await pool.query(
-      `UPDATE managed_campaigns SET no_rec_reason = 'single_ad_set', no_rec_detail = $2 WHERE id = $1`,
-      [camp.rows[0].id, JSON.stringify({ adSetCount: 1 })],
+      `UPDATE managed_campaigns SET no_rec_reason = 'no_comparable_audiences', no_rec_detail = $2 WHERE id = $1`,
+      [camp.rows[0].id, JSON.stringify({ comparableCount: 1 })],
     );
 
     const list = await listCustomers(pool);
@@ -43,8 +43,8 @@ d("customers view (DB + HTTP)", () => {
     expect(detail?.mainService).toBe("personal training");
     expect(detail?.outstandingRecommendation?.type).toBe("increase_budget");
     expect(detail?.openOpsItems).toBe(1);
-    expect(detail?.noRecReason).toBe("single_ad_set");
-    expect(detail?.noRecDetail).toMatchObject({ adSetCount: 1 });
+    expect(detail?.noRecReason).toBe("no_comparable_audiences");
+    expect(detail?.noRecDetail).toMatchObject({ comparableCount: 1 });
 
     const res = await request(createApp()).get(`/api/admin/customers/${customerId}`).set("Authorization", ADMIN);
     expect(res.status).toBe(200);

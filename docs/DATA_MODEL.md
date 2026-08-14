@@ -110,10 +110,16 @@ of a DB `ENUM` type, so adding a value doesn't need a DDL type migration...
 except the CHECK itself still needs one: `ALTER TABLE ... DROP CONSTRAINT`
 then re-`ADD CONSTRAINT` with the wider list (migration 013 did this first,
 for `recommendations.type`; migration 032 did it for `no_rec_reason`'s new
-`cooling_down` value, AIC-77b). **Skipping this migration fails silently** —
-the app-level write happens inside a try/catch that logs and continues
-(`generation.ts`'s `recordNoRecReason` call), so a forgotten CHECK-widen
-doesn't crash anything, it just quietly never persists the new value, forever.
+`cooling_down` value, AIC-77b; migration 034 widened `recommendations.type`
+again for `add_creatives_for_comparison`, migration 035 widened
+`no_rec_reason` again for the AIC-85 comparability reasons — a rename
+(`single_ad_set` → `no_comparable_audiences`) plus two new values). **Skipping
+this migration fails silently** — the app-level write happens inside a
+try/catch that logs and continues (`generation.ts`'s `recordNoRecReason`
+call), so a forgotten CHECK-widen doesn't crash anything, it just quietly
+never persists the new value, forever. A rename is safe with no data
+migration: `no_rec_reason` is overwritten every engine tick, not a
+historical record.
 
 ## Migrations
 

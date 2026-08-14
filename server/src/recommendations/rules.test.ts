@@ -4,6 +4,9 @@ import {
   resolveThresholds,
   ruleClassOf,
   resolveCooldownClasses,
+  comparableCreatives,
+  comparableAdsets,
+  __rulesForTest,
   RULE_THRESHOLDS as T,
   type CampaignEvidence,
   type CreativeStat,
@@ -28,6 +31,153 @@ function baseEvidence(over: Partial<CampaignEvidence> = {}): CampaignEvidence {
 function cr(id: string, spend: number, leads: number, cpl: number | null): CreativeStat {
   return { metaObjectId: id, creativeName: id, spendAgorot: spend, leads, cplAgorot: cpl, deliveryStatus: "active" };
 }
+
+// AIC-85/86: "comparable" is relative to campaign spend (shareOfCampaignSpend),
+// not raw presence — the real bug this fixes: a dormant object still counts
+// toward `ev.adsets.length`/`ev.creatives.length` today, so it silently
+// passes the old `adSetCount < 2` check and the account falls through to the
+// dishonest "stable" catch-all instead of reporting it can't compare anything.
+describe("comparableAdsets / comparableCreatives (AIC-85/86)", () => {
+  it("GelNails-shaped: a real ad set + a dormant one (₪2.35 of ₪46.29 ≈ 5%) — the dormant one must NOT count as comparable", () => {
+    const ev = baseEvidence({
+      current: { spendAgorot: 4629, leads: 5, cplAgorot: 926, days: 7 },
+      adsets: [
+        { adSetId: "as_real", spendAgorot: 4394, leads: 5, cplAgorot: 879, deliveryStatus: "active" },
+        { adSetId: "as_dormant", spendAgorot: 235, leads: 0, cplAgorot: null, deliveryStatus: "active" },
+      ],
+    });
+    const c = comparableAdsets(ev, T);
+    expect(c.comparableCount).toBe(1); // NOT 2 — the old adSetCount-based check would say 2
+    expect(c.comparableIds).toEqual(["as_real"]);
+    expect(c.dormantIds).toEqual(["as_dormant"]);
+  });
+
+  it("two real, roughly-split ad sets are both comparable", () => {
+    const ev = baseEvidence({
+      current: { spendAgorot: 70000, leads: 20, cplAgorot: 3500, days: 7 },
+      adsets: [
+        { adSetId: "as_1", spendAgorot: 35000, leads: 10, cplAgorot: 3500, deliveryStatus: "active" },
+        { adSetId: "as_2", spendAgorot: 35000, leads: 10, cplAgorot: 3500, deliveryStatus: "active" },
+      ],
+    });
+    expect(comparableAdsets(ev, T).comparableCount).toBe(2);
+  });
+
+  it("no adsets at all → comparableCount 0, not a crash", () => {
+    const ev = baseEvidence({ adsets: undefined });
+    expect(comparableAdsets(ev, T).comparableCount).toBe(0);
+  });
+
+  it("zero campaign spend → nothing is comparable (null share, not a divide-by-zero)", () => {
+    const ev = baseEvidence({
+      current: { spendAgorot: 0, leads: 0, cplAgorot: null, days: 3 },
+      adsets: [{ adSetId: "as_1", spendAgorot: 0, leads: 0, cplAgorot: null, deliveryStatus: "active" }],
+    });
+    expect(comparableAdsets(ev, T).comparableCount).toBe(0);
+  });
+
+  it("comparableCreatives: GelNails-shaped single real creative — comparableCount 1, not 3", () => {
+    const ev = baseEvidence({
+      current: { spendAgorot: 4629, leads: 5, cplAgorot: 926, days: 7 },
+      creatives: [cr("cr_only", 4394, 5, 879)],
+    });
+    expect(comparableCreatives(ev, T).comparableCount).toBe(1);
+  });
+
+  it("withEvidenceCount separately tracks the absolute ₪150/₪300 gate — comparable but still thin", () => {
+    // Two real (non-dormant, 50/50 split) creatives, both under MIN_CREATIVE_SPEND_AGOROT.
+    const ev = baseEvidence({
+      current: { spendAgorot: 10000, leads: 2, cplAgorot: 5000, days: 3 },
+      creatives: [cr("cr_a", 5000, 1, 5000), cr("cr_b", 5000, 1, 5000)],
+    });
+    const c = comparableCreatives(ev, T);
+    expect(c.comparableCount).toBe(2); // both real, 50/50 split
+    expect(c.withEvidenceCount).toBe(0); // neither cleared ₪150 yet
+  });
+});
+
+describe("add_creatives_for_comparison (AIC-86)", () => {
+  it("fires on day one — zero leads, zero days, no evidence gate at all", () => {
+    const ev = baseEvidence({
+      current: { spendAgorot: 0, leads: 0, cplAgorot: null, days: 0 },
+      deliveryDays: 0,
+      creatives: [],
+    });
+    const d = evaluateCampaign(ev);
+    expect(d.type).toBe("add_creatives_for_comparison");
+  });
+
+  it("does NOT fire once 2 real (non-dormant) creatives exist", () => {
+    const ev = baseEvidence(); // default 3 creatives, all comparable
+    const d = evaluateCampaign(ev);
+    expect(d.type).not.toBe("add_creatives_for_comparison");
+  });
+
+  it("names the flexible-ad case explicitly (AIC-36) instead of the generic phrasing", () => {
+    const ev = baseEvidence({
+      current: { spendAgorot: 4629, leads: 5, cplAgorot: 926, days: 7 },
+      creatives: [cr("cr_only", 4394, 5, 879)],
+      flexibleCreativeAdSetIds: new Set(["as_flex"]),
+    });
+    ev.creatives[0].adSetId = "as_flex";
+    const d = evaluateCampaign(ev);
+    expect(d.type).toBe("add_creatives_for_comparison");
+    expect(d.evidence.isFlexibleAd).toBe(true);
+  });
+
+  it("does not name flexible-ad when the sole comparable creative is in a normal ad set", () => {
+    const ev = baseEvidence({
+      current: { spendAgorot: 4629, leads: 5, cplAgorot: 926, days: 7 },
+      creatives: [{ ...cr("cr_only", 4394, 5, 879), adSetId: "as_normal" }],
+      flexibleCreativeAdSetIds: new Set(["as_other_flex"]),
+    });
+    const d = evaluateCampaign(ev);
+    expect(d.evidence.isFlexibleAd).toBe(false);
+  });
+
+  it("is suppressed when a delivery problem is active — delivery_blocked still wins", () => {
+    const ev = baseEvidence({ creatives: [], deliveryProblemAdSetIds: ["as_broken"] });
+    const d = evaluateCampaign(ev);
+    expect(d.type).toBe("no_action");
+    expect(d.evidence.reason).toBe("delivery_blocked");
+  });
+
+  it("takes priority over a budget rule even when hasMinimumEvidence is true", () => {
+    // CPL clearly rising (would fire decrease_budget) AND only one creative —
+    // the structural gap wins, since you can't judge on a budget move made
+    // blind to which creative is actually driving the cost.
+    const ev = baseEvidence({
+      current: { spendAgorot: 70000, leads: 10, cplAgorot: 7000, days: 7 },
+      previous: { spendAgorot: 70000, leads: 20, cplAgorot: 3500, days: 7 },
+      creatives: [cr("cr_only", 70000, 10, 7000)],
+    });
+    const d = evaluateCampaign(ev);
+    expect(d.type).toBe("add_creatives_for_comparison");
+  });
+
+  it("evidence carries both creative and audience facts — the ops console's full picture", () => {
+    const ev = baseEvidence({
+      current: { spendAgorot: 4629, leads: 5, cplAgorot: 926, days: 7 },
+      creatives: [cr("cr_only", 4394, 5, 879)],
+      adsets: [
+        { adSetId: "as_real", spendAgorot: 4394, leads: 5, cplAgorot: 879, deliveryStatus: "active" },
+        { adSetId: "as_dormant", spendAgorot: 235, leads: 0, cplAgorot: null, deliveryStatus: "active" },
+      ],
+    });
+    const d = evaluateCampaign(ev);
+    expect(d.evidence.comparableCreativeCount).toBe(1);
+    expect(d.evidence.comparableAdsetCount).toBe(1);
+    expect(d.evidence.dormantAdsetIds).toEqual(["as_dormant"]);
+    expect(d.currentBudgetAgorot).toBeNull();
+    expect(d.proposedBudgetAgorot).toBeNull();
+    expect(d.maxSpendImpactAgorot).toBeNull();
+    expect(d.targetMetaId).toBeNull();
+  });
+
+  it("never enters cooldown accounting — ruleClassOf returns null for it", () => {
+    expect(ruleClassOf("add_creatives_for_comparison")).toBeNull();
+  });
+});
 
 describe("minimum-evidence gate (doing nothing is valid)", () => {
   it("returns no_action/collecting below the day gate", () => {
@@ -87,12 +237,12 @@ describe("no_action reason classification (AIC-64)", () => {
     expect(d.evidence.reason).toBe("delivery_blocked");
   });
 
-  it("single_ad_set when the gate passes, no rule fires, and there's only one audience with data", () => {
+  it("no_comparable_audiences when the gate passes, no rule fires, and there's only one audience with data", () => {
     const d = evaluateCampaign(baseEvidence({ adsets: [{ adSetId: "as_1", spendAgorot: 70000, leads: 20, cplAgorot: 3500, deliveryStatus: "active" }] }));
-    expect(d.evidence.reason).toBe("single_ad_set");
+    expect(d.evidence.reason).toBe("no_comparable_audiences");
   });
 
-  it("stable (not single_ad_set) when ≥2 audiences have data and nothing fires", () => {
+  it("stable (not no_comparable_audiences) when ≥2 audiences have data and nothing fires", () => {
     const d = evaluateCampaign(
       baseEvidence({
         adsets: [
@@ -102,6 +252,40 @@ describe("no_action reason classification (AIC-64)", () => {
       }),
     );
     expect(d.evidence.reason).toBe("stable");
+  });
+
+  it("below_object_evidence_floor (creative) — 2 real, comparable creatives, neither cleared ₪150 yet", () => {
+    const d = evaluateCampaign(
+      baseEvidence({
+        current: { spendAgorot: 20000, leads: 5, cplAgorot: 4000, days: 7 },
+        creatives: [cr("cr_a", 10000, 3, 3333), cr("cr_b", 10000, 2, 5000)],
+        adsets: [
+          { adSetId: "as_1", spendAgorot: 20000, leads: 5, cplAgorot: 4000, deliveryStatus: "active" },
+          { adSetId: "as_2", spendAgorot: 20000, leads: 5, cplAgorot: 4000, deliveryStatus: "active" },
+        ],
+      }),
+    );
+    expect(d.evidence.reason).toBe("below_object_evidence_floor");
+    expect((d.evidence.detail as Record<string, unknown>).kind).toBe("creative");
+  });
+
+  it("below_object_evidence_floor (audience) — creatives cleared, but audiences didn't", () => {
+    const d = evaluateCampaign(
+      baseEvidence({
+        adsets: [
+          { adSetId: "as_1", spendAgorot: 10000, leads: 2, cplAgorot: 5000, deliveryStatus: "active" },
+          { adSetId: "as_2", spendAgorot: 10000, leads: 2, cplAgorot: 5000, deliveryStatus: "active" },
+        ],
+      }),
+    );
+    expect(d.evidence.reason).toBe("below_object_evidence_floor");
+    expect((d.evidence.detail as Record<string, unknown>).kind).toBe("audience");
+  });
+
+  it("no_comparable_creatives is reachable directly from classifyNoAction (defensive — AIC-86's advisory rule intercepts it in normal evaluateCampaign flow)", () => {
+    const ev = baseEvidence({ creatives: [cr("cr_only", 25000, 8, 3125)] });
+    const result = __rulesForTest.classifyNoAction(ev, T);
+    expect(result.reason).toBe("no_comparable_creatives");
   });
 });
 

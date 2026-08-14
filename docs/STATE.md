@@ -6,6 +6,75 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-14 — AIC-85/86: "stable" honesty fix + the first advisory recommendation
+Live investigation of GelNails (the same account across this whole session's
+arc) found `no_rec_reason = "stable"` reporting "everything's fine" while the
+truth was "the engine structurally can't judge this account" — one creative
+with real spend (a flexible ad collapsing 4 posts into one comparable object,
+AIC-36) and one dormant ad set. `stable` was a catch-all standing in for
+three different situations at once, and `no_rec_detail` was empty, so the
+nuance wasn't even stored.
+
+**The insight that made this worth building immediately:** the honest
+explanation and the single most valuable thing the engine could say are the
+*same message* — "we can't compare because you only have one ad" converts
+directly into "add 2–3 more ads," already the product's own recommended
+range. Filed as two tickets, built together: AIC-85 (stop using `stable` as
+a catch-all) and AIC-86 (turn "nothing comparable" into a real, actionable
+recommendation).
+
+**AIC-85 — honest comparability.** New `comparableCreatives`/
+`comparableAdsets` (`rules.ts`) define "comparable" relative to campaign
+spend via `shareOfCampaignSpend` (already existed, AIC-75) — an object is
+comparable at ≥10% share, a chosen scale-free number rather than a fixed
+shekel floor that would break across account sizes. Fixes a real bug: the
+old `single_ad_set` check counted raw ad-set *presence*, letting a
+₪2.35/week dormant ad set silently count as "comparable" and fall through to
+`stable`. Three new/renamed `no_rec_reason` values: `no_comparable_audiences`
+(replaces `single_ad_set`), `no_comparable_creatives`, and
+`below_object_evidence_floor` — comparable objects exist but haven't
+individually cleared the existing absolute spend gate yet, a genuinely
+different fact from "nothing to compare at all." Migration 035 widens
+`managed_campaigns_no_rec_reason_check`.
+
+**AIC-86 — the advisory recommendation.** New type
+`add_creatives_for_comparison` (migration 034 widens
+`recommendations_type_check`) — the first recommendation that's advisory
+only, never a Meta write. Fires **independent of the evidence gate**
+(`hasMinimumEvidence`), a deliberate design decision: the gates exist for
+*comparative* claims needing statistical power ("creative A underperforms
+B"); "there is only one creative" is a *count*, and no amount of additional
+data makes a count more true. Firing from day one means the advice arrives
+*before* a customer burns weeks of budget on one untested creative, not
+after — gating it behind 5 leads would have meant it only ever arrived once
+the damage it warns against had already happened. Advisory + dismissible, so
+the cost of firing early is mild redundancy. No new state-machine states
+needed: the customer UI simply never calls approve for this type, linking to
+the existing add-ad screen (AIC-63) instead; it self-resolves through the
+*existing* staleness mechanism once a second real creative appears — zero
+special-case expiry code. Copy has two variants (with real performance data
+to open on vs. the day-one case with none yet) plus explicit flexible-ad
+naming, per explicit correction during design review.
+
+Verified live: the real production tick on GelNails now reports
+`below_object_evidence_floor` (3 real comparable creatives, none past ₪150
+yet) instead of `stable` — the account's shape had changed since the
+investigation (comparability was no longer the blocker), itself live proof
+the fix responds correctly to real data as it changes. Customer copy
+rendered live: *"אין המלצה כרגע — יש מה להשוות, אבל עדיין לא מספיק נתונים
+(מודעות: 0/3 עברו את סף ₪150)"* — not "הכל עובד כרגיל". `add_creatives_for_comparison`
+itself is covered by 24+ direct unit/integration tests rather than
+re-demonstrated live, since the account had already resolved past that
+specific state by verification time.
+
+Test-first for the dormant-ad-set miscount (the real bug). Full suite green
+(351 unit tests, 202/204 integration — only the 2 known pre-existing
+flakes), typecheck clean, web build clean. Docs:
+[RULES.md](RULES.md#comparability--the-add_creatives_for_comparison-advisory-aic-8586)
+(new section — the full design), [FEATURES.md](FEATURES.md),
+[DATA_MODEL.md](DATA_MODEL.md), [recommendation-engine.md](features/recommendation-engine.md),
+[ops-console.md](features/ops-console.md#recommendations-oversight-aic-46).
+
 ### 2026-08-14 — AIC-76: outcome measurement — did an executed recommendation help?
 Closes the loop AIC-75/77a/77b opened: the engine proposes, the customer
 approves, the change lands — and until now, nothing ever checked the result.

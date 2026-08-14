@@ -19,6 +19,9 @@ const rd = a.recDetail;
 const L = a.home.live;
 
 const isBudget = (t: string) => t === "increase_budget" || t === "decrease_budget";
+// AIC-86: advisory only — never a Meta write. The CTA below routes straight
+// to the existing add-ad screen instead of the approve/execute pipeline.
+const isAdvisory = (t: string) => t === "add_creatives_for_comparison";
 
 export function Recommendations() {
   const [data, setData] = useState<CustomerRecList | null>(null);
@@ -181,10 +184,15 @@ export function RecommendationDetail() {
               {rec.type === "pause_adset" && <p className="muted" style={{ marginTop: 8 }}>{rd.changesAudience}</p>}
               {isBudget(rec.type) && <p className="muted" style={{ marginTop: 8 }}>{rd.changesBudget}</p>}
               {rec.type === "replace_creative" && <p className="muted" style={{ marginTop: 8 }}>{rd.changesReplace}</p>}
+              {isAdvisory(rec.type) && <p className="muted" style={{ marginTop: 8 }}>{rd.changesAddCreatives}</p>}
             </div>
 
             <div className="row gap12" style={{ flexWrap: "wrap" }}>
-              <button className="btn btn-primary" onClick={approve}>{a.approve}</button>
+              {isAdvisory(rec.type) ? (
+                <Link className="btn btn-primary" to="/app/add-content">{rd.addCreativesCta}</Link>
+              ) : (
+                <button className="btn btn-primary" onClick={approve}>{a.approve}</button>
+              )}
               <button className="btn btn-outline" onClick={dismiss}>{a.notNow}</button>
               <a className="btn btn-ghost" href={WA} style={{ marginInlineStart: "auto" }}>{rd.wantToTalk} {a.talk}</a>
             </div>

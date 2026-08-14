@@ -43,6 +43,19 @@ if the row is still in the expected `from` state; a lost race throws
 `action_history` (what / previous / new / why / who / human / when / result) — the
 one place a real change is logged.
 
+**`add_creatives_for_comparison` (AIC-86) never enters `approved`/`executing`/
+`executed` at all.** It's the first recommendation type that's advisory only —
+no Meta write exists for it to gate. Rather than adding new states to the
+machine above, the existing `proposed`/`dismissed` states are reused
+unchanged: the customer UI simply never calls the approve endpoint for this
+type (its detail screen renders a link to the existing add-ad screen, AIC-63,
+instead of an Approve button), and "not now" dismisses exactly like any other
+rec. It self-resolves through the *existing* staleness mechanism below — once
+the customer adds a second real creative, the rule stops matching and the rec
+expires on the next tick, with zero special-case code. See
+[RULES.md](../RULES.md#comparability--the-add_creatives_for_comparison-advisory-aic-8586)
+for the full design.
+
 ## Deterministic rules (AIC-9)
 
 A campaign is evaluated by pure rules over `insight_snapshot`-derived evidence,

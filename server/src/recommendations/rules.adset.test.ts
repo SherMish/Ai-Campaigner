@@ -115,7 +115,13 @@ describe("pause_underperforming_audience (AIC-36; live since AIC-39)", () => {
   });
 
   it("is LIVE: evaluateCampaign emits pause_adset for a clear A≫B split", () => {
-    const d = evaluateCampaign(base({ adsets: [ad("A", 40000, 20, 2000), ad("B", 40000, 5, 8000)] }));
+    // Two real, comparable creatives (AIC-86 fires ahead of every RULES-array
+    // rule when there aren't — irrelevant to what THIS test is about, the
+    // audience rule) so the audience rule actually gets evaluated.
+    const d = evaluateCampaign(base({
+      creatives: [cr("cr_1", "A", 20000, 12, 1667), cr("cr_2", "B", 20000, 13, 1538)],
+      adsets: [ad("A", 40000, 20, 2000), ad("B", 40000, 5, 8000)],
+    }));
     expect(d.type).toBe("pause_adset");
     expect(d.targetMetaId).toBe("B");
   });

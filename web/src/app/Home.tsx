@@ -40,10 +40,14 @@ function noRecCard(reason: string | null): { title: string; body: string; cta?: 
       return h.noRec.collecting;
     case "budget_below_threshold":
       return { ...h.noRec.budgetBelowThreshold, cta: { to: "/app/settings", label: h.noRec.budgetBelowThreshold.cta } };
-    case "single_ad_set":
-      return h.noRec.singleAdSet;
+    case "no_comparable_audiences": // AIC-85, was single_ad_set
+      return h.noRec.noComparableAudiences;
     case "cooling_down":
       return h.noRec.coolingDown;
+    case "below_object_evidence_floor": // AIC-85
+      return h.noRec.belowObjectEvidenceFloor;
+    case "no_comparable_creatives": // AIC-85 — rarely reached, see rules.ts
+      return h.noRec.noComparableCreatives;
     case "stable":
       return h.noRec.stable;
     default:

@@ -16,7 +16,7 @@ interface CustomerOption { id: string; businessName: string }
 
 const money = (agorot: number | null) => (agorot === null ? a.noData : formatShekel(agorot));
 const STATES = ["proposed", "approved", "executing", "executed", "failed", "dismissed", "expired"];
-const TYPES = ["pause_creative", "pause_adset", "increase_budget", "decrease_budget", "replace_creative", "no_action"];
+const TYPES = ["pause_creative", "pause_adset", "increase_budget", "decrease_budget", "replace_creative", "no_action", "add_creatives_for_comparison"];
 const VERDICTS: OutcomeVerdict[] = ["improved", "degraded", "neutral", "confounded", "insufficient_data", "not_measurable"];
 const pct = (v: number | null) => (v === null ? a.noData : `${v > 0 ? "+" : ""}${v}%`);
 

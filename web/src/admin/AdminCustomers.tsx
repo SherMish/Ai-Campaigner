@@ -97,8 +97,14 @@ function noRecDetailLine(reason: string, detail: Record<string, unknown> | null)
       const ids = Array.isArray(detail.problemAdSetIds) ? (detail.problemAdSetIds as string[]) : [];
       return ids.length ? `ad set: ${ids.join(", ")}` : null;
     }
-    case "single_ad_set":
-      return `${num("adSetCount")} קהלים עם נתונים`;
+    case "no_comparable_audiences": // AIC-85, was single_ad_set
+      return `${num("comparableCount")} קהלים ברי-השוואה (לא כולל קהלים כמעט-לא-פעילים)`;
+    case "no_comparable_creatives": // AIC-85 — rarely stored, see rules.ts
+      return `${num("comparableCount")} מודעות ברות-השוואה`;
+    case "below_object_evidence_floor": { // AIC-85
+      const kind = detail.kind === "audience" ? "קהלים" : "מודעות";
+      return `${kind}: ${num("withEvidenceCount")}/${num("comparableCount")} עברו את סף ${money(num("requiredSpendAgorot"))}`;
+    }
     case "cooling_down": {
       const resumesAt = typeof detail.resumesAt === "string" ? detail.resumesAt.slice(0, 10) : null;
       return `${detail.suppressedType} · ${num("cooldownDays")} ימי צינון${resumesAt ? ` · חוזר ${resumesAt}` : ""}`;

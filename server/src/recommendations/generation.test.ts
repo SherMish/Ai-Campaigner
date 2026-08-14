@@ -119,15 +119,19 @@ describe("runGenerationTick", () => {
     expect([...recs.records.values()]).toHaveLength(0);
   });
 
-  it("stable/thin evidence yields no recommendation", async () => {
+  it("zero creative-level data (day-one-shaped): AIC-86 fires add_creatives_for_comparison instead of yielding nothing", async () => {
+    // Before AIC-86 this yielded no recommendation at all — exactly the
+    // dead end the ticket exists to close: thin/no creative data is when
+    // "add creatives" is most worth saying, not a reason to say nothing.
     const snapshots = new InMemorySnapshotStore();
     await snapshots.upsert([
       snap({ grain: "campaign", metaObjectId: "camp", spendAgorot: 200, leads: 0, cplAgorot: null }),
     ]);
     const recs = new InMemoryRecommendationStore();
     const res = await tick([CAMP], okReader(), snapshots, recs);
-    expect(res).toMatchObject({ evaluated: 1, created: 0 });
-    expect([...recs.records.values()]).toHaveLength(0);
+    expect(res).toMatchObject({ evaluated: 1, created: 1 });
+    const rec = [...recs.records.values()][0];
+    expect(rec.type).toBe("add_creatives_for_comparison");
   });
 
   it("skips a campaign whose live budget can't be read (never guesses)", async () => {
@@ -156,6 +160,13 @@ describe("runGenerationTick — audience rule + AIC-39 delivery exclusion", () =
   it("proposes pause_adset on the worse audience when both deliver", async () => {
     const snapshots = new InMemorySnapshotStore();
     await seedAudience(snapshots);
+    // Two real, comparable creatives (AIC-86 fires ahead of every RULES-array
+    // rule, including the audience rule this test is actually about, when
+    // there aren't) — irrelevant to what this test tests.
+    await snapshots.upsert([
+      snap({ grain: "creative", metaObjectId: "cr_1", spendAgorot: 20000, leads: 12, cplAgorot: 1667 }),
+      snap({ grain: "creative", metaObjectId: "cr_2", spendAgorot: 20000, leads: 13, cplAgorot: 1538 }),
+    ]);
     const recs = new InMemoryRecommendationStore();
     const res = await runGenerationTick({
       campaigns: [CAMP], reader: okReader(),
@@ -313,6 +324,10 @@ describe("runGenerationTick — recordNoRecReason (AIC-64)", () => {
     const snapshots = new InMemorySnapshotStore();
     await snapshots.upsert([
       snap({ grain: "campaign", metaObjectId: "camp", spendAgorot: 200, leads: 0, cplAgorot: null }),
+      // Two real, comparable creatives (AIC-86 fires ahead of the day/lead-
+      // count gate this test is actually about) — thinness under test is days.
+      snap({ grain: "creative", metaObjectId: "cr_a", spendAgorot: 100, leads: 0, cplAgorot: null }),
+      snap({ grain: "creative", metaObjectId: "cr_b", spendAgorot: 100, leads: 0, cplAgorot: null }),
     ]);
     const recs = new InMemoryRecommendationStore();
     let recorded: { campaignId: string; reason: string } | null = null;
@@ -404,6 +419,11 @@ describe("runGenerationTick — recordNoRecReason (AIC-64)", () => {
       snap({ grain: "campaign", metaObjectId: "camp", periodStart: "2026-07-28", spendAgorot: 369, leads: 1, cplAgorot: 369 }),
       snap({ grain: "campaign", metaObjectId: "camp", periodStart: "2026-07-30", spendAgorot: 813, leads: 0, cplAgorot: null }),
       snap({ grain: "campaign", metaObjectId: "camp", periodStart: "2026-07-31", spendAgorot: 2739, leads: 3, cplAgorot: 913 }),
+      // Two real, comparable creatives (AIC-86 fires ahead of the day/lead-
+      // count gate this regression test is actually pinning) — irrelevant to
+      // the double-counting bug this test proves is fixed.
+      snap({ grain: "creative", metaObjectId: "cr_a", spendAgorot: 2000, leads: 2, cplAgorot: 1000 }),
+      snap({ grain: "creative", metaObjectId: "cr_b", spendAgorot: 1900, leads: 2, cplAgorot: 950 }),
     ]);
     const recs = new InMemoryRecommendationStore();
     let reason: string | null = null;

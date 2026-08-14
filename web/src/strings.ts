@@ -52,8 +52,10 @@ export const strings = {
         collecting: "עדיין אוסף נתונים",
         budget_below_threshold: "תקציב מתחת לסף הזיהוי",
         delivery_blocked: "קבוצת מודעות לא מתפרסמת",
-        single_ad_set: "קהל אחד בלבד — אין השוואה",
+        no_comparable_audiences: "קהל אחד בלבד — אין השוואה", // AIC-85, was single_ad_set
         cooling_down: "בתקופת צינון לאחר שינוי אחרון", // AIC-77b
+        below_object_evidence_floor: "יש מה להשוות, אבל עדיין לא מספיק נתונים", // AIC-85
+        no_comparable_creatives: "מודעה אחת בלבד — אין השוואה", // AIC-85, rarely stored — see rules.ts
       } as Record<string, string>,
     },
 
@@ -249,6 +251,7 @@ export const strings = {
       typeLabels: {
         pause_creative: "עצירת מודעה", pause_adset: "עצירת קהל", increase_budget: "העלאת תקציב",
         decrease_budget: "הורדת תקציב", replace_creative: "החלפת קריאייטיב", no_action: "ללא פעולה",
+        add_creatives_for_comparison: "הוספת מודעות להשוואה", // AIC-86
       } as Record<string, string>,
 
       // AIC-76: did the change actually help? Correlation, never causation —
@@ -629,9 +632,23 @@ export const strings = {
             body: "בתקציב הנוכחי אנחנו לא יכולים לזהות מה עובד ומה לא. שווה לשקול להעלות אותו.",
             cta: "לבקשת העלאת תקציב",
           },
-          singleAdSet: {
+          noComparableAudiences: {
             title: "אין כרגע משהו שצריך לעשות",
             body: "יש לכם כרגע קהל פרסום אחד פעיל — אין עדיין עם מה להשוות כדי להמליץ על שינוי קהל.",
+          },
+          // AIC-85: comparable creatives/audiences exist, just not enough
+          // data on each yet — genuinely different from "nothing to compare
+          // at all" (above), and from "everything's fine" (stable).
+          belowObjectEvidenceFloor: {
+            title: "כמעט מוכנים להשוות",
+            body: "יש לנו כמה עיצובים או קהלים להשוות, אבל עדיין לא מספיק נתונים על כל אחד כדי לדעת מה עובד טוב יותר. נמשיך לעקוב.",
+          },
+          // Defensive — see rules.ts's classifyNoAction comment: in practice
+          // a pending add_creatives_for_comparison recommendation already
+          // outranks this card before it would ever render.
+          noComparableCreatives: {
+            title: "כדאי להוסיף עוד מודעות",
+            body: "יש לכם כרגע מודעה אחת פעילה — אין עדיין עם מה להשוות כדי להמליץ על שינוי עיצוב.",
           },
           // AIC-77b: after an executed change, the engine waits a few days
           // before proposing another change of the same kind — long enough
@@ -740,10 +757,16 @@ export const strings = {
           decrease_budget: "כדאי להוריד זמנית את התקציב",
           replace_creative: "כדאי להחליף את הקריאייטיב",
           no_action: "אין כרגע שינוי מומלץ",
+          add_creatives_for_comparison: "כדאי להוסיף עוד מודעות", // AIC-86
         },
         changesBudget: "השינוי מתבצע מיד לאחר האישור.",
         changesReplace: "החלפת הקריאייטיב מתבצעת יחד עם הצוות שלנו — ניצור קשר להמשך.",
         changesAudience: "הקהל הזה ייעצר; התקציב יופנה לקהל שמביא תוצאות טובות יותר. סך התקציב לא יגדל.",
+        // AIC-86: advisory only — nothing is approved/executed here; the CTA
+        // opens the existing add-ad screen, and no spend changes as a result
+        // of THIS recommendation itself.
+        changesAddCreatives: "לא מבצעים כאן שינוי בקמפיין — לוחצים על הכפתור ועוברים למסך הוספת מודעות. אין שינוי בתקציב.",
+        addCreativesCta: "להוספת מודעות",
         maxImpactPrefix: "תוספת מקסימלית של",
       },
       settings: {

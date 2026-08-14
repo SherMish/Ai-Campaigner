@@ -270,6 +270,15 @@ logged to `admin_audit_log` (`recommendation.flag`/`.unflag`, AIC-44's table —
 **Failed recs** surface via the state filter (`state=failed`) — consistent
 with the needs-attention queue below: a failure is never hidden.
 
+**`add_creatives_for_comparison` (AIC-86)** — the first advisory-only
+recommendation type — renders through the exact same generic evidence table
+with zero special-case code, but its evidence is richer on purpose: it
+carries both `comparableCreativeCount` and `comparableAdsetCount` /
+`dormantAdsetIds` together, so an operator sees the full structurally-un-
+optimizable picture even though the customer only ever sees the
+creative-focused message. See
+[RULES.md](../RULES.md#comparability--the-add_creatives_for_comparison-advisory-aic-8586).
+
 Web: `web/src/admin/AdminRecommendations.tsx` at `/admin/recommendations` (nav
 item now live). A fleet-wide **outcome-by-type summary card** at the top
 (AIC-76, see below); a state/type/customer filter row; a table of matches; a

@@ -1,6 +1,6 @@
 import type { RecommendationDraft } from "./types.js";
 import type { RecommendationType } from "@aic/shared";
-import { bestPeerCpl, groupCreativesByAdSet, spendWithoutLead } from "./features.js";
+import { bestPeerCpl, groupCreativesByAdSet, spendWithoutLead, shareOfCampaignSpend } from "./features.js";
 
 // ── Minimum-evidence gates ("doing nothing is valid") ─────────────────────────
 // The gates matter more than the rules. A rule that fires on one lead of data is
@@ -126,6 +126,71 @@ export interface CampaignEvidence {
   deliveryProblemAdSetIds?: string[];
 }
 
+// ── Comparability (AIC-85/86) ──────────────────────────────────────────────
+// "Comparable" is relative to campaign spend, not raw presence — a dormant
+// object (technically nonzero spend, but Meta isn't really delivering to it)
+// must not silently count toward "we have 2 to compare". Reused by BOTH the
+// no_action reason classifier below and the add_creatives_for_comparison rule
+// (rules.ts's RULES array) — one definition, so they can't drift apart.
+//
+// Two independent questions, deliberately not conflated into one number:
+//   - comparable (this)  = is Meta actually delivering to this object at all?
+//     Relative (share of campaign spend), because a fixed shekel floor breaks
+//     across account sizes — ₪20/week is dormant in a ₪210/week campaign,
+//     but half the campaign's real delivery in a ₪50/week one.
+//   - withEvidence (below) = has this SPECIFIC object individually cleared
+//     the existing absolute MIN_CREATIVE_SPEND_AGOROT/AUDIENCE_MIN_SPEND_AGOROT
+//     gate? Two real, comparable objects can both still be too thin to judge.
+//
+// DORMANT_SHARE_THRESHOLD is a chosen, scale-free number — provisional,
+// same treatment as BUDGET_CPL_RISE_PCT (docs/RULES.md): recalibrate once
+// AIC-76 has produced real outcomes to look at, not before.
+const DORMANT_SHARE_THRESHOLD = 0.1; // < 10% of campaign spend = not really running
+
+export interface ComparabilityCheck {
+  comparableCount: number;
+  comparableIds: string[];
+  dormantIds: string[];
+  withEvidenceCount: number;
+}
+
+function isDormant(objectSpendAgorot: number, campaignSpendAgorot: number): boolean {
+  const share = shareOfCampaignSpend(objectSpendAgorot, campaignSpendAgorot);
+  return share === null || share < DORMANT_SHARE_THRESHOLD;
+}
+
+export function comparableCreatives(ev: CampaignEvidence, thresholds: RuleThresholds = RULE_THRESHOLDS): ComparabilityCheck {
+  const campaignSpend = ev.current.spendAgorot;
+  const comparableIds: string[] = [];
+  const dormantIds: string[] = [];
+  let withEvidenceCount = 0;
+  for (const c of ev.creatives) {
+    if (isDormant(c.spendAgorot, campaignSpend)) {
+      dormantIds.push(c.metaObjectId);
+      continue;
+    }
+    comparableIds.push(c.metaObjectId);
+    if (c.spendAgorot >= thresholds.MIN_CREATIVE_SPEND_AGOROT) withEvidenceCount++;
+  }
+  return { comparableCount: comparableIds.length, comparableIds, dormantIds, withEvidenceCount };
+}
+
+export function comparableAdsets(ev: CampaignEvidence, thresholds: RuleThresholds = RULE_THRESHOLDS): ComparabilityCheck {
+  const campaignSpend = ev.current.spendAgorot;
+  const comparableIds: string[] = [];
+  const dormantIds: string[] = [];
+  let withEvidenceCount = 0;
+  for (const a of ev.adsets ?? []) {
+    if (isDormant(a.spendAgorot, campaignSpend)) {
+      dormantIds.push(a.adSetId);
+      continue;
+    }
+    comparableIds.push(a.adSetId);
+    if (a.spendAgorot >= thresholds.AUDIENCE_MIN_SPEND_AGOROT) withEvidenceCount++;
+  }
+  return { comparableCount: comparableIds.length, comparableIds, dormantIds, withEvidenceCount };
+}
+
 // Internal reason codes carried on a no_action draft (AIC-64). The customer-
 // facing Hebrew is rendered from these in web/src/strings.ts (`home.noRec`);
 // the ops-console detail is rendered from `detail` in AdminCustomers.tsx.
@@ -142,8 +207,13 @@ export type NoActionReason =
   | "collecting"
   | "budget_below_threshold"
   | "delivery_blocked"
-  | "single_ad_set"
-  | "cooling_down";
+  | "no_comparable_audiences" // AIC-85, replaces single_ad_set — see classifyNoAction
+  | "cooling_down"
+  | "below_object_evidence_floor" // AIC-85
+  | "no_comparable_creatives"; // AIC-85 — see classifyNoAction's comment: rarely
+  // actually STORED, since the AIC-86 advisory rule intercepts this exact
+  // condition before classifyNoAction is ever reached (see evaluateCampaign).
+  // Kept for completeness/defensive correctness, not dead by design.
 
 // ── Cooldown (AIC-77b) ──────────────────────────────────────────────────────
 // Which "class" a recommendation type belongs to — cooldown suppresses at
@@ -263,12 +333,33 @@ function deliveryDetail(ev: CampaignEvidence): Record<string, unknown> {
   return { problemAdSetIds: ev.deliveryProblemAdSetIds ?? [] };
 }
 
-// Classify WHY there's no recommendation this tick (AIC-64) — called both when
-// the minimum-evidence gate fails and when the gate passes but no rule fires.
-// Priority: a delivery problem is usually the root cause of thin evidence (and
-// worth surfacing even once evidence is otherwise fine), so it outranks the
-// budget/collecting distinction; a structurally-too-low budget outranks "just
-// needs more time" because more time never fixes it.
+function comparabilityDetail(check: ComparabilityCheck): Record<string, unknown> {
+  return {
+    comparableCount: check.comparableCount,
+    comparableIds: check.comparableIds,
+    dormantIds: check.dormantIds,
+  };
+}
+
+function evidenceFloorDetail(kind: "creative" | "audience", check: ComparabilityCheck, requiredAgorot: number): Record<string, unknown> {
+  return { kind, comparableCount: check.comparableCount, withEvidenceCount: check.withEvidenceCount, requiredSpendAgorot: requiredAgorot };
+}
+
+// Classify WHY there's no recommendation this tick (AIC-64/85) — called both
+// when the minimum-evidence gate fails and when the gate passes but no rule
+// fires. By the time this runs, the AIC-86 advisory rule has ALREADY had its
+// chance (evaluateCampaign calls it first, unconditionally) — so
+// `no_comparable_creatives` below is reachable only in the delivery-blocked
+// branch's absence AND the advisory rule somehow still not firing; kept for
+// completeness, not because it's expected to be common. See docs/RULES.md.
+//
+// Priority: a delivery problem is usually the root cause of thin evidence
+// (and worth surfacing even once evidence is otherwise fine), so it outranks
+// everything below; a structurally-too-low budget outranks "just needs more
+// time" because more time never fixes it; comparability (can we judge
+// ANYTHING at all) outranks the absolute evidence floor (comparable objects
+// exist, just still thin) — the more basic fact wins, same ordering
+// principle as insufficient_data outranking confounded in AIC-76.
 function classifyNoAction(
   ev: CampaignEvidence,
   thresholds: RuleThresholds = RULE_THRESHOLDS,
@@ -282,14 +373,79 @@ function classifyNoAction(
     }
     return { reason: "collecting", rationale: "below minimum-evidence gate", detail: evidenceGapDetail(ev, thresholds) };
   }
-  const adSetCount = ev.adsets?.length ?? 0;
-  if (adSetCount < 2) {
-    return { reason: "single_ad_set", rationale: "only one audience with data; can't compare", detail: { adSetCount } };
+
+  const creatives = comparableCreatives(ev, thresholds);
+  if (creatives.comparableCount < 2) {
+    return { reason: "no_comparable_creatives", rationale: "fewer than 2 real creatives; can't compare", detail: comparabilityDetail(creatives) };
   }
+  const adsets = comparableAdsets(ev, thresholds);
+  if (adsets.comparableCount < 2) {
+    return { reason: "no_comparable_audiences", rationale: "fewer than 2 real audiences; can't compare", detail: comparabilityDetail(adsets) };
+  }
+
+  // Comparable objects exist on both sides, but haven't individually cleared
+  // the absolute spend gate the acting rules themselves require
+  // (PAUSE_MIN_PEERS / the audience rule's `withData.length < 2` check) —
+  // genuinely different from "nothing to compare at all".
+  if (creatives.withEvidenceCount < 2) {
+    return { reason: "below_object_evidence_floor", rationale: "comparable creatives exist but haven't cleared the spend gate yet", detail: evidenceFloorDetail("creative", creatives, thresholds.MIN_CREATIVE_SPEND_AGOROT) };
+  }
+  if (adsets.withEvidenceCount < 2) {
+    return { reason: "below_object_evidence_floor", rationale: "comparable audiences exist but haven't cleared the spend gate yet", detail: evidenceFloorDetail("audience", adsets, thresholds.AUDIENCE_MIN_SPEND_AGOROT) };
+  }
+
   return { reason: "stable", rationale: "stable; no change warranted", detail: {} };
 }
 
 // ── Rules (each returns a draft or null) ──────────────────────────────────────
+
+// AIC-86: advisory, not a Meta write — "add more creatives" so pause_creative/
+// replace_creative eventually have something to compare. Deliberately NOT one
+// of the RULES tried below `hasMinimumEvidence` (evaluateCampaign calls this
+// separately, first): the evidence gates exist for COMPARATIVE claims
+// ("creative A underperforms B" needs statistical power) — "there is only one
+// creative" is a COUNT, and no amount of additional data makes a count more
+// true. Firing from day one is deliberate: this is most valuable BEFORE a
+// customer burns weeks of budget on one untested creative, not after. It's
+// advisory and dismissible, so the cost of firing early is mild redundancy;
+// the cost of waiting for 5 leads is a customer who already did the thing it
+// warns against. See docs/RULES.md.
+function addCreativesForComparison(
+  ev: CampaignEvidence,
+  thresholds: RuleThresholds = RULE_THRESHOLDS,
+): RecommendationDraft | null {
+  const creatives = comparableCreatives(ev, thresholds);
+  if (creatives.comparableCount >= 2) return null;
+
+  const adsets = comparableAdsets(ev, thresholds);
+  // Names the AIC-36 flexible-ad case explicitly: Meta collapses N assets
+  // inside one flexible ad into a single comparable object, so "add creatives"
+  // there really means "split the flexible ad", not "there is no ad at all".
+  const soleId = creatives.comparableIds[0];
+  const soleCreative = soleId ? ev.creatives.find((c) => c.metaObjectId === soleId) : undefined;
+  const isFlexibleAd = !!(soleCreative?.adSetId && ev.flexibleCreativeAdSetIds?.has(soleCreative.adSetId));
+
+  return {
+    campaignId: ev.campaignId,
+    type: "add_creatives_for_comparison",
+    targetMetaId: null, // advice about the campaign's structure, not one object
+    // Carries BOTH the creative and audience facts, deliberately — the ops
+    // console's whole picture of a structurally-un-optimizable account (AIC-85),
+    // even though the customer-facing copy only ever mentions creatives.
+    evidence: {
+      comparableCreativeCount: creatives.comparableCount,
+      isFlexibleAd,
+      comparableAdsetCount: adsets.comparableCount,
+      dormantAdsetIds: adsets.dormantIds,
+      currentLeads: ev.current.leads,
+      currentCplAgorot: ev.current.cplAgorot,
+    },
+    currentBudgetAgorot: null,
+    proposedBudgetAgorot: null,
+    maxSpendImpactAgorot: null, // no spend change
+    rationale: `only ${creatives.comparableCount} comparable creative(s) — pause_creative/replace_creative have nothing to judge against`,
+  };
+}
 
 // Within one ad set, find a creative that spent meaningfully more than its peers
 // for far fewer leads. Comparing WITHIN an ad set is the AIC-36 fix — the same
@@ -532,6 +688,15 @@ export function evaluateCampaign(
   thresholds: RuleThresholds = RULE_THRESHOLDS,
   cooldown?: CooldownContext,
 ): RecommendationDraft {
+  // AIC-86: checked BEFORE the evidence gate, deliberately — see
+  // addCreativesForComparison's own comment. Still respects delivery-blocked
+  // precedence (AIC-77's "fix the breakage first" — classifyNoAction below
+  // checks the same condition first too).
+  if (!ev.deliveryProblemAdSetIds?.length) {
+    const advisory = addCreativesForComparison(ev, thresholds);
+    if (advisory) return advisory;
+  }
+
   if (hasMinimumEvidence(ev, thresholds)) {
     let suppressed: RecommendationDraft | null = null;
     for (const rule of RULES) {
@@ -564,6 +729,7 @@ export const __rulesForTest = {
   pauseUnderperformingAudience,
   decreaseBudget,
   increaseBudget,
+  addCreativesForComparison,
   hasMinimumEvidence,
   classifyNoAction,
   isBudgetBelowThreshold,

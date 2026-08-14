@@ -81,6 +81,44 @@ describe("refreshRecommendations (staleness/expiry)", () => {
     expect([...recs.records.values()].filter((r) => r.state === "proposed")).toHaveLength(1);
   });
 
+  it("AIC-86: an advisory add_creatives_for_comparison rec is created like any other draft", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await snapshots.upsert([
+      ...campaignDailyRows(4629, 5),
+      snap({ grain: "creative", metaObjectId: "cr_only", spendAgorot: 4394, leads: 5, cplAgorot: 879 }),
+    ]);
+    const recs = new InMemoryRecommendationStore();
+    const d = deps(snapshots, recs);
+
+    const result = await refreshRecommendations(d);
+    expect(result.createdId).toBeDefined();
+    const rec = recs.records.get(result.createdId!)!;
+    expect(rec.type).toBe("add_creatives_for_comparison");
+    expect(rec.state).toBe("proposed");
+  });
+
+  it("AIC-86: the advisory rec auto-expires once a second real creative restores comparability", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await snapshots.upsert([
+      ...campaignDailyRows(4629, 5),
+      snap({ grain: "creative", metaObjectId: "cr_only", spendAgorot: 4394, leads: 5, cplAgorot: 879 }),
+    ]);
+    const recs = new InMemoryRecommendationStore();
+    const d = deps(snapshots, recs);
+
+    const first = await refreshRecommendations(d);
+    expect(first.createdId).toBeDefined();
+
+    // The customer adds a second creative — same "material divergence" test
+    // every other rec type uses, no special-case code needed for this type.
+    await snapshots.upsert([
+      snap({ grain: "creative", metaObjectId: "cr_second", spendAgorot: 4394, leads: 4, cplAgorot: 1099 }),
+    ]);
+    const second = await refreshRecommendations(d);
+    expect(second.expiredIds).toContain(first.createdId);
+    expect(second.freshDraft.type).not.toBe("add_creatives_for_comparison");
+  });
+
   it("a per-account threshold override (AIC-77a) reaches refreshRecommendations end-to-end", async () => {
     const snapshots = new InMemorySnapshotStore();
     await seedWeak(snapshots, 1, 18000); // fires pause_creative under the default deps() below

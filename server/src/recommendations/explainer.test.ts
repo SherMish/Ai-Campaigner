@@ -21,6 +21,33 @@ function rec(over: Partial<RecommendationRecord>): RecommendationRecord {
 const PAUSE = rec({ type: "pause_creative", targetMetaId: "ad_3", evidence: { spendAgorot: 18000, leads: 1 } });
 const INCREASE = rec({ type: "increase_budget", currentBudgetAgorot: 7000, proposedBudgetAgorot: 8000 });
 
+describe("add_creatives_for_comparison (AIC-86) — with-data vs day-one vs flexible-ad copy", () => {
+  it("with real leads: opens on performance, never phrased as 'nothing to do'", () => {
+    const text = explain(rec({ type: "add_creatives_for_comparison", evidence: { currentLeads: 5, currentCplAgorot: 1390, isFlexibleAd: false } }));
+    expect(text).toContain("5");
+    expect(text).not.toContain("אין מה לעשות");
+  });
+
+  it("day one, zero leads: skips the performance line, still actionable", () => {
+    const text = explain(rec({ type: "add_creatives_for_comparison", evidence: { currentLeads: 0, currentCplAgorot: null, isFlexibleAd: false } }));
+    expect(text).toContain("להוסיף");
+    expect(text).not.toContain("פניות בעלות ממוצעת"); // no performance line to open on
+  });
+
+  it("names the flexible-ad case explicitly instead of the generic 'only one ad' phrasing", () => {
+    const withData = explain(rec({ type: "add_creatives_for_comparison", evidence: { currentLeads: 5, currentCplAgorot: 1390, isFlexibleAd: true } }));
+    const noData = explain(rec({ type: "add_creatives_for_comparison", evidence: { currentLeads: 0, currentCplAgorot: null, isFlexibleAd: true } }));
+    expect(withData).toContain("גמישה");
+    expect(noData).toContain("גמישה");
+  });
+
+  it("requiredFigures: no leads yet → no figures to guard; with leads → leads + CPL guarded", () => {
+    expect(requiredFigures(rec({ type: "add_creatives_for_comparison", evidence: { currentLeads: 0, currentCplAgorot: null } }))).toEqual([]);
+    const figures = requiredFigures(rec({ type: "add_creatives_for_comparison", evidence: { currentLeads: 5, currentCplAgorot: 1390 } }));
+    expect(figures).toContain("5");
+  });
+});
+
 describe("pause_adset — named by its human audience dimension (AIC-37)", () => {
   it("names the audience when a label is present in evidence", () => {
     const withLabel = rec({ type: "pause_adset", targetMetaId: "as_2", evidence: { audienceLabel: "35–45" } });
@@ -61,9 +88,10 @@ describe("explainer number fidelity", () => {
     }
   });
 
-  it("distinguishes each no_action reason (AIC-64) — never the same message", () => {
+  it("distinguishes each no_action reason (AIC-64/85) — never the same message", () => {
     const texts = [
-      "stable", "collecting", "budget_below_threshold", "delivery_blocked", "single_ad_set",
+      "stable", "collecting", "budget_below_threshold", "delivery_blocked",
+      "no_comparable_audiences", "no_comparable_creatives", "below_object_evidence_floor",
     ].map((reason) => explain(rec({ type: "no_action", evidence: { reason } })));
     expect(new Set(texts).size).toBe(texts.length);
     expect(texts[0]).toContain("יציב");
@@ -71,6 +99,8 @@ describe("explainer number fidelity", () => {
     expect(texts[2]).toContain("תקציב");
     expect(texts[3]).toContain("מתפרסמת");
     expect(texts[4]).toContain("קהל אחד");
+    expect(texts[5]).toContain("מודעה אחת");
+    expect(texts[6]).toContain("להשוות");
   });
 
   it("renders a weekly status summary with the figures passed in", () => {

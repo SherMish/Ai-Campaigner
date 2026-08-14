@@ -40,7 +40,7 @@ never silently the same message twice (AIC-64). See below.
 "No recommendation" used to be one undifferentiated `no_action` — the customer
 saw the identical reassurance whether the campaign was genuinely stable or the
 engine was structurally blind at the current budget. `classifyNoAction`
-(`rules.ts`) now picks one of six reasons, in priority order — `cooling_down`
+(`rules.ts`) now picks one of eight reasons, in priority order — `cooling_down`
 (AIC-77b) is decided inside `evaluateCampaign` itself, before falling through
 to `classifyNoAction`, since it's the one reason that depends on a rule
 having actually fired (see [Cooldown](#cooldown-aic-77b) below):
@@ -51,8 +51,10 @@ having actually fired (see [Cooldown](#cooldown-aic-77b) below):
 | `budget_below_threshold` | `dailyBudgetAgorot × 7 < MIN_CREATIVE_SPEND_AGOROT` — the campaign's own 7-day rolling window can never reach the cheapest rule's spend gate, so no amount of *time* fixes it | raise the budget |
 | `collecting` | Below the minimum-evidence gate (days/delivery-days/leads), but the budget COULD reach it with more time | wait |
 | `cooling_down` | Gate passed and a rule genuinely WOULD have fired, but its class executed successfully within `COOLDOWN_DAYS` — reported ONLY when something would have fired and was suppressed, never as a placeholder | wait for the cooldown to elapse |
-| `single_ad_set` | Gate passed, no rule fired, and fewer than 2 ad sets have audience-comparison data (so `pause_underperforming_audience` structurally can't compare) — informational, not a problem | none needed |
-| `stable` | Gate passed, no rule fired, ≥2 ad sets compared | none needed |
+| `no_comparable_creatives` | Fewer than 2 real creatives — AIC-85. **Rarely actually stored**: the [AIC-86 advisory rule](#comparability--the-add_creatives_for_comparison-advisory-aic-85-86) intercepts this exact condition before `classifyNoAction` is ever reached, and produces a real recommendation instead. Kept for completeness/defensive correctness | add creatives (a real recommendation says this — see below) |
+| `no_comparable_audiences` | Gate passed, no rule fired, and fewer than 2 ad sets are real (non-dormant) audience-comparison data — AIC-85, replaces `single_ad_set`; see below for why | none needed |
+| `below_object_evidence_floor` | Comparable creatives or audiences EXIST (≥2 real ones), but none has individually cleared the absolute spend gate yet — AIC-85, genuinely different from "nothing to compare at all" | wait |
+| `stable` | Gate passed, no rule fired, everything genuinely evaluated and healthy | none needed |
 
 `budget_below_threshold` is the AIC-64 headline case: at GelNails' real ₪10/day
 budget, 7 × ₪10 = ₪70/week — under `MIN_CREATIVE_SPEND_AGOROT` (₪150), so
@@ -95,6 +97,106 @@ watching the last change" is an honest progress signal, not a placeholder.
 (`web/src/admin/AdminCustomers.tsx`) shows the precise reason plus the exact
 numbers from `no_rec_detail` (e.g. `₪10/יום × 7 = ₪70 < נדרש ₪150`) — sourced
 from `getCustomerDetail` (`server/src/services/customers.ts`).
+
+## Comparability & the `add_creatives_for_comparison` advisory (AIC-85/86)
+
+**Status:** live. Found and fixed together, from a live GelNails investigation
+(2026-08-14): `stable` was standing in for three genuinely different
+situations at once — everything evaluated and healthy; nothing comparable
+to evaluate AT ALL (so a rule structurally can't run, regardless of spend or
+thresholds); and comparable objects that just haven't individually cleared
+the spend gate yet. All three used to render identically, and `no_rec_detail`
+was empty for `stable`, so the nuance wasn't even stored for the operator.
+
+**"Comparable" is relative to campaign spend, not raw presence.** The bug
+this fixes precisely: the old `single_ad_set` check counted
+`ev.adsets.length` — any ad set present, including a technically-nonzero but
+effectively-dormant one — which let a ₪2.35/week ad set silently count
+toward "2 ad sets" and fall through to `stable`. `comparableCreatives`/
+`comparableAdsets` (`rules.ts`) fix this: an object is "comparable" only when
+`shareOfCampaignSpend(objectSpendAgorot, campaignSpendAgorot) >= 0.10`
+(`shareOfCampaignSpend` already existed, AIC-75 — see
+[FEATURES.md](FEATURES.md)). A fixed shekel floor was considered and
+rejected: it breaks across account sizes (dormant in a ₪210/week campaign,
+half the real delivery in a ₪50/week one). **10% is a chosen, scale-free
+number — provisional, same treatment as `BUDGET_CPL_RISE_PCT`**, meant to be
+recalibrated once AIC-76 has produced real outcomes to look at.
+
+**Comparable ≠ evidence-sufficient — two independent questions, on purpose:**
+- *comparable* (relative) — is Meta actually delivering to this object at
+  all? Answers "can we even ask the question."
+- *evidence-sufficient* (absolute, the existing `MIN_CREATIVE_SPEND_AGOROT`/
+  `AUDIENCE_MIN_SPEND_AGOROT` gates, unchanged) — has THIS specific object
+  individually spent enough to trust a judgement about it? Two real,
+  comparable objects can both still be too thin to judge — that's
+  `below_object_evidence_floor`, checked only once comparability is already
+  established for both sides.
+
+**The advisory rule fires independent of the evidence gate — deliberately.**
+`addCreativesForComparison` (`rules.ts`) is checked in `evaluateCampaign`
+*before* `hasMinimumEvidence`, not inside the `RULES` array — the only
+rule that isn't. The principle: the evidence gates exist for **comparative**
+claims ("creative A underperforms creative B" needs statistical power) —
+"there is only one creative" is a **count**, and no amount of additional data
+makes a count more true. Firing from day one is the point: this is most
+valuable *before* a customer burns weeks of budget on one untested creative,
+not after. It's advisory (no spend change, no approval/execute gate — the
+customer UI never calls the approve pipeline for this type, it just links to
+the existing add-ad screen, AIC-63) and dismissible, so the cost of firing
+early is mild redundancy; the cost of waiting for 5 leads is a customer who
+already did the thing it warns against. Still respects delivery-blocked
+precedence (checked first, same as everywhere else — "fix the breakage
+first").
+
+**Placement**: effectively rule zero — takes priority over every rule in the
+`RULES` array, including budget moves, since you can't trust a budget
+decision blind to which creative is actually driving the cost. `pauseWeakCreative`/
+`pauseUnderperformingAudience` structurally can't fire anyway when there's
+nothing comparable (no peer to judge against), so this only changes
+precedence relative to `decreaseBudget`/`increaseBudget`.
+
+**The flexible-ad case names itself** (AIC-36): `ev.flexibleCreativeAdSetIds`
+already exists — when the sole comparable creative sits in a flexible ad set,
+the evidence (`isFlexibleAd`) and the copy say so explicitly ("can't compare
+designs inside one flexible ad", not the generic "only one ad").
+
+**Evidence carries both sides, for the ops console.** The customer only ever
+sees the creative-focused message ("add creatives" — one clear action beats
+two competing ones), but the draft's `evidence` block carries
+`comparableCreativeCount`, `comparableAdsetCount`, `dormantAdsetIds`, and
+`isFlexibleAd` together — an operator reading the ops console's (already
+generic) evidence table gets the full structural picture, not just the half
+the customer acted on.
+
+**Practical consequence for `no_rec_reason`:** since the advisory rule
+intercepts the "no comparable creatives" condition before `classifyNoAction`
+is ever reached, `no_comparable_creatives` is rarely actually the *stored*
+`no_rec_reason` value in production — a live pending recommendation exists
+instead. Find structurally-un-optimizable accounts by querying for pending
+`add_creatives_for_comparison` recommendations, not by `no_rec_reason`.
+
+**Verified live** (2026-08-14, same GelNails account, same tick mechanism as
+AIC-75's verification): the real production tick now reports
+`below_object_evidence_floor` (`kind: creative`, 3 real comparable creatives,
+0 individually past ₪150) instead of `stable` — the account's shape had
+changed since the investigation (comparability was no longer the blocker),
+which is itself live proof the fix responds correctly to real data. Customer
+copy rendered: *"אין המלצה כרגע — יש מה להשוות, אבל עדיין לא מספיק נתונים
+(מודעות: 0/3 עברו את סף ₪150)"* — not "הכל עובד כרגיל". `add_creatives_for_comparison`
+itself is covered by 24+ direct unit/integration tests (fires day one with
+zero evidence, names the flexible-ad case, takes priority over a budget rule,
+suppressed on delivery-blocked, auto-expires via the existing staleness
+mechanism once a second creative appears) — not re-demonstrated live because
+the account had already resolved past that specific state.
+
+**Lock-in tests:** `rules.test.ts` (`comparableCreatives`/`comparableAdsets`
+— the dormant-miscount bug as a failing-then-fixed test; `add_creatives_for_comparison`
+— day-one firing, flexible-ad naming, priority over budget rules, delivery-
+blocked suppression, never cooldown-tracked; `classifyNoAction`'s full new
+precedence order), `explainer.test.ts` (both copy variants — with
+performance data and day-one — plus the flexible-ad phrasing, never "nothing
+to do"), `staleness.test.ts` (the advisory rec created and auto-expired like
+any other draft).
 
 ## Rules v1 (evaluated in priority order)
 

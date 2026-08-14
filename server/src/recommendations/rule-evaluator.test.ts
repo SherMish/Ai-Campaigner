@@ -125,6 +125,11 @@ describe("evaluateAndPersist", () => {
     const snapshots = new InMemorySnapshotStore();
     await snapshots.upsert([
       snap({ grain: "campaign", metaObjectId: "camp", spendAgorot: 4000, leads: 1, cplAgorot: 4000 }),
+      // Two real, comparable creatives (AIC-86 fires independent of this gate,
+      // so it would otherwise fire here instead of the day/lead-count path
+      // this test is actually about) — thinness under test is days/leads.
+      snap({ grain: "creative", metaObjectId: "cr_a", spendAgorot: 2000, leads: 1, cplAgorot: 2000 }),
+      snap({ grain: "creative", metaObjectId: "cr_b", spendAgorot: 2000, leads: 0, cplAgorot: null }),
     ]);
     const recs = new InMemoryRecommendationStore();
     const result = await evaluateAndPersist({
