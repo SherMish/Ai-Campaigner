@@ -40,7 +40,7 @@ never silently the same message twice (AIC-64). See below.
 "No recommendation" used to be one undifferentiated `no_action` — the customer
 saw the identical reassurance whether the campaign was genuinely stable or the
 engine was structurally blind at the current budget. `classifyNoAction`
-(`rules.ts`) now picks one of eight reasons, in priority order — `cooling_down`
+(`rules.ts`) now picks one of nine reasons, in priority order — `cooling_down`
 (AIC-77b) is decided inside `evaluateCampaign` itself, before falling through
 to `classifyNoAction`, since it's the one reason that depends on a rule
 having actually fired (see [Cooldown](#cooldown-aic-77b) below):
@@ -48,6 +48,7 @@ having actually fired (see [Cooldown](#cooldown-aic-77b) below):
 | Reason | When | Actionable? |
 | --- | --- | --- |
 | `delivery_blocked` | An ad set was excluded from evidence (AIC-39) — checked FIRST, even if the gate would otherwise pass, since a delivery problem is usually the root cause of thin data | fix the delivery problem |
+| `tracking_broken` | The campaign's declared `lead_event_types` doesn't match what its ad sets are configured on Meta to optimize for (AIC-88) — checked SECOND, before even the pre-gate AIC-86 advisory: the lead count itself is structurally wrong (not thin, WRONG), so nothing may act on it, including advice | fix the lead-definition mismatch (see [tracking-health.md](features/tracking-health.md)) |
 | `budget_below_threshold` | `dailyBudgetAgorot × 7 < MIN_CREATIVE_SPEND_AGOROT` — the campaign's own 7-day rolling window can never reach the cheapest rule's spend gate, so no amount of *time* fixes it | raise the budget |
 | `collecting` | Below the minimum-evidence gate (days/delivery-days/leads), but the budget COULD reach it with more time | wait |
 | `cooling_down` | Gate passed and a rule genuinely WOULD have fired, but its class executed successfully within `COOLDOWN_DAYS` — reported ONLY when something would have fired and was suppressed, never as a placeholder | wait for the cooldown to elapse |

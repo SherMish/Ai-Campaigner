@@ -237,6 +237,55 @@ describe("no_action reason classification (AIC-64)", () => {
     expect(d.evidence.reason).toBe("delivery_blocked");
   });
 
+  // AIC-88: the lead count itself is wrong, so nothing may fire. Every other
+  // reason describes how much evidence we have; this one says the evidence is
+  // a lie, which no amount of waiting fixes.
+  it("tracking_broken suppresses a rule that WOULD otherwise have fired", () => {
+    // Control: this exact evidence produces a real acting recommendation.
+    const control = evaluateCampaign(baseEvidence({ creatives: [cr("cr_a", 25000, 10, 2500), cr("cr_b", 25000, 1, 25000)] }));
+    expect(control.type).not.toBe("no_action");
+
+    const d = evaluateCampaign(
+      baseEvidence({ creatives: [cr("cr_a", 25000, 10, 2500), cr("cr_b", 25000, 1, 25000)], trackingBroken: true }),
+    );
+    expect(d.type).toBe("no_action");
+    expect(d.evidence.reason).toBe("tracking_broken");
+  });
+
+  it("tracking_broken also suppresses the AIC-86 pre-gate advisory", () => {
+    // One creative would normally produce add_creatives_for_comparison, which
+    // fires BEFORE the evidence gate. "Add more ads" is wrong advice when the
+    // real problem is that conversions aren't being counted at all.
+    const ev = baseEvidence({ creatives: [cr("cr_a", 46000, 0, null)], current: { spendAgorot: 46000, leads: 0, cplAgorot: null, days: 7 } });
+    expect(evaluateCampaign(ev).type).toBe("add_creatives_for_comparison");
+
+    const d = evaluateCampaign({ ...ev, trackingBroken: true });
+    expect(d.type).toBe("no_action");
+    expect(d.evidence.reason).toBe("tracking_broken");
+  });
+
+  it("delivery_blocked still outranks tracking_broken (fix the breakage first)", () => {
+    const d = evaluateCampaign(baseEvidence({ trackingBroken: true, deliveryProblemAdSetIds: ["as_broken"] }));
+    expect(d.evidence.reason).toBe("delivery_blocked");
+  });
+
+  it("tracking_broken outranks collecting — thin data and WRONG data are different", () => {
+    const d = evaluateCampaign(
+      baseEvidence({
+        current: { spendAgorot: 700, leads: 0, cplAgorot: null, days: 1 },
+        trackingBroken: true,
+      }),
+    );
+    expect(d.evidence.reason).toBe("tracking_broken");
+  });
+
+  it("trackingBroken absent/false changes nothing (the regression case)", () => {
+    const withFalse = evaluateCampaign(baseEvidence({ trackingBroken: false }));
+    const without = evaluateCampaign(baseEvidence({}));
+    expect(withFalse.type).toBe(without.type);
+    expect(withFalse.evidence.reason).toBe(without.evidence.reason);
+  });
+
   it("no_comparable_audiences when the gate passes, no rule fires, and there's only one audience with data", () => {
     const d = evaluateCampaign(baseEvidence({ adsets: [{ adSetId: "as_1", spendAgorot: 70000, leads: 20, cplAgorot: 3500, deliveryStatus: "active" }] }));
     expect(d.evidence.reason).toBe("no_comparable_audiences");

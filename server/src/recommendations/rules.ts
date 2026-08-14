@@ -124,6 +124,12 @@ export interface CampaignEvidence {
   // so a resulting no_action can honestly say WHY evidence is thin, instead of
   // looking identical to "just needs more time" (AIC-64).
   deliveryProblemAdSetIds?: string[];
+  // AIC-88: the campaign's declared lead definition doesn't match what Meta is
+  // configured to optimize for, so `leads` (and therefore CPL, and therefore
+  // every comparative judgement) is structurally wrong — not merely thin.
+  // Every rule here reasons over leads or CPL, so NOTHING may fire while this
+  // is true; acting on it would be acting on a number we know is a lie.
+  trackingBroken?: boolean;
 }
 
 // ── Comparability (AIC-85/86) ──────────────────────────────────────────────
@@ -207,6 +213,7 @@ export type NoActionReason =
   | "collecting"
   | "budget_below_threshold"
   | "delivery_blocked"
+  | "tracking_broken" // AIC-88 — the lead count itself is wrong; see classifyNoAction
   | "no_comparable_audiences" // AIC-85, replaces single_ad_set — see classifyNoAction
   | "cooling_down"
   | "below_object_evidence_floor" // AIC-85
@@ -366,6 +373,18 @@ function classifyNoAction(
 ): { reason: NoActionReason; rationale: string; detail: Record<string, unknown> } {
   if (ev.deliveryProblemAdSetIds?.length) {
     return { reason: "delivery_blocked", rationale: "ad set(s) excluded from evidence — not delivering", detail: deliveryDetail(ev) };
+  }
+  // AIC-88, second only to delivery: every reason below this line describes
+  // how much evidence we have. `tracking_broken` says the evidence is WRONG —
+  // the lead count is structurally zero because the declared lead definition
+  // doesn't match Meta's config. Reporting "still collecting" there would be
+  // a lie that never resolves, however long you wait.
+  if (ev.trackingBroken) {
+    return {
+      reason: "tracking_broken",
+      rationale: "declared lead definition doesn't match the ad sets' Meta configuration — leads are not being counted",
+      detail: {},
+    };
   }
   if (!hasMinimumEvidence(ev, thresholds)) {
     if (isBudgetBelowThreshold(ev.currentBudgetAgorot, thresholds)) {
@@ -688,6 +707,16 @@ export function evaluateCampaign(
   thresholds: RuleThresholds = RULE_THRESHOLDS,
   cooldown?: CooldownContext,
 ): RecommendationDraft {
+  // AIC-88: nothing may fire while the lead count itself is wrong. Placed
+  // above even the pre-gate advisory: telling a customer "add more ads" when
+  // the real problem is that their conversions aren't being counted at all is
+  // confidently wrong advice, and it would bury the actual fix. Fixing the
+  // tracking comes first; every judgement below reads leads or CPL.
+  if (ev.trackingBroken) {
+    const t = classifyNoAction(ev, thresholds);
+    return noAction(ev.campaignId, t.reason, t.rationale, t.detail);
+  }
+
   // AIC-86: checked BEFORE the evidence gate, deliberately — see
   // addCreativesForComparison's own comment. Still respects delivery-blocked
   // precedence (AIC-77's "fix the breakage first" — classifyNoAction below

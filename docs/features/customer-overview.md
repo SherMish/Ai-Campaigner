@@ -104,10 +104,12 @@ except `ok`/`collecting`, whose title/body come from `noRecCard()` instead
 (see "Why there's no recommendation" below; only their badge is fixed).
 Only states with a real destination carry a CTA (`attention` → `/connect`,
 `no_campaign` → `/onboarding`). `attention` carries a second signal,
-`attentionKind: 'connection' | 'delivery' | null` (AIC-39) — a lost Meta
-connection and a not-delivering ad set are different problems with different
-copy (`h.states.attention` vs `h.states.delivery`); a delivery problem shows
-no CTA (there's nothing for the customer to click — we're already on it).
+`attentionKind: 'connection' | 'delivery' | 'tracking' | null` (AIC-39, AIC-88)
+— a lost Meta connection, a not-delivering ad set, and a lead-tracking
+mismatch are three different problems with three different copy blocks
+(`h.states.attention` / `.delivery` / `.tracking`); neither `delivery` nor
+`tracking` shows a CTA — there's nothing for the customer to click, it's on
+us to fix (see [tracking-health.md](tracking-health.md)).
 
 ## Honest delivery state, not the management flag (AIC-71)
 

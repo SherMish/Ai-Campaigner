@@ -23,6 +23,11 @@ export const EXPLAINER_HE = {
   collecting: () => `אין כרגע מספיק מידע שמצדיק שינוי. נמשיך לעקוב.`,
   budgetBelowThreshold: () => `בתקציב הנוכחי אנחנו לא יכולים לזהות מה עובד. שווה לשקול להעלות אותו.`,
   deliveryBlocked: () => `אחת מקבוצות הפרסום לא מתפרסמת כרגע, כך שאין לנו עדיין תמונה מלאה.`,
+  // AIC-88: the conversions ARE happening on Meta; we're not counting them,
+  // because the campaign's configured lead event doesn't match what the ad
+  // sets optimize for. Says plainly that the numbers are wrong and that it's
+  // on us to fix — never implies the campaign is failing.
+  trackingBroken: () => `יש אצלנו אי-התאמה בהגדרת מדידת הפניות בקמפיין הזה, כך שהפניות שמגיעות לא נספרות ומספרי הביצועים כאן אינם מלאים. אנחנו כבר על זה — לא נמליץ על שינויים עד שנתקן, כדי לא להסתמך על נתון שגוי.`,
   // AIC-85: replaces singleAdSet — same content, renamed to match the fixed
   // comparableAdsets() check (a dormant ad set no longer silently counts).
   noComparableAudiences: () => `הקמפיין יציב. יש כרגע קהל אחד פעיל, כך שאין עם מה להשוות כדי להמליץ על שינוי קהל.`,
@@ -124,6 +129,8 @@ export function explain(rec: RecommendationRecord): string {
           return EXPLAINER_HE.budgetBelowThreshold();
         case "delivery_blocked":
           return EXPLAINER_HE.deliveryBlocked();
+        case "tracking_broken":
+          return EXPLAINER_HE.trackingBroken();
         case "no_comparable_audiences":
           return EXPLAINER_HE.noComparableAudiences();
         case "no_comparable_creatives":

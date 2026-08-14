@@ -81,6 +81,11 @@ export const OPS_QUEUE_TYPE = [
   "support_request",
   "missing_creative",
   "account_restriction",
+  // AIC-88: the campaign's declared lead definition doesn't match what its ad
+  // sets are configured on Meta to optimize for, so real conversions count as
+  // zero. Must stay in sync with the CHECK in migration 038 — both enumerate
+  // the allowed set, and missing either one throws at runtime.
+  "campaign_tracking_broken",
 ] as const;
 export type OpsQueueType = (typeof OPS_QUEUE_TYPE)[number];
 

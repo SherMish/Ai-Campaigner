@@ -16,6 +16,7 @@ import type { ControlWriter, ManualObjectStatus } from "../controls/types.js";
 import { shekelToAgorot } from "@aic/shared";
 import { extractLeads } from "./insights.js";
 import { normalizeAdMedia, type AdMedia, type AdMediaReader, type RawAdMedia } from "./ad-media.js";
+import type { AdSetTrackingConfig, TrackingReader } from "./tracking-health.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
 // Marketing API. Budgets are read/written in the account currency's MINOR unit,
@@ -26,7 +27,7 @@ import { normalizeAdMedia, type AdMedia, type AdMediaReader, type RawAdMedia } f
 // one, so setDailyBudget targets the right object.
 const BASE = "https://graph.facebook.com";
 
-export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter, AdditionWriter, ControlWriter, AdMediaReader {
+export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter, AdditionWriter, ControlWriter, AdMediaReader, TrackingReader {
   private budgetObj = new Map<string, string>(); // campaignId → budget object id
 
   constructor(
@@ -260,6 +261,32 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     // zero. Fill in the confirmed-empty default before normalizing.
     const rows = ((body.data as RawAdSetMeta[]) ?? []).map((r) => ({ ...r, ads: r.ads ?? { data: [] } }));
     return rows.map(normalizeAdSetMeta);
+  }
+
+  // AIC-88: the ad sets' tracking configuration — what Meta is actually
+  // optimizing for. Deliberately its OWN read rather than widening
+  // getAdSetMeta: that one's result is cached into ad_set_meta for the
+  // customer-facing audience labels, and these fields have nothing to do with
+  // labelling. Read-only; a failure surfaces as `unknown`, never as "broken".
+  async getAdSetTracking(metaCampaignId: string): Promise<AdSetTrackingConfig[]> {
+    const body = await this.get(
+      `${metaCampaignId}/adsets?fields=id,name,optimization_goal,destination_type,promoted_object&limit=100`,
+    );
+    type Raw = {
+      id: string;
+      name?: string;
+      optimization_goal?: string;
+      destination_type?: string;
+      promoted_object?: { pixel_id?: string; custom_event_type?: string };
+    };
+    return ((body.data as Raw[]) ?? []).map((r) => ({
+      adSetId: String(r.id),
+      name: r.name ?? null,
+      optimizationGoal: r.optimization_goal ?? null,
+      destinationType: r.destination_type ?? null,
+      pixelId: r.promoted_object?.pixel_id ?? null,
+      customEventType: r.promoted_object?.custom_event_type ?? null,
+    }));
   }
 
   // ── Create-writes (AIC-50, the builder) ────────────────────────────────────

@@ -77,6 +77,10 @@ function hero(state: HomeState, attentionKind: CustomerOverview["attentionKind"]
       // A delivery problem (AIC-39) reads differently from a lost connection.
       if (attentionKind === "delivery")
         return { badge: h.states.delivery.badge, title: h.states.delivery.title, body: h.states.delivery.body };
+      // AIC-88: broken lead tracking — no CTA, same as delivery: there is
+      // nothing for the customer to click, it's on us to fix.
+      if (attentionKind === "tracking")
+        return { badge: h.states.tracking.badge, title: h.states.tracking.title, body: h.states.tracking.body };
       return { ...h.states.attention, cta: { to: "/connect", label: h.states.attention.cta } };
     case "ready_to_launch":
       return { badge: h.states.readyToLaunch.badge, title: h.states.readyToLaunch.title, body: h.states.readyToLaunch.body, launch: { label: h.states.readyToLaunch.cta } };

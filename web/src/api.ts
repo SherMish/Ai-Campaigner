@@ -105,7 +105,7 @@ export interface CustomerOverview {
   }>;
   pendingRecommendations: number;
   pendingRecommendationType: RecommendationType | null;
-  attentionKind: "connection" | "delivery" | null;
+  attentionKind: "connection" | "delivery" | "tracking" | null;
   homeState: HomeState;
 }
 

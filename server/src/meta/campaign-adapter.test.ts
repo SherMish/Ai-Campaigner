@@ -551,3 +551,65 @@ describe("GraphCampaignAdapter getLifetimeLeads (AIC-67 follow-up)", () => {
     expect(r.spendAgorot).toBe(20506);
   });
 });
+
+// AIC-88: the real ad-set shape, captured live before this module was written.
+describe("GraphCampaignAdapter getAdSetTracking (AIC-88)", () => {
+  it("maps the real Pixel ad-set shape (free_beta_signups_leads)", async () => {
+    const mock = vi.fn(async () => ({
+      ok: true, status: 200,
+      json: async () => ({
+        data: [{
+          id: "120248238539100352",
+          name: "18-28_university-admission,student_website",
+          optimization_goal: "OFFSITE_CONVERSIONS",
+          destination_type: "UNDEFINED",
+          promoted_object: { pixel_id: "984664453249037", custom_event_type: "COMPLETE_REGISTRATION", smart_pse_enabled: false },
+        }],
+      }),
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const [cfg] = await adapter.getAdSetTracking("meta_camp_1");
+
+    expect(cfg).toEqual({
+      adSetId: "120248238539100352",
+      name: "18-28_university-admission,student_website",
+      optimizationGoal: "OFFSITE_CONVERSIONS",
+      destinationType: "UNDEFINED",
+      pixelId: "984664453249037",
+      customEventType: "COMPLETE_REGISTRATION",
+    });
+  });
+
+  it("maps the real Click-to-WhatsApp ad-set shape (GelNails) — no promoted_object.pixel_id", async () => {
+    const mock = vi.fn(async () => ({
+      ok: true, status: 200,
+      json: async () => ({
+        data: [{
+          id: "120249004871300352",
+          name: "GelNails audience",
+          optimization_goal: "CONVERSATIONS",
+          destination_type: "WHATSAPP",
+          promoted_object: { page_id: "100457729476059", smart_pse_enabled: false },
+        }],
+      }),
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const [cfg] = await adapter.getAdSetTracking("meta_camp_1");
+
+    expect(cfg.pixelId).toBeNull();
+    expect(cfg.customEventType).toBeNull();
+    expect(cfg.optimizationGoal).toBe("CONVERSATIONS");
+  });
+
+  it("no ad sets at all → empty array, not an error", async () => {
+    const mock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ data: [] }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    expect(await adapter.getAdSetTracking("meta_camp_1")).toEqual([]);
+  });
+});

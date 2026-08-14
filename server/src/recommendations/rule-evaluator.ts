@@ -59,6 +59,10 @@ export async function buildCampaignEvidence(
   // status is judgeable, not excluded (isJudgeable, features.ts).
   adStatuses?: LiveStatusMap,
   adSetStatuses?: LiveStatusMap,
+  // AIC-88: the campaign's declared lead definition doesn't match what Meta is
+  // configured to optimize for, so its `leads` are structurally wrong (zero) —
+  // every rule that reasons over leads or CPL would be reasoning over a lie.
+  trackingBroken?: boolean,
 ): Promise<CampaignEvidence> {
   const [curTotals, prevTotals, curCreatives, prevCreatives, curAdsets, curDaily, prevDaily] = await Promise.all([
     store.campaignTotals(campaign.id, current.start, current.end),
@@ -98,6 +102,7 @@ export async function buildCampaignEvidence(
       const d = deliveryProblemAdSetIds ?? excluded;
       return d.size > 0 ? [...d] : undefined;
     })(),
+    trackingBroken,
   };
 }
 

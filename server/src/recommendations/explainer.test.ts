@@ -88,10 +88,11 @@ describe("explainer number fidelity", () => {
     }
   });
 
-  it("distinguishes each no_action reason (AIC-64/85) — never the same message", () => {
+  it("distinguishes each no_action reason (AIC-64/85/88) — never the same message", () => {
     const texts = [
       "stable", "collecting", "budget_below_threshold", "delivery_blocked",
       "no_comparable_audiences", "no_comparable_creatives", "below_object_evidence_floor",
+      "tracking_broken",
     ].map((reason) => explain(rec({ type: "no_action", evidence: { reason } })));
     expect(new Set(texts).size).toBe(texts.length);
     expect(texts[0]).toContain("יציב");
@@ -101,6 +102,9 @@ describe("explainer number fidelity", () => {
     expect(texts[4]).toContain("קהל אחד");
     expect(texts[5]).toContain("מודעה אחת");
     expect(texts[6]).toContain("להשוות");
+    // AIC-88: says the NUMBERS are wrong and it's on us — never that the
+    // campaign is failing, which is what a naive "0 leads" message implies.
+    expect(texts[7]).toContain("נספרות");
   });
 
   it("renders a weekly status summary with the figures passed in", () => {

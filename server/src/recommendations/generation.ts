@@ -11,6 +11,9 @@ import { refreshRecommendations } from "./staleness.js";
 import { rollingPeriods } from "../meta/scheduled-ingestion.js";
 import { summarize, type DeliveryReader, type DeliverySummary } from "../meta/delivery-health.js";
 import { recordCampaignDelivery } from "../services/delivery-monitor.js";
+import { summarizeTracking, type TrackingReader, type TrackingSummary } from "../meta/tracking-health.js";
+import { recordCampaignTracking } from "../services/tracking-monitor.js";
+import { LEAD_ACTION_PRIORITY } from "../meta/insights.js";
 import { deriveAudienceLabels, type AdSetMeta } from "../meta/audience-label.js";
 import { upsertAdSetMeta } from "../services/audience-meta-cache.js";
 import { recordNoRecReason } from "../services/evaluation-reason.js";
@@ -69,6 +72,7 @@ export interface GenerationSummary {
   expired: number; // proposed recs the rules no longer support
   skipped: number; // eligible but couldn't read live budget
   deliveryProblems: number; // campaigns with a not-delivering ad set (AIC-39)
+  trackingProblems: number; // campaigns whose lead definition doesn't match Meta (AIC-88)
 }
 
 // Campaigns eligible for generation: actively managed, automation on, linked to a
@@ -114,6 +118,11 @@ export async function runGenerationTick(deps: {
   // evidence, so the audience rule never proposes pausing a broken ad set.
   deliveryReader?: DeliveryReader;
   recordDelivery?: (campaign: GenCampaign, summary: DeliverySummary) => Promise<void>;
+  // AIC-88: compare the campaign's declared lead definition against what its
+  // ad sets are configured on Meta to optimize for. A mismatch means every
+  // real conversion counts as zero.
+  trackingReader?: TrackingReader;
+  recordTracking?: (campaign: GenCampaign, summary: TrackingSummary) => Promise<void>;
   // AIC-37: ad-set metadata (name + targeting), used to derive human audience
   // labels and cache them (via recordAudienceMeta) for the customer surface.
   audienceMetaReader?: AudienceMetaReader;
@@ -142,7 +151,7 @@ export async function runGenerationTick(deps: {
     rollingPeriods(deps.ref);
   const log = deps.logger;
 
-  const summary: GenerationSummary = { evaluated: 0, created: 0, expired: 0, skipped: 0, deliveryProblems: 0 };
+  const summary: GenerationSummary = { evaluated: 0, created: 0, expired: 0, skipped: 0, deliveryProblems: 0, trackingProblems: 0 };
 
   for (const campaign of campaigns) {
     let currentBudgetAgorot: number;
@@ -229,6 +238,33 @@ export async function runGenerationTick(deps: {
     // (classifyNoAction), so the two stay separate all the way through.
     const excludeAdSetIds = new Set([...(deliveryProblemAdSetIds ?? []), ...unmanagedAdSetIds]);
 
+    // AIC-88: does the campaign's declared lead definition match what Meta is
+    // actually optimizing for? A mismatch means every real conversion counts
+    // as zero, so the engine would reason over — and eventually act on — a
+    // number that is structurally wrong. Deliberately NOT gated on delivery or
+    // spend: this is a pure configuration comparison, so it works on a paused
+    // campaign, i.e. it can catch the misconfiguration before a shekel is
+    // spent. Fail-open like every other optional step.
+    let trackingBroken = false;
+    if (deps.trackingReader) {
+      try {
+        const configs = await deps.trackingReader.getAdSetTracking(campaign.metaCampaignId);
+        // Judge only ad sets we actually manage — a dead/draft one's config is
+        // not a live problem (the AIC-65 lesson, same filter as delivery above).
+        const realConfigs = configs.filter((c) => !unmanagedAdSetIds.has(c.adSetId));
+        const tr = summarizeTracking(realConfigs, campaign.leadEventTypes ?? LEAD_ACTION_PRIORITY);
+        if (tr.state === "broken") {
+          trackingBroken = true;
+          summary.trackingProblems++;
+          log?.info(`[generation] ${campaign.id}: tracking misconfigured — ${tr.reason}`);
+        }
+        await deps.recordTracking?.(campaign, tr);
+      } catch (e) {
+        // Unreadable config is `unknown`, never "broken" — never flag on a failure.
+        log?.error(`[generation] ${campaign.id}: tracking-health read failed — ${(e as Error).message}`);
+      }
+    }
+
     let lastActionAtByType: Record<string, Date> | undefined;
     if (deps.cooldownReader) {
       try {
@@ -256,6 +292,7 @@ export async function runGenerationTick(deps: {
       // FULL exclude set (delivery ∪ unmanaged) when this is omitted, which
       // would wrongly call an unmanaged-only exclusion "delivery_blocked".
       deliveryProblemAdSetIds: deliveryProblemAdSetIds ?? new Set(),
+      trackingBroken,
       adSetLabels,
       flexibleCreativeAdSetIds,
       adStatuses,
@@ -302,6 +339,10 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
       audienceMetaReader: adapter,
       recordAudienceMeta: async (campaign, adsets) => {
         await upsertAdSetMeta(pool, campaign.id, adsets);
+      },
+      trackingReader: adapter,
+      recordTracking: async (campaign, tr) => {
+        await recordCampaignTracking({ pool, ops, campaignId: campaign.id, customerId: campaign.customerId, summary: tr });
       },
       recordNoRecReason: async (campaign, draft) => {
         await recordNoRecReason({ pool, campaignId: campaign.id, draft });

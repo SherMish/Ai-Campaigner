@@ -52,6 +52,7 @@ export const strings = {
         collecting: "עדיין אוסף נתונים",
         budget_below_threshold: "תקציב מתחת לסף הזיהוי",
         delivery_blocked: "קבוצת מודעות לא מתפרסמת",
+        tracking_broken: "מדידת הפניות לא תואמת את הגדרות Meta", // AIC-88
         no_comparable_audiences: "קהל אחד בלבד — אין השוואה", // AIC-85, was single_ad_set
         cooling_down: "בתקופת צינון לאחר שינוי אחרון", // AIC-77b
         below_object_evidence_floor: "יש מה להשוות, אבל עדיין לא מספיק נתונים", // AIC-85
@@ -549,6 +550,10 @@ export const strings = {
           // customer's explicit go-live approval — nothing spends until they click.
           readyToLaunch: { badge: "מוכן להפעלה", title: "הקמפיין מוכן — נותר רק לאשר הפעלה", body: "בנינו את הקמפיין והוא עבר בדיקה, אבל הוא עדיין מושהה ולא מוציא כסף. ההפעלה מתבצעת רק באישור שלכם.", cta: "אישור והפעלה" },
           // AIC-39: a not-delivering ad set — distinct from a lost Meta connection.
+          // AIC-88: the conversions ARE happening; we are not counting them.
+          // Never phrased as the campaign failing — the fault is ours, and
+          // the honest thing is to say the numbers on screen are incomplete.
+          tracking: { badge: "צריך טיפול", title: "מספרי הפניות כאן אינם מלאים", body: "יש אי-התאמה בהגדרת מדידת הפניות בקמפיין, כך שפניות שמגיעות אינן נספרות. אנחנו כבר על זה, ולא נמליץ על שינויים עד שנתקן — כדי לא להסתמך על נתון שגוי.", cta: "" },
           delivery: { badge: "צריך טיפול", title: "חלק מהקמפיין לא מתפרסם כרגע", body: "אחת מקבוצות הפרסום נתקלה בבעיה ואינה מציגה מודעות. אנחנו כבר על זה — ניצור קשר אם נצטרך משהו מכם. שאר הקמפיין ממשיך לרוץ.", cta: "" },
           // AIC-71: nothing is currently delivering (usually the customer's own
           // pause via the audience controls below) — not an error (that's

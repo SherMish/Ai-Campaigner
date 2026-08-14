@@ -41,6 +41,9 @@ export interface CustomerOverview {
     // AIC-53: review-approved (status='active') but the customer hasn't
     // approved activation yet — the campaign is still PAUSED on Meta.
     readyToLaunch: boolean;
+    // AIC-88: false only on a positively-detected lead-definition mismatch.
+    // null = never checked / could not determine — never treated as a problem.
+    trackingOk: boolean | null;
     // AIC-64: why the engine's last tick had nothing to propose — null before
     // the engine has ever run, or when an acting recommendation exists instead.
     noRecReason: string | null;
@@ -81,7 +84,7 @@ export interface CustomerOverview {
   pendingRecommendationType: RecommendationType | null;
   // Which kind of "needs attention" the customer sees, so Home shows the right
   // message: a lost Meta connection vs a delivery problem (AIC-39).
-  attentionKind: "connection" | "delivery" | null;
+  attentionKind: "connection" | "delivery" | "tracking" | null;
   homeState: HomeState;
 }
 
@@ -100,6 +103,10 @@ function deriveHomeState(
   // and the one actionable thing is the launch approval itself.
   if (campaign.readyToLaunch) return "ready_to_launch";
   if (!campaign.deliveryOk) return "attention"; // a not-delivering ad set (AIC-39)
+  // AIC-88: the lead numbers are structurally wrong (declared lead definition
+  // doesn't match Meta's config). Explicit === false: null means "never
+  // checked / couldn't determine", which must never read as a problem.
+  if (campaign.trackingOk === false) return "attention";
   if (campaign.status === "paused") return "paused";
   if (campaign.status === "needs_attention" || campaign.status === "connection_problem")
     return "attention";
@@ -191,6 +198,7 @@ export async function buildCustomerOverview(
       budget_period: "daily" | "monthly";
       automation_enabled: boolean;
       delivery_ok: boolean;
+      tracking_ok: boolean | null;
       launch_approved_at: Date | null;
       meta_campaign_id: string | null;
       no_rec_reason: string | null;
@@ -200,7 +208,7 @@ export async function buildCustomerOverview(
       delivering_ad_count: number | null;
       leads_to_date: number | null;
     }>(
-      `SELECT id, name, status, objective, agreed_budget_agorot, budget_period, automation_enabled, delivery_ok, launch_approved_at, meta_campaign_id, no_rec_reason, no_rec_detail, live_budget_agorot, delivering, delivering_ad_count, leads_to_date
+      `SELECT id, name, status, objective, agreed_budget_agorot, budget_period, automation_enabled, delivery_ok, tracking_ok, launch_approved_at, meta_campaign_id, no_rec_reason, no_rec_detail, live_budget_agorot, delivering, delivering_ad_count, leads_to_date
        FROM managed_campaigns WHERE customer_id = $1`,
       [customerId],
     ),
@@ -252,6 +260,7 @@ export async function buildCustomerOverview(
         budgetPeriod: campRes.rows[0].budget_period,
         automationEnabled: campRes.rows[0].automation_enabled,
         deliveryOk: campRes.rows[0].delivery_ok,
+        trackingOk: campRes.rows[0].tracking_ok,
         readyToLaunch:
           campRes.rows[0].status === "active" &&
           campRes.rows[0].launch_approved_at === null &&
@@ -314,12 +323,17 @@ export async function buildCustomerOverview(
   const pendingRecommendations = proposedRecs.length;
   const pendingRecommendationType = proposedRecs[0]?.type ?? null;
 
-  const attentionKind: "connection" | "delivery" | null =
+  // Same precedence as deriveHomeState's, deliberately — the two derive the
+  // same fact and MUST agree, or the hero falls through to a generic
+  // attention card telling a customer with a tracking problem to reconnect Meta.
+  const attentionKind: "connection" | "delivery" | "tracking" | null =
     connection && connection.accessHealth !== "ok"
       ? "connection"
       : campaign && !campaign.deliveryOk
         ? "delivery"
-        : null;
+        : campaign && campaign.trackingOk === false
+          ? "tracking"
+          : null;
 
   return {
     account,

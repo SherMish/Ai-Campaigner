@@ -6,6 +6,57 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-14 — AIC-88: guard against a lead-definition/Meta-config mismatch
+The blocker named in AIC-87's own investigation: a Pixel campaign can be
+connected with the wrong `lead_event_types` (exactly what happened with
+free_beta_signups_leads before that fix), silently reporting real
+conversions as zero leads while the engine confidently reasons over the
+wrong number.
+
+The originally planned design (spend-with-zero-leads, confirmed against
+`{pixel}/stats`) was designed, then discarded before any code was written,
+after a Plan agent's adversarial review found it doesn't work: pixel stats
+are pixel-scoped, so on a landing page with no other traffic "the event
+never fired" is indistinguishable from "nobody converted yet" — the
+confirmation step adds zero discriminating power exactly where it matters.
+The review also proved the spend threshold is arithmetically unreachable on
+a ₪20/day campaign (₪140/week < the existing ₪150 evidence gate) — it could
+never have fired on the very account that motivated the ticket.
+
+Built instead: the ad set's own Meta configuration
+(`optimization_goal`/`promoted_object.custom_event_type`) deterministically
+implies which Insights action type its conversions arrive as
+(`impliedLeadActionType`, `server/src/meta/tracking-health.ts`). Comparing
+that against the campaign's declared `lead_event_types` is exact — zero
+false positives, no spend needed, no attribution lag — and works on a
+**paused** campaign, catching the misconfiguration before a shekel is spent
+(the statistical version structurally could not). Three-valued
+(`ok`/`broken`/`unknown`); `unknown` never collapses into `ok` — a real,
+cited bug in the delivery-health pattern this otherwise mirrors, where the
+recorder writes its flag unconditionally. Ops alerting is idempotent
+(keyed off an open ops item, not the ok→broken edge) — the edge-based
+delivery-health version has a latent failure where a thrown `ops.create`
+permanently loses the alert; this module deliberately avoids inheriting it.
+
+Migration 038 (`tracking_ok`/`tracking_reason`/`tracking_detail`/
+`tracking_checked_at` + widened `ops_queue_items` CHECK). Suppresses every
+rule AND the AIC-86 pre-gate advisory ("add more ads" is wrong advice when
+conversions aren't being counted at all) via `CampaignEvidence.trackingBroken`,
+second only to `delivery_blocked` in `classifyNoAction`'s precedence.
+Customer-facing (a config mismatch is deterministic, not a guess, so unlike
+the discarded statistical version it's safe to show): `attentionKind:
+"tracking"`, distinct Hebrew hero copy, no CTA.
+
+Test-first throughout. Full server suite green (388 unit, 210/212
+integration — only the 2 known pre-existing flakes), typecheck clean, web
+build clean. **Verified live**: restored the exact original bug on the real
+free_beta campaign (WhatsApp default on a Pixel campaign) and confirmed the
+guard correctly flags it (`state: broken`, ops item raised, precise reason)
+before restoring the correct config; then ran the real production
+generation tick against both real campaigns and confirmed both correctly
+verify `ok`. Docs: [tracking-health.md](features/tracking-health.md),
+[RULES.md](RULES.md), [customer-overview.md](features/customer-overview.md).
+
 ### 2026-08-14 — Connected free_beta_signups_leads (real Pixel campaign) to test@test.com
 The concrete instance AIC-87 was built for. Same Meta Business Portfolio and
 ad account (`act_2181076988590009`) as Sharon's "Pisga"/GelNails customer, a
