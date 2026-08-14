@@ -250,6 +250,35 @@ export const strings = {
         pause_creative: "עצירת מודעה", pause_adset: "עצירת קהל", increase_budget: "העלאת תקציב",
         decrease_budget: "הורדת תקציב", replace_creative: "החלפת קריאייטיב", no_action: "ללא פעולה",
       } as Record<string, string>,
+
+      // AIC-76: did the change actually help? Correlation, never causation —
+      // every label here describes what CPL DID, not what the change DID.
+      outcome: {
+        sectionTitle: "תוצאה",
+        disclaimer: "השוואת מחיר-לליד בין החלון שלפני הביצוע לחלון שאחריו — מתאם, לא הוכחת סיבתיות.",
+        notYetMeasured: "טרם נמדד — יימדד אוטומטית בתום חלון ההמתנה.",
+        cplBefore: "מחיר לליד — לפני",
+        cplAfter: "מחיר לליד — אחרי",
+        delta: "שינוי",
+        window: "חלון המדידה",
+        measuredAt: "נמדד בתאריך",
+        confoundTitle: "גורם מתערב",
+        confoundOtherAction: "פעולה נוספת באותו חלון",
+        confoundZeroSpend: "יום ללא הוצאה בחלון שאחרי",
+        verdictLabels: {
+          improved: "מחיר לליד ירד", degraded: "מחיר לליד עלה", neutral: "ללא שינוי משמעותי",
+          confounded: "לא ניתן לייחוס", insufficient_data: "נתונים לא מספיקים", not_measurable: "לא ניתן למדידה",
+        } as Record<string, string>,
+      },
+      // AIC-76: fleet-wide "is the engine actually helping?" summary, above
+      // the filtered list — its own query, not a rollup of the visible rows.
+      outcomeSummary: {
+        title: "סיכום תוצאות לפי סוג המלצה",
+        disclaimer: "מבוסס על השוואת מחיר-לליד לפני/אחרי כל ביצוע — מתאם, לא סיבתיות מוכחת.",
+        colType: "סוג",
+        colExecuted: "בוצעו",
+        empty: "עדיין אין תוצאות מדודות.",
+      },
     },
 
     // Operator accounts + admin action audit log (AIC-47).

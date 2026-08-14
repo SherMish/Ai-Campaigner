@@ -19,6 +19,7 @@ See also: [STATE.md](STATE.md) (dated changelog) · [features/_TEMPLATE.md](feat
 | Recommendation engine — state machine, rules, staleness, explainer | [features/recommendation-engine.md](features/recommendation-engine.md) |
 | Feature layer — named windowed metrics the rules reason over | [FEATURES.md](FEATURES.md) |
 | Rule thresholds + LLM boundary | [RULES.md](RULES.md) |
+| Outcome measurement — did an executed recommendation actually help? | [features/outcome-measurement.md](features/outcome-measurement.md) |
 | Approval & safe execution — budget safety, outbox, pipeline | [features/safe-execution.md](features/safe-execution.md) |
 | Manual object controls — pause/resume (all users), archive/delete (admin) | [features/manual-controls.md](features/manual-controls.md) |
 | Action history surface (audit trail + condensed projection) | [features/action-history.md](features/action-history.md) |

@@ -6,6 +6,69 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-14 — AIC-76: outcome measurement — did an executed recommendation help?
+Closes the loop AIC-75/77a/77b opened: the engine proposes, the customer
+approves, the change lands — and until now, nothing ever checked the result.
+New `recommendation_outcomes` table (migration 033), the **first
+engine-computed table** in this schema (every earlier computed cache is a
+scalar column). One row per executed recommendation, comparing a fixed
+before-window against a fixed after-window anchored on `executed_at`, with
+the execution day itself excluded from both (contaminated by construction —
+same discipline as the engine's other "complete days only" gates).
+
+**The measurement window is `COOLDOWN_DAYS`** — AIC-77b's cooldown key,
+reused rather than a second key defaulted to the same number. One policy:
+the engine can't act again on a class until it knows whether the last action
+worked, so "cooldown lifts" and "outcome measurable" are definitionally the
+same moment. Pinned by a dedicated invariant test in `outcomes.test.ts` that
+walks day-by-day and asserts the two conditions flip on the identical day —
+so a future split into two keys breaks a build instead of drifting apart
+silently. Full reasoning in
+[outcome-measurement.md](features/outcome-measurement.md#the-window--and-why-its-the-same-key-as-the-cooldown).
+
+Six verdicts (`improved`/`degraded`/`neutral`/`confounded`/
+`insufficient_data`/`not_measurable`), resolved strictly can't-compute →
+can't-attribute → bucket. The materiality band reuses `BUDGET_CPL_RISE_PCT`
+(the engine's own existing "moved enough to act on" bar) rather than
+inventing a second number against zero real outcomes — provisional,
+recalibrated once real outcomes exist. **The raw delta is always stored
+alongside the bucket** — the bucket is a view, the delta is the data, so a
+real −11% stays visible as `neutral (−11%)` instead of being discarded.
+`replace_creative` is `not_measurable`: it executes successfully but makes
+**no Meta write** (files an ops ticket instead), so there is no event to
+measure from — explicitly temporary, revisit once creative replacement gets
+a real tracked execution. Attribution is correlation, never causation,
+enforced in the Hebrew copy and the code comments throughout.
+
+Caught mid-build: the DB round-trip on the new table's `DATE` columns —
+`pg` parses `DATE` as a local-midnight JS `Date`, and `.toISOString()`
+shifted it a day backward on a machine in `Asia/Jerusalem`. Fixed by reading
+via `to_char(col, 'YYYY-MM-DD')`, the same convention
+`insight_snapshots.dailySeries` already used for the identical reason —
+applied in both the test and the new ops-console query.
+
+Ops console (`AdminRecommendations.tsx`): a per-recommendation outcome block
+in the detail panel (verdict, before/after CPL, raw delta, exact window,
+confound detail), plus a fleet-wide aggregate-by-type card at the top —
+its own query (`getOutcomeAggregate`), not a client-side rollup over the
+300-row-capped list, which would silently undercount past 300 rows.
+
+24 new pure unit tests (`outcomes.test.ts`, incl. the invariant), 12 new DB
+integration tests (`outcome-measurement.integration.test.ts` — the due-query,
+the `executed_at`-stamped-on-the-failed-path trap, confound detection, a full
+measured run, tick idempotency), 4 new oversight integration tests
+(measured outcome + confound detail + the aggregate, list + HTTP). Full
+suite green (328 unit tests, 202/204 integration — only the 2 known
+pre-existing flakes), typecheck clean, web build clean. Ships **unexercised
+in production** (zero recommendations have ever executed on the one live
+account) — verified instead by a seeded end-to-end run against the real DB:
+throwaway executed rec + engineered before/after snapshots → the real tick →
+persisted verdict/delta matched the arithmetic → ops console rendered both
+surfaces → every throwaway row deleted. Docs:
+[outcome-measurement.md](features/outcome-measurement.md) (new),
+[RULES.md](RULES.md#precedence--cooldown-aic-77b),
+[DATA_MODEL.md](DATA_MODEL.md), [ops-console.md](features/ops-console.md#recommendations-oversight-aic-46).
+
 ### 2026-08-14 — AIC-77b: cooldown + already-paused exclusion + precedence docs
 Two provable flaws, both reachable the moment the engine fires its first
 recommendation ever (`recommendations` had zero rows; every one of production

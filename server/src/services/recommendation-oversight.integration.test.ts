@@ -5,7 +5,7 @@ import request from "supertest";
 import { pool } from "../db/pool.js";
 import { createApp } from "../app.js";
 import { signAuthToken } from "../auth/tokens.js";
-import { listRecommendationsForAdmin, flagRecommendation, unflagRecommendation } from "./recommendation-oversight.js";
+import { listRecommendationsForAdmin, flagRecommendation, unflagRecommendation, getOutcomeAggregate } from "./recommendation-oversight.js";
 import { listAuditLog } from "./admin-audit.js";
 
 const HAS_DB = !!process.env.DATABASE_URL;
@@ -31,6 +31,36 @@ async function seedRec(campaignId: string, opts: { type?: string; state?: string
     [campaignId, opts.type ?? "decrease_budget", opts.state ?? "proposed", JSON.stringify(opts.evidence ?? { spendAgorot: 5000, leads: 1 })],
   );
   return r.rows[0].id;
+}
+
+// AIC-76: seed a minimal outcome row directly (bypassing measureOne — that
+// path is exercised end-to-end by outcome-measurement.integration.test.ts;
+// here we only need a row to exist so the oversight JOIN has something real
+// to read back).
+async function seedOutcome(
+  recId: string,
+  campaignId: string,
+  opts: { verdict?: string; beforeStart?: string; afterEnd?: string; confoundDetail?: object } = {},
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO recommendation_outcomes
+       (recommendation_id, campaign_id, before_start, before_end, after_start, after_end,
+        before_features, after_features, delta, verdict, confound_detail)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+    [
+      recId,
+      campaignId,
+      opts.beforeStart ?? "2026-08-03",
+      "2026-08-09",
+      "2026-08-11",
+      opts.afterEnd ?? "2026-08-17",
+      JSON.stringify({ spendAgorot: 28000, leads: 7, cplAgorot: 4000, daysActive: 7 }),
+      JSON.stringify({ spendAgorot: 21000, leads: 7, cplAgorot: 3000, daysActive: 7 }),
+      JSON.stringify({ cplPct: -25, leadsPct: 0, spendPct: -25 }),
+      opts.verdict ?? "improved",
+      opts.confoundDetail ? JSON.stringify(opts.confoundDetail) : null,
+    ],
+  );
 }
 
 d("recommendations oversight (DB + HTTP)", () => {
@@ -87,6 +117,43 @@ d("recommendations oversight (DB + HTTP)", () => {
     const row = rows.find((r) => r.id === recId)!;
     expect(row.actionHistoryId).toBe(ah.rows[0].id);
     expect(row.executionResult).toBe("success");
+    // Not yet measured — no recommendation_outcomes row exists for it.
+    expect(row.outcome).toBeNull();
+  });
+
+  it("surfaces a measured outcome once one exists, with exact window dates", async () => {
+    const { campaignId } = await seedCampaign("outcome");
+    const recId = await seedRec(campaignId, { type: "pause_creative", state: "executed" });
+    await seedOutcome(recId, campaignId, { verdict: "improved" });
+
+    const rows = await listRecommendationsForAdmin(pool);
+    const row = rows.find((r) => r.id === recId)!;
+    expect(row.outcome).not.toBeNull();
+    const out = row.outcome!;
+    expect(out.verdict).toBe("improved");
+    expect(out.beforeFeatures.cplAgorot).toBe(4000);
+    expect(out.afterFeatures.cplAgorot).toBe(3000);
+    expect(out.delta.cplPct).toBe(-25);
+    expect(out.confoundDetail).toBeNull();
+    // The exact DATE round trip (pg parses DATE as local-midnight; reading it
+    // via to_char in the query avoids the UTC .toISOString() day-shift that
+    // bit the outcome-measurement integration tests — see that file's fix).
+    expect(out.beforeStart).toBe("2026-08-03");
+    expect(out.afterEnd).toBe("2026-08-17");
+  });
+
+  it("carries the confound detail through when the outcome was confounded", async () => {
+    const { campaignId } = await seedCampaign("confound");
+    const recId = await seedRec(campaignId, { type: "decrease_budget", state: "executed" });
+    await seedOutcome(recId, campaignId, {
+      verdict: "confounded",
+      confoundDetail: { otherActions: [{ actionType: "pause_adset", occurredAt: "2026-08-12T10:00:00Z", humanInvolved: true }] },
+    });
+
+    const rows = await listRecommendationsForAdmin(pool);
+    const row = rows.find((r) => r.id === recId)!;
+    expect(row.outcome!.verdict).toBe("confounded");
+    expect(row.outcome!.confoundDetail?.otherActions?.[0]?.actionType).toBe("pause_adset");
   });
 
   it("surfaces a failed rec (consistent with the needs-attention queue)", async () => {
@@ -148,5 +215,46 @@ d("recommendations oversight (DB + HTTP)", () => {
   it("rejects the routes without an admin credential", async () => {
     const res = await request(createApp()).get("/api/admin/recommendations");
     expect(res.status).toBe(401);
+  });
+
+  // AIC-76: fleet-wide aggregate — its own query, deliberately not a
+  // client-side rollup over listRecommendationsForAdmin's capped list.
+  describe("getOutcomeAggregate", () => {
+    it("counts executed recs and buckets measured outcomes by verdict, per type", async () => {
+      const a = await seedCampaign("agg-a");
+      const b = await seedCampaign("agg-b");
+
+      // pause_creative: 2 executed, 1 improved + 1 not yet measured.
+      const rec1 = await seedRec(a.campaignId, { type: "pause_creative", state: "executed" });
+      await seedOutcome(rec1, a.campaignId, { verdict: "improved" });
+      await seedRec(b.campaignId, { type: "pause_creative", state: "executed" }); // no outcome row yet
+
+      // decrease_budget: 1 executed, confounded — across a different customer.
+      const rec2 = await seedRec(b.campaignId, { type: "decrease_budget", state: "executed" });
+      await seedOutcome(rec2, b.campaignId, { verdict: "confounded" });
+
+      // A proposed (never executed) rec must not inflate the executed count.
+      await seedRec(a.campaignId, { type: "pause_creative", state: "proposed" });
+
+      const agg = await getOutcomeAggregate(pool);
+      const creative = agg.find((r) => r.type === "pause_creative")!;
+      expect(creative.executed).toBeGreaterThanOrEqual(2);
+      expect(creative.byVerdict.improved).toBeGreaterThanOrEqual(1);
+
+      const budget = agg.find((r) => r.type === "decrease_budget")!;
+      expect(budget.executed).toBeGreaterThanOrEqual(1);
+      expect(budget.byVerdict.confounded).toBeGreaterThanOrEqual(1);
+    });
+
+    it("is reachable over HTTP behind an admin credential", async () => {
+      const admin = await pool.query<{ id: string }>(
+        `INSERT INTO app_users (email, password_hash, name, is_admin) VALUES ('__it_oversight_agg_admin@example.com','x','Op',true) RETURNING id`,
+      );
+      const auth = `Bearer ${signAuthToken(admin.rows[0].id)}`;
+      const res = await request(createApp()).get("/api/admin/recommendations/outcomes-summary").set("Authorization", auth);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.byType)).toBe(true);
+      await pool.query(`DELETE FROM app_users WHERE email = '__it_oversight_agg_admin@example.com'`);
+    });
   });
 });

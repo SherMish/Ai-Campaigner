@@ -1,5 +1,6 @@
 import type pg from "pg";
 import type { RecommendationType, RecommendationState } from "@aic/shared";
+import type { OutcomeVerdict, OutcomeFeatures, OutcomeDelta, ConfoundDetail } from "../recommendations/outcomes.js";
 import { logAdminAction, type Actor } from "./admin-audit.js";
 
 // Recommendations oversight (AIC-46): the operator's cross-account window into
@@ -12,6 +13,23 @@ import { logAdminAction, type Actor } from "./admin-audit.js";
 // ever needs an operator to act on a customer's behalf, that should be its
 // own explicit, audited flow through AIC-12 — not bolted onto this oversight
 // list.
+
+// AIC-76: did the recommendation actually help? Nested rather than flattened
+// onto AdminRecRow — it's a distinct, self-contained record (its own window,
+// its own verdict) with a real null case (not yet due, or not_measurable),
+// so a null-vs-populated object reads clearer than a wall of nullable fields.
+export interface AdminRecOutcome {
+  verdict: OutcomeVerdict;
+  measuredAt: string;
+  beforeStart: string; // YYYY-MM-DD
+  beforeEnd: string;
+  afterStart: string;
+  afterEnd: string;
+  beforeFeatures: OutcomeFeatures;
+  afterFeatures: OutcomeFeatures;
+  delta: OutcomeDelta;
+  confoundDetail: ConfoundDetail | null;
+}
 
 export interface AdminRecRow {
   id: string;
@@ -35,6 +53,7 @@ export interface AdminRecRow {
   flaggedAt: string | null;
   actionHistoryId: string | null; // latest action_history row for this rec, if executed
   executionResult: "success" | "failed" | null;
+  outcome: AdminRecOutcome | null; // null until measured (or never, if not due yet)
 }
 
 export interface RecFilter {
@@ -58,7 +77,14 @@ export async function listRecommendationsForAdmin(pool: pg.Pool, filter: RecFilt
 
   const { rows } = await pool.query(
     `SELECT r.*, mc.name AS campaign_name, c.id AS customer_id, c.business_name,
-            ah.id AS action_history_id, ah.result AS execution_result
+            ah.id AS action_history_id, ah.result AS execution_result,
+            o.verdict AS o_verdict, o.measured_at AS o_measured_at,
+            to_char(o.before_start, 'YYYY-MM-DD') AS o_before_start,
+            to_char(o.before_end, 'YYYY-MM-DD') AS o_before_end,
+            to_char(o.after_start, 'YYYY-MM-DD') AS o_after_start,
+            to_char(o.after_end, 'YYYY-MM-DD') AS o_after_end,
+            o.before_features AS o_before_features, o.after_features AS o_after_features,
+            o.delta AS o_delta, o.confound_detail AS o_confound_detail
      FROM recommendations r
      JOIN managed_campaigns mc ON mc.id = r.campaign_id
      JOIN customers c ON c.id = mc.customer_id
@@ -67,6 +93,7 @@ export async function listRecommendationsForAdmin(pool: pg.Pool, filter: RecFilt
        WHERE recommendation_id = r.id
        ORDER BY occurred_at DESC LIMIT 1
      ) ah ON true
+     LEFT JOIN recommendation_outcomes o ON o.recommendation_id = r.id
      ${where}
      ORDER BY r.created_at DESC
      LIMIT ${LIST_LIMIT}`,
@@ -95,7 +122,67 @@ export async function listRecommendationsForAdmin(pool: pg.Pool, filter: RecFilt
     flaggedAt: r.flagged_at ? new Date(r.flagged_at).toISOString() : null,
     actionHistoryId: r.action_history_id ?? null,
     executionResult: r.execution_result ?? null,
+    outcome: r.o_verdict
+      ? {
+          verdict: r.o_verdict,
+          measuredAt: new Date(r.o_measured_at).toISOString(),
+          beforeStart: r.o_before_start,
+          beforeEnd: r.o_before_end,
+          afterStart: r.o_after_start,
+          afterEnd: r.o_after_end,
+          beforeFeatures: r.o_before_features,
+          afterFeatures: r.o_after_features,
+          delta: r.o_delta,
+          confoundDetail: r.o_confound_detail ?? null,
+        }
+      : null,
   }));
+}
+
+// Aggregate by rec type (AIC-76) — a fleet-wide "is the engine actually
+// helping?" summary. Its OWN query, not a client-side rollup over the
+// 300-row-capped list above: that list is a recent-tail triage view and can
+// silently exclude older executed recs the moment more than 300 rows exist,
+// which would make the aggregate quietly wrong. Two queries, merged in JS,
+// rather than one GROUP BY on both an unfiltered `executed` count and a
+// verdict breakdown — cleaner than reasoning about a FILTER interacting with
+// a GROUP BY that already splits rows by (possibly null) verdict.
+export interface OutcomeAggregateRow {
+  type: RecommendationType;
+  executed: number; // recommendations in state='executed', measured or not yet
+  byVerdict: Partial<Record<OutcomeVerdict, number>>;
+}
+
+export async function getOutcomeAggregate(pool: pg.Pool): Promise<OutcomeAggregateRow[]> {
+  const [executedByType, verdictsByType] = await Promise.all([
+    pool.query<{ type: RecommendationType; n: string }>(
+      `SELECT type, COUNT(*) AS n FROM recommendations WHERE state = 'executed' GROUP BY type`,
+    ),
+    pool.query<{ type: RecommendationType; verdict: OutcomeVerdict; n: string }>(
+      `SELECT r.type, o.verdict, COUNT(*) AS n
+       FROM recommendation_outcomes o
+       JOIN recommendations r ON r.id = o.recommendation_id
+       GROUP BY r.type, o.verdict`,
+    ),
+  ]);
+
+  const byType = new Map<RecommendationType, OutcomeAggregateRow>();
+  for (const row of executedByType.rows) {
+    byType.set(row.type, { type: row.type, executed: Number(row.n), byVerdict: {} });
+  }
+  for (const row of verdictsByType.rows) {
+    let entry = byType.get(row.type);
+    if (!entry) {
+      // A type with a measured outcome but zero rows currently in
+      // state='executed' shouldn't happen (outcomes only exist for recs that
+      // reached 'executed'), but don't let a future state transition hide
+      // real verdict data — surface it with executed:0 rather than drop it.
+      entry = { type: row.type, executed: 0, byVerdict: {} };
+      byType.set(row.type, entry);
+    }
+    entry.byVerdict[row.verdict] = Number(row.n);
+  }
+  return [...byType.values()].sort((a, b) => a.type.localeCompare(b.type));
 }
 
 type FlagResult = { ok: true } | { ok: false; error: string };

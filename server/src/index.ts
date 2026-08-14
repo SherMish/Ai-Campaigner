@@ -3,6 +3,7 @@ import { createApp } from "./app.js";
 import { pool } from "./db/pool.js";
 import { buildIngestionTick } from "./meta/scheduled-ingestion.js";
 import { buildGenerationTick } from "./recommendations/generation.js";
+import { buildOutcomeTick } from "./services/outcome-measurement.js";
 import { startScheduler } from "./services/scheduler.js";
 import { consoleLogger } from "./services/logger.js";
 
@@ -52,13 +53,22 @@ if (process.env.META_SEED_PISGA) {
     .catch((e) => consoleLogger.error("[seed-pisga] crashed", e));
 }
 
-// The engine loop: ingest fresh snapshots, then run the recommendation
-// evaluator over them (AIC-9). Both build to null when no Meta token is set,
-// leaving the scheduler off until Meta is wired up (see docs/META_SETUP.md).
-// Generation runs AFTER ingestion in the same tick so it sees the freshest data.
+// The engine loop: ingest fresh snapshots, run the recommendation evaluator
+// over them (AIC-9), then measure any past recommendation whose outcome window
+// has closed (AIC-76). Ingestion and generation build to null when no Meta
+// token is set, leaving the scheduler off until Meta is wired up (see
+// docs/META_SETUP.md). Order is deliberate:
+//   ingest → generate (sees the freshest snapshots)
+//          → measure  (reads only already-ingested snapshots, and going last
+//                      means an outcome recorded now is available to the NEXT
+//                      tick's rules)
 // Interval defaults to hourly.
 const ingestTick = buildIngestionTick(pool);
 const generationTick = buildGenerationTick(pool);
+// Needs no Meta token — it reads snapshots we already stored — so it is never
+// inert. It still only runs inside the engine loop: with no token nothing can
+// execute, so there is never anything to measure.
+const outcomeTick = buildOutcomeTick(pool, consoleLogger);
 if (ingestTick || generationTick) {
   const intervalMs = Number(process.env.INGESTION_INTERVAL_MS) || 60 * 60 * 1000;
   startScheduler({
@@ -76,6 +86,18 @@ if (ingestTick || generationTick) {
         consoleLogger.info(
           `generation tick: ${g.evaluated} evaluated, ${g.created} proposed, ${g.expired} expired, ${g.skipped} skipped, ${g.deliveryProblems} delivery-problems`,
         );
+      }
+      // Isolated: a measurement failure must never make an otherwise-successful
+      // ingest+generate tick read as crashed.
+      try {
+        const o = await outcomeTick();
+        if (o.due > 0) {
+          consoleLogger.info(
+            `outcome tick: ${o.due} due, ${o.measured} measured, ${o.failed} failed — ${JSON.stringify(o.byVerdict)}`,
+          );
+        }
+      } catch (e) {
+        consoleLogger.error(`outcome tick crashed — ${(e as Error).message}`);
       }
     },
   });

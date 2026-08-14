@@ -245,9 +245,10 @@ status — the operator's window into whether the engine is trustworthy.
 `server/src/services/recommendation-oversight.ts` `listRecommendationsForAdmin
 (pool, filter)` joins `recommendations → managed_campaigns → customers` (+ a
 lateral join to the latest `action_history` row for that rec, so an executed
-rec carries its outcome and a link back), filterable by state/type/customer,
-newest-first, capped at 300 (a triage view, not a report). `GET
-/admin/recommendations?state=&type=&customerId=`.
+rec carries its Meta write's success/failure and a link back, and a
+`LEFT JOIN recommendation_outcomes` for its measured AIC-76 outcome — see
+below), filterable by state/type/customer, newest-first, capped at 300 (a
+triage view, not a report). `GET /admin/recommendations?state=&type=&customerId=`.
 
 **Deliberately read + flag only — no operator-initiated approve/execute.**
 The ticket left this "optional, decide in build." The product's whole trust
@@ -270,18 +271,34 @@ logged to `admin_audit_log` (`recommendation.flag`/`.unflag`, AIC-44's table —
 with the needs-attention queue below: a failure is never hidden.
 
 Web: `web/src/admin/AdminRecommendations.tsx` at `/admin/recommendations` (nav
-item now live). State/type/customer filter row; a table of matches; a
+item now live). A fleet-wide **outcome-by-type summary card** at the top
+(AIC-76, see below); a state/type/customer filter row; a table of matches; a
 drill-down per rec showing current→proposed budget, max spend impact,
 rationale, approval/execution status, the raw evidence as a key→value table
 (whatever shape the rule that fired put there — never reformatted/guessed),
 a link into the customer's action-history (`/admin/customers?focus=<id>`,
 AIC-44's drill-down, which already renders condensed action-history) when the
-rec was actually executed, and the flag/unflag control.
+rec was actually executed, a **measured-outcome block** for any executed rec
+(AIC-76, see below), and the flag/unflag control.
 
 Tests: `recommendation-oversight.integration.test.ts` (list + join
 correctness, state/type/customer filters, action-history linkage, failed recs
-surfaced, flag/unflag + audit logging, 404 on a missing rec, full HTTP round
-trip with a real admin actor, auth).
+surfaced, a measured outcome and its exact window dates, a confounded
+outcome's detail, `getOutcomeAggregate`'s per-type counts, flag/unflag +
+audit logging, 404 on a missing rec, full HTTP round trip with a real admin
+actor, auth).
+
+**Outcome measurement (AIC-76).** Did an executed recommendation actually
+help? Full design in [outcome-measurement.md](outcome-measurement.md) — this
+page only covers the two UI surfaces it adds here. The per-rec block shows
+the verdict, before/after CPL, the raw delta, the exact measured window, and
+(when confounded) what else changed and when — reading
+`AdminRecRow.outcome`, `null` until the after-window closes. The aggregate
+card (`GET /admin/recommendations/outcomes-summary`) is its **own** query,
+grouping every executed recommendation by type and verdict — deliberately
+not a client-side rollup over the 300-row-capped list above, which would
+silently undercount past 300 rows. Both are correlation-only by construction
+and copy — see the doc for why.
 
 **Note:** GelNails hasn't produced a real recommendation yet (thin data / the
 one ad set that's excluded from evidence by AIC-39's delivery-health check) —

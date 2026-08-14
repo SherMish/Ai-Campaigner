@@ -357,6 +357,14 @@ fires, nothing-would-fire never invents the reason), `staleness.test.ts`
 (`getLatestEngineActionByType` against the real schema: engine-only,
 successful-only, latest-per-type).
 
+**`COOLDOWN_DAYS` is also the [outcome-measurement](features/outcome-measurement.md)
+window (AIC-76) — one key, not two that happen to share a default.** The
+engine may not act again on a class until it can tell whether the last
+action on that class worked, so "when the cooldown lifts" and "when the
+outcome is measurable" are the same moment by definition, not by
+coincidence. See [outcome-measurement.md](features/outcome-measurement.md#the-window--and-why-its-the-same-key-as-the-cooldown)
+for the invariant and its lock-in test.
+
 ## Staleness
 A `proposed` recommendation expires when its evidence **materially diverges**,
 defined precisely as: the same gated rules, run on current evidence, no longer

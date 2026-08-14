@@ -325,6 +325,25 @@ export const adminObjectControl = (
   });
 
 // ── Admin: recommendations oversight (AIC-46) ───────────────────────────────
+
+// AIC-76: did the recommendation actually help? Null until measured (the
+// after-window hasn't closed yet, or the type never writes to Meta).
+export type OutcomeVerdict = "improved" | "degraded" | "neutral" | "confounded" | "insufficient_data" | "not_measurable";
+export interface OutcomeFeatures { spendAgorot: number; leads: number; cplAgorot: number | null; daysActive: number }
+export interface OutcomeDelta { cplPct: number | null; leadsPct: number | null; spendPct: number | null }
+export interface AdminRecOutcome {
+  verdict: OutcomeVerdict;
+  measuredAt: string;
+  beforeStart: string; // YYYY-MM-DD
+  beforeEnd: string;
+  afterStart: string;
+  afterEnd: string;
+  beforeFeatures: OutcomeFeatures;
+  afterFeatures: OutcomeFeatures;
+  delta: OutcomeDelta;
+  confoundDetail: { otherActions?: Array<{ actionType: string; occurredAt: string; humanInvolved: boolean }>; zeroSpendDays?: string[] } | null;
+}
+
 export interface AdminRecRow {
   id: string;
   customerId: string;
@@ -347,6 +366,7 @@ export interface AdminRecRow {
   flaggedAt: string | null;
   actionHistoryId: string | null;
   executionResult: "success" | "failed" | null;
+  outcome: AdminRecOutcome | null;
 }
 export const getAdminRecommendations = (filter: { state?: string; type?: string; customerId?: string } = {}) => {
   const q = new URLSearchParams(Object.entries(filter).filter(([, v]) => v) as [string, string][]).toString();
@@ -356,6 +376,11 @@ export const flagRecommendation = (id: string, note: string) =>
   api<{ ok: true }>(`/admin/recommendations/${id}/flag`, { method: "POST", body: JSON.stringify({ note }) });
 export const unflagRecommendation = (id: string) =>
   api<{ ok: true }>(`/admin/recommendations/${id}/unflag`, { method: "POST", body: "{}" });
+
+// AIC-76: fleet-wide "did the engine's changes actually help?" — its own
+// query on the server, not a client-side rollup over the capped list.
+export interface OutcomeAggregateRow { type: string; executed: number; byVerdict: Partial<Record<OutcomeVerdict, number>> }
+export const getOutcomeSummary = () => api<{ byType: OutcomeAggregateRow[] }>("/admin/recommendations/outcomes-summary");
 
 export const changePassword = (currentPassword: string, newPassword: string) =>
   api<{ ok: true }>("/auth/change-password", {

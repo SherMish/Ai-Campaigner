@@ -42,6 +42,7 @@ when `DATABASE_URL` is unset.
 | `action_history` | Append-only audit: what / previous / new / why / who / human / when | `campaign_id`, `recommendation_id` |
 | `lead_quality_feedback` | Weekly campaign-level: leads reported, relevant count, customers won | `campaign_id`; UNIQUE `(campaign_id, week_start)` |
 | `ops_queue_items` | Needs-attention worklist: type, severity, status | `customer_id`, `campaign_id` |
+| `recommendation_outcomes` | AIC-76: before/after CPL comparison for one executed recommendation — window bounds, features, delta, verdict, confound detail. The first engine-computed **table** (every earlier computed cache is a scalar column above) — see [outcome-measurement.md](features/outcome-measurement.md) | `recommendation_id` (1:1, UNIQUE), `campaign_id` |
 
 ### Managed-campaign shape (AIC-38)
 

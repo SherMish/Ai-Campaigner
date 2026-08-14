@@ -24,7 +24,7 @@ import { submitReview, recordCustomerDecision, getLatestReview } from "../servic
 import { updateBilling, conversionSummary, upsertLeadQuality, listLeadQuality, leadQualityResponseRate } from "../services/billing.js";
 import { buildFleetOverview } from "../services/fleet-overview.js";
 import { buildCampaignExplorer } from "../services/campaign-explorer.js";
-import { listRecommendationsForAdmin, flagRecommendation, unflagRecommendation } from "../services/recommendation-oversight.js";
+import { listRecommendationsForAdmin, flagRecommendation, unflagRecommendation, getOutcomeAggregate } from "../services/recommendation-oversight.js";
 import { RECOMMENDATION_STATE, RECOMMENDATION_TYPE, type RecommendationState, type RecommendationType } from "@aic/shared";
 
 // Internal admin surfaces. Reads only from our DB (insight_snapshots) — never a
@@ -283,6 +283,12 @@ adminRouter.get("/recommendations", async (req, res) => {
       state: validState, type: validType, customerId: customerId || undefined,
     }),
   });
+});
+
+// AIC-76: fleet-wide "did the engine's changes actually help?" summary —
+// its own query (see getOutcomeAggregate), not derived from the list above.
+adminRouter.get("/recommendations/outcomes-summary", async (_req, res) => {
+  res.json({ byType: await getOutcomeAggregate(pool) });
 });
 
 adminRouter.post("/recommendations/:id/flag", async (req, res) => {
