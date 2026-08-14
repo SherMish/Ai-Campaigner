@@ -118,21 +118,15 @@ export async function buildCampaignReadout(
     },
   } satisfies Record<RangeKey, PeriodAgg>;
 
-  const creatives = await pool.query<{
-    meta_object_id: string;
-    creative_name: string | null;
-    spend_agorot: number;
-    leads: number;
-    cpl_agorot: number | null;
-    delivery_status: string;
-  }>(
-    `SELECT meta_object_id, creative_name, spend_agorot, leads, cpl_agorot, delivery_status
-     FROM insight_snapshots
-     WHERE campaign_id = $1 AND grain = 'creative'
-       AND period_start >= $2 AND period_end <= $3
-     ORDER BY spend_agorot DESC`,
-    [campaignId, current.start, current.end],
-  );
+  // AIC-85/86 regression fix: this used to be its own hand-rolled query,
+  // independently vulnerable to the same overlapping-window bug
+  // creativeStats() was just fixed for (a rolling row plus the "today"
+  // extra-period ingestion's leftover single-day rows for the same object,
+  // both matching a plain containment filter with no dedup — one real ad
+  // rendered as three). Routing through the shared, now-fixed store method
+  // instead of re-querying `insight_snapshots` directly means this can't
+  // drift out of sync with the fix again.
+  const creativeStats = await store.creativeStats(campaignId, current.start, current.end);
 
   return {
     campaignId,
@@ -154,13 +148,13 @@ export async function buildCampaignReadout(
           ? deltaPct(cur.cplAgorot, prev.cplAgorot)
           : null,
     },
-    perCreative: creatives.rows.map((r) => ({
-      metaObjectId: r.meta_object_id,
-      creativeName: r.creative_name,
-      spendAgorot: Number(r.spend_agorot),
-      leads: Number(r.leads),
-      cplAgorot: r.cpl_agorot === null ? null : Number(r.cpl_agorot),
-      deliveryStatus: r.delivery_status,
+    perCreative: creativeStats.map((r) => ({
+      metaObjectId: r.metaObjectId,
+      creativeName: r.creativeName,
+      spendAgorot: r.spendAgorot,
+      leads: r.leads,
+      cplAgorot: r.cplAgorot,
+      deliveryStatus: r.deliveryStatus,
     })),
   };
 }

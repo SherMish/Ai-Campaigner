@@ -165,3 +165,29 @@ describe("buildCampaignEvidence — deliveryProblemAdSetIds (AIC-64)", () => {
     expect(ev.deliveryProblemAdSetIds).toBeUndefined();
   });
 });
+
+// REGRESSION (real, found 2026-08-14 against production GelNails data). The
+// same overlapping-window class as the campaignTotals bug (AIC-75), one level
+// up: a rolling creative/adset row plus the "today" extra-period ingestion's
+// leftover single-day rows for the SAME object both matched creativeStats/
+// adsetStats' containment window, with no dedup — one real ad read as three.
+// That's not just a display bug: buildCampaignEvidence feeds ev.creatives/
+// ev.adsets straight into the rules (pauseWeakCreative's peer comparison,
+// AIC-85's comparableCreatives count), so a phantom "peer" could drive a
+// wrong recommendation. Fixed at snapshot-store.ts (both PgSnapshotStore and
+// InMemorySnapshotStore) — this proves the fix reaches the engine's actual
+// evidence, not just the store method in isolation.
+describe("buildCampaignEvidence — one real object never becomes three (AIC-85/86 regression)", () => {
+  it("a rolling creative row plus leftover single-day rows for the same object collapse to one entry", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await snapshots.upsert([
+      snap({ grain: "campaign", metaObjectId: "camp" }),
+      snap({ grain: "creative", metaObjectId: "cr_only", parentMetaId: "as_1", periodStart: "2026-07-26", periodEnd: "2026-08-01", spendAgorot: 4394, leads: 5, cplAgorot: 879 }),
+      snap({ grain: "creative", metaObjectId: "cr_only", parentMetaId: "as_1", periodStart: "2026-07-30", periodEnd: "2026-07-30", spendAgorot: 2739, leads: 3, cplAgorot: 913 }),
+      snap({ grain: "creative", metaObjectId: "cr_only", parentMetaId: "as_1", periodStart: "2026-07-31", periodEnd: "2026-07-31", spendAgorot: 706, leads: 1, cplAgorot: 706 }),
+    ]);
+    const ev = await buildCampaignEvidence(snapshots, { id: "camp-1", currentBudgetAgorot: 7000 }, CUR, PREV);
+    expect(ev.creatives).toHaveLength(1);
+    expect(ev.creatives[0]).toMatchObject({ metaObjectId: "cr_only", spendAgorot: 4394, leads: 5 });
+  });
+});

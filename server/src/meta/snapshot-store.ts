@@ -158,22 +158,26 @@ export class PgSnapshotStore implements SnapshotStore {
       cpl_agorot: number | null;
       delivery_status: string;
     }>(
-      `SELECT meta_object_id, parent_meta_id, creative_name, spend_agorot, leads, cpl_agorot, delivery_status
+      `SELECT DISTINCT ON (meta_object_id)
+              meta_object_id, parent_meta_id, creative_name, spend_agorot, leads, cpl_agorot, delivery_status
        FROM insight_snapshots
        WHERE campaign_id = $1 AND grain = 'creative'
          AND period_start >= $2 AND period_end <= $3
-       ORDER BY spend_agorot DESC`,
+         AND period_start != period_end
+       ORDER BY meta_object_id, period_end DESC, created_at DESC, spend_agorot DESC`,
       [campaignId, start, end],
     );
-    return rows.map((r) => ({
-      metaObjectId: r.meta_object_id,
-      adSetId: r.parent_meta_id,
-      creativeName: r.creative_name,
-      spendAgorot: Number(r.spend_agorot),
-      leads: Number(r.leads),
-      cplAgorot: r.cpl_agorot === null ? null : Number(r.cpl_agorot),
-      deliveryStatus: r.delivery_status,
-    }));
+    return rows
+      .map((r) => ({
+        metaObjectId: r.meta_object_id,
+        adSetId: r.parent_meta_id,
+        creativeName: r.creative_name,
+        spendAgorot: Number(r.spend_agorot),
+        leads: Number(r.leads),
+        cplAgorot: r.cpl_agorot === null ? null : Number(r.cpl_agorot),
+        deliveryStatus: r.delivery_status,
+      }))
+      .sort((a, b) => b.spendAgorot - a.spendAgorot);
   }
 
   async adsetStats(
@@ -188,20 +192,24 @@ export class PgSnapshotStore implements SnapshotStore {
       cpl_agorot: number | null;
       delivery_status: string;
     }>(
-      `SELECT meta_object_id, spend_agorot, leads, cpl_agorot, delivery_status
+      `SELECT DISTINCT ON (meta_object_id)
+              meta_object_id, spend_agorot, leads, cpl_agorot, delivery_status
        FROM insight_snapshots
        WHERE campaign_id = $1 AND grain = 'adset'
          AND period_start >= $2 AND period_end <= $3
-       ORDER BY spend_agorot DESC`,
+         AND period_start != period_end
+       ORDER BY meta_object_id, period_end DESC, created_at DESC, spend_agorot DESC`,
       [campaignId, start, end],
     );
-    return rows.map((r) => ({
-      adSetId: r.meta_object_id,
-      spendAgorot: Number(r.spend_agorot),
-      leads: Number(r.leads),
-      cplAgorot: r.cpl_agorot === null ? null : Number(r.cpl_agorot),
-      deliveryStatus: r.delivery_status,
-    }));
+    return rows
+      .map((r) => ({
+        adSetId: r.meta_object_id,
+        spendAgorot: Number(r.spend_agorot),
+        leads: Number(r.leads),
+        cplAgorot: r.cpl_agorot === null ? null : Number(r.cpl_agorot),
+        deliveryStatus: r.delivery_status,
+      }))
+      .sort((a, b) => b.spendAgorot - a.spendAgorot);
   }
 
   async dailySeries(campaignId: string, start: string, end: string): Promise<DailyPoint[]> {
@@ -259,19 +267,28 @@ export class InMemorySnapshotStore implements SnapshotStore {
     return { spendAgorot, leads, cplAgorot: computeCpl(spendAgorot, leads) };
   }
 
+  // Mirrors PgSnapshotStore's DISTINCT ON fix: a single-day row is a slice,
+  // never an object's totals for the requested window — only the
+  // rolling/aggregate row (period_start != period_end) qualifies. Kept as
+  // one shared helper so creativeStats/adsetStats can't drift apart.
+  private latestPerObject(rows: SnapshotUpsert[], start: string, end: string, keyOf: (r: SnapshotUpsert) => string): SnapshotUpsert[] {
+    const byObject = new Map<string, SnapshotUpsert>();
+    for (const r of rows) {
+      if (r.periodStart < start || r.periodEnd > end || r.periodStart === r.periodEnd) continue;
+      const key = keyOf(r);
+      const existing = byObject.get(key);
+      if (!existing || r.periodEnd > existing.periodEnd) byObject.set(key, r);
+    }
+    return [...byObject.values()];
+  }
+
   async creativeStats(
     campaignId: string,
     start: string,
     end: string,
   ): Promise<CreativeStatRow[]> {
-    return [...this.rows.values()]
-      .filter(
-        (r) =>
-          r.campaignId === campaignId &&
-          r.grain === "creative" &&
-          r.periodStart >= start &&
-          r.periodEnd <= end,
-      )
+    const rows = [...this.rows.values()].filter((r) => r.campaignId === campaignId && r.grain === "creative");
+    return this.latestPerObject(rows, start, end, (r) => r.metaObjectId)
       .map((r) => ({
         metaObjectId: r.metaObjectId,
         adSetId: r.parentMetaId,
@@ -289,14 +306,8 @@ export class InMemorySnapshotStore implements SnapshotStore {
     start: string,
     end: string,
   ): Promise<AdsetStatRow[]> {
-    return [...this.rows.values()]
-      .filter(
-        (r) =>
-          r.campaignId === campaignId &&
-          r.grain === "adset" &&
-          r.periodStart >= start &&
-          r.periodEnd <= end,
-      )
+    const rows = [...this.rows.values()].filter((r) => r.campaignId === campaignId && r.grain === "adset");
+    return this.latestPerObject(rows, start, end, (r) => r.metaObjectId)
       .map((r) => ({
         adSetId: r.metaObjectId,
         spendAgorot: r.spendAgorot,

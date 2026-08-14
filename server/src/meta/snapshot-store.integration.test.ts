@@ -122,4 +122,49 @@ d("PgSnapshotStore (DB)", () => {
 
     await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
   });
+
+  // REGRESSION (real, found 2026-08-14 against production GelNails data, while
+  // browsing the customer's "audience details" disclosure). The SAME
+  // overlapping-window class as the campaignTotals bug above, at a THIRD
+  // consumer AIC-75 explicitly (and it turns out incorrectly) declared safe:
+  // "those grains have no daily rows written for them at all." They do — the
+  // "today" extra-period ingestion (scheduled-ingestion.ts's `todayPeriod`)
+  // calls the full multi-grain `getInsights`, which leaves behind ad/adset/
+  // creative single-day rows nothing was designed to consume. Those rows then
+  // fall inside creativeStats/adsetStats' containment window right alongside
+  // the real rolling-window row for the SAME object, and — with no
+  // deduplication — get returned as if they were separate objects. One real
+  // ad rendered as three in the customer's UI; the AIC-85/86 comparability
+  // count read 3 "comparable creatives" where there was really 1.
+  //
+  // The fix (unlike campaignTotals, which needed to SUM disjoint days)
+  // selects only the rolling/aggregate row per object — a single-day row is a
+  // slice, never the object's totals for the requested window — and dedupes
+  // to the freshest one via DISTINCT ON, in case more than one ever exists.
+  it("creativeStats/adsetStats return exactly one row per object, never a daily slice masquerading as a peer", async () => {
+    const { campaignId, customerId } = await makeCampaign();
+    const store = new PgSnapshotStore(pool);
+    await store.upsert([
+      // the rolling 7-day row the primary ingestion tick writes...
+      snap(campaignId, { grain: "creative", metaObjectId: "cr_only", parentMetaId: "as_1", periodStart: "2026-08-06", periodEnd: "2026-08-12", spendAgorot: 4394, leads: 5, cplAgorot: 879 }),
+      // ...and single-day rows the "today" extra-period ingestion leaves
+      // behind for the SAME object, on two different days.
+      snap(campaignId, { grain: "creative", metaObjectId: "cr_only", parentMetaId: "as_1", periodStart: "2026-08-11", periodEnd: "2026-08-11", spendAgorot: 2739, leads: 3, cplAgorot: 913 }),
+      snap(campaignId, { grain: "creative", metaObjectId: "cr_only", parentMetaId: "as_1", periodStart: "2026-08-12", periodEnd: "2026-08-12", spendAgorot: 706, leads: 1, cplAgorot: 706 }),
+      // same shape for the ad set.
+      snap(campaignId, { grain: "adset", metaObjectId: "as_1", periodStart: "2026-08-06", periodEnd: "2026-08-12", spendAgorot: 4394, leads: 5, cplAgorot: 879 }),
+      snap(campaignId, { grain: "adset", metaObjectId: "as_1", periodStart: "2026-08-11", periodEnd: "2026-08-11", spendAgorot: 2739, leads: 3, cplAgorot: 913 }),
+      snap(campaignId, { grain: "adset", metaObjectId: "as_1", periodStart: "2026-08-12", periodEnd: "2026-08-12", spendAgorot: 706, leads: 1, cplAgorot: 706 }),
+    ]);
+
+    const creatives = await store.creativeStats(campaignId, "2026-08-06", "2026-08-13");
+    expect(creatives).toHaveLength(1); // NOT 3
+    expect(creatives[0]).toMatchObject({ metaObjectId: "cr_only", spendAgorot: 4394, leads: 5 });
+
+    const adsets = await store.adsetStats(campaignId, "2026-08-06", "2026-08-13");
+    expect(adsets).toHaveLength(1); // NOT 3
+    expect(adsets[0]).toMatchObject({ adSetId: "as_1", spendAgorot: 4394, leads: 5 });
+
+    await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
+  });
 });

@@ -6,6 +6,49 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-14 — Bugfix: creativeStats/adsetStats returned duplicate rows for one real object
+Found live while browsing the customer's "audience details" disclosure on the
+just-shipped AIC-85/86: one real ad rendered as three, each with different
+spend/leads. Same overlapping-window class as `campaignTotals`'s AIC-75 fix,
+at a third call site that fix explicitly (and it turns out incorrectly)
+declared safe — "those grains have no daily rows written for them at all."
+They do: the "today" extra-period ingestion (`scheduled-ingestion.ts`'s
+`todayPeriod`) calls the full multi-grain `getInsights` for a single day,
+leaving behind ad/adset/creative single-day rows nothing was designed to
+consume. Those rows then matched `creativeStats`/`adsetStats`' plain
+containment predicate right alongside the real rolling row for the same
+object, with no dedup.
+
+Not just cosmetic: `buildCampaignEvidence` (the engine's own evidence
+builder) calls these same two methods, so `pauseWeakCreative`/
+`pauseUnderperformingAudience` could in principle compare a real object
+against a phantom "peer" that's really itself at a different point in time,
+and AIC-85/86's brand-new `comparableCreatives`/`comparableAdsets` inherited
+the bug immediately — GelNails' "3 comparable creatives" from the AIC-85/86
+live verification just hours earlier was this exact corruption; there's
+really 1.
+
+Fixed at both `SnapshotStore` implementations (`PgSnapshotStore` via SQL —
+`AND period_start != period_end` plus `DISTINCT ON (meta_object_id)`;
+`InMemorySnapshotStore` via an equivalent shared JS helper, so the two can't
+drift apart) — the complementary predicate to the disjoint-daily view, not
+the same one: `campaignTotals` needed to sum disjoint days, these want a
+single object's totals for the window, and a daily row is a slice, never the
+answer. `readout.ts`'s per-creative breakdown had independently hand-rolled
+the identical buggy query rather than calling `creativeStats()` — fixed by
+routing it through the shared, now-corrected method instead of patching a
+third copy of the same SQL.
+
+Test-first (`snapshot-store.integration.test.ts`, `rule-evaluator.test.ts`).
+Re-verified live on GelNails after the fix: `comparableCreativeCount` reads
+1 (not 3), and `add_creatives_for_comparison` — the exact recommendation
+AIC-85/86 was built to produce — fired for real in production for the first
+time; the ops console's per-ad table dropped from 3 duplicate rows to the 1
+real one. Full suite green (352 unit, 203/205 integration — only the 2 known
+pre-existing flakes), typecheck clean, web build clean. Docs:
+[DATA_MODEL.md](DATA_MODEL.md#the-disjoint-daily-view-migration-030) (the
+corrected record).
+
 ### 2026-08-14 — AIC-85/86: "stable" honesty fix + the first advisory recommendation
 Live investigation of GelNails (the same account across this whole session's
 arc) found `no_rec_reason = "stable"` reporting "everything's fine" while the

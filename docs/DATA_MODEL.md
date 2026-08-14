@@ -87,20 +87,49 @@ CREATE VIEW insight_snapshot_daily AS
 `PgSnapshotStore.campaignTotals` and `.dailySeries` both read
 `insight_snapshot_daily`; a `SUM()` over the view is arithmetically incapable
 of double-counting, because the rolling rows it would double-count against
-simply aren't in it. `creativeStats`/`adsetStats` are **deliberately
-unaffected** — those grains have no daily rows written for them at all (only
-`campaign` grain gets the daily `time_increment=1` ingestion call), so they
-select rows within a window rather than summing over time, and were never
-ambiguous the way a `SUM()` is.
+simply aren't in it.
 
 This is the same move as AIC-70's `intentStatus()`/`deliveryStatus()`
 accessors: a read-side filter every future consumer has to *remember* is a
 landmine; a view makes the right query the only reachable one.
 
-**Not yet done, deliberately deferred:** stopping the *write* of the now-
-redundant rolling campaign row (it's still written every tick, just no longer
-read for aggregation) — a follow-up ticket, after confirming nothing else
-legitimately reads it.
+**`creativeStats`/`adsetStats` were declared unaffected here — that turned
+out to be wrong** (found 2026-08-14, AIC-85/86). The reasoning at the time —
+"those grains have no daily rows written for them at all" — assumed only
+`campaign` grain gets the daily `time_increment=1` ingestion call. It
+doesn't: the separate "today" extra-period ingestion (`scheduled-ingestion.ts`'s
+`todayPeriod`) calls the full multi-grain `getInsights` for a single day, and
+nothing was designed to consume the ad/adset/creative single-day rows that
+leaves behind — but nothing stops them from being written or read either.
+Those rows then matched `creativeStats`/`adsetStats`' plain containment
+predicate right alongside the real rolling row for the same object, with no
+dedup: one real ad read as three, both in the customer's audience-details
+disclosure and in the engine's own evidence (`buildCampaignEvidence`, which
+calls these same two methods — a wrong "peer" could drive a wrong
+recommendation, not just a wrong display).
+
+**The fix is the complementary predicate to the view above, not the same
+one.** `campaignTotals` needed to *sum* disjoint days; `creativeStats`/
+`adsetStats` want a single object's totals for the requested window, so a
+daily row is a slice, never the answer — the correct row is the
+rolling/aggregate one. Both methods (`PgSnapshotStore` via SQL, `AND
+period_start != period_end` plus `DISTINCT ON (meta_object_id)`;
+`InMemorySnapshotStore` via an equivalent JS filter, so the two
+`SnapshotStore` implementations can't drift apart) now select exactly one row
+per object. `readout.ts`'s admin/customer per-creative breakdown had
+independently hand-rolled the identical buggy query rather than calling
+`creativeStats()` — fixed by routing it through the shared, now-corrected
+method instead of patching a third copy of the same SQL.
+
+**Not yet done, deliberately deferred:** stopping the "today" extra-period
+ingestion from writing ad/adset/creative-grain rows at all (the write-side
+root cause) — the read-side fix above is sufficient and lower-risk (it
+doesn't touch the ingestion path that also feeds `readout.today`, the range
+switcher, and the leads graph), but old rows written before this fix will
+keep existing until they age out of the 45-day daily lookback. Also
+unaddressed: stopping the write of the now-redundant rolling campaign row
+itself (it's still written every tick, just no longer read for aggregation)
+— a follow-up ticket, after confirming nothing else legitimately reads it.
 
 ### Enum-shaped TEXT columns need a migration to widen, every time
 

@@ -26,8 +26,11 @@ function snap(campaignId: string, o: Partial<SnapshotUpsert>): SnapshotUpsert {
     creativeName: null,
     // A single DAY inside the current window, not the whole window: campaign
     // totals are summed, and summing must only see disjoint rows (migration
-    // 030 / insight_snapshot_daily). Creative-grain rows still match the
-    // containment predicate creativeStats uses, so this default serves both.
+    // 030 / insight_snapshot_daily). Creative/adset-grain rows want the
+    // OPPOSITE — creativeStats/adsetStats now read only the rolling/aggregate
+    // row (period_start != period_end), so a creative-grain snap in this file
+    // explicitly overrides periodEnd to `current.end` (see below) rather than
+    // relying on this campaign-grain default.
     periodStart: current.start,
     periodEnd: current.start,
     spendAgorot: 0,
@@ -80,6 +83,7 @@ d("dogfood readout (DB + HTTP)", () => {
         spendAgorot: 12000,
         leads: 5,
         cplAgorot: 2400,
+        periodEnd: current.end, // rolling row — creativeStats reads this, never a daily slice
       }),
       snap(campaignId, {
         grain: "creative",
@@ -88,6 +92,7 @@ d("dogfood readout (DB + HTTP)", () => {
         spendAgorot: 6000,
         leads: 1,
         cplAgorot: 6000,
+        periodEnd: current.end,
       }),
       // previous period campaign total for the delta
       snap(campaignId, {
