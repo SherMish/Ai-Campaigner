@@ -72,8 +72,14 @@ export async function seedPisgaOwner(log: Logger): Promise<void> {
       log.info(`[seed-pisga] created meta_connection ${connId}`);
     }
 
-    // 4) ad_account
-    let acctId = (await pool.query<{ id: string }>(`SELECT id FROM ad_accounts WHERE meta_ad_account_id = $1`, [AD_ACCOUNT])).rows[0]?.id;
+    // 4) ad_account — scoped to THIS connection (migration 037: one Meta ad
+    // account can now back several customers, each via their own
+    // meta_connections row, so an unscoped lookup could match another
+    // customer's ad_accounts row and skip creating this one's).
+    let acctId = (await pool.query<{ id: string }>(
+      `SELECT id FROM ad_accounts WHERE connection_id = $1 AND meta_ad_account_id = $2`,
+      [connId, AD_ACCOUNT],
+    )).rows[0]?.id;
     if (!acctId) {
       acctId = (await pool.query<{ id: string }>(
         `INSERT INTO ad_accounts (connection_id, meta_ad_account_id, name, currency)

@@ -53,6 +53,14 @@ if (process.env.META_SEED_PISGA) {
     .catch((e) => consoleLogger.error("[seed-pisga] crashed", e));
 }
 
+// One-off (AIC-87): connect the real free_beta_signups_leads Pixel campaign
+// to META_SEED_TEST_FREEBETA_EMAIL. Gated by META_SEED_TEST_FREEBETA; remove after.
+if (process.env.META_SEED_TEST_FREEBETA) {
+  import("./db/seed-test-freebeta.js")
+    .then(({ seedTestFreeBeta }) => seedTestFreeBeta(consoleLogger))
+    .catch((e) => consoleLogger.error("[seed-test-freebeta] crashed", e));
+}
+
 // The engine loop: ingest fresh snapshots, run the recommendation evaluator
 // over them (AIC-9), then measure any past recommendation whose outcome window
 // has closed (AIC-76). Ingestion and generation build to null when no Meta

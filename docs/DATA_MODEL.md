@@ -35,7 +35,7 @@ when `DATABASE_URL` is unset.
 | `customers` | Business info, offer, contact, onboarding status; `is_test` marks dogfood | — |
 | `subscriptions` | Manual billing: setup/monthly agorot, status, next charge | `customer_id` (1:1) |
 | `meta_connections` | Partner-access + System User linkage; `access_health` (ok/revoked/invalid/needs_reconnect); per-asset grants | `customer_id` (1:1) |
-| `ad_accounts` | Managed ad account under a connection | `connection_id` |
+| `ad_accounts` | Managed ad account under a connection. `meta_ad_account_id` is unique **per connection** (migration 037), not globally — one real Meta ad account can back several of our customers, each via their own `meta_connections` row | `connection_id` |
 | `managed_campaigns` | The one managed campaign per customer; status, agreed budget (agorot), `automation_enabled` brake, per-account rule-threshold overrides (`threshold_overrides` JSONB, sparse, AIC-77a — see [RULES.md](RULES.md#configurable-thresholds-aic-77a)), per-campaign lead definition (`lead_event_types` TEXT[], `tracking_pixel_id`, AIC-87 — see [METRICS.md](METRICS.md#lead-aic-87-per-campaign-not-a-global-constant)). Supported shape: **1 campaign → N ad sets → 3–5 creatives** (see note below) | `customer_id` (1:1), `ad_account_id` |
 | `insight_snapshots` | Normalized Insights at campaign/adset/ad/creative grain; spend, leads, CPL (agorot); internal impressions/clicks | `campaign_id`; UNIQUE `(campaign_id, grain, meta_object_id, period_start, period_end)` |
 | `recommendations` | Proposed action + type + evidence + state machine + expiry | `campaign_id` |

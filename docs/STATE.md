@@ -6,6 +6,46 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-14 — Connected free_beta_signups_leads (real Pixel campaign) to test@test.com
+The concrete instance AIC-87 was built for. Same Meta Business Portfolio and
+ad account (`act_2181076988590009`) as Sharon's "Pisga"/GelNails customer, a
+different real campaign (`120248236848650352`, objective OUTCOME_LEADS,
+Pixel `984664453249037`, `COMPLETE_REGISTRATION`). `ad_accounts.meta_ad_account_id`
+was globally UNIQUE, so a second customer couldn't reference the same Meta
+account at all — migration 037 narrows it to `UNIQUE (connection_id,
+meta_ad_account_id)`, verified safe first: every ownership lookup in the
+codebase already scopes by `connection_id`, never by the Meta id alone.
+Found and fixed one real lookup that would have broken under the new
+constraint — `seed-pisga-owner.ts`'s ad-account query was unscoped and would
+have matched the WRONG customer's row once a second one existed.
+
+New `seed-test-freebeta.ts` (gated by `META_SEED_TEST_FREEBETA`, modeled
+directly on `seed-pisga-owner.ts`) provisions test@test.com's own customer +
+connection + ad-account row + managed campaign, with `lead_event_types` set
+to the campaign's real Pixel action type (confirmed via read-only Graph probe
+before writing anything — see AIC-87 above). Run once, idempotent.
+
+**Verified live, end to end, through the real production code paths** — not
+a seeded/faked scenario: ran the real `buildIngestionTick` and
+`buildGenerationTick` against both campaigns together. free_beta's disjoint
+daily snapshots sum to exactly 26 leads / ₪205.06 — a byte-for-byte match to
+the real campaign's actual Meta performance from the original read-only
+probe. `leads_to_date`/`spend_to_date` (the second lead-definition site)
+landed the same 26/₪205.06. GelNails advanced from 6→7 leads / ₪82.49→₪82.57
+between the two ticks (real ad spend continuing to accrue on a live account —
+expected, not a regression) and its own `lead_event_types` stayed the
+WhatsApp default throughout, completely unaffected by the new connection.
+Browser-verified as test@test.com (a real pre-existing account — authenticated
+via a minted JWT for its own user id, the same mechanism the HTTP integration
+tests use, rather than touching its real password): the dashboard's "הכל"
+(all-time) range shows ₪205.1 spend / 26 leads / ₪7.9 CPL, matching exactly.
+The engine also produced its first real recommendation for this account
+(`add_creatives_for_comparison` — correct, it has exactly one ad). Hero state
+correctly reads "ready to launch, needs your approval" rather than "active" —
+honest, since no launch-approval click ever happened and the campaign
+genuinely stays PAUSED on Meta throughout (nothing spends, nothing was ever
+at risk while this was verified).
+
 ### 2026-08-14 — AIC-87: the lead definition becomes per-campaign, not a global constant
 Prompted by connecting a real Pixel-conversion campaign
 (`free_beta_signups_leads`, objective OUTCOME_LEADS, `promoted_object.custom_event_type:
