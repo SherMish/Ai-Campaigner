@@ -12,18 +12,51 @@ trustworthy; get them wrong and the whole product's judgment is silently corrupt
 
 ---
 
-## Lead
+## Lead (AIC-87: per-campaign, not a global constant)
 
-P0 campaigns are **Leads-objective, Click-to-WhatsApp**. The countable lead is the
-**messaging-conversation-started** event from Insights `actions`:
+**The lead definition lives on the campaign, not in code.**
+`managed_campaigns.lead_event_types` is an ordered priority list of Insights
+`action_type` strings; `extractLeads(actions, priority)` walks it and returns
+the **first matching type's summed value — never sums across types** (Meta
+often reports the same real conversion under several action-type aliases at
+once, so summing would multiply one lead into several).
 
-- Preferred action type: `onsite_conversion.messaging_conversation_started_7d`
+The **default** — used by every campaign that doesn't set its own — is P0's
+original Click-to-WhatsApp shape: the messaging-conversation-started event,
+preferring the 7-day-attribution variant when present:
+
+- Preferred: `onsite_conversion.messaging_conversation_started_7d`
 - Fallback: `onsite_conversion.messaging_conversation_started`
 
-We take the **7-day variant when present, else the base type — never both** (summing
-both would double-count). No WhatsApp reading, no individual-lead tracking (PRD
-forbids both). If a campaign's lead mechanism differs (e.g. Instant Forms in P1),
-that's out of scope for P0 ingestion.
+A **Pixel-conversion campaign** (objective `OUTCOME_LEADS`,
+`optimization_goal: OFFSITE_CONVERSIONS`) reports a completely different action
+type — e.g. `offsite_conversion.fb_pixel_complete_registration` for a
+`COMPLETE_REGISTRATION` custom event. Under the old hardcoded constant this
+counted as **zero leads regardless of real performance** (confirmed live: a
+real ₪205.06/26-registration campaign ingested as ₪205.06/0 before this fix)
+— a working campaign rendered as a catastrophically failing one. Setting that
+campaign's `lead_event_types` to its real action type fixes it at the source;
+no downstream code (snapshot store, readout, features, rules, outcome
+measurement, the whole web layer) needed to change, because all of it already
+reasons over an abstract `leads` integer.
+
+**Two independent sites turn raw `actions` into a `leads` count, and both
+must read the same per-campaign list** (found while wiring this — a classic
+"missed consumer" the same way AIC-70/AIC-75 were):
+1. Ingestion (`normalizeRow` in `insights.ts`) — writes `insight_snapshots.leads`,
+   which backs the rolling/current window, the range switcher, and the engine's evidence.
+2. `GraphCampaignAdapter.getLifetimeTotals` — a live, uncached read backing
+   `leads_to_date`/`spend_to_date`, the dashboard's "all time" range, and the
+   AIC-67 lead-quality watermark.
+
+**Deliberately not threaded:** the operator explorer (`meta/explorer.ts`)
+normalizes an entire ad account's rows in one call across potentially several
+campaigns, each with its own definition — threading a single list through it
+needs a `Map<metaCampaignId, string[]>` built from `managed_campaigns`, which
+is disproportionate for an operator-only diagnostic surface. It stays on the
+WhatsApp default; a documented gap, not a silent one. The env-gated `probe.ts`
+boot check is account-level (no single campaign's definition applies) and is
+explicitly commented as such.
 
 ## Cost per lead (CPL)
 

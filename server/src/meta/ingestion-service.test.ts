@@ -47,6 +47,49 @@ describe("IngestionService.ingestCampaign", () => {
     expect(snap.cplAgorot).toBe(3600);
   });
 
+  // AIC-87: the real free_beta_signups_leads campaign's shape — Pixel
+  // conversions, not WhatsApp messages. Under the old hardcoded constant these
+  // 26 registrations would ingest as 0.
+  it("honors a per-campaign lead-event list (AIC-87 Pixel campaign)", async () => {
+    const client = new FakeMetaClient();
+    client.setInsights("meta_pixel_1", [
+      {
+        grain: "campaign",
+        objectId: "meta_pixel_1",
+        spend: "205.06",
+        actions: [{ action_type: "offsite_conversion.fb_pixel_complete_registration", value: "26" }],
+      },
+    ]);
+    const store = new InMemorySnapshotStore();
+    const svc = new IngestionService(store, client);
+
+    await svc.ingestCampaign(
+      { id: "camp-pixel", metaCampaignId: "meta_pixel_1", leadEventTypes: ["offsite_conversion.fb_pixel_complete_registration"] },
+      PERIOD,
+    );
+    const snap = [...store.rows.values()][0];
+    expect(snap.leads).toBe(26);
+    expect(snap.spendAgorot).toBe(20506);
+  });
+
+  it("without a lead-event list, a Pixel campaign's actions count 0 (documents why AIC-87 exists)", async () => {
+    const client = new FakeMetaClient();
+    client.setInsights("meta_pixel_1", [
+      {
+        grain: "campaign",
+        objectId: "meta_pixel_1",
+        spend: "205.06",
+        actions: [{ action_type: "offsite_conversion.fb_pixel_complete_registration", value: "26" }],
+      },
+    ]);
+    const store = new InMemorySnapshotStore();
+    const svc = new IngestionService(store, client);
+
+    await svc.ingestCampaign({ id: "camp-pixel", metaCampaignId: "meta_pixel_1" }, PERIOD);
+    const snap = [...store.rows.values()][0];
+    expect(snap.leads).toBe(0);
+  });
+
   it("is idempotent per (campaign, grain, object, period) — re-run doesn't duplicate", async () => {
     const client = new FakeMetaClient();
     client.setInsights("meta_camp_1", campaignRows("180.00", "5"));
@@ -113,6 +156,31 @@ describe("runIngestionTick (reliability)", () => {
     expect(summary.snapshots).toBe(1);
     expect(logger.errors).toHaveLength(1);
     expect(logger.errors[0].msg).toContain("bad");
+  });
+
+  // AIC-87: the tick carries each campaign's own lead-event list from
+  // ManagedCampaignRef through to the stored snapshot.
+  it("threads a per-campaign lead-event list from ManagedCampaignRef through to the snapshot", async () => {
+    const client = new FakeMetaClient();
+    client.setInsights("meta_pixel_1", [
+      {
+        grain: "campaign",
+        objectId: "meta_pixel_1",
+        spend: "205.06",
+        actions: [{ action_type: "offsite_conversion.fb_pixel_complete_registration", value: "26" }],
+      },
+    ]);
+    const store = new InMemorySnapshotStore();
+    const ingestion = new IngestionService(store, client);
+    const logger = new CollectingLogger();
+
+    const campaigns: ManagedCampaignRef[] = [
+      { id: "camp-pixel", metaCampaignId: "meta_pixel_1", connectionId: null, leadEventTypes: ["offsite_conversion.fb_pixel_complete_registration"] },
+    ];
+
+    await runIngestionTick({ campaigns, ingestion, period: PERIOD, logger });
+    const snap = [...store.rows.values()][0];
+    expect(snap.leads).toBe(26);
   });
 
   it("skips campaigns not yet linked to a Meta campaign", async () => {

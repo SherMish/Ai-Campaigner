@@ -6,6 +6,42 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-14 — AIC-87: the lead definition becomes per-campaign, not a global constant
+Prompted by connecting a real Pixel-conversion campaign
+(`free_beta_signups_leads`, objective OUTCOME_LEADS, `promoted_object.custom_event_type:
+COMPLETE_REGISTRATION`) — read-only probed before touching anything, confirmed
+its real Insights `actions` carry `offsite_conversion.fb_pixel_complete_registration: 26`
+and zero `onsite_conversion.messaging_conversation_started`, the only thing
+`extractLeads` counted. Connected as-is, 26 real registrations on ₪205.06 of
+spend would have ingested as 0 leads — a working campaign rendered as a
+catastrophically failing one.
+
+New `managed_campaigns.lead_event_types TEXT[]` (migration 036, default
+reproduces today's WhatsApp constant exactly) + `tracking_pixel_id`.
+`extractLeads(actions, priority = LEAD_ACTION_PRIORITY)` gains an optional,
+defaulted second parameter — same backward-compat trick as AIC-77a's
+`resolveThresholds`, every existing call site unchanged. Threaded through the
+TWO independent sites that turn raw actions into a leads count: ingestion
+(`normalizeRow` → `ManagedCampaignRef`/`listManagedCampaigns`) and
+`GraphCampaignAdapter.getLifetimeTotals` (→ `GenCampaign`/
+`listEligibleForGeneration`, backing `leads_to_date` and the dashboard's
+all-time range) — a real "missed consumer" risk, same class as AIC-70/75, now
+closed at both sites with dedicated tests. Deliberately NOT threaded: the
+operator explorer (would need a `Map<metaCampaignId, string[]>` across a whole
+ad account — disproportionate for a diagnostic-only surface) and the env-gated
+boot probe (account-level, no single campaign's definition applies) — both
+left on the WhatsApp default with an explicit comment, a documented gap rather
+than a silent one.
+
+Test-first (the Pixel campaign's real action shape reproduced in a regression
+test proving it counts 0 under the old default). Full server suite green (364
+unit), typecheck clean. Docs:
+[METRICS.md](METRICS.md#lead-aic-87-per-campaign-not-a-global-constant),
+[DATA_MODEL.md](DATA_MODEL.md).
+
+Companion tickets AIC-88 (tracking-health guard) and connecting the campaign
+to a real customer follow in separate commits/pushes.
+
 ### 2026-08-14 — Bugfix: hero card and pending-rec card contradicted each other
 Live user report: the dashboard hero said "הכל עובד כרגיל" (everything's
 working normally, nothing needs your attention) directly above a second card

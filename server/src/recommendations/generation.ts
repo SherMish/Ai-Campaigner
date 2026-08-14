@@ -38,8 +38,12 @@ export interface CooldownReader {
 export interface LeadsReader {
   getLifetimeLeads(metaCampaignId: string): Promise<number>;
   // Lifetime leads + spend in one call. Optional so existing doubles that
-  // only implement getLifetimeLeads keep working.
-  getLifetimeTotals?(metaCampaignId: string): Promise<{ leads: number; spendAgorot: number }>;
+  // only implement getLifetimeLeads keep working. AIC-87: `leadEventTypes`
+  // is the campaign's own lead definition — this is the SECOND independent
+  // site (besides ingestion) that turns raw Insights actions into a leads
+  // count, and it must use the same per-campaign definition or leads_to_date
+  // silently disagrees with everything else the customer sees.
+  getLifetimeTotals?(metaCampaignId: string, leadEventTypes?: readonly string[]): Promise<{ leads: number; spendAgorot: number }>;
 }
 
 // The scheduled recommendation evaluator (AIC-9). It closes the engine loop:
@@ -55,6 +59,8 @@ export interface GenCampaign {
   customerId: string | null;
   // Per-account rule threshold overrides (AIC-77a, managed_campaigns.threshold_overrides).
   thresholdOverrides?: Record<string, number> | null;
+  // AIC-87: this campaign's own lead definition (managed_campaigns.lead_event_types).
+  leadEventTypes?: readonly string[] | null;
 }
 
 export interface GenerationSummary {
@@ -74,8 +80,9 @@ export async function listEligibleForGeneration(pool: pg.Pool): Promise<GenCampa
     meta_campaign_id: string;
     customer_id: string | null;
     threshold_overrides: Record<string, number>;
+    lead_event_types: string[];
   }>(
-    `SELECT mc.id, mc.meta_campaign_id, mc.customer_id, mc.threshold_overrides
+    `SELECT mc.id, mc.meta_campaign_id, mc.customer_id, mc.threshold_overrides, mc.lead_event_types
      FROM managed_campaigns mc
      JOIN meta_connections conn ON conn.customer_id = mc.customer_id
      WHERE mc.status = 'active'
@@ -88,6 +95,7 @@ export async function listEligibleForGeneration(pool: pg.Pool): Promise<GenCampa
     metaCampaignId: r.meta_campaign_id,
     customerId: r.customer_id,
     thresholdOverrides: r.threshold_overrides,
+    leadEventTypes: r.lead_event_types,
   }));
 }
 
@@ -163,7 +171,7 @@ export async function runGenerationTick(deps: {
     if (deps.leadsReader) {
       try {
         const r = deps.leadsReader.getLifetimeTotals
-          ? await deps.leadsReader.getLifetimeTotals(campaign.metaCampaignId)
+          ? await deps.leadsReader.getLifetimeTotals(campaign.metaCampaignId, campaign.leadEventTypes ?? undefined)
           : { leads: await deps.leadsReader.getLifetimeLeads(campaign.metaCampaignId), spendAgorot: undefined };
         await deps.recordLeadsToDate?.(campaign, r.leads, r.spendAgorot);
       } catch (e) {

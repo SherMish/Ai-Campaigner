@@ -8,6 +8,9 @@ export interface ManagedCampaignRef {
   id: string; // our managed_campaigns.id
   metaCampaignId: string | null; // null until linked to a Meta campaign
   connectionId: string | null;
+  // AIC-87: this campaign's own lead definition (managed_campaigns.lead_event_types).
+  // Undefined falls through to extractLeads' WhatsApp default.
+  leadEventTypes?: readonly string[];
 }
 
 export class IngestionService {
@@ -19,11 +22,11 @@ export class IngestionService {
   // Pull Insights for one campaign and upsert normalized snapshots. Idempotent
   // per (campaign, grain, object, period) via the store. Returns rows written.
   async ingestCampaign(
-    campaign: { id: string; metaCampaignId: string },
+    campaign: { id: string; metaCampaignId: string; leadEventTypes?: readonly string[] },
     period: InsightsPeriod,
   ): Promise<number> {
     const raw = await this.client.getInsights(campaign.metaCampaignId, period);
-    const snaps = raw.map((r) => normalizeRow(r, campaign.id, period));
+    const snaps = raw.map((r) => normalizeRow(r, campaign.id, period, campaign.leadEventTypes));
     return this.store.upsert(snaps);
   }
 
@@ -33,13 +36,13 @@ export class IngestionService {
   // would double-count (a real live bug: 1 lead read as 3). Also the series
   // behind the leads-per-week graph.
   async ingestDaily(
-    campaign: { id: string; metaCampaignId: string },
+    campaign: { id: string; metaCampaignId: string; leadEventTypes?: readonly string[] },
     period: InsightsPeriod,
   ): Promise<number> {
     if (!this.client.getDailyInsights) return 0;
     const days = await this.client.getDailyInsights(campaign.metaCampaignId, period);
     const snaps = days.map(({ date, row }) =>
-      normalizeRow(row, campaign.id, { start: date, end: date }),
+      normalizeRow(row, campaign.id, { start: date, end: date }, campaign.leadEventTypes),
     );
     return this.store.upsert(snaps);
   }
@@ -99,9 +102,15 @@ export async function runIngestionTick(deps: {
 
     if (!c.metaCampaignId) continue; // not linked to a Meta campaign yet
 
+    // AIC-87: this campaign's own lead definition, carried on every ingest
+    // call below (primary window, extras, and the daily series) — a missed
+    // one of these three would silently ingest the wrong lead count for
+    // exactly this campaign, not fail loudly.
+    const leadEventTypes = c.leadEventTypes;
+
     try {
       const n = await ingestion.ingestCampaign(
-        { id: c.id, metaCampaignId: c.metaCampaignId },
+        { id: c.id, metaCampaignId: c.metaCampaignId, leadEventTypes },
         period,
       );
       summary.snapshots += n;
@@ -115,7 +124,7 @@ export async function runIngestionTick(deps: {
     for (const extra of extraPeriods) {
       try {
         summary.snapshots += await ingestion.ingestCampaign(
-          { id: c.id, metaCampaignId: c.metaCampaignId },
+          { id: c.id, metaCampaignId: c.metaCampaignId, leadEventTypes },
           extra,
         );
       } catch (err) {
@@ -127,7 +136,7 @@ export async function runIngestionTick(deps: {
     if (deps.dailyPeriod) {
       try {
         summary.snapshots += await ingestion.ingestDaily(
-          { id: c.id, metaCampaignId: c.metaCampaignId },
+          { id: c.id, metaCampaignId: c.metaCampaignId, leadEventTypes },
           deps.dailyPeriod,
         );
       } catch (err) {

@@ -19,6 +19,7 @@ async function listManagedCampaigns(
   const { rows } = await pool.query(
     `SELECT mc.id,
             mc.meta_campaign_id,
+            mc.lead_event_types,
             conn.id AS connection_id
      FROM managed_campaigns mc
      JOIN customers c        ON c.id = mc.customer_id
@@ -29,6 +30,8 @@ async function listManagedCampaigns(
     id: r.id,
     metaCampaignId: r.meta_campaign_id ?? null,
     connectionId: r.connection_id ?? null,
+    // AIC-87: threaded to every ingest call in runIngestionTick.
+    leadEventTypes: r.lead_event_types ?? undefined,
   }));
 }
 

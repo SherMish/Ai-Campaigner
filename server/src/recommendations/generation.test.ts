@@ -506,6 +506,31 @@ describe("runGenerationTick — leadsReader/recordLeadsToDate", () => {
     expect(recorded).toEqual({ campaignId: "camp-1", leadsToDate: 4 });
   });
 
+  // AIC-87: leads_to_date is the SECOND independent site that calls
+  // extractLeads (the first is ingestion) — a Pixel campaign's lead_event_types
+  // must reach getLifetimeTotals too, or leads_to_date silently reads 0 for a
+  // campaign whose real leads render correctly everywhere else.
+  it("threads the campaign's lead_event_types to getLifetimeTotals", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    const recs = new InMemoryRecommendationStore();
+    const pixelCamp: GenCampaign = { ...CAMP, leadEventTypes: ["offsite_conversion.fb_pixel_complete_registration"] };
+    let seenTypes: readonly string[] | undefined;
+    await runGenerationTick({
+      campaigns: [pixelCamp], reader: okReader(3000),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      leadsReader: {
+        getLifetimeLeads: async () => 0,
+        getLifetimeTotals: async (_id, leadEventTypes) => {
+          seenTypes = leadEventTypes;
+          return { leads: 26, spendAgorot: 20506 };
+        },
+      },
+      recordLeadsToDate: async () => {},
+    });
+    expect(seenTypes).toEqual(["offsite_conversion.fb_pixel_complete_registration"]);
+  });
+
   it("a lifetime-leads read failure doesn't fail the tick", async () => {
     const snapshots = new InMemorySnapshotStore();
     await seedWeak(snapshots);

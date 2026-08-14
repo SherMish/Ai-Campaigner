@@ -220,13 +220,21 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // summed from the per-day rows (those only cover DAILY_LOOKBACK_DAYS), so
   // it reads these cached lifetime figures instead. That also keeps the daily
   // window from having to grow with campaign age.
-  async getLifetimeTotals(metaCampaignId: string): Promise<{ leads: number; spendAgorot: number }> {
+  //
+  // AIC-87: `leadEventTypes` is the SECOND independent site (besides
+  // ingestion's normalizeRow) that turns raw actions into a leads count —
+  // must use the same per-campaign definition, or leads_to_date silently
+  // disagrees with every other number the customer sees for this campaign.
+  async getLifetimeTotals(
+    metaCampaignId: string,
+    leadEventTypes?: readonly string[],
+  ): Promise<{ leads: number; spendAgorot: number }> {
     const body = await this.get(
       `${metaCampaignId}/insights?level=campaign&fields=actions,spend&date_preset=maximum`,
     );
     const row = (body.data as Array<{ actions?: Array<{ action_type: string; value: string }>; spend?: string }>)?.[0];
     return {
-      leads: extractLeads(row?.actions),
+      leads: extractLeads(row?.actions, leadEventTypes),
       spendAgorot: shekelToAgorot(Number(row?.spend ?? 0) || 0),
     };
   }

@@ -526,4 +526,28 @@ describe("GraphCampaignAdapter getLifetimeLeads (AIC-67 follow-up)", () => {
 
     expect(await adapter.getLifetimeLeads("meta_camp_1")).toBe(0);
   });
+
+  // AIC-87: getLifetimeTotals is the second independent lead-definition site
+  // (besides ingestion) — a Pixel campaign's real conversions must count here too.
+  it("getLifetimeTotals honors a per-campaign lead-event list (AIC-87)", async () => {
+    const mock = vi.fn(async () => ({
+      ok: true, status: 200,
+      json: async () => ({
+        data: [{
+          spend: "205.06",
+          actions: [
+            { action_type: "offsite_conversion.fb_pixel_complete_registration", value: "26" },
+            { action_type: "link_click", value: "156" },
+          ],
+        }],
+      }),
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const r = await adapter.getLifetimeTotals("meta_pixel_1", ["offsite_conversion.fb_pixel_complete_registration"]);
+
+    expect(r.leads).toBe(26);
+    expect(r.spendAgorot).toBe(20506);
+  });
 });

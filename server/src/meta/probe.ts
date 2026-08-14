@@ -57,8 +57,12 @@ export async function runMetaProbe(log: Logger): Promise<void> {
     if (ins.ok) {
       readOk = true;
       const row = ((ins.body.data as Array<Record<string, unknown>>) ?? [])[0] ?? {};
+      // AIC-87: this is an ACCOUNT-level read (proves the token can read
+      // Insights at all), not a single campaign's — there is no one
+      // lead_event_types to apply here. Deliberately left on extractLeads'
+      // WhatsApp default; the number is a smoke-test signal, not a real count.
       const leads = extractLeads(row.actions as never);
-      log.info(`[meta-probe] INSIGHTS read OK on ${act}: spend=${row.spend ?? "0"} leads(7d)=${leads}`);
+      log.info(`[meta-probe] INSIGHTS read OK on ${act}: spend=${row.spend ?? "0"} leads(7d, WhatsApp-default only)=${leads}`);
     } else {
       const c = classifyGraphError(ins.status, ins.body as GraphErrorBody);
       log.error(`[meta-probe] INSIGHTS read FAILED on ${act} → health=${c.health} :: ${c.detail}`);
