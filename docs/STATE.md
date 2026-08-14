@@ -6,6 +6,49 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-14 — Bugfix: hero card and pending-rec card contradicted each other
+Live user report: the dashboard hero said "הכל עובד כרגיל" (everything's
+working normally, nothing needs your attention) directly above a second card
+saying "כדאי להוסיף עוד מודעות" (worth adding more ads) — the product
+contradicting itself on one screen. Root cause: `deriveHomeState` has never
+known about `pendingRecommendations` — `homeState: "ok"`/`"collecting"`
+always rendered fixed, generic hero copy regardless of whether a real
+recommendation existed. The two cards were computed and rendered completely
+independently and could always disagree; the specific screenshot just made it
+visible for the first time.
+
+Fixed by merging them (`Home.tsx`): `hero()` now takes `noRecReason` and,
+for `ok`/`collecting`, sources title/body from `noRecCard()` — the SAME
+engine-reason copy the reassurance card already used (only the badge stays
+fixed). When a recommendation is pending for those two states, the hero is
+replaced entirely by the pending-rec teaser (per-type headline, from the
+AIC-86 dashboard-teaser fix below) instead of sitting in a second card below
+a contradictory hero. `attention`/`paused`/`stopped`/`ready_to_launch` are
+unaffected — those states already outrank a recommendation, so a pending rec
+there (believed unreachable in practice) stays a small supplementary card,
+not a merge candidate. Trimmed the now-dead `states.ok`/`.collecting`
+title/body strings and the long-dead, never-reachable `states.rec` object
+(`web/src/strings.ts`). Browser-verified both merged states live (pending
+advisory rec → single teaser hero; no pending rec → single reassurance hero)
+against seeded throwaway accounts, then deleted them. Web build clean
+(no frontend unit tests for `Home.tsx` — browser-verified per convention).
+Docs: [customer-overview.md](features/customer-overview.md).
+
+### 2026-08-14 — Fix: audience-details panel window silently disagreed with the KPI cards
+Live user report: top KPIs showed ₪78.6/6 leads, the "פירוט" (details) panel
+just below showed ₪43.9/5 leads for the same account — no label explaining
+why. Not a double-count bug (each number was independently correct for its
+own window): the top KPIs follow the customer's range switcher (a *trailing*
+window that includes today), while the details panel always reads the
+engine's fixed 7-*complete*-day window (excluding today, the same one
+recommendations are evaluated on) — completely unrelated to the switcher.
+Two honest, differently-scoped numbers with no label read as broken. Fixed
+by adding an explicit window note (`D.windowNote`, `web/src/strings.ts`)
+whenever the panel is open, rather than changing the panel's window itself
+(which must keep matching what the engine evaluated). Browser-verified live
+against a seeded throwaway account reproducing the exact discrepancy, then
+deleted it. Web build clean. Docs: [customer-overview.md](features/customer-overview.md).
+
 ### 2026-08-14 — Bugfix: dashboard teaser stated the wrong recommendation type
 Live user report, right after AIC-86 shipped: the dashboard said "worth
 pausing one of the ads," but the actual pending recommendation was "add more

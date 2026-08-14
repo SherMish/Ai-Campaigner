@@ -63,7 +63,15 @@ const PILL: Record<HomeState, "ok" | "info" | "neutral" | "attn"> = {
 // Which status-hero copy + optional CTA each real state shows. A `launch: true`
 // hero opens the launch-approval modal instead of navigating (the only in-place
 // action); the rest either link to a real screen or carry no button.
-function hero(state: HomeState, attentionKind: CustomerOverview["attentionKind"], readyToBuild: boolean): { badge: string; title: string; body: string; cta?: { to: string; label: string }; launch?: { label: string } } {
+//
+// Bug fix, 2026-08-14: "ok"/"collecting" used to carry their own fixed copy
+// ("הכל עובד כרגיל") completely independent of the engine's actual reasoning —
+// so a campaign with a real pending recommendation could show a hero claiming
+// nothing needed attention, directly above a card saying otherwise. Both
+// states now read through the SAME noRecCard() reasoning the pending-rec
+// teaser already used, so the hero and the "why (not)" card can never again
+// say different things about the same campaign.
+function hero(state: HomeState, attentionKind: CustomerOverview["attentionKind"], readyToBuild: boolean, noRecReason: string | null): { badge: string; title: string; body: string; cta?: { to: string; label: string }; launch?: { label: string } } {
   switch (state) {
     case "attention":
       // A delivery problem (AIC-39) reads differently from a lost connection.
@@ -76,16 +84,33 @@ function hero(state: HomeState, attentionKind: CustomerOverview["attentionKind"]
       return { badge: h.states.paused.badge, title: h.states.paused.title, body: h.states.paused.body };
     case "stopped":
       return { badge: h.states.stopped.badge, title: h.states.stopped.title, body: h.states.stopped.body };
-    case "collecting":
-      return h.states.collecting;
     case "no_campaign":
       // Connected + ready → the guided builder (AIC-52); still onboarding/
       // connecting → the existing setup-status copy, unchanged.
       if (readyToBuild) return { ...h.states.createCampaign, cta: { to: "/app/builder", label: h.states.createCampaign.cta } };
       return { ...h.states.setup, cta: { to: "/onboarding", label: h.states.setup.cta } };
-    default:
-      return h.states.ok;
+    case "collecting":
+    case "ok":
+    default: {
+      const nr = noRecCard(noRecReason);
+      return { badge: state === "collecting" ? h.states.collecting.badge : h.states.ok.badge, title: nr.title, body: nr.body, cta: nr.cta };
+    }
   }
+}
+
+// The pending-recommendation teaser — its own eyebrow/title/CTA layout,
+// shared between the merged hero (state ok/collecting) and the rare fallback
+// case (a pending rec surviving alongside a more urgent state).
+function RecTeaser({ ov }: { ov: CustomerOverview }) {
+  return (
+    <div className="rec">
+      <div className="k">{h.recWaitingTitle}</div>
+      <h3>{(ov.pendingRecommendationType && a.recDetail.titles[ov.pendingRecommendationType]) || h.recWaitingTitle}</h3>
+      <div className="actions">
+        <Link className="btn btn-primary btn-sm" to="/app/recommendations">{h.view}</Link>
+      </div>
+    </div>
+  );
 }
 
 const fmtDate = (iso: string) =>
@@ -200,8 +225,18 @@ export function Home() {
 
   const state = ov.homeState;
   const readyToBuild = ov.connection?.accessHealth === "ok" && !!ov.connection.adAccount && !!ov.connection.pageId;
-  const hd = hero(state, ov.attentionKind, readyToBuild);
+  const hd = hero(state, ov.attentionKind, readyToBuild, ov.campaign?.noRecReason ?? null);
+  // A pending recommendation (including the AIC-86 advisory type, which fires
+  // before any evidence gate) outranks the "nothing to report" hero — it IS
+  // the current status. Scoped to ok/collecting: attention/paused/stopped
+  // already say something more urgent, so a pending rec there is supplementary
+  // rather than contradictory, and stays in its own small fallback card below.
+  const hasPendingHero = (state === "ok" || state === "collecting") && ov.pendingRecommendations > 0;
   const r = ov.readout;
+  // The dashboard shows today while the engine still evaluates on complete
+  // days — so "3 פניות היום" can sit next to "עדיין אוספים נתונים". Said
+  // explicitly below the hero, rather than let it read as a contradiction.
+  const todayActive = !!r && (r.today.leads > 0 || r.today.spendAgorot > 0);
   // One explicit window, chosen by the customer — replaces the old
   // "today card + separate 7-day KPIs" split, which showed two sets of
   // numbers for the same campaign and read as a contradiction.
@@ -241,18 +276,27 @@ export function Home() {
       <div className="dash-grid">
         {/* MAIN column */}
         <div className="dash-main">
-          {/* status hero */}
-          <div className="card">
-            <div className="row between" style={{ flexWrap: "wrap", gap: 14 }}>
-              <div>
-                <StatusPill variant={PILL[state]}>{hd.badge}</StatusPill>
-                <h2 style={{ fontSize: "1.35rem", margin: "12px 0 8px" }}>{hd.title}</h2>
-                <p className="muted" style={{ maxWidth: "42em" }}>{hd.body}</p>
+          {/* status hero — a pending recommendation (ok/collecting states
+              only) replaces the "nothing to report" copy entirely, rather
+              than sitting in a second card that could say the opposite. */}
+          {hasPendingHero ? (
+            <RecTeaser ov={ov} />
+          ) : (
+            <div className="card">
+              <div className="row between" style={{ flexWrap: "wrap", gap: 14 }}>
+                <div>
+                  <StatusPill variant={PILL[state]}>{hd.badge}</StatusPill>
+                  <h2 style={{ fontSize: "1.35rem", margin: "12px 0 8px" }}>{hd.title}</h2>
+                  <p className="muted" style={{ maxWidth: "42em" }}>{hd.body}</p>
+                  {todayActive && (state === "ok" || state === "collecting") && (
+                    <p className="muted" style={{ marginTop: 8, fontSize: "0.85rem" }}>{h.noRec.completeDaysNote}</p>
+                  )}
+                </div>
+                {hd.cta && <Link className="btn btn-primary btn-sm" to={hd.cta.to}>{hd.cta.label}</Link>}
+                {hd.launch && <button className="btn btn-primary btn-sm" onClick={() => setLaunchOpen(true)}>{hd.launch.label}</button>}
               </div>
-              {hd.cta && <Link className="btn btn-primary btn-sm" to={hd.cta.to}>{hd.cta.label}</Link>}
-              {hd.launch && <button className="btn btn-primary btn-sm" onClick={() => setLaunchOpen(true)}>{hd.launch.label}</button>}
             </div>
-          </div>
+          )}
 
           {launchOpen && <LaunchModal onClose={() => setLaunchOpen(false)} />}
 
@@ -289,36 +333,17 @@ export function Home() {
           {/* opt-in per-audience / per-creative details (AIC-37) — collapsed by default */}
           {ov.campaign && <AudienceDetails activeAds={activeAds} />}
 
-          {/* a pending recommendation outranks the reassurance card. Headline
-              comes from the SAME per-type map the detail screen uses
-              (a.recDetail.titles) — never a second, hand-written guess that
-              can say something different from what's actually pending. */}
-          {ov.pendingRecommendations > 0 ? (
-            <div className="rec">
-              <div className="k">{h.recWaitingTitle}</div>
-              <h3>{(ov.pendingRecommendationType && a.recDetail.titles[ov.pendingRecommendationType]) || h.recWaitingTitle}</h3>
-              <div className="actions">
-                <Link className="btn btn-primary btn-sm" to="/app/recommendations">{h.view}</Link>
-              </div>
-            </div>
-          ) : (state === "ok" || state === "collecting") ? (
-            (() => {
-              const nr = noRecCard(ov.campaign?.noRecReason ?? null);
-              // The dashboard now shows today while the engine still
-              // evaluates on complete days — so "3 פניות היום" can sit next
-              // to "עדיין אוספים נתונים". Say why, rather than let it read as
-              // the product contradicting itself (AIC-64's job).
-              const todayActive = !!r && (r.today.leads > 0 || r.today.spendAgorot > 0);
-              return (
-                <div className="card">
-                  <StatusPill variant="ok">{nr.title}</StatusPill>
-                  <p className="muted" style={{ marginTop: 12 }}>{nr.body}</p>
-                  {todayActive && <p className="muted" style={{ marginTop: 8, fontSize: "0.85rem" }}>{h.noRec.completeDaysNote}</p>}
-                  {nr.cta && <Link className="btn btn-outline btn-sm" style={{ marginTop: 12 }} to={nr.cta.to}>{nr.cta.label}</Link>}
-                </div>
-              );
-            })()
-          ) : null}
+          {/* Bug fix, 2026-08-14: a pending recommendation while state is ok/
+              collecting is now folded straight into the hero above (see
+              hasPendingHero) — the old design showed it a SECOND time here,
+              stacked directly under a hero that said "nothing needs your
+              attention", which read as the product contradicting itself.
+              This fallback only fires for the rare case a rec is pending
+              while a MORE urgent state (attention/paused/stopped) already
+              owns the hero — there it's supplementary, not contradictory. */}
+          {!hasPendingHero && state !== "ok" && state !== "collecting" && ov.pendingRecommendations > 0 && (
+            <RecTeaser ov={ov} />
+          )}
 
           {/* weekly feedback */}
           {ov.leadQuality && <LeadQualityCard leadQuality={ov.leadQuality} />}
@@ -566,6 +591,7 @@ function AudienceDetails({ activeAds }: { activeAds: number }) {
 
       {open && (
         <div style={{ marginTop: 10 }}>
+          <p className="muted" style={{ fontSize: "0.8rem", marginBottom: 10 }}>{D.windowNote}</p>
           {ctlFailed && <p className="muted" style={{ color: "var(--orange)", marginBottom: 10 }}>{CT.failed}</p>}
           {loading ? (
             <p className="muted">{a.loading}</p>

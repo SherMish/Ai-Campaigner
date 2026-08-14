@@ -50,6 +50,42 @@ the two can never say different things again. The teaser's CTA is also
 neutral ("view", not "view and approve") since not every type has an
 approval step.
 
+### The hero and the "why (not)" card were two independent signals (bug fix, 2026-08-14)
+
+Fixing the teaser's *type* (above) didn't fix a bigger, structural version of
+the same class of bug: the status hero at the top of Home and the pending-rec
+teaser/reassurance card below it were computed **completely independently**.
+`deriveHomeState` has never known about `pendingRecommendations` — it reasons
+only over connection/campaign/delivery rows — so `homeState: "ok"` renders a
+fixed "הכל עובד כרגיל" ("everything's working normally") hero regardless of
+whether a real recommendation is sitting right below it. Live on the real
+account: the hero said nothing needed attention while the very next card said
+"כדאי להוסיף עוד מודעות" (worth adding more ads) — the product contradicting
+itself on the same screen.
+
+Fixed by merging the two into one card, first on the page (`Home.tsx`):
+- For `homeState: "ok"`/`"collecting"`, `hero()` no longer carries its own
+  fixed title/body — it now takes `noRecReason` and sources both from
+  `noRecCard()`, the SAME engine-reason copy the reassurance card already
+  used. Only the badge ("פעיל"/"אוספים נתונים") stays a fixed, state-driven
+  fact — accurate independent of what the engine currently recommends.
+- When `pendingRecommendations > 0` **and** state is `ok`/`collecting`, the
+  hero card is replaced entirely by the pending-rec teaser (`RecTeaser`,
+  reading `recDetail.titles[pendingRecommendationType]` per the fix above) —
+  there is no longer a second card repeating or contradicting it.
+- For `attention`/`paused`/`stopped`/`ready_to_launch` — states that already
+  say something more urgent than a recommendation — the hero is unaffected,
+  and a pending rec (if one somehow coexists, believed unreachable today
+  since the rule engine suppresses generation during delivery problems) still
+  renders as a small standalone card, since it's supplementary there, not
+  contradictory.
+
+`strings.he.app.home.states.ok`/`.collecting` were trimmed to `{ badge }`
+only — their `title`/`body` are dead now that `noRecCard()` is the single
+source for that copy. The long-dead `states.rec` (leftover from before
+`pendingRecommendations` existed as a separate signal, never wired to any
+reachable `HomeState` value) was deleted rather than left to rot.
+
 ## homeState (the single Home headline)
 
 Derived server-side, highest-priority first:
@@ -63,8 +99,10 @@ Derived server-side, highest-priority first:
 | `collecting` | campaign active but no snapshot data (no spend, no leads, no creatives) |
 | `ok` | active with data |
 
-The client maps each state to hero copy in `strings.he.app.home.states`; only
-states with a real destination carry a CTA (`attention` → `/connect`,
+The client maps each state to hero copy in `strings.he.app.home.states` —
+except `ok`/`collecting`, whose title/body come from `noRecCard()` instead
+(see "Why there's no recommendation" below; only their badge is fixed).
+Only states with a real destination carry a CTA (`attention` → `/connect`,
 `no_campaign` → `/onboarding`). `attention` carries a second signal,
 `attentionKind: 'connection' | 'delivery' | null` (AIC-39) — a lost Meta
 connection and a not-delivering ad set are different problems with different
@@ -104,16 +142,21 @@ headline state.
 
 ## Why there's no recommendation (AIC-64)
 
-When `homeState` is `ok` or `collecting`, Home's reassurance card no longer
-shows one generic message — `campaign.noRecReason`/`noRecDetail` (cached by
-the engine on `managed_campaigns`, see [RULES.md](../RULES.md#why-theres-no-recommendation-aic-64))
+When `homeState` is `ok` or `collecting`, the status hero itself (not a
+separate reassurance card below it — see "The hero and the 'why (not)' card
+were two independent signals" above) no longer shows one generic message —
+`campaign.noRecReason`/`noRecDetail` (cached by the engine on
+`managed_campaigns`, see [RULES.md](../RULES.md#why-theres-no-recommendation-aic-64))
 picks distinct copy per reason (`stable`/`collecting`/`budget_below_threshold`/
-`single_ad_set`, `web/src/strings.ts` → `home.noRec`), with a raise-budget CTA
+`no_comparable_audiences`/`below_object_evidence_floor`/`no_comparable_creatives`/
+`cooling_down`, `web/src/strings.ts` → `home.noRec`), with a raise-budget CTA
 to `/app/settings` for `budget_below_threshold`. `delivery_blocked` never
 reaches this card — `deriveHomeState` already routes a delivery problem to
 `attention` first, so the two surfaces can't disagree. `noRecReason` is
-`null` before the engine's first tick for a campaign; the card falls back to
-the original generic copy in that case.
+`null` before the engine's first tick for a campaign; the hero falls back to
+the original generic copy (`noActionTitle`/`noAction`) in that case. A
+pending recommendation (any type, including AIC-86's advisory
+`add_creatives_for_comparison`) outranks this reasoning entirely — see above.
 
 ## Opt-in audience details (AIC-37, redesigned AIC-73)
 
@@ -129,6 +172,22 @@ own per-creative breakdown. Backed by `services/campaign-audiences.ts`
 **Deferred AC:** instrumenting the toggle's open-rate needs the AIC-28 metrics
 layer, which doesn't exist yet — there's no event sink to write to, so this
 isn't half-built here.
+
+**The panel's window silently disagreed with the KPI cards above it (bug fix,
+2026-08-14).** The top KPI cards follow the customer's range switcher
+(day/week/month/all — `ranges[range]`, a *trailing* window that INCLUDES
+today). `buildCampaignAudiences` always reads `rollingPeriods(ref).current` —
+the engine's own fixed 7-*complete*-day window (EXCLUDING today), the same
+one recommendations are evaluated on, unrelated to the range switcher.
+Confirmed live: top KPIs showed ₪78.6/6 leads (week, includes today) while
+the panel showed ₪43.9/5 leads (the fixed engine window) for the same
+account, no label explaining why. Not a double-count bug (each number was
+independently correct for its own window) — a missing label that made two
+honest, differently-scoped numbers on one screen read as broken. Fixed with
+`D.windowNote` (`web/src/strings.ts`), a line stating the window explicitly
+whenever the panel is open — the panel's window itself was left as-is
+(deliberately: it must keep matching what the engine evaluated, not whatever
+range the customer happens to have selected).
 
 **AIC-73 fixed the actual root cause of the raw-name leak.**
 `deriveAudienceLabels` used to label a dimension only when it DIFFERED across

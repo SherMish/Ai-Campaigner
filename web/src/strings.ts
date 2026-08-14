@@ -531,9 +531,14 @@ export const strings = {
         graphWeekPrefix: "שבוע",
         graphTotalSuffix: "סה״כ",
         states: {
-          ok: { badge: "פעיל", title: "הכל עובד כרגיל", body: "הקמפיין פעיל ואין כרגע משהו שדורש את תשומת הלב שלך." },
-          rec: { badge: "מחכה לך", title: "יש לנו המלצה אחת", body: "מצאנו שינוי שיכול לשפר את הקמפיין ומחכה לאישור שלך.", cta: "לצפייה בהמלצה" },
-          collecting: { badge: "אוספים נתונים", title: "רק התחלנו לאסוף נתונים", body: "עדיין מוקדם להסיק מסקנות. אנחנו ממשיכים לעקוב." },
+          // Bug fix, 2026-08-14: "ok"/"collecting" no longer carry their own
+          // fixed title/body — hero() now sources both from noRecCard(), the
+          // same engine-reason copy the pending-rec card always used, so the
+          // hero and "why (not)" reasoning can never again disagree. Only the
+          // badge stays fixed (still an honest "is the campaign active" fact,
+          // independent of what the engine currently recommends).
+          ok: { badge: "פעיל" },
+          collecting: { badge: "אוספים נתונים" },
           paused: { badge: "מושהה", title: "הקמפיין כרגע מושהה", body: "הקמפיין מושהה ואינו מוציא תקציב או מביא פניות עד שנחזיר אותו לפעילות. לחידוש הפעילות דברו איתנו.", cta: "" },
           attention: { badge: "צריך טיפול", title: "איבדנו גישה לחשבון Meta", body: "הקמפיין עשוי להמשיך לרוץ, אבל לא נוכל לנהל אותו עד לחיבור מחדש.", cta: "חיבור מחדש" },
           setup: { badge: "בהקמה", title: "אנחנו מקימים את החשבון", body: "החשבון נפתח. אחרי שיחת ההיכרות וחיבור Meta נתחיל לנהל את הקמפיין ותוכלו לראות כאן נתונים.", cta: "לסטטוס ההקמה" },
@@ -589,6 +594,11 @@ export const strings = {
         details: {
           show: "הצג פירוט",
           hide: "הסתר פירוט",
+          // The KPI cards above follow the range switcher; this panel always
+          // shows the engine's own fixed 7-complete-days window (the same one
+          // recommendations are evaluated on) — without this note the two
+          // totals silently disagree and read as broken, not as two periods.
+          windowNote: "הנתונים כאן מבוססים על 7 הימים המלאים האחרונים (ללא היום), ללא קשר לתקופה שנבחרה למעלה.",
           empty: "עדיין אין מספיק נתונים לפירוט לפי קהל.",
           audienceCol: "קהל",
           spendCol: "הוצאה",
