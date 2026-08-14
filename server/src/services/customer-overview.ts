@@ -1,5 +1,5 @@
 import type pg from "pg";
-import type { Agorot, CampaignStatus } from "@aic/shared";
+import type { Agorot, CampaignStatus, RecommendationType } from "@aic/shared";
 import { buildCampaignReadout, type CampaignReadout } from "./readout.js";
 import {
   listCustomerActionHistory,
@@ -70,6 +70,15 @@ export interface CustomerOverview {
   leadQuality: LeadQualityStatus | null;
   recentActivity: CondensedEntry[];
   pendingRecommendations: number;
+  // The pending rec's own type (AIC-86 regression fix, 2026-08-14): the
+  // dashboard teaser used to guess a fixed headline ("worth pausing an ad")
+  // from nothing but this count, which went wrong the moment a genuinely
+  // different type (add_creatives_for_comparison) could be pending. Null
+  // when there's none. Never more than one — RULES.md's precedence
+  // guarantee (evaluateCampaign returns exactly one draft; staleness expires
+  // any proposed rec the fresh draft no longer matches) — so this is always
+  // in sync with pendingRecommendations > 0.
+  pendingRecommendationType: RecommendationType | null;
   // Which kind of "needs attention" the customer sees, so Home shows the right
   // message: a lost Meta connection vs a delivery problem (AIC-39).
   attentionKind: "connection" | "delivery" | null;
@@ -138,6 +147,7 @@ export async function buildCustomerOverview(
       leadQuality: null,
       recentActivity: [],
       pendingRecommendations: 0,
+      pendingRecommendationType: null,
       attentionKind: null,
       homeState: "no_campaign",
     };
@@ -288,16 +298,21 @@ export async function buildCustomerOverview(
     await listCustomerActionHistory(pool, customerId),
   ).slice(0, 8);
 
-  const pendingRecommendations = campaign
-    ? Number(
-        (
-          await pool.query<{ n: number }>(
-            `SELECT count(*)::int AS n FROM recommendations WHERE campaign_id = $1 AND state = 'proposed'`,
-            [campaign.id],
-          )
-        ).rows[0].n,
-      )
-    : 0;
+  // Fetches the row(s), not just a count, so the dashboard teaser can show
+  // the REAL pending recommendation's type instead of guessing (the AIC-86
+  // regression this fixes). `proposed` is at most one per campaign by
+  // construction (RULES.md's precedence guarantee), but this doesn't assume
+  // that to derive the count.
+  const proposedRecs = campaign
+    ? (
+        await pool.query<{ type: RecommendationType }>(
+          `SELECT type FROM recommendations WHERE campaign_id = $1 AND state = 'proposed'`,
+          [campaign.id],
+        )
+      ).rows
+    : [];
+  const pendingRecommendations = proposedRecs.length;
+  const pendingRecommendationType = proposedRecs[0]?.type ?? null;
 
   const attentionKind: "connection" | "delivery" | null =
     connection && connection.accessHealth !== "ok"
@@ -316,6 +331,7 @@ export async function buildCustomerOverview(
     leadQuality,
     recentActivity,
     pendingRecommendations,
+    pendingRecommendationType,
     attentionKind,
     homeState: deriveHomeState(campaign, connection, readout),
   };

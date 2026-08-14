@@ -32,6 +32,24 @@ Every query filters by the customer id resolved from the JWT's user — a custom
 can only ever see their own data. An account with no linked `customer_id`
 returns `homeState: "no_campaign"` with null sections (the Home "setup" state).
 
+### `pendingRecommendationType`, not just a count (bug fix, 2026-08-14)
+
+`pendingRecommendations` (a bare count, ≤1 by construction — RULES.md's
+precedence guarantee) used to be the *only* signal the Home dashboard teaser
+had. The teaser's headline was a single hardcoded string ("worth pausing one
+of the ads") shown for **any** pending type — fine while every acting type
+was a spend change with roughly that shape, wrong the moment AIC-86
+introduced `add_creatives_for_comparison`: the customer saw "pause an ad,"
+clicked through, and found "add more ads" instead.
+
+`pendingRecommendationType` fixes this at the data layer: `buildCustomerOverview`
+now fetches the actual proposed row(s)' `type`, not a `count(*)`. `Home.tsx`'s
+teaser headline reads `recDetail.titles[pendingRecommendationType]` — the
+exact same per-type copy the detail screen (`Recommendations.tsx`) uses — so
+the two can never say different things again. The teaser's CTA is also
+neutral ("view", not "view and approve") since not every type has an
+approval step.
+
 ## homeState (the single Home headline)
 
 Derived server-side, highest-priority first:

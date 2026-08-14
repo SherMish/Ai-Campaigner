@@ -6,6 +6,31 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-14 — Bugfix: dashboard teaser stated the wrong recommendation type
+Live user report, right after AIC-86 shipped: the dashboard said "worth
+pausing one of the ads," but the actual pending recommendation was "add more
+ads." The teaser headline (`Home.tsx`) was a single hardcoded string shown
+for *any* pending type — a leftover from when every acting type was a spend
+change with roughly that shape. `pendingRecommendations` was only ever a
+`count(*)`, never the type, so there was nothing else for the teaser to go
+on. A second string, `recWaitingReason`, carried a fully fabricated example
+(a made-up ₪184 figure) — never actually rendered, but deleted rather than
+left to rot.
+
+Fixed at the data layer: `buildCustomerOverview` now fetches the proposed
+row's actual `type` (new `pendingRecommendationType` field) instead of a bare
+count. `Home.tsx`'s teaser headline reads `recDetail.titles[type]` — the
+exact same per-type copy the detail screen already uses — so the two
+surfaces can't say different things again. The teaser's CTA changed from "view
+and approve" to a neutral "view", since not every type has an approval step
+(the advisory `add_creatives_for_comparison` never did). Test-first
+(`customer-overview.integration.test.ts`). Verified live end-to-end with a
+seeded pending `add_creatives_for_comparison` rec: dashboard, list, and
+detail screen all now say "worth adding more ads," consistently. Full suite
+green (352 unit, 204/206 integration — only the 2 known pre-existing flakes),
+typecheck clean, web build clean. Docs:
+[customer-overview.md](features/customer-overview.md).
+
 ### 2026-08-14 — Bugfix: creativeStats/adsetStats returned duplicate rows for one real object
 Found live while browsing the customer's "audience details" disclosure on the
 just-shipped AIC-85/86: one real ad rendered as three, each with different

@@ -289,13 +289,16 @@ export function Home() {
           {/* opt-in per-audience / per-creative details (AIC-37) — collapsed by default */}
           {ov.campaign && <AudienceDetails activeAds={activeAds} />}
 
-          {/* a pending recommendation outranks the reassurance card */}
+          {/* a pending recommendation outranks the reassurance card. Headline
+              comes from the SAME per-type map the detail screen uses
+              (a.recDetail.titles) — never a second, hand-written guess that
+              can say something different from what's actually pending. */}
           {ov.pendingRecommendations > 0 ? (
             <div className="rec">
               <div className="k">{h.recWaitingTitle}</div>
-              <h3>{h.recWaiting}</h3>
+              <h3>{(ov.pendingRecommendationType && a.recDetail.titles[ov.pendingRecommendationType]) || h.recWaitingTitle}</h3>
               <div className="actions">
-                <Link className="btn btn-primary btn-sm" to="/app/recommendations">{h.viewApprove}</Link>
+                <Link className="btn btn-primary btn-sm" to="/app/recommendations">{h.view}</Link>
               </div>
             </div>
           ) : (state === "ok" || state === "collecting") ? (

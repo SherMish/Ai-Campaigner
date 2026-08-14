@@ -104,6 +104,7 @@ export interface CustomerOverview {
     when: string; summary: string; automated: boolean; result: "success" | "failed";
   }>;
   pendingRecommendations: number;
+  pendingRecommendationType: RecommendationType | null;
   attentionKind: "connection" | "delivery" | null;
   homeState: HomeState;
 }
@@ -111,7 +112,7 @@ export interface CustomerOverview {
 // ── Recommendations (AIC-23) ────────────────────────────────────────────────
 export type RecommendationType =
   | "pause_creative" | "pause_adset" | "increase_budget" | "decrease_budget"
-  | "replace_creative" | "no_action";
+  | "replace_creative" | "no_action" | "add_creatives_for_comparison"; // AIC-86
 export interface CustomerRec {
   id: string;
   type: RecommendationType;

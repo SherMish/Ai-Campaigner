@@ -614,10 +614,15 @@ export const strings = {
           // destructive, so they must not out-rank the audience label.
           moreActions: "עוד",
         },
+        // Bug fix, 2026-08-14: recWaiting used to be one fixed headline
+        // ("worth pausing an ad") shown for ANY pending recommendation type —
+        // wrong the moment a genuinely different type (add creatives) could
+        // be pending. The teaser headline now comes from recDetail.titles[type]
+        // (the same source the detail screen itself uses), so the two can
+        // never say different things. The CTA is neutral — "view", never
+        // "view and approve" — since not every type has an approval step.
         recWaitingTitle: "המלצה שמחכה לך",
-        recWaiting: "כדאי לעצור את אחת המודעות",
-        recWaitingReason: "היא הוציאה ₪184 והביאה פנייה אחת בלבד. שתי המודעות האחרות עובדות טוב יותר.",
-        viewApprove: "לצפייה ולאישור",
+        view: "לצפייה",
         noActionTitle: "אין כרגע משהו שצריך לעשות",
         noAction: "אנחנו ממשיכים לעקוב אחר הקמפיין.",
         // AIC-64: WHY there's no recommendation — distinct, honest copy per

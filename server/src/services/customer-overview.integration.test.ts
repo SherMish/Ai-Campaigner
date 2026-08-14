@@ -166,6 +166,29 @@ d("customer overview (DB + HTTP)", () => {
     expect(ov2!.campaign?.noRecReason).toBeNull();
   });
 
+  // REGRESSION (real, found 2026-08-14 live): the dashboard's "recommendation
+  // waiting" teaser rendered a hardcoded headline ("worth pausing one of the
+  // ads") regardless of what the actual pending recommendation was — because
+  // pendingRecommendations was only ever a bare count, never the type. Once
+  // AIC-86 introduced a genuinely different pending type, the teaser
+  // confidently stated the wrong thing. The customer clicked through to find
+  // "add more ads" behind a headline that said "pause an ad".
+  it("surfaces the pending recommendation's TYPE, not just a count (AIC-86 dashboard mismatch)", async () => {
+    const { userId, campaignId } = await seedChain("pendingtype");
+    let ov = await buildCustomerOverview(pool, userId);
+    expect(ov!.pendingRecommendations).toBe(0);
+    expect(ov!.pendingRecommendationType).toBeNull();
+
+    await pool.query(
+      `INSERT INTO recommendations (campaign_id, type, state, rationale)
+       VALUES ($1, 'add_creatives_for_comparison', 'proposed', 'test')`,
+      [campaignId],
+    );
+    ov = await buildCustomerOverview(pool, userId);
+    expect(ov!.pendingRecommendations).toBe(1);
+    expect(ov!.pendingRecommendationType).toBe("add_creatives_for_comparison");
+  });
+
   it("surfaces the live-synced budget, not the static agreed ceiling (real bug fix)", async () => {
     const { userId, campaignId } = await seedChain("livebudget");
     // seedChain sets agreed_budget_agorot=800; before any engine tick, null.
