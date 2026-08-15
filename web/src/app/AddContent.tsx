@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { normalizeBusinessCategory, resolveAudienceDefault, type BusinessCategory } from "@aic/shared";
-import { strings } from "../strings";
+import { strings, META_BUSINESS_PORTFOLIO_ID } from "../strings";
 import {
   getAdditionContext, getExistingAdSets, getPendingAdditions, approveAddition,
   addAd, addAdSet, ApiError,
@@ -22,6 +22,7 @@ function freshKey(): string {
 export function AddContent() {
   const [phase, setPhase] = useState<"loading" | "not_ready" | "ready" | "error">("loading");
   const [notReadyReason, setNotReadyReason] = useState<AdditionUnavailableReason>("no_campaign");
+  const [idCopied, setIdCopied] = useState(false);
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [mode, setMode] = useState<"ad" | "ad_set">("ad");
 
@@ -176,7 +177,20 @@ export function AddContent() {
             <p className="muted" style={{ marginBottom: 16 }}>{c.missingBody}</p>
             <b>{c.howToFix}</b>
             <ol className="muted" style={{ margin: "8px 0 20px", paddingInlineStart: 20 }}>
-              {c.fixSteps.map((f, i) => <li key={i}>{f}</li>)}
+              {c.fixSteps.map((f, i) => (
+                <li key={i}>
+                  {f}
+                  {i === 0 && (
+                    <div className="copybox" style={{ marginTop: 10 }}>
+                      <span className="mono muted" style={{ fontSize: "0.7rem" }}>{c.businessId}</span>
+                      <b>{META_BUSINESS_PORTFOLIO_ID}</b>
+                      <button onClick={() => { navigator.clipboard?.writeText(META_BUSINESS_PORTFOLIO_ID); setIdCopied(true); }}>
+                        {idCopied ? c.copied : c.copy}
+                      </button>
+                    </div>
+                  )}
+                </li>
+              ))}
             </ol>
             <Link className="btn btn-primary btn-sm" to="/app/settings">{s.goToSettings}</Link>
           </div>

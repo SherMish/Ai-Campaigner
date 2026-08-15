@@ -110,7 +110,16 @@ every screen; responsive at ≤860px (grids collapse, nav hides).
   → the matching card + stepper) with the real name; Connect shows the real
   connection state and "check connection" calls `POST /api/app/connection/recheck`
   (live per-asset verify when a Meta token is set, else the stored health). The
-  business-portfolio-ID copybox is still a placeholder config value (AIC-33).
+  business-portfolio-ID copybox now shows the real value (AIC-33 closed, bug fix
+  2026-08-15) — `META_BUSINESS_PORTFOLIO_ID` (`web/src/strings.ts`, the same
+  `2491237118040524` recorded in [META_SETUP.md](../META_SETUP.md)'s identifiers
+  table), not `strings.he.app.mock.businessId`. Found live: the copybox's copy
+  button worked and looked fully real, so this had shipped a fake, unusable ID
+  ("418 552 907 431") to every real customer reaching the connect step — the
+  fix steps for the additions flow's `missing_page` state
+  ([campaign-builder.md](campaign-builder.md#add-to-an-existing-campaign-aic-63))
+  reuse the same constant and copybox pattern, so there's one real ID, not two
+  that could drift.
 - **Home** (AIC-22): ✅ **now wired** — KPIs/state/sidebar/activity + weekly
   lead-quality all render from `GET /api/app/overview`, see
   [customer-overview.md](customer-overview.md). The dev state-switcher is gone;

@@ -1,3 +1,16 @@
+// Our Meta Business Portfolio ID — what a customer actually enters in Meta
+// Business Settings to grant us partner access (docs/META_SETUP.md's
+// verified identifiers table). Meta partners are added by this numeric ID,
+// never by searching a name — the portfolio and our app share the display
+// name "AI Campaigner", so a name search is unreliable (documented as the
+// "naming trap" in META_SETUP.md). A real, stable identifier, not
+// translatable copy, so it lives here as its own constant rather than
+// inside `strings` — and NOT `strings.he.app.mock`, which Connect.tsx used
+// to (accidentally) pull this value from: a real bug, found live, where the
+// onboarding screen showed a fake placeholder ID ("418 552 907 431") with a
+// working copy button, indistinguishable from the real one.
+export const META_BUSINESS_PORTFOLIO_ID = "2491237118040524";
+
 // All user-facing copy lives here — never hard-code Hebrew inside a component.
 // (The static landing page is the one exception; its copy lives in landing/.)
 export const strings = {
@@ -456,10 +469,10 @@ export const strings = {
         noPassword: "אנחנו לא צריכים את הסיסמה שלכם לפייסבוק.",
         howTitle: "איך עושים את זה",
         steps: [
-          "פותחים את הגדרות העסק ב־Meta",
-          "מוסיפים את Ads Agent כשותף עסקי",
-          "נותנים גישה לחשבון הפרסום",
-          "אם נדרש, נותנים גישה גם לעמוד הפייסבוק / אינסטגרם",
+          "פותחים את הגדרות העסק ב־Meta (Business Settings)",
+          "עוברים לשותפים (Partners) ← הוספה (Add) ← \"לתת לשותף גישה לנכסים שלכם\" (Give a partner access to your assets), ומזינים את המזהה העסקי שלנו (Business ID) — מופיע למטה",
+          "משתפים את חשבון הפרסום (Ad account) עם הרשאת פרסום (Advertise)",
+          "אם נדרש, משתפים גם את עמוד הפייסבוק (Page) / אינסטגרם (Instagram)",
           "חוזרים לכאן ואנחנו בודקים שהכול מחובר",
         ],
         openMeta: "פתיחת Meta Business Settings ↗",
@@ -476,13 +489,12 @@ export const strings = {
         technical: "פרטים טכניים",
         continue: "המשך",
         missingTitle: "חסרה גישה",
-        missingBody: "חשבון הפרסום מחובר, אבל חסרה גישה לעמוד הפייסבוק. בלי גישה לעמוד לא נוכל לפרסם או לעצור מודעות בשמכם. זה תיקון קצר בהגדרות העסק ב־Meta.",
+        missingBody: "חשבון הפרסום מחובר, אבל חסרה גישה לעמוד הפייסבוק (Facebook Page). בלי גישה לעמוד לא נוכל לפרסם או לעצור מודעות בשמכם. זה תיקון קצר בהגדרות העסק ב־Meta (Meta Business Settings).",
         connected: "מחובר", missing: "חסר",
         howToFix: "איך מתקנים?",
         fixSteps: [
-          "בהגדרות העסק ב־Meta עוברים ל״עמודים״.",
-          "בוחרים את העמוד ולוחצים על ״שותפים״.",
-          "מוסיפים את Ads Agent עם הרשאת ניהול מודעות.",
+          "בהגדרות העסק ב־Meta (Business Settings) עוברים לשותפים (Partners) ← הוספה (Add) ← \"לתת לשותף גישה לנכסים שלכם\" (Give a partner access to your assets), ומזינים את המזהה העסקי שלנו (Business ID) — מופיע למטה.",
+          "משתפים את עמוד הפייסבוק (Page) שלכם, עם הרשאת פרסום (Advertise) לפחות.",
         ],
         recheck: "בדיקה מחדש",
         notVerifiedTitle: "לא הצלחנו לאמת את החיבור",

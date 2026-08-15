@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { strings } from "../strings";
+import { strings, META_BUSINESS_PORTFOLIO_ID } from "../strings";
 import { getOverview, recheckConnection, type CustomerOverview } from "../api";
 import { Brand, StatusPill, WA } from "./components";
 
@@ -62,8 +62,8 @@ export function Connect() {
                 {i === 1 && (
                   <div className="copybox" style={{ marginTop: 10 }}>
                     <span className="mono muted" style={{ fontSize: "0.7rem" }}>{c.businessId}</span>
-                    <b>{a.mock.businessId}</b>
-                    <button onClick={() => { navigator.clipboard?.writeText(a.mock.businessId); setCopied(true); }}>
+                    <b>{META_BUSINESS_PORTFOLIO_ID}</b>
+                    <button onClick={() => { navigator.clipboard?.writeText(META_BUSINESS_PORTFOLIO_ID); setCopied(true); }}>
                       {copied ? c.copied : c.copy}
                     </button>
                   </div>

@@ -6,6 +6,30 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-15 — Fix: fake Business Portfolio ID shipped as real (AIC-33 closed) + enriched fix-step copy
+Requested enrichment of the `missing_page` fix steps (English parentheticals
+for every Meta UI term, e.g. "עמודים (Pages)", plus our actual Business ID
+inline) surfaced a real, separate bug while implementing it: the onboarding
+Connect screen's "BUSINESS ID" copybox — a working copy-to-clipboard button,
+indistinguishable from real data — was reading `strings.he.app.mock.businessId`
+("418 552 907 431"), an obviously-placeholder value from the same `mock`
+object Review.tsx's still-mock screen and Auth.tsx's form placeholders use.
+`customer-app.md` had this flagged as an explicit open gap since AIC-33
+("business-portfolio-ID copybox is still a placeholder config value") — this
+closes it. Added `META_BUSINESS_PORTFOLIO_ID = "2491237118040524"` (`web/src/strings.ts`,
+matching META_SETUP.md's identifiers table) as a real constant, not inside
+`strings` (it's a fixed ID, not translatable copy) and not `mock`. Both
+Connect.tsx's onboarding steps and AddContent.tsx's `missing_page` fix steps
+now render the same constant through the same copybox widget — one real ID,
+one place it's defined, two places it's shown. Also rewrote both step lists
+to follow the exact partner-grant flow META_SETUP.md documents as verified
+(Business Settings → Partners → Add → enter the ID → share the asset) rather
+than the previous "search the Page's own Partners list by name" path, which
+risks exactly the "naming trap" META_SETUP.md warns about (our Business
+Portfolio and app share the display name "AI Campaigner," so name search is
+unreliable — partners must be added by ID). Full suite green, typecheck +
+web build clean. Docs: [customer-app.md](features/customer-app.md#whats-not-wired-backend-per-ticket).
+
 ### 2026-08-15 — Fix: "connection issue" wasn't helpful either — split out missing_page with the real fix steps
 Follow-up to the same day's add-content fix, reported live testing it: the
 new `connection_issue` message ("check your connection in Settings") was
