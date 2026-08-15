@@ -14,7 +14,7 @@ export function Brand({ className = "brand" }: { className?: string }) {
   return (
     <span className={className} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
       <img src="/favicon.png" alt="" className="brand-icon" />
-      Ads Manager
+      {strings.he.appName}
     </span>
   );
 }

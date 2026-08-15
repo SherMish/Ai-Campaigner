@@ -1,7 +1,7 @@
 # Landing page
 
 **Status:** live — the static marketing page (AIC-20), implementing the **Ads
-Manager** design directions (RTL Hebrew, cream/ink/orange).
+Agent** design directions (RTL Hebrew, cream/ink/orange).
 
 **Source of truth:** `landing/index.html` (self-contained static HTML/CSS). Served
 at `/` by the server (`web/dist/index.html` after build) and by the Vite dev
@@ -15,7 +15,7 @@ server serves the landing at `/`.
 
 ## How it works today
 
-A single fluid, responsive RTL page in the Ads Manager brand:
+A single fluid, responsive RTL page in the Ads Agent brand:
 - **Palette:** orange `#FF5A36`, cream `#F7F2EA`/`#EDE6DA`, ink `#171717`, green
   `#2FA36B`, indigo `#665CFF`, WhatsApp `#DCF8C6`. Fonts: **Rubik** + **IBM Plex
   Mono** (Google Fonts).
@@ -45,8 +45,8 @@ serves them directly at `/terms.html` / `/privacy.html` with no server route
 needed — same mechanism as `favicon.png`.
 
 Content is the real, lawyer-provided text (not placeholder copy), with the
-product's legal-document name normalized to **Ads Manager** and the contact
-address set to `hello@ads-manager.co.il`.
+product's legal-document name normalized to **Ads Agent** and the contact
+address set to `hello@ads-agent.co.il`.
 
 Linked from two places:
 - The landing footer's `תקנון` / `פרטיות` links (previously `#` placeholders).
@@ -56,10 +56,15 @@ Linked from two places:
   form isn't lost).
 
 ## Note — brand
-The product's consumer-facing name is **Ads Manager** (decided 2026-08-12,
-resolving the earlier AdPilot-vs-AI-Campaigner ambiguity — both were retired).
-The logo icon (`web/public/favicon.png`, full-res source `logo-source.png`)
-renders beside the wordmark everywhere the brand appears: the customer sidebar,
-the admin sidebar, the pre-shell screens' `Brand` component
-(`web/src/app/components.tsx`), and the landing header/footer. The site
-favicon uses the same file.
+The product's consumer-facing name is **Ads Agent** (renamed 2026-08-15 from
+**Ads Manager**, itself decided 2026-08-12 resolving the earlier
+AdPilot-vs-AI-Campaigner ambiguity — all three earlier names are retired).
+The name lives in one place, `strings.he.appName` (`web/src/strings.ts`), and
+every in-app surface (customer sidebar, admin sidebar, the pre-shell screens'
+`Brand` component in `web/src/app/components.tsx`) reads it from there rather
+than hardcoding it, so a future rename is a one-line change — the static
+landing page and the two legal pages are the only surfaces that still
+hardcode the wordmark, since they're plain HTML with no shared strings
+module. The logo icon (`web/public/favicon.png`, full-res source
+`logo-source.png`) renders beside the wordmark everywhere the brand appears.
+The site favicon uses the same file.

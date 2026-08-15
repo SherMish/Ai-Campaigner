@@ -50,7 +50,7 @@ export function Sidebar() {
 
   return (
     <aside className="ap-side">
-      <div className="ap-brand">Ads Manager<img src="/favicon-dark.png" alt="" className="ap-brand-icon" /></div>
+      <div className="ap-brand">{strings.he.appName}<img src="/favicon-dark.png" alt="" className="ap-brand-icon" /></div>
 
       <div className="ap-nav-section">
         <NavLink end to="/app" className={cls}>

@@ -6,6 +6,32 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-15 — Rebrand: Ads Manager → Ads Agent
+The live domain (`ads-agent.co.il`) already used the new name; the app's own
+displayed name hadn't caught up. Renamed everywhere the product refers to
+itself: `strings.he.appName`/`adminShell.brand` (and the two hardcoded
+components that now read `appName` instead of duplicating the literal —
+`components.tsx`'s `Brand`, `Sidebar.tsx`'s `.ap-brand`), the connect-flow
+onboarding copy ("add Ads Agent as a business partner"), the SPA `<title>`,
+the landing page (title/header/footer), and both legal pages (title, headers,
+body text, footer, and the contact address — now `hello@ads-agent.co.il`).
+Living docs describing current branding updated too (`INDEX.md`,
+`landing.md`, `customer-app.md`).
+
+**Left unchanged, deliberately:** every occurrence of "Ads Manager" that
+refers to **Meta's own real Ads Manager tool** — jargon-avoidance comments
+("no Ads Manager jargon" in `explainer.ts`/`action-history.ts`/`RULES.md`/
+etc.), the landing page's "you don't need [Meta's] Ads Manager" pitch
+section, the legal pages' "your Meta Ads Manager account" clauses, the
+`METRICS.md`/`dogfood-readout.md` reconciliation notes (comparing our
+numbers against Meta's own dashboard), and `META_SETUP.md`'s literal
+external asset name ("AdPilot backend", the real, already-registered name of
+our Meta System User — a live external identifier, not something a doc edit
+can rename). Renaming our own product doesn't change what any of these
+actually refer to. This STATE.md's own historical entries are untouched too
+(append-only) — earlier dated blocks correctly still say "Ads Manager"
+because that was the name at the time.
+
 ### 2026-08-15 — Fix: add-content collapsed six unavailable reasons into one wrong message
 Reported live on production (ads-agent.co.il): a customer with an ACTIVE,
 spending campaign saw "עוד אין קמפיין להוסיף לו תוכן — צריך קודם ליצור את
