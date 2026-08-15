@@ -50,6 +50,20 @@ code area to the doc that owns it. Start there before changing anything.
 - All user-facing text (Hebrew) lives in the **strings file** — never hard-code
   Hebrew in a component. (Landing copy lives in the static `landing/`.)
 
+### Never blank when the reason is known
+- **Any surface that can be empty must render a reason. "No data" is not a
+  reason.** If the code already knows *why* a panel, card, or row has nothing to
+  show — thin evidence, a campaign that just started, a value we don't hold — say
+  that, don't render nothing. An empty state the code can't yet explain is fine;
+  a silent one it *could* explain is the bug.
+- This is a recurring pattern, not a one-off: the no-recommendation reasons
+  (AIC-64/85), the measurement-trust composed state (AIC-94), the launch screen's
+  destination row (never print a blank value beside a confident label — describe
+  it or block, per AIC-89), and the audience/ad detail panel (AIC-95) are four
+  independent instances of the same underlying bug. Apply this by default on any
+  new surface rather than waiting for the next blank panel to show up in a
+  screenshot.
+
 ---
 
 ## The product in one paragraph (keep in mind for every feature)
