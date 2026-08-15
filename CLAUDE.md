@@ -50,19 +50,56 @@ code area to the doc that owns it. Start there before changing anything.
 - All user-facing text (Hebrew) lives in the **strings file** — never hard-code
   Hebrew in a component. (Landing copy lives in the static `landing/`.)
 
-### Never blank when the reason is known
-- **Any surface that can be empty must render a reason. "No data" is not a
-  reason.** If the code already knows *why* a panel, card, or row has nothing to
-  show — thin evidence, a campaign that just started, a value we don't hold — say
-  that, don't render nothing. An empty state the code can't yet explain is fine;
-  a silent one it *could* explain is the bug.
-- This is a recurring pattern, not a one-off: the no-recommendation reasons
-  (AIC-64/85), the measurement-trust composed state (AIC-94), the launch screen's
-  destination row (never print a blank value beside a confident label — describe
-  it or block, per AIC-89), and the audience/ad detail panel (AIC-95) are four
-  independent instances of the same underlying bug. Apply this by default on any
-  new surface rather than waiting for the next blank panel to show up in a
-  screenshot.
+## Never render a blank where a reason exists
+
+Any surface that can show nothing — an empty panel, a zero, a missing
+value, a suppressed recommendation, a status badge — MUST render **why**.
+The code one layer down almost always knows. The bug is that it never
+reaches the screen.
+
+- **"אין נתונים" is not a reason.** "הקמפיין התחיל לרוץ היום" is a reason.
+  If you cannot say why, that is a gap in the feature, not a copy problem.
+- **Distinguish causes end-to-end.** If two situations have different
+  fixes, they get different text — all the way through to the customer.
+  Collapsing them into one generic message destroys the only part that
+  was actionable.
+- **Name who acts next**: us, the customer, or nobody. A customer reading
+  a problem they cannot act on is worse than not showing it.
+- **Never render a value you don't have.** A blank beside a label asserts
+  a fact. If a value is unknown, say it is unknown — and if an action
+  depends on it, block the action rather than showing an empty field.
+- **When the reason is "we're not sure the data is right", say that too.**
+  Never silently degrade a number into looking confident.
+
+This applies to adding, changing, AND removing states. A new variant of
+any customer-visible enum ships with its copy in the same change.
+
+### How this is enforced (not a code-review checklist)
+
+A rule nobody can violate beats a rule everyone remembers. Every
+customer-visible enum has an **exhaustive** copy map, so a new variant is a
+`tsc` failure rather than a blank on someone's screen:
+
+```ts
+const HOME_STATE_COPY: Record<HomeState, StateCopy> = { /* … */ };
+
+// and at any switch over one of these enums:
+default:
+  return assertNever(state); // shared/src/assert-never.ts
+```
+
+The maps live in [`web/src/app/state-copy.ts`](web/src/app/state-copy.ts)
+(text still comes from `strings.ts` — the maps bind reason → copy, they
+don't inline Hebrew). `state-copy.test.ts` additionally asserts every
+variant's copy is **non-empty and distinct**: `Record<Enum, T>` catches a
+missing key but happily accepts `""` or copy pasted from the case above it,
+which is exactly how the three `צריך טיפול` causes would quietly re-collapse
+into one message. Do not weaken that test to make a new variant pass.
+
+Enums under the contract today: `HomeState`, `AttentionKind`,
+`NoActionReason`. When you add a customer-visible enum, add it here — the
+lead/destination type (AIC-87/89) and `measurement_trust` (AIC-94) join this
+list when they land as real union types.
 
 ---
 

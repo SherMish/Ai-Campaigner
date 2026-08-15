@@ -21,8 +21,12 @@ import {
   type DailyPoint,
   type RangeKey,
   type AdditionUnavailableReason,
+  type AttentionKind,
+  type NoActionReason,
   RANGE_KEYS,
 } from "../api";
+import { assertNever } from "@aic/shared";
+import { ATTENTION_COPY, HOME_STATE_BADGE, noRecCopy } from "./state-copy";
 import { StatusPill } from "./components";
 import { useSharedOverview, invalidateOverview } from "./overview-store";
 
@@ -32,31 +36,11 @@ const L = h.live;
 const D = h.details;
 const CT = h.controls;
 
-// AIC-64: distinct, honest copy for WHY there's no recommendation, keyed by the
-// engine's reason. `delivery_blocked` is deliberately absent — a delivery
-// problem already routes homeState to "attention" before this card ever
-// renders (see deriveHomeState), so it would never reach here.
-function noRecCard(reason: string | null): { title: string; body: string; cta?: { to: string; label: string } } {
-  switch (reason) {
-    case "collecting":
-      return h.noRec.collecting;
-    case "budget_below_threshold":
-      return { ...h.noRec.budgetBelowThreshold, cta: { to: "/app/settings", label: h.noRec.budgetBelowThreshold.cta } };
-    case "no_comparable_audiences": // AIC-85, was single_ad_set
-      return h.noRec.noComparableAudiences;
-    case "cooling_down":
-      return h.noRec.coolingDown;
-    case "below_object_evidence_floor": // AIC-85
-      return h.noRec.belowObjectEvidenceFloor;
-    case "no_comparable_creatives": // AIC-85 — rarely reached, see rules.ts
-      return h.noRec.noComparableCreatives;
-    case "stable":
-      return h.noRec.stable;
-    default:
-      // Engine hasn't classified a reason yet (e.g. before its first tick).
-      return { title: h.noActionTitle, body: h.noAction };
-  }
-}
+// AIC-98: the reason -> copy binding now lives in state-copy.ts as an
+// exhaustive Record, so a new engine reason is a compile error instead of
+// silently falling through to the generic "we're watching the campaign"
+// message. This wrapper only keeps the call sites below unchanged.
+const noRecCard = noRecCopy;
 
 const PILL: Record<HomeState, "ok" | "info" | "neutral" | "attn"> = {
   ok: "ok", collecting: "neutral", paused: "neutral", attention: "attn", no_campaign: "neutral", ready_to_launch: "info", stopped: "neutral",
@@ -73,39 +57,45 @@ const PILL: Record<HomeState, "ok" | "info" | "neutral" | "attn"> = {
 // states now read through the SAME noRecCard() reasoning the pending-rec
 // teaser already used, so the hero and the "why (not)" card can never again
 // say different things about the same campaign.
-function hero(state: HomeState, attentionKind: CustomerOverview["attentionKind"], readyToBuild: boolean, noRecReason: string | null, wasBuiltHere: boolean): { badge: string; title: string; body: string; cta?: { to: string; label: string }; launch?: { label: string } } {
+function hero(state: HomeState, attentionKind: AttentionKind | null, readyToBuild: boolean, noRecReason: NoActionReason | null, wasBuiltHere: boolean): { badge: string; title: string; body: string; cta?: { to: string; label: string }; launch?: { label: string } } {
   switch (state) {
-    case "attention":
-      // A delivery problem (AIC-39) reads differently from a lost connection.
-      if (attentionKind === "delivery")
-        return { badge: h.states.delivery.badge, title: h.states.delivery.title, body: h.states.delivery.body };
-      // AIC-88: broken lead tracking — no CTA, same as delivery: there is
-      // nothing for the customer to click, it's on us to fix.
-      if (attentionKind === "tracking")
-        return { badge: h.states.tracking.badge, title: h.states.tracking.title, body: h.states.tracking.body };
-      return { ...h.states.attention, cta: { to: "/connect", label: h.states.attention.cta } };
+    case "attention": {
+      // AIC-98: the three causes come from ATTENTION_COPY, an exhaustive
+      // Record — a fourth cause can't ship reusing one of these messages.
+      // Only `connection` carries a CTA: the other two are ours to fix, and
+      // a button the customer can't act on is worse than no button.
+      const kind = attentionKind ?? "connection";
+      const copy = ATTENTION_COPY[kind];
+      return kind === "connection"
+        ? { ...copy, cta: { to: "/connect", label: h.states.attention.cta } }
+        : copy;
+    }
     case "ready_to_launch":
       // Bug fix, 2026-08-14: "we built it, it passed review" is false for a
       // campaign connected from outside the app — confirmed live. Same
       // badge/CTA either way; only the claim about who built it changes.
       return wasBuiltHere
-        ? { badge: h.states.readyToLaunch.badge, title: h.states.readyToLaunch.title, body: h.states.readyToLaunch.body, launch: { label: h.states.readyToLaunch.cta } }
-        : { badge: h.states.readyToLaunch.badge, title: h.states.readyToLaunchConnected.title, body: h.states.readyToLaunchConnected.body, launch: { label: h.states.readyToLaunch.cta } };
+        ? { badge: HOME_STATE_BADGE.ready_to_launch, title: h.states.readyToLaunch.title, body: h.states.readyToLaunch.body, launch: { label: h.states.readyToLaunch.cta } }
+        : { badge: HOME_STATE_BADGE.ready_to_launch, title: h.states.readyToLaunchConnected.title, body: h.states.readyToLaunchConnected.body, launch: { label: h.states.readyToLaunch.cta } };
     case "paused":
-      return { badge: h.states.paused.badge, title: h.states.paused.title, body: h.states.paused.body };
+      return { badge: HOME_STATE_BADGE.paused, title: h.states.paused.title, body: h.states.paused.body };
     case "stopped":
-      return { badge: h.states.stopped.badge, title: h.states.stopped.title, body: h.states.stopped.body };
+      return { badge: HOME_STATE_BADGE.stopped, title: h.states.stopped.title, body: h.states.stopped.body };
     case "no_campaign":
       // Connected + ready → the guided builder (AIC-52); still onboarding/
       // connecting → the existing setup-status copy, unchanged.
       if (readyToBuild) return { ...h.states.createCampaign, cta: { to: "/app/builder", label: h.states.createCampaign.cta } };
       return { ...h.states.setup, cta: { to: "/onboarding", label: h.states.setup.cta } };
     case "collecting":
-    case "ok":
-    default: {
+    case "ok": {
       const nr = noRecCard(noRecReason);
-      return { badge: state === "collecting" ? h.states.collecting.badge : h.states.ok.badge, title: nr.title, body: nr.body, cta: nr.cta };
+      return { badge: HOME_STATE_BADGE[state], title: nr.title, body: nr.body, cta: nr.cta };
     }
+    default:
+      // AIC-98: no catch-all. A new HomeState without a branch fails tsc here
+      // rather than silently rendering the "ok" hero, which is how a state
+      // meaning "something is wrong" could ship looking like "all good".
+      return assertNever(state, "HomeState");
   }
 }
 

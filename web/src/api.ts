@@ -41,6 +41,25 @@ export class ApiError extends Error {
 // Mirrors server/src/services/customer-overview.ts. Money is integer agorot.
 export type AccessHealth = "ok" | "revoked" | "invalid" | "needs_reconnect";
 export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campaign" | "ready_to_launch" | "stopped";
+// AIC-98: which cause put the campaign in `attention`. Named (was inline on
+// CustomerOverview) so the copy map can be `Record<AttentionKind, …>` and a
+// fourth cause can't ship without its own message — the three existing ones
+// all wear the same "צריך טיפול" badge and would otherwise silently collapse
+// into one another.
+export type AttentionKind = "connection" | "delivery" | "tracking";
+// AIC-98: mirrors server/src/recommendations/rules.ts. Was `string | null` on
+// CustomerOverview, which defeated exhaustiveness at the boundary — a new
+// engine reason type-checked fine and rendered the generic fallback.
+export type NoActionReason =
+  | "stable"
+  | "collecting"
+  | "budget_below_threshold"
+  | "delivery_blocked"
+  | "tracking_broken"
+  | "no_comparable_audiences"
+  | "cooling_down"
+  | "below_object_evidence_floor"
+  | "no_comparable_creatives";
 export type CampaignStatus =
   | "under_review" | "active" | "paused" | "needs_attention"
   | "connection_problem" | "unmanaged";
@@ -86,7 +105,7 @@ export interface CustomerOverview {
     // one connected from outside the app, so the ready_to_launch hero can
     // stop claiming "we built it, it passed review" for the latter.
     wasBuiltHere: boolean;
-    noRecReason: string | null; noRecDetail: Record<string, unknown> | null;
+    noRecReason: NoActionReason | null; noRecDetail: Record<string, unknown> | null;
     liveBudgetAgorot: number | null;
     delivering: boolean; deliveringAdCount: number | null;
   } | null;
@@ -113,7 +132,7 @@ export interface CustomerOverview {
   }>;
   pendingRecommendations: number;
   pendingRecommendationType: RecommendationType | null;
-  attentionKind: "connection" | "delivery" | "tracking" | null;
+  attentionKind: AttentionKind | null;
   homeState: HomeState;
 }
 

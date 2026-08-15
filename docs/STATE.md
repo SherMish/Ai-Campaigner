@@ -6,6 +6,39 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-16 — AIC-98: "never render a blank where a reason exists" is now a compile error
+The same defect had shipped on four surfaces (AIC-64/85 no-rec reasons,
+AIC-89 launch destination, AIC-95 audience panel, AIC-97 מצב badge), each
+found by a customer in a screenshot, each fixed individually. Made it a rule
+in CLAUDE.md (replacing the shorter version already there) **and** enforced
+it, because a rule in a doc gets followed until someone is in a hurry.
+
+Three layers: `Record<Enum, Copy>` maps in the new
+`web/src/app/state-copy.ts` (missing variant = `tsc` failure);
+`assertNever` (new `shared/src/assert-never.ts`) replacing the swallowing
+`default:` in `Home.tsx`'s `hero()`; and `state-copy.test.ts` asserting every
+variant's copy is non-empty and **distinct**, which `Record` alone cannot see
+— it happily accepts `""` or copy pasted from the case above it, exactly how
+the three `צריך טיפול` causes would re-collapse into one message. All three
+were verified by deliberately breaking them: a new `HomeState` produced
+`Argument of type '"suspended"' is not assignable to parameter of type 'never'`,
+and duplicated/empty copy failed the test naming the offending key.
+
+Two boundary types were stringly-typed and defeated the whole thing:
+`noRecReason` was `string | null` on both the server interface and the web
+mirror, so a new engine reason type-checked fine and rendered the generic
+fallback. Now `NoActionReason`, with the DB row typed at the
+CHECK-constrained boundary. `attentionKind` became a named `AttentionKind`.
+
+`delivery_blocked` and `tracking_broken` gained real customer copy — both
+previously fell through to "we're watching the campaign," which for them was
+false. Both are unreachable today (they route to the `attention` hero first),
+kept because "unreachable" is a routing detail a refactor changes silently.
+
+Also: `npm run test:unit` now includes the web workspace (was shared + server
+only, so a web test would not have run in CI at all). Deliberately narrow —
+this sets the standard; AIC-95 and AIC-97 are its first two users.
+
 ### 2026-08-15 — Fix: a still-ACTIVE ad silently disappeared from the audience panel's selected window
 Reported live on the newly-connected free_beta account: the campaign card
 said "2 מודעות פעילות" but opening "הצג פירוט" showed only 1 ad. Root cause,

@@ -730,6 +730,19 @@ export const strings = {
             title: "כדאי להוסיף עוד מודעות",
             body: "יש לכם כרגע מודעה אחת פעילה — אין עדיין עם מה להשוות כדי להמליץ על שינוי עיצוב.",
           },
+          // AIC-98: both of these route the campaign to the "צריך טיפול" hero
+          // before this card renders — but the rule is that every reason owns
+          // its copy, because "unreachable today" is a routing detail a future
+          // refactor can change silently. Framed as "why no recommendation",
+          // which is a different question from the hero's "what is wrong".
+          deliveryBlocked: {
+            title: "לא נמליץ עד שהפרסום יחזור לרוץ",
+            body: "אחת מקבוצות הפרסום לא מציגה מודעות כרגע, כך שהנתונים חלקיים. המלצה שתתבסס עליהם עלולה להיות שגויה — אנחנו מטפלים בזה קודם.",
+          },
+          trackingBroken: {
+            title: "לא נמליץ על סמך מספרים שאינם מלאים",
+            body: "יש אי-התאמה בהגדרת מדידת הפניות, כך שחלק מהפניות אינן נספרות. לא נציע שינויים עד שנתקן — המלצה שמסתמכת על מספר שגוי גרועה מלא להמליץ בכלל.",
+          },
           // AIC-77b: after an executed change, the engine waits a few days
           // before proposing another change of the same kind — long enough
           // to actually see whether the last change worked. This is the

@@ -7,12 +7,18 @@ import {
   type CondensedEntry,
 } from "./action-history.js";
 import { getLeadQualityStatus, type LeadQualityStatus } from "./lead-quality-review.js";
+import type { NoActionReason } from "../recommendations/rules.js";
 
 // What the logged-in customer's Home + Settings screens render from. Assembled
 // from the customer's own rows (never another customer's) + the snapshot-based
 // readout. Everything is read-only; no live Meta call at render time.
 export type AccessHealth = "ok" | "revoked" | "invalid" | "needs_reconnect";
 export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campaign" | "ready_to_launch" | "stopped";
+// AIC-98: which cause put the campaign in `attention`. Named so the web copy
+// map can be Record<AttentionKind, …> — all three wear the same "צריך טיפול"
+// badge, so a fourth silently reusing another's message is the exact failure
+// the exhaustive map exists to prevent.
+export type AttentionKind = "connection" | "delivery" | "tracking";
 
 export interface CustomerOverview {
   account: { name: string; email: string };
@@ -54,7 +60,7 @@ export interface CustomerOverview {
     trackingOk: boolean | null;
     // AIC-64: why the engine's last tick had nothing to propose — null before
     // the engine has ever run, or when an acting recommendation exists instead.
-    noRecReason: string | null;
+    noRecReason: NoActionReason | null;
     noRecDetail: Record<string, unknown> | null;
     // The live-read Meta daily budget, cached every generation tick — the
     // number to actually show the customer. `agreedBudgetAgorot` is the
@@ -92,7 +98,7 @@ export interface CustomerOverview {
   pendingRecommendationType: RecommendationType | null;
   // Which kind of "needs attention" the customer sees, so Home shows the right
   // message: a lost Meta connection vs a delivery problem (AIC-39).
-  attentionKind: "connection" | "delivery" | "tracking" | null;
+  attentionKind: AttentionKind | null;
   homeState: HomeState;
 }
 
@@ -209,7 +215,11 @@ export async function buildCustomerOverview(
       tracking_ok: boolean | null;
       launch_approved_at: Date | null;
       meta_campaign_id: string | null;
-      no_rec_reason: string | null;
+      // AIC-98: the column is CHECK-constrained to exactly this union
+      // (migrations 013/024/032/035), so the cast is the DB->type boundary,
+      // not a guess. Typed here rather than `string` so every consumer gets
+      // exhaustiveness instead of a stringly-typed reason.
+      no_rec_reason: NoActionReason | null;
       no_rec_detail: Record<string, unknown> | null;
       live_budget_agorot: number | null;
       delivering: boolean;
@@ -340,7 +350,7 @@ export async function buildCustomerOverview(
   // Same precedence as deriveHomeState's, deliberately — the two derive the
   // same fact and MUST agree, or the hero falls through to a generic
   // attention card telling a customer with a tracking problem to reconnect Meta.
-  const attentionKind: "connection" | "delivery" | "tracking" | null =
+  const attentionKind: AttentionKind | null =
     connection && connection.accessHealth !== "ok"
       ? "connection"
       : campaign && !campaign.deliveryOk

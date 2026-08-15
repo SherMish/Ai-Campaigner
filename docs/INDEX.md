@@ -29,5 +29,6 @@ See also: [STATE.md](STATE.md) (dated changelog) · [features/_TEMPLATE.md](feat
 | Customer app — auth, onboarding, connect, home, recommendations, settings (frontend) | [features/customer-app.md](features/customer-app.md) |
 | Customer auth — email+password, JWT sessions (backend) | [features/customer-auth.md](features/customer-auth.md) |
 | Customer overview — Home/Settings data API, homeState, lead-quality (backend) | [features/customer-overview.md](features/customer-overview.md) |
+| State → copy mapping — the exhaustive copy maps that enforce "never blank" | [features/state-copy.md](features/state-copy.md) |
 | Customer recommendations — approve/dismiss over the safe-execute pipeline | [features/customer-recommendations.md](features/customer-recommendations.md) |
 | Campaign builder (P1) — recommended defaults, create-writes, guided UI, launch gate | [features/campaign-builder.md](features/campaign-builder.md) |
