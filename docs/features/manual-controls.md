@@ -186,6 +186,28 @@ justifies the ops explorer's live reads (AIC-45).
 Pausing an ad set stops every ad under it — the UI says so before the click
 rather than letting the customer discover it.
 
+**Both live reads gate on the SAME connection-readiness check the
+add-content flow uses, and used to fail silently (bug fix, 2026-08-15,
+found live).** `GET /state` and `GET /media` both call `resolveAdditionContext`
+first (they need the caller's `metaCampaignId`) — and until this fix, a 409
+there meant a flat `{error: "no managed campaign"}`, even when the real
+campaign was active, linked, and spending, just missing Page access
+(`missing_page`). `AudienceDetails` (`Home.tsx`) wrapped both calls in a bare
+`.catch(() => {})`, so `ctl`/`media` simply stayed empty forever — no pause
+button, no ad thumbnails, and nothing telling the customer why, indistinguishable
+from the feature never having existed. Confirmed live: the same account
+whose missing Page access broke add-content (`campaign-builder.md`) also
+silently lost both of these.
+
+Fixed the same way: both routes now call `resolveAdditionAvailability`
+(`additions/session.ts`) and put the reason on the 409 body. `AudienceDetails`
+reads it off `ApiError.body` (`noteIfKnownReason`) and renders
+`CT.readUnavailable` — a short honest note plus a link to Settings — only
+when the failure carries a real reason; a transient network error still
+degrades silently, since there's nothing specific to tell the customer about
+that. Test-first: two new `controls.integration.test.ts` cases proving both
+routes 409 with `missing_page`, not the old flat message.
+
 ## After a write, trust the write — don't re-read a lagging field (AIC-70)
 
 Real bug, 2026-08-12: a customer clicked resume, the write succeeded and was

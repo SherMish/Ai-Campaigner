@@ -9,6 +9,7 @@ import {
   getControlState,
   getAdMedia,
   setObjectPaused,
+  ApiError,
   type ControlState,
   type AdMedia,
   shekels,
@@ -19,6 +20,7 @@ import {
   type LeadQualityStatus,
   type DailyPoint,
   type RangeKey,
+  type AdditionUnavailableReason,
   RANGE_KEYS,
 } from "../api";
 import { StatusPill } from "./components";
@@ -517,6 +519,12 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
   const [media, setMedia] = useState<Map<string, AdMedia>>(new Map());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [ctlFailed, setCtlFailed] = useState(false);
+  // Bug fix, 2026-08-15: /state and /media 409 with a specific reason
+  // (missing_page/connection_issue/not_launched) when the connection can't
+  // support these reads — set from whichever of the two calls below fails
+  // first with a real reason, so pause buttons / creative images degrade to
+  // an honest note instead of silently vanishing.
+  const [readUnavailable, setReadUnavailable] = useState<AdditionUnavailableReason | null>(null);
   // AIC-70: which row just succeeded, so the confirmation renders right where
   // the change happened. Cleared as soon as another action starts.
   const [successId, setSuccessId] = useState<string | null>(null);
@@ -535,15 +543,27 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
       .finally(() => setLoading(false));
   }
 
+  // Captures the reason on a 409 (missing_page/connection_issue/not_launched)
+  // so the panel can say why pause/thumbnails are unavailable instead of
+  // just not showing them. Any other failure (network blip, 502) stays
+  // silent — degrade quietly, same as before — since there's nothing
+  // specific to tell the customer about a transient error.
+  function noteIfKnownReason(e: unknown) {
+    if (e instanceof ApiError && e.status === 409) {
+      const reason = (e.body as { reason?: AdditionUnavailableReason } | undefined)?.reason;
+      if (reason) setReadUnavailable(reason);
+    }
+  }
+
   function toggle() {
     const next = !open;
     setOpen(next);
     if (next && !data) fetchAudiences(range);
-    if (next && !ctl) getControlState().then(setCtl).catch(() => {});
+    if (next && !ctl) getControlState().then(setCtl).catch(noteIfKnownReason);
     if (next && media.size === 0) {
       getAdMedia()
         .then((r) => setMedia(new Map(r.ads.map((m) => [m.adId, m]))))
-        .catch(() => {}); // degrade to names, never break the panel
+        .catch(noteIfKnownReason); // degrade to names, but say why if we know
     }
   }
 
@@ -619,6 +639,11 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
               this panel now reads the exact same still-updating window. */}
           {range === "day" && <p className="muted" style={{ fontSize: "0.8rem", marginBottom: 10 }}>{h.provisional}</p>}
           {ctlFailed && <p className="muted" style={{ color: "var(--orange)", marginBottom: 10 }}>{CT.failed}</p>}
+          {readUnavailable && (
+            <p className="muted" style={{ marginBottom: 10 }}>
+              {CT.readUnavailable} <Link className="link" to="/app/settings">{CT.goToSettings}</Link>
+            </p>
+          )}
           {loading ? (
             <p className="muted">{a.loading}</p>
           ) : !data ? (

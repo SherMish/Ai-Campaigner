@@ -622,6 +622,15 @@ export const strings = {
           // right where the change happened, not a global toast.
           pausedNow: "הושהה",
           resumedNow: "הופעל",
+          // Bug fix, 2026-08-15: GET /state and /media used to fail silently
+          // (a bare .catch(() => {})) — the pause button and creative images
+          // just never appeared, with nothing explaining why, indistinguishable
+          // from "this feature doesn't exist". Shown whenever either read 409s
+          // with a reason (missing_page/connection_issue/not_launched) — same
+          // house rule as the empty-window copy above: never blank without
+          // saying why.
+          readUnavailable: "אי אפשר כרגע להציג תמונות מודעות או לעצור/להפעיל אותן — יש בעיה בחיבור לחשבון הפרסום.",
+          goToSettings: "לבדיקה בהגדרות",
         },
         details: {
           show: "הצג פירוט",

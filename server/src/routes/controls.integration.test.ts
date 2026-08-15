@@ -250,6 +250,30 @@ d("manual controls routes (AIC-66)", () => {
     expect((await request(app).get("/api/app/controls/media")).status).toBe(401);
   });
 
+  // REGRESSION (found live, same account as the add-content bug): both
+  // routes used to 409 with a flat "no managed campaign" for every
+  // unavailable reason, so a customer whose Page access was missing on an
+  // otherwise real, active campaign got no pause button and no ad images,
+  // with the frontend's own .catch(() => {}) swallowing the reason entirely
+  // — indistinguishable from "this feature doesn't exist".
+  it("GET /state 409s with the real reason (missing_page), not a flat 'no campaign'", async () => {
+    const { token, customerId } = await seed("state-missing-page");
+    await pool.query(`UPDATE meta_connections SET page_id = NULL WHERE customer_id = $1`, [customerId]);
+
+    const res = await request(app).get("/api/app/controls/state").set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe("missing_page");
+  });
+
+  it("GET /media 409s with the real reason (missing_page), not a flat 'no campaign'", async () => {
+    const { token, customerId } = await seed("media-missing-page");
+    await pool.query(`UPDATE meta_connections SET page_id = NULL WHERE customer_id = $1`, [customerId]);
+
+    const res = await request(app).get("/api/app/controls/media").set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe("missing_page");
+  });
+
   it("there is NO customer-facing delete or archive route", async () => {
     const { token } = await seed("nodelete");
     for (const action of ["delete", "archive"]) {

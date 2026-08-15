@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
-import { resolveAdditionContext, buildAdditionWriter } from "../additions/session.js";
+import { resolveAdditionContext, resolveAdditionAvailability, buildAdditionWriter } from "../additions/session.js";
 import { setObjectStatus, assertOwnedByCampaign } from "../controls/manual-controls.js";
 import type { ControlObjectKind, ControlWriter } from "../controls/types.js";
 import type { DeliveryReader } from "../meta/delivery-health.js";
@@ -36,16 +36,26 @@ function unavailable(res: import("express").Response): void {
 // cached status would render a pause button that lies about what it does. This
 // is fetched only when the customer opens the details panel, the same
 // explicit-action rule that justifies the ops explorer's live reads (AIC-45).
+//
+// Uses resolveAdditionAvailability, not resolveAdditionContext (bug fix,
+// 2026-08-15, found live): both this route and /media used to 409 with a
+// flat "no managed campaign" for EVERY unavailable reason, including
+// missing_page and connection_issue on a real, active, linked campaign. The
+// frontend's own `.catch(() => {})` then swallowed that error completely —
+// a customer whose Page access was missing saw no pause button and no ad
+// images, with literally nothing explaining why (indistinguishable from
+// "this feature doesn't exist"). The reason now reaches the response body so
+// AudienceDetails can render an honest note instead of silently degrading.
 controlsRouter.get("/state", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
-    if (!ctx) {
-      res.status(409).json({ error: "no managed campaign" });
+    const availability = await resolveAdditionAvailability(pool, (req as AuthedRequest).userId!);
+    if (!availability.ctx) {
+      res.status(409).json({ error: "no managed campaign", reason: availability.reason });
       return;
     }
     const writer = buildAdditionWriter() as ControlWriter | null;
     if (!writer) return unavailable(res);
-    const state = await writer.getCampaignState(ctx.metaCampaignId);
+    const state = await writer.getCampaignState(availability.ctx.metaCampaignId);
     res.json({ adStatuses: state.adStatuses, adSetStatuses: state.adSetStatuses });
   } catch (e) {
     console.error("[controls] state failed", e);
@@ -57,17 +67,19 @@ controlsRouter.get("/state", requireAuth, async (req, res) => {
 // live-on-explicit-open rule as /state above: the DB-only readout has no
 // image data, and a salon owner's ads are pictures — a comma-separated name
 // string is the weakest possible representation of them. Read-only; a
-// failure degrades the UI to names rather than breaking the panel.
+// failure degrades the UI to names rather than breaking the panel — but see
+// the /state comment above: the REASON for that degradation now travels
+// with the error rather than being swallowed silently.
 controlsRouter.get("/media", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
-    if (!ctx) {
-      res.status(409).json({ error: "no managed campaign" });
+    const availability = await resolveAdditionAvailability(pool, (req as AuthedRequest).userId!);
+    if (!availability.ctx) {
+      res.status(409).json({ error: "no managed campaign", reason: availability.reason });
       return;
     }
     const reader = buildAdditionWriter() as AdMediaReader | null;
     if (!reader) return unavailable(res);
-    res.json({ ads: await reader.getAdMedia(ctx.metaCampaignId) });
+    res.json({ ads: await reader.getAdMedia(availability.ctx.metaCampaignId) });
   } catch (e) {
     console.error("[controls] media failed", e);
     res.status(502).json({ error: "failed to read creative media" });

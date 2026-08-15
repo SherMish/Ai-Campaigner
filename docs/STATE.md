@@ -6,6 +6,29 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-15 — Fix: pause buttons + ad thumbnails silently vanished, no explanation
+Reported live: a customer's audience panel showed neither a pause button nor
+ad images, on the same account whose add-content flow was already known to
+be blocked by missing Page access. Root cause: `GET /api/app/controls/state`
+and `GET /api/app/controls/media` both call `resolveAdditionContext`
+(needing the caller's `metaCampaignId`) and, until this fix, 409'd with a
+flat `{error: "no managed campaign"}` for every unavailable reason —
+including `missing_page` on a real, active, spending campaign.
+`AudienceDetails` (`Home.tsx`) wrapped both calls in a bare
+`.catch(() => {})`, so the pause button and thumbnails just never rendered,
+with nothing telling the customer why — indistinguishable from the feature
+never existing.
+
+Fixed the same way as the add-content fix earlier today: both routes now use
+`resolveAdditionAvailability` and put the reason on the 409 body;
+`AudienceDetails` reads `ApiError.body.reason` and shows a short honest note
++ Settings link only when the failure carries a real, known reason (a
+transient network error still degrades silently — nothing specific to say
+about that). Test-first: 2 new integration cases proving both routes 409
+with `missing_page`. Full suite green (435 unit, 234/236 integration — only
+the 2 known pre-existing flakes), typecheck + web build clean.
+Docs: [manual-controls.md](features/manual-controls.md#customer-surface).
+
 ### 2026-08-15 — Admin console: surface the same connection-readiness reason before a customer hits it
 Requested: see the add-content connection errors (no_campaign/not_launched/
 missing_page/connection_issue) in the admin dashboard. The classification
