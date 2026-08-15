@@ -71,7 +71,7 @@ const PILL: Record<HomeState, "ok" | "info" | "neutral" | "attn"> = {
 // states now read through the SAME noRecCard() reasoning the pending-rec
 // teaser already used, so the hero and the "why (not)" card can never again
 // say different things about the same campaign.
-function hero(state: HomeState, attentionKind: CustomerOverview["attentionKind"], readyToBuild: boolean, noRecReason: string | null): { badge: string; title: string; body: string; cta?: { to: string; label: string }; launch?: { label: string } } {
+function hero(state: HomeState, attentionKind: CustomerOverview["attentionKind"], readyToBuild: boolean, noRecReason: string | null, wasBuiltHere: boolean): { badge: string; title: string; body: string; cta?: { to: string; label: string }; launch?: { label: string } } {
   switch (state) {
     case "attention":
       // A delivery problem (AIC-39) reads differently from a lost connection.
@@ -83,7 +83,12 @@ function hero(state: HomeState, attentionKind: CustomerOverview["attentionKind"]
         return { badge: h.states.tracking.badge, title: h.states.tracking.title, body: h.states.tracking.body };
       return { ...h.states.attention, cta: { to: "/connect", label: h.states.attention.cta } };
     case "ready_to_launch":
-      return { badge: h.states.readyToLaunch.badge, title: h.states.readyToLaunch.title, body: h.states.readyToLaunch.body, launch: { label: h.states.readyToLaunch.cta } };
+      // Bug fix, 2026-08-14: "we built it, it passed review" is false for a
+      // campaign connected from outside the app — confirmed live. Same
+      // badge/CTA either way; only the claim about who built it changes.
+      return wasBuiltHere
+        ? { badge: h.states.readyToLaunch.badge, title: h.states.readyToLaunch.title, body: h.states.readyToLaunch.body, launch: { label: h.states.readyToLaunch.cta } }
+        : { badge: h.states.readyToLaunch.badge, title: h.states.readyToLaunchConnected.title, body: h.states.readyToLaunchConnected.body, launch: { label: h.states.readyToLaunch.cta } };
     case "paused":
       return { badge: h.states.paused.badge, title: h.states.paused.title, body: h.states.paused.body };
     case "stopped":
@@ -229,7 +234,7 @@ export function Home() {
 
   const state = ov.homeState;
   const readyToBuild = ov.connection?.accessHealth === "ok" && !!ov.connection.adAccount && !!ov.connection.pageId;
-  const hd = hero(state, ov.attentionKind, readyToBuild, ov.campaign?.noRecReason ?? null);
+  const hd = hero(state, ov.attentionKind, readyToBuild, ov.campaign?.noRecReason ?? null, ov.campaign?.wasBuiltHere ?? false);
   // A pending recommendation (including the AIC-86 advisory type, which fires
   // before any evidence gate) outranks the "nothing to report" hero — it IS
   // the current status. Scoped to ok/collecting: attention/paused/stopped

@@ -166,6 +166,61 @@ d("customer overview (DB + HTTP)", () => {
     expect(ov2!.campaign?.noRecReason).toBeNull();
   });
 
+  // REGRESSION (real, found 2026-08-14 live): the ready_to_launch hero claims
+  // "we built the campaign and it passed review". `readyToLaunch` was derived
+  // purely from status/launch_approved_at/meta_campaign_id, with nothing
+  // distinguishing a builder-built campaign from one connected from outside
+  // the app — so a real connected Pixel campaign got told it was built here,
+  // which is false on both counts (nobody built it, nothing went through
+  // campaign_reviews). `wasBuiltHere` is derived from a REAL create_campaign
+  // action_history row rather than a separately-set flag, so it can't drift.
+  it("wasBuiltHere is false for a campaign with no create_campaign action_history row — even though it's ready_to_launch (AIC-89 hero-copy bug)", async () => {
+    const { userId, campaignId } = await seedChain("connected");
+    // Same shape the real connected campaign has: reviewed + linked to a real
+    // Meta campaign, not yet launch-approved — but nothing built it here.
+    await pool.query(
+      `UPDATE managed_campaigns SET meta_campaign_id = 'meta_camp_connected' WHERE id = $1`,
+      [campaignId],
+    );
+
+    const ov = await buildCustomerOverview(pool, userId);
+    expect(ov!.campaign?.readyToLaunch).toBe(true);
+    expect(ov!.campaign?.wasBuiltHere).toBe(false);
+    expect(ov!.homeState).toBe("ready_to_launch");
+  });
+
+  it("wasBuiltHere is true once a real, successful create_campaign action_history row exists", async () => {
+    const { userId, campaignId } = await seedChain("builtHere");
+    await pool.query(
+      `UPDATE managed_campaigns SET meta_campaign_id = 'meta_camp_built' WHERE id = $1`,
+      [campaignId],
+    );
+    await pool.query(
+      `INSERT INTO action_history (campaign_id, what, action_type, previous_state, new_state, human_involved, result)
+       VALUES ($1, 'created campaign', 'create_campaign', '{}'::jsonb, '{}'::jsonb, true, 'success')`,
+      [campaignId],
+    );
+
+    const ov = await buildCustomerOverview(pool, userId);
+    expect(ov!.campaign?.wasBuiltHere).toBe(true);
+  });
+
+  it("a FAILED create_campaign attempt does not count as wasBuiltHere", async () => {
+    const { userId, campaignId } = await seedChain("failedbuild");
+    await pool.query(
+      `UPDATE managed_campaigns SET meta_campaign_id = 'meta_camp_failed' WHERE id = $1`,
+      [campaignId],
+    );
+    await pool.query(
+      `INSERT INTO action_history (campaign_id, what, action_type, previous_state, new_state, human_involved, result)
+       VALUES ($1, 'attempted create', 'create_campaign', '{}'::jsonb, '{}'::jsonb, true, 'failed')`,
+      [campaignId],
+    );
+
+    const ov = await buildCustomerOverview(pool, userId);
+    expect(ov!.campaign?.wasBuiltHere).toBe(false);
+  });
+
   // REGRESSION (real, found 2026-08-14 live): the dashboard's "recommendation
   // waiting" teaser rendered a hardcoded headline ("worth pausing one of the
   // ads") regardless of what the actual pending recommendation was — because

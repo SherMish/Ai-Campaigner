@@ -94,6 +94,7 @@ Derived server-side, highest-priority first:
 | --- | --- |
 | `no_campaign` | account has no linked customer/campaign yet |
 | `attention` | connection `access_health` ≠ `ok`, or campaign `needs_attention`/`connection_problem`, or a real delivery problem (AIC-39) |
+| `ready_to_launch` | reviewed (`status='active'`), linked to a real Meta campaign, but not yet customer-approved (`launch_approved_at IS NULL`) — outranks delivery/collecting, since a still-PAUSED campaign has no delivery data to judge and the one actionable thing is the launch itself (AIC-53) |
 | `paused` | campaign `status = paused` (an operator paused OUR management of it — resuming needs us) |
 | `stopped` | nothing is currently deliverable, but nothing is broken (AIC-71) — usually the customer's own pause via the audience controls; they can resume it themselves |
 | `collecting` | campaign active but no snapshot data (no spend, no leads, no creatives) |
@@ -110,6 +111,25 @@ mismatch are three different problems with three different copy blocks
 (`h.states.attention` / `.delivery` / `.tracking`); neither `delivery` nor
 `tracking` shows a CTA — there's nothing for the customer to click, it's on
 us to fix (see [tracking-health.md](tracking-health.md)).
+
+**`ready_to_launch`'s copy used to claim work that wasn't done (bug fix,
+2026-08-14).** Its hero body said "בנינו את הקמפיין והוא עבר בדיקה" — "we built
+the campaign and it passed review" — true only when a campaign came through
+our own builder (AIC-50, always logs a `create_campaign` `action_history` row)
+or first-campaign review. A campaign connected from outside the app (see
+[campaign-builder.md](campaign-builder.md)'s "Add to an existing campaign"
+section) is equally `ready_to_launch` — genuinely PAUSED on Meta, genuinely
+needing approval — but nobody built it and it never went through review.
+Confirmed live on the real connected Pixel campaign.
+
+`buildCustomerOverview` now derives `campaign.wasBuiltHere` from whether a
+real, successful `create_campaign` `action_history` row exists for that
+campaign — the actual historical fact, not a separately-maintained flag that
+could drift from it (the same "derive from what happened" instinct as
+AIC-77b's `recommendation_id IS NOT NULL AND result='success'`
+engine/manual discriminator). `Home.tsx`'s hero switches copy on it: same
+badge and CTA either way, but a `wasBuiltHere: false` campaign gets an honest
+"we found your campaign on Meta, it's still paused" body instead.
 
 ## Honest delivery state, not the management flag (AIC-71)
 

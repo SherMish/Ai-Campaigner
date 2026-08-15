@@ -78,6 +78,11 @@ export interface CustomerOverview {
     id: string; name: string; status: CampaignStatus; objective: string;
     agreedBudgetAgorot: number; budgetPeriod: "daily" | "monthly";
     automationEnabled: boolean; deliveryOk: boolean; readyToLaunch: boolean;
+    // Bug fix, 2026-08-14: whether a real create_campaign action_history row
+    // exists for this campaign — distinguishes a builder-built campaign from
+    // one connected from outside the app, so the ready_to_launch hero can
+    // stop claiming "we built it, it passed review" for the latter.
+    wasBuiltHere: boolean;
     noRecReason: string | null; noRecDetail: Record<string, unknown> | null;
     liveBudgetAgorot: number | null;
     delivering: boolean; deliveringAdCount: number | null;

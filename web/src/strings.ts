@@ -549,6 +549,11 @@ export const strings = {
           // AIC-53: built + review-approved, PAUSED on Meta, waiting for the
           // customer's explicit go-live approval — nothing spends until they click.
           readyToLaunch: { badge: "מוכן להפעלה", title: "הקמפיין מוכן — נותר רק לאשר הפעלה", body: "בנינו את הקמפיין והוא עבר בדיקה, אבל הוא עדיין מושהה ולא מוציא כסף. ההפעלה מתבצעת רק באישור שלכם.", cta: "אישור והפעלה" },
+          // Bug fix, 2026-08-14: the copy above claims "we built it, it passed
+          // review" — both false for a campaign connected from outside the app
+          // (confirmed live on the real free_beta campaign). Same badge/cta,
+          // an honest body that doesn't claim work we didn't do.
+          readyToLaunchConnected: { title: "הקמפיין ממתין לאישור הפעלה", body: "מצאנו את הקמפיין שלכם ב-Meta, אבל הוא עדיין מושהה ולא מוציא כסף. ההפעלה מתבצעת רק באישור שלכם." },
           // AIC-39: a not-delivering ad set — distinct from a lost Meta connection.
           // AIC-88: the conversions ARE happening; we are not counting them.
           // Never phrased as the campaign failing — the fault is ours, and

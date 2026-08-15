@@ -41,6 +41,14 @@ export interface CustomerOverview {
     // AIC-53: review-approved (status='active') but the customer hasn't
     // approved activation yet — the campaign is still PAUSED on Meta.
     readyToLaunch: boolean;
+    // Bug fix, 2026-08-14: whether THIS campaign has a real, successful
+    // `create_campaign` action_history row — the ground truth for "did our
+    // builder make this," derived from what actually happened rather than a
+    // separately-maintained flag that could drift. `readyToLaunch` used to
+    // assume every unlaunched campaign was builder-made, so its hero copy
+    // ("we built it, it passed review") was false for a campaign connected
+    // from outside the app — confirmed live on the real free_beta campaign.
+    wasBuiltHere: boolean;
     // AIC-88: false only on a positively-detected lead-definition mismatch.
     // null = never checked / could not determine — never treated as a problem.
     trackingOk: boolean | null;
@@ -207,9 +215,14 @@ export async function buildCustomerOverview(
       delivering: boolean;
       delivering_ad_count: number | null;
       leads_to_date: number | null;
+      was_built_here: boolean;
     }>(
-      `SELECT id, name, status, objective, agreed_budget_agorot, budget_period, automation_enabled, delivery_ok, tracking_ok, launch_approved_at, meta_campaign_id, no_rec_reason, no_rec_detail, live_budget_agorot, delivering, delivering_ad_count, leads_to_date
-       FROM managed_campaigns WHERE customer_id = $1`,
+      `SELECT mc.id, mc.name, mc.status, mc.objective, mc.agreed_budget_agorot, mc.budget_period, mc.automation_enabled, mc.delivery_ok, mc.tracking_ok, mc.launch_approved_at, mc.meta_campaign_id, mc.no_rec_reason, mc.no_rec_detail, mc.live_budget_agorot, mc.delivering, mc.delivering_ad_count, mc.leads_to_date,
+              EXISTS (
+                SELECT 1 FROM action_history ah
+                WHERE ah.campaign_id = mc.id AND ah.action_type = 'create_campaign' AND ah.result = 'success'
+              ) AS was_built_here
+       FROM managed_campaigns mc WHERE mc.customer_id = $1`,
       [customerId],
     ),
     pool.query<{
@@ -265,6 +278,7 @@ export async function buildCustomerOverview(
           campRes.rows[0].status === "active" &&
           campRes.rows[0].launch_approved_at === null &&
           campRes.rows[0].meta_campaign_id !== null,
+        wasBuiltHere: campRes.rows[0].was_built_here,
         noRecReason: campRes.rows[0].no_rec_reason,
         noRecDetail: campRes.rows[0].no_rec_detail,
         liveBudgetAgorot: campRes.rows[0].live_budget_agorot,

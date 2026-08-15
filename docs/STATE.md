@@ -6,6 +6,31 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-14 — Fix: the ready_to_launch hero claimed work that wasn't done
+Class B from the same sweep as the two fixes below: `readyToLaunch` was
+derived purely from `status`/`launch_approved_at`/`meta_campaign_id`, with
+nothing distinguishing a campaign our own builder made from one connected
+from outside the app. Its hero body says "בנינו את הקמפיין והוא עבר בדיקה"
+("we built the campaign and it passed review") — both false for a connected
+campaign. Confirmed live on the real free_beta campaign.
+
+`buildCustomerOverview` now derives `campaign.wasBuiltHere` from whether a
+real, successful `create_campaign` `action_history` row exists — the actual
+historical fact, not a new flag that could drift from it. `Home.tsx`'s hero
+switches body copy on it (same badge/CTA either way): "we found your campaign
+on Meta, it's still paused" instead of claiming work never done. Also fixed
+a real doc gap found while writing this up — `ready_to_launch` was entirely
+missing from `customer-overview.md`'s `homeState` precedence table.
+
+Test-first: 3 new DB integration cases (no action_history row → `wasBuiltHere:
+false` even though `readyToLaunch: true`; a real successful row → `true`; a
+FAILED create attempt does NOT count). Full suite green (401 unit, 221/223
+integration — only the 2 known pre-existing flakes), typecheck and web build
+clean. Verified live: `test@test.com`'s hero now reads "הקמפיין ממתין לאישור
+הפעלה" / "מצאנו את הקמפיין שלכם ב-Meta..." with no false claim; GelNails
+(already launched) unaffected. Docs:
+[customer-overview.md](features/customer-overview.md).
+
 ### 2026-08-14 — Fix: the WhatsApp Meta-write literals were re-hardcoded, not sourced from the constants
 Root-cause pass on the bug the previous fix (below) refused rather than
 fixed. `shared/src/recommended-defaults.ts`'s `FIXED_DESTINATION`/`FIXED_CTA`
