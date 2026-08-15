@@ -71,6 +71,15 @@ export const strings = {
         below_object_evidence_floor: "יש מה להשוות, אבל עדיין לא מספיק נתונים", // AIC-85
         no_comparable_creatives: "מודעה אחת בלבד — אין השוואה", // AIC-85, rarely stored — see rules.ts
       } as Record<string, string>,
+      // Same reasons the customer-facing add-content 409 uses
+      // (connection-readiness.ts) — operator label, not customer copy, so
+      // it can name the technical gap directly.
+      connectionReadinessReason: {
+        no_campaign: "אין קמפיין מנוהל",
+        not_launched: "קמפיין קיים, לא מקושר ל-Meta",
+        missing_page: "חסרה גישה לעמוד הפייסבוק",
+        connection_issue: "בעיית חיבור ל-Meta",
+      } as Record<string, string>,
     },
 
     // Admin console shell + nav (AIC-43)
@@ -95,6 +104,7 @@ export const strings = {
       filterAll: "הכל",
       filterActive: "פעילים",
       filterDeactivated: "מושבתים",
+      filterAttention: "בעיית חיבור",
       noResults: "לא נמצאו לקוחות.",
       fieldBusinessName: "שם העסק",
       fieldCategory: "תחום",

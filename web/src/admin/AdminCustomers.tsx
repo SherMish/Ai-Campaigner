@@ -35,6 +35,12 @@ interface CustomerRow {
   campaignId: string | null;
   agreedBudgetAgorot: number | null;
   openRecommendations: number;
+  // Same reason the customer-facing add-content flow would 409 with
+  // (server/src/services/connection-readiness.ts) — null once the campaign
+  // is real, linked, and every connection layer (health/ad account/Page) is
+  // present. Lets an operator catch a gap like a missing Page grant before
+  // a customer with an active, spending campaign hits the wall themselves.
+  connectionReadiness: "no_campaign" | "not_launched" | "missing_page" | "connection_issue" | null;
 }
 
 // Full record (AIC-44): the list row plus everything only the detail route
@@ -150,7 +156,7 @@ export function AdminCustomers() {
   const [queue, setQueue] = useState<OpsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "deactivated">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "deactivated" | "attention">("all");
 
   const [selected, setSelected] = useState<CustomerRow | null>(null);
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
@@ -235,6 +241,7 @@ export function AdminCustomers() {
   const filtered = customers.filter((c) => {
     if (statusFilter === "active" && !c.isActive) return false;
     if (statusFilter === "deactivated" && c.isActive) return false;
+    if (statusFilter === "attention" && !c.connectionReadiness) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return c.businessName.toLowerCase().includes(q) || c.category.toLowerCase().includes(q);
@@ -389,6 +396,7 @@ export function AdminCustomers() {
             <button type="button" className={statusFilter === "all" ? "active" : ""} onClick={() => setStatusFilter("all")}>{cc.filterAll}</button>
             <button type="button" className={statusFilter === "active" ? "active" : ""} onClick={() => setStatusFilter("active")}>{cc.filterActive}</button>
             <button type="button" className={statusFilter === "deactivated" ? "active" : ""} onClick={() => setStatusFilter("deactivated")}>{cc.filterDeactivated}</button>
+            <button type="button" className={statusFilter === "attention" ? "active" : ""} onClick={() => setStatusFilter("attention")}>{cc.filterAttention}</button>
           </div>
         </div>
 
@@ -409,7 +417,14 @@ export function AdminCustomers() {
                 <tr key={c.id} className={selected?.id === c.id ? "selected" : ""} onClick={() => select(c)}>
                   <td>{c.businessName}{!c.isActive && <span className="pill neutral" style={{ marginInlineStart: 8, padding: "2px 9px", fontSize: "0.72rem" }}>{cc.deactivatedBadge}</span>}</td>
                   <td>{c.subscriptionStatus ?? t.none}</td>
-                  <td>{c.accessHealth ?? t.none}</td>
+                  <td>
+                    {c.accessHealth ?? t.none}
+                    {c.connectionReadiness && (
+                      <span className="pill warn" style={{ marginInlineStart: 8, padding: "2px 9px", fontSize: "0.72rem" }}>
+                        {t.connectionReadinessReason[c.connectionReadiness]}
+                      </span>
+                    )}
+                  </td>
                   <td>{c.campaignStatus ?? t.none}</td>
                   <td>{c.agreedBudgetAgorot ? formatShekel(c.agreedBudgetAgorot) : t.none}</td>
                   <td>{c.openRecommendations}</td>
@@ -430,6 +445,13 @@ export function AdminCustomers() {
             <button className="btn btn-outline btn-sm" onClick={() => { setSelected(null); setDetail(null); }}>✕</button>
           </div>
           <p className="muted" style={{ marginTop: 6 }}>{t.campaign}: {selected.campaignStatus ?? t.none} · {t.connection}: {selected.accessHealth ?? t.none}</p>
+          {selected.connectionReadiness && (
+            <p className="muted" style={{ fontSize: "0.85rem" }}>
+              <span className="pill warn" style={{ padding: "2px 9px", fontSize: "0.72rem" }}>
+                {t.connectionReadinessReason[selected.connectionReadiness]}
+              </span>
+            </p>
+          )}
           {!selected.isActive && <p className="muted" style={{ fontSize: "0.85rem" }}>{cc.deactivatedNote}</p>}
 
           {/* CRUD actions */}

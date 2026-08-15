@@ -1,6 +1,7 @@
 import type pg from "pg";
 import type { AccessHealth, CampaignStatus, SubscriptionStatus } from "@aic/shared";
 import { resolveThresholds, type RuleThresholds } from "../recommendations/rules.js";
+import { classifyConnectionReadiness, type ConnectionReadinessReason } from "./connection-readiness.js";
 
 // One row of the operator's customer list — status at a glance.
 export interface CustomerListRow {
@@ -19,18 +20,27 @@ export interface CustomerListRow {
   campaignStatus: CampaignStatus | null;
   agreedBudgetAgorot: number | null;
   openRecommendations: number;
+  // Same classification the customer-facing add-content 409 uses
+  // (connection-readiness.ts) — null once a customer HAS a campaign,
+  // access_health='ok', an ad account, and a Page; otherwise the reason
+  // the operator would otherwise only discover after the customer hits a
+  // wall themselves (confirmed live: an active, spending campaign whose
+  // Page access was silently missing for weeks).
+  connectionReadiness: ConnectionReadinessReason | null;
 }
 
 export async function listCustomers(pool: pg.Pool): Promise<CustomerListRow[]> {
   const { rows } = await pool.query(
     `SELECT c.id, c.business_name, c.category, c.is_test, c.is_active, c.deactivated_at, c.onboarding_status,
             s.status AS subscription_status, s.setup_paid,
-            conn.access_health,
+            conn.access_health, conn.page_id,
             mc.id AS campaign_id, mc.name AS campaign_name, mc.status AS campaign_status, mc.agreed_budget_agorot,
+            mc.meta_campaign_id, aa.meta_ad_account_id,
             COALESCE(r.open_recs, 0) AS open_recs
      FROM customers c
      LEFT JOIN subscriptions s      ON s.customer_id = c.id
      LEFT JOIN meta_connections conn ON conn.customer_id = c.id
+     LEFT JOIN ad_accounts aa       ON aa.connection_id = conn.id
      LEFT JOIN managed_campaigns mc  ON mc.customer_id = c.id
      LEFT JOIN LATERAL (
        SELECT count(*)::int AS open_recs FROM recommendations r
@@ -54,6 +64,13 @@ export async function listCustomers(pool: pg.Pool): Promise<CustomerListRow[]> {
     campaignStatus: r.campaign_status ?? null,
     agreedBudgetAgorot: r.agreed_budget_agorot ?? null,
     openRecommendations: Number(r.open_recs),
+    connectionReadiness: classifyConnectionReadiness({
+      campaignId: r.campaign_id ?? null,
+      metaCampaignId: r.meta_campaign_id ?? null,
+      accessHealth: r.access_health ?? null,
+      metaAdAccountId: r.meta_ad_account_id ?? null,
+      pageId: r.page_id ?? null,
+    }),
   }));
 }
 
@@ -95,12 +112,14 @@ export async function getCustomerDetail(
 ): Promise<CustomerDetail | null> {
   const list = await pool.query(
     `SELECT c.*, s.status AS subscription_status, s.setup_paid, s.next_charge_date,
-            conn.access_health,
+            conn.access_health, conn.page_id,
             mc.id AS campaign_id, mc.name AS campaign_name, mc.status AS campaign_status, mc.agreed_budget_agorot,
-            mc.no_rec_reason, mc.no_rec_detail, mc.threshold_overrides, mc.live_budget_agorot
+            mc.no_rec_reason, mc.no_rec_detail, mc.threshold_overrides, mc.live_budget_agorot,
+            mc.meta_campaign_id, aa.meta_ad_account_id
      FROM customers c
      LEFT JOIN subscriptions s       ON s.customer_id = c.id
      LEFT JOIN meta_connections conn ON conn.customer_id = c.id
+     LEFT JOIN ad_accounts aa        ON aa.connection_id = conn.id
      LEFT JOIN managed_campaigns mc   ON mc.customer_id = c.id
      WHERE c.id = $1`,
     [customerId],
@@ -153,6 +172,13 @@ export async function getCustomerDetail(
     campaignStatus: c.campaign_status ?? null,
     agreedBudgetAgorot: c.agreed_budget_agorot ?? null,
     openRecommendations: openRecs,
+    connectionReadiness: classifyConnectionReadiness({
+      campaignId: c.campaign_id ?? null,
+      metaCampaignId: c.meta_campaign_id ?? null,
+      accessHealth: c.access_health ?? null,
+      metaAdAccountId: c.meta_ad_account_id ?? null,
+      pageId: c.page_id ?? null,
+    }),
     mainService: c.main_service,
     geoArea: c.geo_area,
     primaryCustomer: c.primary_customer,

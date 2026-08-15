@@ -715,6 +715,17 @@ of `connection_issue`, and `AddContent.tsx` renders the exact same
 `app.connect` strings rather than duplicating them — same problem, same
 explanation, wherever a customer encounters it.
 
+**The classification itself moved out to a shared module (same day,
+follow-up).** `no_campaign`/`not_launched`/`missing_page`/`connection_issue`
+is now `classifyConnectionReadiness` in `server/src/services/connection-readiness.ts`
+— a pure function over `{campaignId, metaCampaignId, accessHealth,
+metaAdAccountId, pageId}`, returning the reason or `null` when ready. Both
+`resolveAdditionContext` and `resolveAdditionAvailability` call it rather
+than re-checking the four fields inline; the admin console's customer list
+(`customers.ts`, see [ops-console.md](ops-console.md#customers-view-aic-16))
+calls the exact same function so an operator sees the identical reason a
+customer would eventually hit, before they hit it.
+
 **Customer surface** (`web/src/app/AddContent.tsx`): reached via a new
 persistent sidebar entry ("הוספת תוכן"), shown whenever a managed campaign
 exists — the opposite gate from the builder's `no_campaign`-only Home CTA.

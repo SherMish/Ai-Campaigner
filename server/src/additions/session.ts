@@ -6,6 +6,7 @@ import type { AdditionWriter } from "./types.js";
 import type { DeliveryReader } from "../meta/delivery-health.js";
 import type { AdMediaReader } from "../meta/ad-media.js";
 import { isMessagingAction } from "../meta/tracking-health.js";
+import { classifyConnectionReadiness, type ConnectionReadinessReason } from "../services/connection-readiness.js";
 
 // The inverse precondition of builder/session.ts's resolveBuilderContext:
 // that one requires NO managed campaign (first-time build only); this one
@@ -116,9 +117,14 @@ function toContext(r: AdditionContextRow): AdditionContext {
 
 export async function resolveAdditionContext(pool: pg.Pool, userId: string): Promise<AdditionContext | null> {
   const r = await fetchAdditionContextRow(pool, userId);
-  if (!r || !r.customer_id || !r.campaign_id || !r.meta_campaign_id) return null;
-  if (r.access_health !== "ok" || !r.meta_ad_account_id || !r.page_id) return null;
-  return toContext(r);
+  const reason = classifyConnectionReadiness({
+    campaignId: r?.campaign_id ?? null,
+    metaCampaignId: r?.meta_campaign_id ?? null,
+    accessHealth: r?.access_health ?? null,
+    metaAdAccountId: r?.meta_ad_account_id ?? null,
+    pageId: r?.page_id ?? null,
+  });
+  return reason ? null : toContext(r!);
 }
 
 // Why additions aren't available yet — the customer-facing counterpart to
@@ -128,39 +134,29 @@ export async function resolveAdditionContext(pool: pg.Pool, userId: string): Pro
 // run when a campaign already exists). resolveAdditionContext collapses SIX
 // different preconditions into one null because every write route just
 // needs a yes/no; this function exists for the ONE place (GET /context) that
-// has to tell the customer the truth about which one failed.
-//   no_campaign        — nothing built yet. The only case "go build one" is
-//                         actually correct for.
-//   not_launched       — a local campaign row exists but was never linked to
-//                         a real Meta campaign (still mid-builder, or the
-//                         launch was never approved).
-//   missing_page       — the campaign IS linked and running, our ad account
-//                         access is fine, but we don't have the Facebook
-//                         Page on file. Split out from connection_issue
-//                         (not just collapsed further into it) because it's
-//                         both the MOST common real-world cause (confirmed
-//                         live: an active, spending campaign hit exactly
-//                         this) and the one with a precise, known fix —
-//                         onboarding's Connect screen already has the exact
-//                         copy for it (missingBody/fixSteps), just unreachable
-//                         once onboarding is behind you. Reused here rather
-//                         than duplicated.
-//   connection_issue   — the rarer remainder: unhealthy connection or no ad
-//                         account on file. No equally precise fix exists yet
-//                         (reconnect via Settings is the best available
-//                         next step), so it stays a single catch-all.
-export type AdditionUnavailableReason = "no_campaign" | "not_launched" | "missing_page" | "connection_issue";
+// has to tell the customer the truth about which one failed. The actual
+// classification is shared with the admin console (connection-readiness.ts)
+// so the two surfaces can't drift onto different definitions of "ready" —
+// see that file for what each reason means. (No separate "no customer_id"
+// check needed here: a user with no customer_id can never join to a
+// campaign_id either, so the shared classifier's no_campaign already
+// covers it.)
+export type AdditionUnavailableReason = ConnectionReadinessReason;
 
 export async function resolveAdditionAvailability(
   pool: pg.Pool,
   userId: string,
 ): Promise<{ ctx: AdditionContext } | { ctx: null; reason: AdditionUnavailableReason }> {
   const r = await fetchAdditionContextRow(pool, userId);
-  if (!r || !r.customer_id || !r.campaign_id) return { ctx: null, reason: "no_campaign" };
-  if (!r.meta_campaign_id) return { ctx: null, reason: "not_launched" };
-  if (r.access_health !== "ok" || !r.meta_ad_account_id) return { ctx: null, reason: "connection_issue" };
-  if (!r.page_id) return { ctx: null, reason: "missing_page" };
-  return { ctx: toContext(r) };
+  const reason = classifyConnectionReadiness({
+    campaignId: r?.campaign_id ?? null,
+    metaCampaignId: r?.meta_campaign_id ?? null,
+    accessHealth: r?.access_health ?? null,
+    metaAdAccountId: r?.meta_ad_account_id ?? null,
+    pageId: r?.page_id ?? null,
+  });
+  if (reason) return { ctx: null, reason };
+  return { ctx: toContext(r!) };
 }
 
 // Same token-gated factory pattern as buildBuilderWriter/buildLaunchWriter.

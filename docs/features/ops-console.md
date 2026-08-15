@@ -96,6 +96,25 @@ Routes: `GET /api/admin/customers`, `GET /api/admin/customers/:id`. Reads
 only; role-gated. Source: `server/src/services/customers.js`. Tests:
 `customers.integration.test.ts`.
 
+**`connectionReadiness` — the same reason a customer would eventually hit,
+surfaced before they do (bug fix, 2026-08-15).** Both rows carry a
+`connectionReadiness` field — `no_campaign` / `not_launched` / `missing_page`
+/ `connection_issue`, or `null` once the campaign is real, linked, and every
+connection layer (health, ad account, Page) is present. This is the EXACT
+same classification the customer-facing add-content flow's 409 uses
+(`server/src/services/connection-readiness.ts`'s `classifyConnectionReadiness`
+— one pure function, two consumers, so the two surfaces can't drift onto
+different definitions of "ready"). Found live: a customer's `page_id` had
+been silently NULL for weeks — real, active, spending campaign, but nothing
+in the admin list distinguished it from a fully healthy one, because
+`accessHealth` alone (`ok`/`revoked`/`invalid`/`needs_reconnect`) only
+reflects whether the CONNECTION passed its own health check, not whether
+every asset it needs (ad account, Page) is actually on file. `AdminCustomers.tsx`
+shows a `pill warn` badge with the reason next to the raw `accessHealth`
+in both the list row and the detail card, and a fourth filter tab
+("בעיית חיבור") narrows the list to exactly these customers — an operator
+no longer has to wait for a customer to report it.
+
 ## Customer CRUD + admin audit log (AIC-44)
 
 AIC-16 was read-only. `server/src/services/customer-admin.ts` adds the write

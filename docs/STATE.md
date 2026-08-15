@@ -6,6 +6,27 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-15 — Admin console: surface the same connection-readiness reason before a customer hits it
+Requested: see the add-content connection errors (no_campaign/not_launched/
+missing_page/connection_issue) in the admin dashboard. The classification
+moved out of `additions/session.ts` into a shared pure function
+(`server/src/services/connection-readiness.ts`'s `classifyConnectionReadiness`)
+so the customer-facing 409 and the admin console read one definition, not
+two that could quietly drift apart. `listCustomers`/`getCustomerDetail` now
+join `ad_accounts` (previously not joined at all in this view) and return
+`connectionReadiness` per customer; `AdminCustomers.tsx` shows a `pill warn`
+badge with the reason in both the list row and the detail card, plus a
+fourth filter tab ("בעיית חיבור") to isolate exactly these customers.
+`accessHealth` alone couldn't have shown this — it only reflects whether the
+connection itself passed its health check, not whether every asset it needs
+(ad account, Page) is actually on file, which is exactly the gap the same
+day's add-content bug found live. Test-first: 7 unit cases on the pure
+classifier + a new DB integration test proving `listCustomers` returns
+`missing_page` for the real-shape row and flips to `null` once the Page is
+filled in. Full suite green (435 unit, 232/234 integration — only the 2
+known pre-existing flakes), typecheck + web build clean.
+Docs: [ops-console.md](features/ops-console.md#customers-view-aic-16).
+
 ### 2026-08-15 — Fix: fake Business Portfolio ID shipped as real (AIC-33 closed) + enriched fix-step copy
 Requested enrichment of the `missing_page` fix steps (English parentheticals
 for every Meta UI term, e.g. "עמודים (Pages)", plus our actual Business ID

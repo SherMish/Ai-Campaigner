@@ -38,6 +38,9 @@ d("customers view (DB + HTTP)", () => {
     expect(row.campaignStatus).toBe("active");
     expect(row.agreedBudgetAgorot).toBe(10000);
     expect(row.openRecommendations).toBe(1);
+    // The seed never links a real Meta campaign — this row is honestly
+    // "not_launched", not silently "ready".
+    expect(row.connectionReadiness).toBe("not_launched");
 
     const detail = await getCustomerDetail(pool, customerId);
     expect(detail?.mainService).toBe("personal training");
@@ -45,10 +48,45 @@ d("customers view (DB + HTTP)", () => {
     expect(detail?.openOpsItems).toBe(1);
     expect(detail?.noRecReason).toBe("no_comparable_audiences");
     expect(detail?.noRecDetail).toMatchObject({ comparableCount: 1 });
+    expect(detail?.connectionReadiness).toBe("not_launched");
 
     const res = await request(createApp()).get(`/api/admin/customers/${customerId}`).set("Authorization", ADMIN);
     expect(res.status).toBe(200);
     expect(res.body.businessName).toBe("__it_cust Co");
+
+    await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
+  });
+
+  // REGRESSION: an operator scanning the fleet had no way to see this without
+  // the customer hitting the wall themselves first (the real add-content bug).
+  it("surfaces the SAME connection-readiness reason the customer-facing add-content flow would hit", async () => {
+    const cust = await pool.query<{ id: string }>(
+      `INSERT INTO customers (business_name, category, onboarding_status) VALUES ('__it_cust_readiness', 'fitness', 'ready') RETURNING id`,
+    );
+    const customerId = cust.rows[0].id;
+    const conn = await pool.query<{ id: string }>(
+      `INSERT INTO meta_connections (customer_id, access_health) VALUES ($1,'ok') RETURNING id`, // page_id left NULL
+      [customerId],
+    );
+    const acct = await pool.query<{ id: string }>(
+      `INSERT INTO ad_accounts (connection_id, meta_ad_account_id) VALUES ($1,$2) RETURNING id`,
+      [conn.rows[0].id, `act_readiness_${conn.rows[0].id.slice(0, 8)}`],
+    );
+    await pool.query(
+      `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, meta_campaign_id) VALUES ($1,$2,'active','meta_camp_readiness')`,
+      [customerId, acct.rows[0].id],
+    );
+
+    const list = await listCustomers(pool);
+    expect(list.find((r) => r.id === customerId)?.connectionReadiness).toBe("missing_page");
+
+    const detail = await getCustomerDetail(pool, customerId);
+    expect(detail?.connectionReadiness).toBe("missing_page");
+
+    // Fill in the Page — the same customer should now read as fully ready.
+    await pool.query(`UPDATE meta_connections SET page_id = 'page_readiness_1' WHERE customer_id = $1`, [customerId]);
+    const listAfter = await listCustomers(pool);
+    expect(listAfter.find((r) => r.id === customerId)?.connectionReadiness).toBeNull();
 
     await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
   });
