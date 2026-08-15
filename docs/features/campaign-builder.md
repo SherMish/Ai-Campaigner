@@ -530,6 +530,43 @@ approval **with its reason stated**, never a silently dead button. Blockers
 are re-checked server-side in `approveLaunch` and return `409` — the disabled
 button is a courtesy, not the gate.
 
+#### Activation left the dashboard stale (bug fix, 2026-08-15, found live)
+
+`activateCampaign` only ever writes to Meta (PAUSED → ACTIVE) — it never
+touches `managed_campaigns.delivery_ok`/`delivering`/`delivering_ad_count`
+(AIC-39/71), which are otherwise only recomputed on the hourly engine tick.
+`LaunchModal`'s `approve()` already called `invalidateOverview()` on success,
+so the client correctly re-fetched the overview — but the overview correctly
+returned whatever the *last tick* had cached, which for a campaign PAUSED for
+weeks before this launch was `delivering: false, delivering_ad_count: 0`.
+
+Confirmed live on the real free_beta campaign: **seconds after approving**,
+Meta genuinely showed 2 ads ACTIVE (a third blocked only by its own,
+separately-paused ad set — a real fact about the account, not a bug), while
+Home confidently said "לא מתפרסם / אין כרגע מודעות שמוצגות ללקוחות" (nothing
+is showing) right after the single most consequential action a customer can
+take.
+
+This is the exact other half of the lesson [manual-controls.md](manual-controls.md)
+already documents for AIC-66's pause/resume routes — a synchronous backend
+recompute matters as much as invalidating the client cache, and a write path
+is only fully fixed once both halves are done. `approveLaunch`
+(`services/customer-launch.ts`) now calls the identical `refreshDeliveryNow`
+(`services/delivery-monitor.ts`) on a genuine `"activated"` outcome — same
+function, same call shape as the manual-controls routes, not a second
+implementation. `buildLaunchReader` (`launch/writer.ts`) is now typed as
+`LaunchStateReader & DeliveryReader` so the one adapter instance serves both
+purposes, the same intersection-type pattern `buildAdditionWriter` already
+used. Best-effort: a refresh failure (verified live — a transient Meta
+ad-account rate limit, from this session's own heavy probing) is logged and
+swallowed, leaving the stale row rather than writing a guess; the next hourly
+tick catches up regardless.
+
+Test-first: a new DB integration case seeds the exact stale state (the last
+tick's cached `delivering: false, delivering_ad_count: 0` from before
+launch), asserts `POST /launch/approve` refreshes both to the real
+post-activation Meta values within the same request.
+
 **Verification**: the two integration suites named above (13 tests total),
 plus a real-browser walk of a locally-seeded review-approved campaign — the
 `ready_to_launch` hero, the modal's full spend summary (₪40/day → ₪1200/mo

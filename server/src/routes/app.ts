@@ -16,6 +16,9 @@ import {
 import { buildCampaignAudiences } from "../services/campaign-audiences.js";
 import { getPendingLaunch, approveLaunch } from "../services/customer-launch.js";
 import { buildLaunchWriter, buildLaunchReader } from "../launch/writer.js";
+import { OpsQueue } from "../services/ops-queue.js";
+
+const launchOps = new OpsQueue(pool);
 
 // Customer-facing data API (AIC-22/24). Every route is scoped to the caller's
 // own customer via the JWT — the service only ever reads rows owned by req.userId.
@@ -199,7 +202,7 @@ appRouter.post("/launch/approve", requireAuth, async (req, res) => {
       res.status(503).json({ error: "execution temporarily unavailable" });
       return;
     }
-    const result = await approveLaunch(pool, writer, (req as AuthedRequest).userId!, buildLaunchReader());
+    const result = await approveLaunch(pool, writer, (req as AuthedRequest).userId!, buildLaunchReader(), launchOps);
     if (result.outcome === "not_found") {
       res.status(404).json({ error: "nothing pending launch" });
       return;

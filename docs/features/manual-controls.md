@@ -163,8 +163,12 @@ show it: `AudienceDetails`' `onToggle` (`Home.tsx`) refreshed the per-row
 cache (`overview-store.ts`) that the headline "מצב" and מודעות פעילות count
 actually read from. Fixed by calling `invalidateOverview()` after a
 successful toggle — the same pattern AIC-53's launch-approval flow already
-uses to leave its own stale state. Lesson: a synchronous backend recompute is
-only half the fix when the frontend caches its own read separately.
+uses. Lesson: a synchronous backend recompute is only half the fix when the
+frontend caches its own read separately.
+
+The launch gate (AIC-53) had exactly the other half of this same lesson
+missing — see [campaign-builder.md](campaign-builder.md)'s launch-gate
+section (bug fix, 2026-08-15) for that one.
 
 ## Customer surface
 

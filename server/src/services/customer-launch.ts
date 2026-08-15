@@ -2,6 +2,9 @@ import type pg from "pg";
 import { activateCampaign, type ActivateResult } from "../launch/activate.js";
 import type { LaunchWriter } from "../launch/types.js";
 import { resolveLaunchDestination, type LaunchDestination } from "./launch-destination.js";
+import type { DeliveryReader } from "../meta/delivery-health.js";
+import { refreshDeliveryNow } from "./delivery-monitor.js";
+import type { OpsQueue } from "./ops-queue.js";
 
 // The customer-facing side of the launch gate (AIC-53): what a customer sees
 // before approving, and the approve action itself. Scoped entirely from the
@@ -124,7 +127,8 @@ export async function approveLaunch(
   pool: pg.Pool,
   writer: LaunchWriter,
   userId: string,
-  reader?: LaunchStateReader | null,
+  reader?: (LaunchStateReader & DeliveryReader) | null,
+  ops?: OpsQueue,
 ): Promise<ActivateResult | { outcome: "not_found" } | { outcome: "blocked"; blockers: LaunchBlocker[] }> {
   const pending = await getPendingLaunch(pool, userId, reader);
   if (!pending) return { outcome: "not_found" };
@@ -133,5 +137,30 @@ export async function approveLaunch(
   if (pending.blockers.length > 0) {
     return { outcome: "blocked", blockers: pending.blockers };
   }
-  return activateCampaign(pool, writer, pending.campaignId, "customer");
+  const result = await activateCampaign(pool, writer, pending.campaignId, "customer");
+
+  // Bug fix, 2026-08-15, found live: activateCampaign only writes to Meta —
+  // the cached delivery/status columns aren't touched, so they stayed at
+  // whatever the last hourly tick saw (typically "still paused, nothing
+  // delivering"). A customer who just approved launch — the single most
+  // consequential action available — saw the dashboard confidently claim
+  // nothing was showing, while real ads had gone ACTIVE on Meta seconds
+  // earlier. Same refresh-in-request fix AIC-71 already applied to manual
+  // pause/resume (`routes/controls.ts`); `delivery-monitor.ts`'s own doc
+  // comment on `refreshDeliveryNow` predicts this exact symptom for any
+  // write path that skips it — this was the one that still did.
+  if (result.outcome === "activated" && reader && ops) {
+    const row = await pool.query<{ customer_id: string | null; meta_campaign_id: string }>(
+      `SELECT customer_id, meta_campaign_id FROM managed_campaigns WHERE id = $1`,
+      [pending.campaignId],
+    );
+    if (row.rows[0]) {
+      await refreshDeliveryNow({
+        pool, ops, deliveryReader: reader, campaignId: pending.campaignId,
+        customerId: row.rows[0].customer_id, metaCampaignId: row.rows[0].meta_campaign_id,
+      });
+    }
+  }
+
+  return result;
 }

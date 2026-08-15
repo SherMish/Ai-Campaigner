@@ -31,8 +31,13 @@ function metaFetch(state: { status: string }, adIds: string[] = ["ad_1", "ad_2"]
     if (u.includes("/stats?aggregation=host")) {
       return jsonRes(host ? { data: [{ data: [{ value: host, count: 42 }] }] } : { data: [] });
     }
-    if (u.includes("/adsets?")) return jsonRes({ data: [{ id: "as_1", status: "ACTIVE" }] });
-    if (u.includes("/ads?")) return jsonRes({ data: adIds.map((id) => ({ id, status: "ACTIVE" })) });
+    // Both `status` (getCampaignState) and `effective_status` (getDeliveryHealth
+    // — a genuinely different Meta field convention) — real Meta responses
+    // carry both, and the mock must too or one consumer sees an undefined status.
+    if (u.includes("/adsets?")) return jsonRes({ data: [{ id: "as_1", status: "ACTIVE", effective_status: "ACTIVE" }] });
+    // adset_id is what getDeliveryHealth's ad-level rollup keys on — without
+    // it every ad is silently unattributed and deliveringAdCount stays 0.
+    if (u.includes("/ads?")) return jsonRes({ data: adIds.map((id) => ({ id, status: "ACTIVE", effective_status: "ACTIVE", adset_id: "as_1" })) });
     if (u.includes("fields=status")) return jsonRes({ status: state.status, effective_status: state.status });
     if (u.includes("fields=daily_budget")) return jsonRes({ daily_budget: "4000", effective_status: state.status, name: "My Campaign" });
     throw new Error(`launch.integration.test: unexpected fetch ${method} ${u}`);
@@ -171,6 +176,41 @@ d("launch gate routes (DB + HTTP)", () => {
     // The overview now no longer reports it as pending.
     const summary = await request(app).get("/api/app/launch").set("Authorization", `Bearer ${token}`);
     expect(summary.body.launch).toBeNull();
+  });
+
+  // REGRESSION (real, found 2026-08-15 live): activateCampaign only writes to
+  // Meta — the cached delivery/status columns weren't refreshed until the
+  // next hourly engine tick, so a customer who just approved launch (real
+  // ads genuinely went ACTIVE on Meta seconds earlier) saw the dashboard
+  // confidently claim "לא מתפרסם / אין כרגע מודעות שמוצגות" (nothing is
+  // showing) right after taking the single most consequential action they
+  // can take. Same refresh-in-request fix AIC-71 already applied to manual
+  // pause/resume (delivery-monitor.ts's own doc comment predicts this exact
+  // symptom for any write that skips it).
+  it("refreshes delivery/status within the SAME request — no stale 'stopped' after a real launch", async () => {
+    const state = { status: "PAUSED" };
+    // 2 genuinely active ads under one ad set — the real post-launch Meta shape.
+    vi.stubGlobal("fetch", metaFetch(state, ["ad_1", "ad_2"]));
+    const { token, campaignId } = await seedPendingLaunch("refresh");
+    // Simulate the stale cache the real bug showed: the last tick ran BEFORE
+    // launch, while the campaign was still paused.
+    await pool.query(
+      `UPDATE managed_campaigns SET delivery_ok = true, delivering = false, delivering_ad_count = 0 WHERE id = $1`,
+      [campaignId],
+    );
+
+    const res = await request(app).post("/api/app/launch/approve").set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.outcome).toBe("activated");
+
+    const row = await pool.query<{ delivering: boolean; delivering_ad_count: number }>(
+      `SELECT delivering, delivering_ad_count FROM managed_campaigns WHERE id = $1`,
+      [campaignId],
+    );
+    // The stale false/0 must be gone — refreshed within this same request,
+    // not left for the next hourly tick.
+    expect(row.rows[0].delivering).toBe(true);
+    expect(row.rows[0].delivering_ad_count).toBe(2);
   });
 
   it("POST /launch/approve 404s when there's nothing to launch", async () => {

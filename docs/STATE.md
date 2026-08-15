@@ -6,6 +6,30 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-15 — Fix: activation left the dashboard stale — no delivery/status refresh
+Reported live on the real free_beta campaign, seconds after the first-ever
+customer launch approval through this app: Meta genuinely showed 2 ads
+ACTIVE, but Home said "לא מתפרסם / אין כרגע מודעות שמוצגות ללקוחות" (nothing
+is showing). `activateCampaign` only writes to Meta — it never recomputes
+`delivery_ok`/`delivering`/`delivering_ad_count`, which are otherwise only
+refreshed on the hourly engine tick. The client-side half (`invalidateOverview()`
+in `LaunchModal.approve()`) was already correct; only the server-side half was
+missing — the exact other half of the lesson `manual-controls.md` already
+documents for AIC-66's pause/resume routes.
+
+`approveLaunch` now calls the same `refreshDeliveryNow` those routes already
+use, on a genuine `"activated"` outcome. `buildLaunchReader` widened to
+`LaunchStateReader & DeliveryReader` so one adapter instance serves both. Test-
+first: seeds the exact stale-cache scenario (pre-launch tick's `delivering:
+false, delivering_ad_count: 0`) and asserts a same-request refresh to the real
+post-activation values. Full suite green (401 unit, 222/224 integration —
+only the 2 known pre-existing flakes), typecheck clean. Verified live:
+attempted a manual refresh against the real campaign and confirmed the
+error-handling path is safe (a transient Meta rate limit — from this
+session's own heavy probing — was logged and swallowed, leaving the stale
+row rather than writing a guess; the next hourly tick will catch up
+regardless). Docs: [campaign-builder.md](features/campaign-builder.md).
+
 ### 2026-08-14 — Fix: the ready_to_launch hero claimed work that wasn't done
 Class B from the same sweep as the two fixes below: `readyToLaunch` was
 derived purely from `status`/`launch_approved_at`/`meta_campaign_id`, with
