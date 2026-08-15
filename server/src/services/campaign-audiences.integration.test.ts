@@ -171,6 +171,40 @@ d("campaign audiences (DB + HTTP)", () => {
     expect(allTime?.audiences[0].spendAgorot).toBe(6000); // today + the old day
   });
 
+  // REGRESSION (real live bug, reported on production): the campaign card
+  // said "2 מודעות פעילות" but opening פירוט showed only 1 ad, with no
+  // acknowledgment a second one exists — read as "one ad vanished". Root
+  // cause confirmed live: a real ad Meta still reports as ACTIVE simply
+  // hadn't delivered anything in 3+ weeks, so it has no row in the selected
+  // window even though it has real historical rows outside it. Never a live
+  // Meta call here (DB-only by design) and no liveness claim either — the
+  // count states only what our own records show: creatives with data
+  // somewhere in history that aren't in the SELECTED window.
+  it("moreCreativesCount notes a creative with real historical data outside the selected window", async () => {
+    const { userId, campaignId } = await seedChain("more-creatives");
+    const store = new PgSnapshotStore(pool);
+    const longAgo = "2026-01-05";
+    await store.upsert([
+      snap(campaignId, { grain: "adset", metaObjectId: "as_x", spendAgorot: 2000, leads: 1 }),
+      snap(campaignId, { grain: "creative", metaObjectId: "cr_recent", parentMetaId: "as_x", creativeName: "Recent", spendAgorot: 2000, leads: 1 }),
+      // A second creative under the SAME ad set, real data, but only from
+      // well outside "week" — the exact shape of the live bug.
+      snap(campaignId, { grain: "creative", metaObjectId: "cr_stale", parentMetaId: "as_x", creativeName: "Stale", periodStart: longAgo, periodEnd: longAgo, spendAgorot: 5000, leads: 5 }),
+    ]);
+    await upsertAdSetMeta(pool, campaignId, [
+      { adSetId: "as_x", name: "Set X", ageMin: 25, ageMax: 40, genders: "all", geoSummary: "", isDynamicCreative: false },
+    ]);
+
+    const week = await buildCampaignAudiences(pool, userId, "week");
+    expect(week?.audiences[0].creatives).toHaveLength(1);
+    expect(week?.audiences[0].creatives[0].creativeName).toBe("Recent");
+    expect(week?.audiences[0].moreCreativesCount).toBe(1);
+
+    const allTime = await buildCampaignAudiences(pool, userId, "allTime");
+    expect(allTime?.audiences[0].creatives).toHaveLength(2);
+    expect(allTime?.audiences[0].moreCreativesCount).toBe(0);
+  });
+
   // The panel's core honesty fix: never a bare empty array.
   describe("empty windows state the reason instead of rendering nothing", () => {
     it("started_today: no historical data, but today has real rows the meta-cache hasn't caught up to yet", async () => {

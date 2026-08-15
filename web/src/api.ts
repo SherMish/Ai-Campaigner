@@ -171,6 +171,9 @@ export interface AudienceRow {
   leads: number;
   cplAgorot: number | null;
   creatives: AudienceCreativeRow[];
+  // AIC-95 followup: creatives with real historical data outside the selected
+  // window (DB-only fact, never a liveness claim) — see campaign-audiences.ts.
+  moreCreativesCount: number;
 }
 // AIC-95: why the panel has nothing for the selected window — never a bare
 // empty array. See campaign-audiences.ts for what each reason means.

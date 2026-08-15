@@ -315,6 +315,27 @@ per-ad-account rate limit (code 17) and the panel degraded exactly as
 designed. If panel opens ever become frequent, merging the two ad-level reads
 into one is the obvious saving.
 
+### Stale creatives no longer vanish silently (AIC-95 followup)
+
+**Real live bug:** the campaign card said "2 מודעות פעילות", but opening the
+panel showed only 1 ad — the second (Meta status ACTIVE) had real historical
+rows, just none inside the selected window, so it simply wasn't in the
+response. From the customer's side an ad had disappeared with no
+acknowledgment it ever existed — the same "never render nothing without
+saying why" gap the empty-window reasons above already close, just one level
+deeper (per-audience, not per-panel).
+
+`buildCampaignAudiences` now also fetches each ad set's all-time creative-ID
+set (skipped when the selected range already IS all-time) and diffs it
+against the window's own set. The difference becomes `AudienceRow.
+moreCreativesCount` — a count only, computed entirely from `insight_snapshot_daily`
+rows already in our DB. **It is not a liveness claim**: this view deliberately
+never makes a live Meta call (see the top of this section), so it cannot say
+whether the missing creative is still delivering, only that it has data
+outside the window. `Home.tsx` renders it as "עוד מודעה אחת עם נתונים מתקופה
+אחרת" / "עוד N מודעות עם נתונים מתקופה אחרת" under the audience's own metrics
+row, only when the count is above zero.
+
 ## The range switcher (day / week / month / all-time)
 
 Home's KPIs are driven by ONE customer-selected window. This replaced a

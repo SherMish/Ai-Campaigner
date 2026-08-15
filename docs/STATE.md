@@ -6,6 +6,27 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-15 — Fix: a still-ACTIVE ad silently disappeared from the audience panel's selected window
+Reported live on the newly-connected free_beta account: the campaign card
+said "2 מודעות פעילות" but opening "הצג פירוט" showed only 1 ad. Root cause,
+confirmed against the real DB: `pisga_vs_trad_course` (Meta status ACTIVE)
+has had zero `insight_snapshot_daily` rows since 2026-07-21 — over three
+weeks — while its sibling ad has data through today. Genuine staleness, not
+attribution lag (an earlier hypothesis from before this account was
+connected, now disproven).
+
+`buildCampaignAudiences` (`server/src/services/campaign-audiences.ts`) now
+additionally fetches each ad set's all-time creative-ID set and diffs it
+against the selected window's set (skipped when the range already IS
+all-time). The difference is a new `AudienceRow.moreCreativesCount` — a
+DB-only count, explicitly never a liveness claim, since this view still never
+makes a live Meta call. `Home.tsx` renders it as a note under the audience's
+metrics ("עוד מודעה אחת / N מודעות עם נתונים מתקופה אחרת") whenever it's
+above zero, so a creative with real historical data no longer just vanishes
+with no acknowledgment. Test-first: `campaign-audiences.integration.test.ts`
+gained a case seeding one recent + one stale creative under one ad set,
+confirmed failing (`expected undefined to be 1`) before the fix.
+
 ### 2026-08-15 — Fix: partner-grant instructions described a flow Meta doesn't have; free_beta fully connected
 The onboarding/missing-Page fix-step copy (`Connect.tsx`, `AddContent.tsx`)
 described granting partner access via a single global **Partners → Add**

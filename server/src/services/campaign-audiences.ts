@@ -36,6 +36,15 @@ export interface AudienceRow {
   leads: number;
   cplAgorot: number | null;
   creatives: AudienceCreativeRow[];
+  // Real live bug: the campaign card said "2 active ads", but this ad set's
+  // own breakdown showed only 1 — the other had real historical data (Meta
+  // still marked it ACTIVE) but nothing in the SELECTED window, so it just
+  // silently disappeared, reading as "an ad vanished". This counts creatives
+  // with a row somewhere in this ad set's history that aren't in `creatives`
+  // above — a DB-only fact (never a liveness claim; that would need a live
+  // Meta call, which this view deliberately never makes) — so the UI can say
+  // "N more with data from another period" instead of nothing.
+  moreCreativesCount: number;
 }
 
 // Why the panel has nothing to show for the selected window — never a bare
@@ -71,10 +80,19 @@ export async function buildCampaignAudiences(
   if (!campaignId) return null;
 
   const window = resolveRangeWindow(range, ref);
+  const allTimeWindow = resolveRangeWindow("allTime", ref);
   const store = new PgSnapshotStore(pool);
-  const [adsetStats, creativeStats, meta] = await Promise.all([
+  const [adsetStats, creativeStats, allTimeCreativeStats, meta] = await Promise.all([
     store.adsetRangeStats(campaignId, window.start, window.end),
     store.creativeRangeStats(campaignId, window.start, window.end),
+    // Only for moreCreativesCount below — real bug, found live: the campaign
+    // card said "2 active ads" but the breakdown showed only 1, because the
+    // second had real historical rows outside the selected window and just
+    // silently disappeared. Skipped when range is already "allTime" (same
+    // query twice) — every creative in range then IS the all-time set.
+    range === "allTime"
+      ? Promise.resolve<Awaited<ReturnType<typeof store.creativeRangeStats>>>([])
+      : store.creativeRangeStats(campaignId, allTimeWindow.start, allTimeWindow.end),
     listAdSetMeta(pool, campaignId),
   ]);
 
@@ -103,6 +121,7 @@ export async function buildCampaignAudiences(
   const labels = deriveAudienceLabels(asMetaList);
 
   const creativesByAdSet = new Map<string, AudienceCreativeRow[]>();
+  const creativeIdsInWindowByAdSet = new Map<string, Set<string>>();
   for (const c of creativeStats) {
     const key = c.adSetId ?? "";
     const list = creativesByAdSet.get(key) ?? [];
@@ -115,16 +134,39 @@ export async function buildCampaignAudiences(
       deliveryStatus: c.deliveryStatus,
     });
     creativesByAdSet.set(key, list);
+    const ids = creativeIdsInWindowByAdSet.get(key) ?? new Set<string>();
+    ids.add(c.metaObjectId);
+    creativeIdsInWindowByAdSet.set(key, ids);
   }
 
-  const audiences: AudienceRow[] = managedAdsetStats.map((a) => ({
-    adSetId: a.adSetId,
-    label: labels.get(a.adSetId) ?? metaById.get(a.adSetId)?.name ?? a.adSetId,
-    spendAgorot: a.spendAgorot,
-    leads: a.leads,
-    cplAgorot: a.cplAgorot,
-    creatives: (creativesByAdSet.get(a.adSetId) ?? []).sort((x, y) => y.spendAgorot - x.spendAgorot),
-  }));
+  // moreCreativesCount: creatives with a row SOMEWHERE in this ad set's
+  // history that aren't in the selected window — see AudienceRow's own
+  // comment for why. range === "allTime" skips the extra query above (the
+  // window's own set already IS the all-time set), so nothing is ever
+  // "missing" from it.
+  const allTimeIdsByAdSet = new Map<string, Set<string>>();
+  for (const c of allTimeCreativeStats) {
+    const key = c.adSetId ?? "";
+    const ids = allTimeIdsByAdSet.get(key) ?? new Set<string>();
+    ids.add(c.metaObjectId);
+    allTimeIdsByAdSet.set(key, ids);
+  }
+
+  const audiences: AudienceRow[] = managedAdsetStats.map((a) => {
+    const inWindow = creativeIdsInWindowByAdSet.get(a.adSetId) ?? new Set<string>();
+    const allTime = allTimeIdsByAdSet.get(a.adSetId) ?? inWindow;
+    let moreCreativesCount = 0;
+    for (const id of allTime) if (!inWindow.has(id)) moreCreativesCount++;
+    return {
+      adSetId: a.adSetId,
+      label: labels.get(a.adSetId) ?? metaById.get(a.adSetId)?.name ?? a.adSetId,
+      spendAgorot: a.spendAgorot,
+      leads: a.leads,
+      cplAgorot: a.cplAgorot,
+      creatives: (creativesByAdSet.get(a.adSetId) ?? []).sort((x, y) => y.spendAgorot - x.spendAgorot),
+      moreCreativesCount,
+    };
+  });
   audiences.sort((a, b) => b.spendAgorot - a.spendAgorot);
 
   if (audiences.length > 0) return { campaignId, range, audiences };

@@ -667,6 +667,14 @@ export const strings = {
           // principle intact (nothing about audiences is fetched until opened).
           previewAds: "מודעות פעילות",
           noCreatives: "אין עדיין מודעות בקהל הזה.",
+          // AIC-95 followup, real live bug: the campaign card counted an ACTIVE
+          // ad Meta still lists, but this breakdown — scoped to the selected
+          // window — had nothing for it, so it just silently disappeared. This
+          // note is a DB-only fact (creative has data outside this window),
+          // never a claim about whether the ad is actually still delivering.
+          moreCreativesOne: "עוד מודעה אחת עם נתונים מתקופה אחרת.",
+          moreCreativesManyPrefix: "עוד",
+          moreCreativesManySuffix: "מודעות עם נתונים מתקופה אחרת.",
           // AIC-73 round 2: per-row state, so "is this running?" is readable
           // without inferring it from which direction the action button points.
           statusRunning: "מפרסם",

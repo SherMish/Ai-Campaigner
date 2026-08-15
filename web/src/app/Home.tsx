@@ -703,6 +703,13 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
                       <Metric label={D.leadsCol} value={String(aud.leads)} />
                       <Metric label={D.cplCol} value={aud.cplAgorot === null ? L.none : shekels(aud.cplAgorot)} />
                     </div>
+                    {aud.moreCreativesCount > 0 && (
+                      <p className="muted" style={{ fontSize: "0.8rem", marginTop: 4 }}>
+                        {aud.moreCreativesCount === 1
+                          ? D.moreCreativesOne
+                          : `${D.moreCreativesManyPrefix} ${aud.moreCreativesCount} ${D.moreCreativesManySuffix}`}
+                      </p>
+                    )}
 
                     {/* Its ads, nested by LAYOUT (indent + rule), not behind a
                         second click. */}
