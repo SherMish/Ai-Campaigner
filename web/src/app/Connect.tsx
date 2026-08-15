@@ -59,7 +59,7 @@ export function Connect() {
               <div className="grow">
                 <div style={{ fontWeight: 600 }}>{step}</div>
                 {i === 0 && <a className="link" href="https://business.facebook.com/settings" target="_blank" rel="noreferrer" style={{ fontSize: "0.9rem" }}>{c.openMeta}</a>}
-                {i === 1 && (
+                {i === 2 && (
                   <div className="copybox" style={{ marginTop: 10 }}>
                     <span className="mono muted" style={{ fontSize: "0.7rem" }}>{c.businessId}</span>
                     <b>{META_BUSINESS_PORTFOLIO_ID}</b>

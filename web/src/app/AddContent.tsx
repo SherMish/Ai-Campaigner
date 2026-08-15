@@ -180,7 +180,7 @@ export function AddContent() {
               {c.fixSteps.map((f, i) => (
                 <li key={i}>
                   {f}
-                  {i === 0 && (
+                  {i === 2 && (
                     <div className="copybox" style={{ marginTop: 10 }}>
                       <span className="mono muted" style={{ fontSize: "0.7rem" }}>{c.businessId}</span>
                       <b>{META_BUSINESS_PORTFOLIO_ID}</b>

@@ -478,11 +478,16 @@ export const strings = {
         sub: "צריך לתת לנו גישה לחשבון הפרסום שבו נמצא הקמפיין שננהל.",
         noPassword: "אנחנו לא צריכים את הסיסמה שלכם לפייסבוק.",
         howTitle: "איך עושים את זה",
+        // Verified against the real Meta Business Settings UI (2026-08-15):
+        // partners are granted per-asset (Accounts → the asset → Assign
+        // Partner), not through a single global "Partners → Add" flow — the
+        // earlier version of these steps described a path that doesn't
+        // match what Meta actually shows.
         steps: [
           "פותחים את הגדרות העסק ב־Meta (Business Settings)",
-          "עוברים לשותפים (Partners) ← הוספה (Add) ← \"לתת לשותף גישה לנכסים שלכם\" (Give a partner access to your assets), ומזינים את המזהה העסקי שלנו (Business ID) — מופיע למטה",
-          "משתפים את חשבון הפרסום (Ad account) עם הרשאת פרסום (Advertise)",
-          "אם נדרש, משתפים גם את עמוד הפייסבוק (Page) / אינסטגרם (Instagram)",
+          "עוברים לחשבונות (Accounts) ← חשבונות פרסום (Ad Accounts), בוחרים את חשבון הפרסום שלכם ולוחצים על הקצאת שותפים (Assign Partner)",
+          "בוחרים שותף עסקי (Business Partner), מזינים את המזהה העסקי שלנו (Business ID) — מופיע למטה — ומסמנים הרשאת פרסום (Advertise)",
+          "אם נדרש, חוזרים על אותו תהליך עבור עמוד הפייסבוק (Page) / אינסטגרם (Instagram) תחת עמודים (Pages)",
           "חוזרים לכאן ואנחנו בודקים שהכול מחובר",
         ],
         openMeta: "פתיחת Meta Business Settings ↗",
@@ -502,9 +507,14 @@ export const strings = {
         missingBody: "חשבון הפרסום מחובר, אבל חסרה גישה לעמוד הפייסבוק (Facebook Page). בלי גישה לעמוד לא נוכל לפרסם או לעצור מודעות בשמכם. זה תיקון קצר בהגדרות העסק ב־Meta (Meta Business Settings).",
         connected: "מחובר", missing: "חסר",
         howToFix: "איך מתקנים?",
+        // Verified against the real Meta Business Settings UI (2026-08-15):
+        // partners are granted per-asset (Accounts → Pages → the page →
+        // Assign Partner), not through a global "Partners → Add" flow.
         fixSteps: [
-          "בהגדרות העסק ב־Meta (Business Settings) עוברים לשותפים (Partners) ← הוספה (Add) ← \"לתת לשותף גישה לנכסים שלכם\" (Give a partner access to your assets), ומזינים את המזהה העסקי שלנו (Business ID) — מופיע למטה.",
-          "משתפים את עמוד הפייסבוק (Page) שלכם, עם הרשאת פרסום (Advertise) לפחות.",
+          "בהגדרות העסק ב־Meta (Business Settings) עוברים לחשבונות (Accounts) ← עמודים (Pages).",
+          "בוחרים את עמוד הפייסבוק שלכם ולוחצים על הקצאת שותפים (Assign Partner).",
+          "בוחרים שותף עסקי (Business Partner) ומזינים את המזהה העסקי שלנו (Business ID) — מופיע למטה.",
+          "מסמנים הרשאת פרסום (Advertise) ולוחצים על מתן הרשאה (Give Access).",
         ],
         recheck: "בדיקה מחדש",
         notVerifiedTitle: "לא הצלחנו לאמת את החיבור",

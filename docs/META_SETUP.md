@@ -155,10 +155,16 @@ WhatsApp number connected to it, for WhatsApp-lead ads), and admin on their own
 Business Settings.
 
 ### 1. Customer grants partner access **[customer, their Business Settings]**
-Business Settings → **Partners** → **Add** → *"Give a partner access to your assets"*
-→ enter **`2491237118040524`**.
+Business Settings → **Accounts** → the asset type (**Ad Accounts** or
+**Pages**) → the specific asset → **Assign Partner** → **Business Partner** →
+enter **`2491237118040524`** → select the tasks below → give access.
 
-Then share, with these tasks:
+(Corrected 2026-08-15, verified live: an earlier version of this doc
+described a single global **Partners → Add** flow — that path doesn't match
+what Meta's current UI actually shows. Partners are granted **per asset**,
+under **Accounts**, not through one global add-a-partner screen.)
+
+Repeat per asset that needs sharing:
 
 | Asset | Minimum task | Why |
 | --- | --- | --- |

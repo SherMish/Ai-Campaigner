@@ -6,6 +6,31 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-15 — Fix: partner-grant instructions described a flow Meta doesn't have; free_beta fully connected
+The onboarding/missing-Page fix-step copy (`Connect.tsx`, `AddContent.tsx`)
+described granting partner access via a single global **Partners → Add**
+screen — the flow `META_SETUP.md` had documented as verified. Reported live,
+mid-fix: walking the real Meta Business Settings UI just now showed that's
+not how it works — partners are granted **per asset**, under **Accounts →
+Ad Accounts / Pages → the specific asset → Assign Partner → Business
+Partner → enter the ID**. Rewrote both copy blocks and `META_SETUP.md`'s own
+runbook to match the confirmed-live flow; moved the Business ID copybox to
+sit next to the step that actually asks for it (was step 1, now step 3, in
+both `connect.steps` and `connect.fixSteps`).
+
+Then completed the loop this same account had been blocked on since the
+add-content fix earlier today: confirmed live that our System User can now
+read Facebook Page `1216278568228263` directly (200, and it appears in
+`me/accounts` as "פסגה הכנה חכמה לפסיכומטרי") — the real grant the corrected
+flow above just walked through worked. Wrote `page_id` into
+`meta_connections` for `test@test.com` and confirmed `resolveAdditionAvailability`
+now returns a ready `ctx` with no reason — add-content, the pause buttons,
+and ad thumbnails should all work for this account now. (No code path
+auto-discovers a newly granted Page — `ConnectionService.verify` only
+re-checks a `page_id` that's already on file, so this still needed a manual
+write once the grant was confirmed; a real gap worth a dedicated ticket if
+this needs to happen for other customers.)
+
 ### 2026-08-15 — Fix: pause buttons + ad thumbnails silently vanished, no explanation
 Reported live: a customer's audience panel showed neither a pause button nor
 ad images, on the same account whose add-content flow was already known to
