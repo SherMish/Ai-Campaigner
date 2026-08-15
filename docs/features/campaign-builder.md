@@ -213,6 +213,21 @@ Meta's Click-to-WhatsApp API and are **not yet live-verified** the way
 The AC's "dogfood on an account we control" step is what actually verifies
 this shape — treat that live test, not this code, as the real confirmation.
 
+**The destination fields are resolved, not hardcoded (bug fix, 2026-08-14).**
+`createAdSet` used to write `"CONVERSATIONS"`/`"WHATSAPP"` as inline string
+literals — the same literals `shared/src/recommended-defaults.ts`'s
+`FIXED_DESTINATION`/`FIXED_CTA` constants existed to own, but nothing
+actually read them. That's exactly how a Pixel campaign could reach this
+code with a WhatsApp shape: the campaign's real lead type never entered the
+decision. `CreateAdSetParams` now carries an explicit `destination: string`,
+resolved by `shared/src/recommended-defaults.ts`'s
+`resolveDestinationShape()` — the single place every Meta field for a
+destination lives. It **throws** for anything it doesn't recognize rather
+than silently returning the WhatsApp shape, so a caller can never emit a
+wrong write by omission. The builder always passes `FIXED_DESTINATION`
+(P0-fixed, unchanged behaviour); a second destination (AIC-89) extends this
+one map instead of requiring another literal hunt.
+
 Tests: `campaign-adapter.test.ts` (created-PAUSED + correct endpoint/field
 shape per object, mocked `fetch`), `write-outbox.integration.test.ts`
 (`applyIdempotent`: resume-without-recreating, failure-then-retry, and the
@@ -260,11 +275,15 @@ ad creative via `object_story_id` (`{pageId}_{postId}`) — no
 `object_story_spec`, no upload, at all.
 
 **The WhatsApp creative shape** (`createCreativeFromUpload`'s
-`object_story_spec.link_data.call_to_action = {type: "WHATSAPP_MESSAGE",
+`object_story_spec.link_data.call_to_action = {type: FIXED_CTA,
 value: {whatsapp_number}}`) is, like AIC-50's ad-set destination fields, a
 best-effort reading of Meta's Click-to-WhatsApp API — **not yet
 live-verified**. It rides along with AIC-50's pending dogfood test rather
-than needing a separate one.
+than needing a separate one. The CTA type is resolved via the same
+`resolveDestinationShape()` as the ad-set fields (bug fix, 2026-08-14, see
+AIC-50's section above) — it used to be the inline literal
+`"WHATSAPP_MESSAGE"`, which is how a Pixel campaign's creative write once
+carried a WhatsApp CTA nobody had checked was correct.
 
 **Idempotent the same way as AIC-50's creates** (`builder/creative-create.ts`,
 `createCreativeIdempotent` → `WriteOutbox.applyIdempotent`, migration 021
@@ -583,6 +602,35 @@ an ad set that isn't genuinely theirs, even if they guessed a valid-looking
 ID. The ad-set list is read live (not the `ad_set_meta` cache), specifically
 so an ad set created moments earlier in the *same* visit — before the hourly
 engine tick would ever refresh that cache — is immediately pickable.
+
+**Refused, not attempted, on a non-WhatsApp campaign (bug fix, 2026-08-14).**
+This flow hardcodes WhatsApp-shaped Meta objects (a `WHATSAPP_MESSAGE`
+call-to-action, `CONVERSATIONS`/`WHATSAPP` ad sets) — correct for AIC-63's
+original scope (every managed campaign was Click-to-WhatsApp) but wrong for
+any other lead type, including a campaign our own builder created. Found by
+checking a real connected Pixel campaign: an added creative would carry an
+empty `whatsapp_number` into a real Meta write, and an added ad set's
+conversions could never match the campaign's `lead_event_types` — real
+spend, zero countable leads, and AIC-88's tracking guard would then flag the
+campaign as broken.
+
+`resolveAdditionContext` (`server/src/additions/session.ts`) is the single
+chokepoint every additions route passes through, so the guard lives there
+rather than per-route: `whatsappWriteBlock(ctx)` returns one of two distinct
+reasons — `not_whatsapp` (this campaign's leads don't arrive over WhatsApp at
+all) or `missing_number` (it genuinely is a WhatsApp campaign, but we never
+captured its number, e.g. connected from outside the builder). **Not
+collapsed into one message**: checking against the real accounts found
+GelNails hits `missing_number`, not `not_whatsapp` — its own campaign was
+never built through the app, so `whatsapp_destination` was never written,
+even though its leads genuinely are WhatsApp messages. `AdditionContext.whatsappNumber`
+is `string | null` (not a coalesced `''`) specifically so a caller can't
+reach a real Meta write with an empty number by forgetting to check — the
+nullable type turns the one remaining unguarded consumer into a compile
+error. Both routes (`POST /creative`, `POST /ad-set`) return `409` with
+`{ reason, error }` before any Meta call or DB write. Full support for other
+destinations is AIC-89's scope, not this fix's — this only ensures the
+flow never attempts a write it can't get right.
 
 **Customer surface** (`web/src/app/AddContent.tsx`): reached via a new
 persistent sidebar entry ("הוספת תוכן"), shown whenever a managed campaign

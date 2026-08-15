@@ -13,7 +13,7 @@ import type {
 import type { LaunchWriter, MetaCampaignStatus } from "../launch/types.js";
 import type { AdditionWriter } from "../additions/types.js";
 import type { ControlWriter, ManualObjectStatus } from "../controls/types.js";
-import { shekelToAgorot } from "@aic/shared";
+import { shekelToAgorot, resolveDestinationShape } from "@aic/shared";
 import { extractLeads } from "./insights.js";
 import { normalizeAdMedia, type AdMedia, type AdMediaReader, type RawAdMedia } from "./ad-media.js";
 import type { AdSetTrackingConfig, TrackingReader } from "./tracking-health.js";
@@ -351,13 +351,16 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // Meta creates ad sets on the AD ACCOUNT's edge (not the campaign's) — the
   // parent is identified by campaign_id IN the body, same pattern as createAd.
   async createAdSet(params: CreateAdSetParams): Promise<string> {
+    // Throws for anything not yet supported rather than silently defaulting
+    // to the WhatsApp shape — the specific defect this replaces.
+    const shape = resolveDestinationShape(params.destination);
     return this.postCreate(params.adAccountId, "adsets", {
       name: params.name,
       campaign_id: params.metaCampaignId,
       status: "PAUSED",
       billing_event: "IMPRESSIONS",
-      optimization_goal: "CONVERSATIONS",
-      destination_type: "WHATSAPP",
+      optimization_goal: shape.optimizationGoal,
+      destination_type: shape.destinationType,
       promoted_object: { page_id: params.pageId },
       targeting: {
         age_min: params.targeting.ageMin,
@@ -468,6 +471,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   }
 
   async createCreativeFromUpload(params: CreateUploadCreativeParams): Promise<string> {
+    const shape = resolveDestinationShape(params.destination);
     const linkData: Record<string, unknown> =
       params.media.kind === "image"
         ? { image_hash: params.media.imageHash }
@@ -480,7 +484,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
           ...linkData,
           message: params.primaryText,
           name: params.headline,
-          call_to_action: { type: "WHATSAPP_MESSAGE", value: { whatsapp_number: params.whatsappNumber } },
+          call_to_action: { type: shape.ctaType, value: { whatsapp_number: params.whatsappNumber } },
         },
       },
     });

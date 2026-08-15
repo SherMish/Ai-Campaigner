@@ -6,6 +6,58 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-14 — Fix: the WhatsApp Meta-write literals were re-hardcoded, not sourced from the constants
+Root-cause pass on the bug the previous fix (below) refused rather than
+fixed. `shared/src/recommended-defaults.ts`'s `FIXED_DESTINATION`/`FIXED_CTA`
+had ZERO consumers — the literals they were meant to own
+(`"CONVERSATIONS"`/`"WHATSAPP"`/`"WHATSAPP_MESSAGE"`) were re-hardcoded
+directly in `campaign-adapter.ts`'s `createAdSet`/`createCreativeFromUpload`.
+That's exactly how a Pixel campaign could reach a WhatsApp-shaped write in
+the first place: the campaign's own lead type never entered the decision at
+the point the literal was written.
+
+New `resolveDestinationShape()` (`shared/src/recommended-defaults.ts`) makes
+the constants the actual single source, and — the part that matters more
+than tidiness — **throws** for an unrecognized destination instead of
+silently falling back to the WhatsApp shape. `CreateAdSetParams` and
+`CreateUploadCreativeParams` gain an explicit `destination: string`; every
+caller (builder, additions) now passes `FIXED_DESTINATION` visibly rather
+than the adapter assuming it three layers down. A second destination
+(AIC-89) is added by extending one map, not by hunting down literals again.
+
+Test-first: 4 new cases (the resolved shape matches the old literals exactly;
+an unrecognized destination throws and is proven to make zero Meta calls,
+for both `createAdSet` and `createCreativeFromUpload`). Full suite green
+(401 unit, 218/220 integration — only the 2 known pre-existing flakes),
+typecheck and web build clean. Docs:
+[campaign-builder.md](features/campaign-builder.md).
+
+### 2026-08-14 — Fix: refuse a Meta write the campaign's lead type can't support
+Found by a sweep for the same bug class as the launch-modal fix (below): the
+add-content flow (AIC-63) emits WhatsApp-shaped Meta objects unconditionally
+— a `WHATSAPP_MESSAGE` call-to-action carrying `whatsapp_destination` (empty
+for any non-messaging campaign) and a hardcoded `CONVERSATIONS`/`WHATSAPP` ad
+set. Nothing has spent yet (no campaign is live through the app yet, and
+there are no other customers), so this closes real exposure before it's
+live rather than patching an active leak.
+
+Refused at `resolveAdditionContext`, the single chokepoint every additions
+route passes through. `AdditionContext.whatsappNumber` is `string | null`
+rather than a coalesced `''` — the nullable type turned the one remaining
+unguarded consumer into a compile error. Two distinct causes, not collapsed:
+`not_whatsapp` (leads don't arrive over WhatsApp at all) vs `missing_number`
+(genuinely a WhatsApp campaign, number never captured). Checking against the
+real accounts surfaced the second case for real — GelNails hits
+`missing_number`, not `not_whatsapp`, since it was connected outside the
+builder. Collapsing them would have told a real WhatsApp customer their
+leads don't come from WhatsApp, which is false.
+
+Test-first: 4 route-level cases + 4 pure unit cases for `whatsappWriteBlock`.
+Full suite green (399 unit, 218/220 integration — only the 2 known
+pre-existing flakes), typecheck and web build clean. Verified against
+GelNails: correctly reports `missing_number`. Docs:
+[campaign-builder.md](features/campaign-builder.md).
+
 ### 2026-08-14 — Bugfix: the launch consent screen asserted a WhatsApp destination it didn't have
 Reported live on the real connected Pixel campaign: the launch-approval modal
 showed "פניות אל וואטסאפ" — a hardcoded label — with a **blank value**, and

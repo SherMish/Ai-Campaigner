@@ -1,4 +1,5 @@
 import type pg from "pg";
+import { FIXED_DESTINATION } from "@aic/shared";
 import { WriteOutbox, builderKey } from "../execution/write-outbox.js";
 import { asCreatingWriter } from "../builder/campaign-create.js";
 import type { BuilderWriter, CreateAdSetTargeting } from "../builder/types.js";
@@ -111,6 +112,10 @@ export async function addAdSetToExistingCampaign(pool: pg.Pool, writer: BuilderW
         name: input.name,
         targeting: input.targeting,
         pageId: input.pageId,
+        // The refusal guard (routes/additions.ts) already confirmed this
+        // campaign can accept WhatsApp writes before this function is ever
+        // reached — FIXED_DESTINATION is the only value that gets here.
+        destination: FIXED_DESTINATION,
       },
     },
     creator,

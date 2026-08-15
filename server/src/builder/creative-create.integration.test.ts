@@ -4,6 +4,7 @@
 // polling, object_story_spec/object_story_id) is verified by
 // campaign-adapter.test.ts.
 import { describe, it, expect, afterAll } from "vitest";
+import { FIXED_DESTINATION } from "@aic/shared";
 import { pool } from "../db/pool.js";
 import { startBuilderCampaign } from "./campaign-create.js";
 import { createCreativeIdempotent, type CreativeSpec } from "./creative-create.js";
@@ -30,6 +31,7 @@ function uploadSpec(adAccountId: string): CreativeSpec {
     primaryText: "20% הנחה",
     whatsappNumber: "972500000000",
     media: { kind: "image", imageHash: "img_hash_1" },
+    destination: FIXED_DESTINATION,
   };
 }
 

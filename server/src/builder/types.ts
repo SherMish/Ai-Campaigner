@@ -26,6 +26,12 @@ export interface CreateAdSetParams {
   name: string;
   targeting: CreateAdSetTargeting;
   pageId: string; // the connected Page — Meta routes WhatsApp destination via its connected number
+  // Resolved via shared/src/recommended-defaults.ts's resolveDestinationShape
+  // — NEVER a caller-hardcoded "whatsapp"/"CONVERSATIONS" literal. Every
+  // caller today passes FIXED_DESTINATION (the only supported value); this
+  // parameter exists so that fact is explicit and load-bearing at the call
+  // site rather than assumed three layers down in the adapter.
+  destination: string;
 }
 
 export interface CreateAdParams {

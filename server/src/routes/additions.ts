@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { validateCreativeCopy, MAX_VIDEO_BYTES } from "@aic/shared";
+import { validateCreativeCopy, MAX_VIDEO_BYTES, FIXED_DESTINATION } from "@aic/shared";
 import { pool } from "../db/pool.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { resolveAdditionContext, buildAdditionWriter, acceptsWhatsappWrites, whatsappWriteBlock, type WhatsappWriteBlock } from "../additions/session.js";
@@ -179,6 +179,10 @@ additionsRouter.post("/creative", requireAuth, async (req, res) => {
         primaryText: body.primaryText!,
         whatsappNumber: body.whatsappNumber ?? "",
         media: body.media!,
+        // The refusal guard above already confirmed this campaign can accept
+        // WhatsApp writes — FIXED_DESTINATION is the only value that can
+        // reach here today. resolveDestinationShape() re-asserts it.
+        destination: FIXED_DESTINATION,
       };
     }
     const creativeId = await createCreativeIdempotent(pool, writer, ctx.localCampaignId, body.clientKey, spec);

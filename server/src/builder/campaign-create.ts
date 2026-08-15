@@ -1,4 +1,5 @@
 import type pg from "pg";
+import { FIXED_DESTINATION } from "@aic/shared";
 import { WriteOutbox, builderKey, type WriteKind, type CreatingWriter } from "../execution/write-outbox.js";
 import type { BuilderWriter, CreateAdSetTargeting } from "./types.js";
 
@@ -143,6 +144,9 @@ export async function buildCampaignOnMeta(
           name: as.name,
           targeting: as.targeting,
           pageId: input.pageId,
+          // P0-fixed: the builder only ever creates Click-to-WhatsApp
+          // campaigns (AIC-89 is what would make this a real choice).
+          destination: FIXED_DESTINATION,
         },
       },
       creator,

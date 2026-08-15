@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { validateCreativeCopy, MAX_VIDEO_BYTES, SPECIAL_AD_CATEGORY, FIXED_BID_STRATEGY, type SpecialAdCategory } from "@aic/shared";
+import { validateCreativeCopy, MAX_VIDEO_BYTES, SPECIAL_AD_CATEGORY, FIXED_BID_STRATEGY, FIXED_DESTINATION, type SpecialAdCategory } from "@aic/shared";
 import { pool } from "../db/pool.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { resolveBuilderContext, ownsLocalCampaign, buildBuilderWriter } from "../builder/session.js";
@@ -143,6 +143,9 @@ builderRouter.post("/creative", requireAuth, async (req, res) => {
         primaryText: body.primaryText!,
         whatsappNumber: body.whatsappNumber ?? "",
         media: body.media!,
+        // P0-fixed: the builder only ever creates Click-to-WhatsApp campaigns
+        // (AIC-89 is what would make this a real choice).
+        destination: FIXED_DESTINATION,
       };
     }
     const creativeId = await createCreativeIdempotent(pool, writer, body.localCampaignId!, body.clientKey, spec);

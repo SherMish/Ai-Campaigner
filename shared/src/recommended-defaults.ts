@@ -26,6 +26,44 @@ export const FIXED_BID_STRATEGY = "LOWEST_COST_WITHOUT_CAP"; // no bid-strategy 
 // could change — the same honesty as objective/buying-type above.
 export const FIXED_PLACEMENTS = "advantage_plus";
 
+// The Meta ad-set/creative fields a given lead destination needs. Structural,
+// not copy — same rule as everything else in this file: never re-hardcode
+// these strings at a call site, resolve them from here.
+//
+// Bug fix, 2026-08-14: FIXED_DESTINATION/FIXED_CTA had ZERO consumers before
+// this — the literals they were meant to own ("CONVERSATIONS", "WHATSAPP",
+// "WHATSAPP_MESSAGE") were re-hardcoded directly in
+// `server/src/meta/campaign-adapter.ts`'s `createAdSet`/
+// `createCreativeFromUpload`, which is exactly how a Pixel campaign got sent
+// a WhatsApp-shaped Meta write (a customer's own lead type never entered the
+// decision). `resolveDestinationShape` makes the constants the actual single
+// source, and — the part that matters more than tidiness — THROWS for an
+// unrecognized destination instead of silently falling back to the WhatsApp
+// shape, so a caller can never emit a wrong write by omission. Every caller
+// of `createAdSet`/`createCreativeFromUpload` now passes an explicit
+// `destination` sourced from `FIXED_DESTINATION`; a second destination
+// (AIC-89) is added by extending this map, not by hunting down literals.
+export interface DestinationShape {
+  optimizationGoal: string;
+  destinationType: string;
+  ctaType: string;
+}
+
+const DESTINATION_SHAPES: Record<string, DestinationShape> = {
+  [FIXED_DESTINATION]: { optimizationGoal: "CONVERSATIONS", destinationType: "WHATSAPP", ctaType: FIXED_CTA },
+};
+
+export function resolveDestinationShape(destination: string): DestinationShape {
+  const shape = DESTINATION_SHAPES[destination];
+  if (!shape) {
+    throw new Error(
+      `resolveDestinationShape: no Meta ad shape known for destination "${destination}" — ` +
+        `AIC-89 must add one here before a campaign with this destination can be built or added to`,
+    );
+  }
+  return shape;
+}
+
 // ── Structure (AIC-38: the single-ad-set ideal is a RECOMMENDATION, never an
 // assumption the engine/review may rely on — a customer can and does run more) ──
 export const RECOMMENDED_STRUCTURE = {

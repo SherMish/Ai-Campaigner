@@ -5,6 +5,7 @@
 // reversible dogfood test instead; this one gets a unit test too because the
 // paused-invariant is safety-critical and cheap to pin down here directly).
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { FIXED_DESTINATION, FIXED_CTA } from "@aic/shared";
 import { GraphCampaignAdapter } from "./campaign-adapter.js";
 
 function fakeFetch(respond: { id: string }) {
@@ -52,6 +53,7 @@ describe("GraphCampaignAdapter create-writes — always PAUSED", () => {
       adAccountId: "act_123", metaCampaignId: "meta_camp_1", name: "Adset",
       targeting: { ageMin: 18, ageMax: 45, genders: [], countries: ["IL"] },
       pageId: "page_1",
+      destination: FIXED_DESTINATION,
     });
 
     expect(id).toBe("meta_adset_1");
@@ -61,6 +63,26 @@ describe("GraphCampaignAdapter create-writes — always PAUSED", () => {
     expect(body.get("status")).toBe("PAUSED");
     expect(body.get("campaign_id")).toBe("meta_camp_1");
     expect(JSON.parse(body.get("targeting") ?? "{}")).toMatchObject({ age_min: 18, age_max: 45 });
+    // AIC-89 sub-fix: these come from resolveDestinationShape(FIXED_DESTINATION),
+    // not an inline literal — the exact fields a Pixel destination must NOT get.
+    expect(body.get("optimization_goal")).toBe("CONVERSATIONS");
+    expect(body.get("destination_type")).toBe("WHATSAPP");
+  });
+
+  it("createAdSet REFUSES an unrecognized destination rather than silently emitting the WhatsApp shape", async () => {
+    const mock = fakeFetch({ id: "meta_adset_1" });
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await expect(
+      adapter.createAdSet({
+        adAccountId: "act_123", metaCampaignId: "meta_camp_1", name: "Adset",
+        targeting: { ageMin: 18, ageMax: 45, genders: [], countries: ["IL"] },
+        pageId: "page_1",
+        destination: "website",
+      }),
+    ).rejects.toThrow(/website/);
+    expect(mock).not.toHaveBeenCalled();
   });
 
   it("createAd sends status=PAUSED and is created on the ad account's edge with adset_id + creative in the body", async () => {
@@ -219,6 +241,7 @@ describe("GraphCampaignAdapter creative handling (AIC-51)", () => {
       headline: "מבצע קיץ", primaryText: "20% הנחה",
       whatsappNumber: "972500000000",
       media: { kind: "image", imageHash: "img_hash_1" },
+      destination: FIXED_DESTINATION,
     });
 
     expect(id).toBe("crea_1");
@@ -228,7 +251,26 @@ describe("GraphCampaignAdapter creative handling (AIC-51)", () => {
     const spec = JSON.parse(body.get("object_story_spec") ?? "{}");
     expect(spec.page_id).toBe("page_1");
     expect(spec.link_data.image_hash).toBe("img_hash_1");
-    expect(spec.link_data.call_to_action).toEqual({ type: "WHATSAPP_MESSAGE", value: { whatsapp_number: "972500000000" } });
+    // AIC-89 sub-fix: sourced from resolveDestinationShape(FIXED_DESTINATION)
+    // via FIXED_CTA, not an inline "WHATSAPP_MESSAGE" literal.
+    expect(spec.link_data.call_to_action).toEqual({ type: FIXED_CTA, value: { whatsapp_number: "972500000000" } });
+  });
+
+  it("createCreativeFromUpload REFUSES an unrecognized destination rather than silently emitting a WhatsApp CTA", async () => {
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ id: "crea_1" }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await expect(
+      adapter.createCreativeFromUpload({
+        adAccountId: "act_123", pageId: "page_1", name: "Ad 1",
+        headline: "מבצע קיץ", primaryText: "20% הנחה",
+        whatsappNumber: "",
+        media: { kind: "image", imageHash: "img_hash_1" },
+        destination: "website",
+      }),
+    ).rejects.toThrow(/website/);
+    expect(mock).not.toHaveBeenCalled();
   });
 
   it("createCreativeFromExistingPost sends object_story_id (page_post) — no upload fields at all", async () => {

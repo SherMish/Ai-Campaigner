@@ -33,6 +33,9 @@ export interface CreateUploadCreativeParams {
   primaryText: string;
   whatsappNumber: string;
   media: CreativeMedia;
+  // Same contract as CreateAdSetParams.destination — resolved via
+  // resolveDestinationShape, never assumed inside the adapter.
+  destination: string;
 }
 
 export interface CreatePostCreativeParams {

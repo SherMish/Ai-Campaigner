@@ -3,9 +3,12 @@ import {
   BUSINESS_CATEGORY,
   CATEGORY_AUDIENCE_DEFAULTS,
   RECOMMENDED_SPECIAL_AD_CATEGORY,
+  FIXED_DESTINATION,
+  FIXED_CTA,
   normalizeBusinessCategory,
   resolveAudienceDefault,
   resolveSpecialAdCategoryHint,
+  resolveDestinationShape,
 } from "./recommended-defaults.js";
 
 describe("normalizeBusinessCategory", () => {
@@ -65,5 +68,30 @@ describe("special ad category", () => {
       const hint = resolveSpecialAdCategoryHint(cat);
       expect(hint === null || hint !== "NONE").toBe(true);
     }
+  });
+});
+
+// AIC-89 sub-fix: FIXED_DESTINATION/FIXED_CTA had ZERO consumers — the Meta
+// field literals they were meant to own ("CONVERSATIONS"/"WHATSAPP"/
+// "WHATSAPP_MESSAGE") were re-hardcoded directly in campaign-adapter.ts,
+// which is exactly how a Pixel campaign got a WhatsApp write (fixed
+// separately by refusing at the additions chokepoint). This makes the
+// constants the actual single source: every Meta-shape literal for a
+// destination lives here once, and an unrecognized destination throws
+// rather than silently falling back to the WhatsApp shape.
+describe("resolveDestinationShape", () => {
+  it("whatsapp resolves to the exact Meta fields FIXED_CTA/createAdSet need, sourced from the constants", () => {
+    expect(resolveDestinationShape(FIXED_DESTINATION)).toEqual({
+      optimizationGoal: "CONVERSATIONS",
+      destinationType: "WHATSAPP",
+      ctaType: FIXED_CTA,
+    });
+  });
+
+  it("REGRESSION: an unrecognized destination throws — never silently returns the WhatsApp shape", () => {
+    // The exact failure mode this replaces: a Pixel campaign's write silently
+    // reusing the WhatsApp shape because nothing checked the destination.
+    expect(() => resolveDestinationShape("website")).toThrow(/website/);
+    expect(() => resolveDestinationShape("")).toThrow();
   });
 });
