@@ -78,15 +78,21 @@ export class GraphMetaClient implements MetaClient {
     }
   }
 
-  // Per-DAY campaign rows (`time_increment=1`). These are DISJOINT — one row
-  // per calendar day — which is the whole point: the rolling-window snapshots
+  // Per-DAY rows (`time_increment=1`). These are DISJOINT — one row per
+  // calendar day — which is the whole point: the rolling-window snapshots
   // this class also writes OVERLAP (a new [today-7..today-1] window every
   // tick), so summing them over an arbitrary range double-counts. That was a
   // real live bug (1 lead read as 3). Any range the customer can pick
   // (day/week/month) is summed from these daily rows instead.
   //
-  // Campaign grain only: the range switcher shows campaign totals, and asking
-  // for ad-set/ad grain per day would multiply the row count for no gain.
+  // All three levels (AIC-95, fixing a real live gap): this used to pull
+  // campaign grain only, on the reasoning that ad-set/ad grain per day would
+  // "multiply the row count for no gain." That stopped being true once the
+  // per-audience/per-ad detail panel (campaign-audiences.ts) started reading
+  // disjoint-daily rows at adset/creative grain to follow the customer's
+  // range switcher — campaign-only meant that panel could never show real
+  // data for ANY real account, only a permanent "no_data_yet". Same pattern
+  // as getInsights: derive a creative-grain row from every ad row.
   async getDailyInsights(
     campaignMetaId: string,
     period: InsightsPeriod,
@@ -94,20 +100,29 @@ export class GraphMetaClient implements MetaClient {
     const timeRange = encodeURIComponent(
       JSON.stringify({ since: period.start, until: period.end }),
     );
-    const url =
-      `${GRAPH_BASE}/${this.graphVersion}/${campaignMetaId}/insights` +
-      `?level=campaign&fields=${INSIGHT_FIELDS}&time_range=${timeRange}&time_increment=1&limit=500`;
-    const res = await this.fetchImpl(url, {
-      headers: { Authorization: `Bearer ${this.token}` },
-    });
-    if (!res.ok) {
-      const body = (await res.json().catch(() => undefined)) as GraphErrorBody | undefined;
-      throw new Error(`daily insights failed: ${JSON.stringify(body?.error ?? res.status)}`);
+    const out: Array<{ date: string; row: RawInsightRow }> = [];
+    for (const { level, grain } of INSIGHT_LEVELS) {
+      const url =
+        `${GRAPH_BASE}/${this.graphVersion}/${campaignMetaId}/insights` +
+        `?level=${level}&fields=${INSIGHT_FIELDS}&time_range=${timeRange}&time_increment=1&limit=500`;
+      const res = await this.fetchImpl(url, {
+        headers: { Authorization: `Bearer ${this.token}` },
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => undefined)) as GraphErrorBody | undefined;
+        throw new Error(`daily insights ${level} failed: ${JSON.stringify(body?.error ?? res.status)}`);
+      }
+      const json = (await res.json()) as { data?: Record<string, unknown>[] };
+      for (const d of json.data ?? []) {
+        const date = String(d.date_start ?? "");
+        if (date.length !== 10) continue;
+        out.push({ date, row: mapInsightRow(d, grain) });
+        if (grain === "ad") {
+          out.push({ date, row: mapInsightRow(d, "creative") });
+        }
+      }
     }
-    const json = (await res.json()) as { data?: Record<string, unknown>[] };
-    return (json.data ?? [])
-      .map((d) => ({ date: String(d.date_start ?? ""), row: mapInsightRow(d, "campaign") }))
-      .filter((r) => r.date.length === 10);
+    return out;
   }
 
   async getInsights(

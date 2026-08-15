@@ -604,11 +604,17 @@ export const strings = {
         details: {
           show: "הצג פירוט",
           hide: "הסתר פירוט",
-          // The KPI cards above follow the range switcher; this panel always
-          // shows the engine's own fixed 7-complete-days window (the same one
-          // recommendations are evaluated on) — without this note the two
-          // totals silently disagree and read as broken, not as two periods.
-          windowNote: "הנתונים כאן מבוססים על 7 הימים המלאים האחרונים (ללא היום), ללא קשר לתקופה שנבחרה למעלה.",
+          // AIC-95: this panel now follows the same day/week/month/הכל
+          // switcher the KPI cards above it use — the old windowNote existed
+          // ONLY because it silently didn't, and disagreed with the numbers
+          // above it as a result. Removed rather than made more precise, per
+          // the ticket's own instruction: the fix is to actually follow the
+          // switcher, not to explain more clearly that it doesn't.
+          //
+          // Never a bare "no data" — every empty case states why, reusing the
+          // house rule this ticket is the origin of.
+          emptyStartedToday: "הקמפיין התחיל לרוץ היום. נסו לבחור \"היום\" למעלה כדי לראות את הנתונים.",
+          emptyNoDataInRange: "אין נתונים לתקופה שנבחרה. הנתונים האחרונים שיש לנו הם מ־",
           empty: "עדיין אין מספיק נתונים לפירוט לפי קהל.",
           audienceCol: "קהל",
           spendCol: "הוצאה",

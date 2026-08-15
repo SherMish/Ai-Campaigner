@@ -169,11 +169,17 @@ export interface AudienceRow {
   cplAgorot: number | null;
   creatives: AudienceCreativeRow[];
 }
+// AIC-95: why the panel has nothing for the selected window — never a bare
+// empty array. See campaign-audiences.ts for what each reason means.
+export type AudienceEmptyReason = "started_today" | "no_data_in_range" | "no_data_yet";
 export interface CampaignAudiences {
   campaignId: string;
+  range: RangeKey;
   audiences: AudienceRow[];
+  empty?: { reason: AudienceEmptyReason; mostRecentDataDate: string | null };
 }
-export const getCampaignAudiences = () => api<CampaignAudiences>("/app/audiences");
+export const getCampaignAudiences = (range: RangeKey) =>
+  api<CampaignAudiences>(`/app/audiences?range=${range}`);
 
 // ── Admin: customer CRUD (AIC-44) ───────────────────────────────────────────
 export interface CustomerWriteFields {

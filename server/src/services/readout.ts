@@ -12,7 +12,28 @@ import { computeCpl } from "../meta/insights.js";
 export const RANGE_KEYS = ["day", "week", "month", "allTime"] as const;
 export type RangeKey = (typeof RANGE_KEYS)[number];
 
-const RANGE_DAYS: Record<Exclude<RangeKey, "allTime">, number> = { day: 1, week: 7, month: 30 };
+export const RANGE_DAYS: Record<Exclude<RangeKey, "allTime">, number> = { day: 1, week: 7, month: 30 };
+
+// The one place the day/week/month/all-time switcher's date math lives.
+// AIC-95: campaign-audiences.ts (the per-audience/per-ad detail panel) used
+// to ignore the switcher entirely and always query a different, fixed
+// window — this is what makes it follow the same selection instead of
+// silently answering a different question with the same UI control.
+//
+// Trailing and INCLUDING today (never the engine's own complete-days-only
+// window, `scheduled-ingestion.ts`'s `rollingPeriods` — a deliberately
+// different question: "how am I doing" vs. "what would the engine judge").
+// `allTime` has no lower bound — summed from whatever disjoint-daily rows
+// exist, honestly "as far back as we have data," not a fabricated lifetime
+// figure for per-object grains that have no separate lifetime counter.
+export function resolveRangeWindow(range: RangeKey, ref: Date): { start: string; end: string } {
+  const day = 24 * 60 * 60 * 1000;
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const end = iso(ref);
+  if (range === "allTime") return { start: "1970-01-01", end };
+  const start = iso(new Date(ref.getTime() - (RANGE_DAYS[range] - 1) * day));
+  return { start, end };
+}
 
 function sumDays(points: DailyPoint[]): PeriodAgg {
   const spendAgorot = points.reduce((s, p) => s + p.spendAgorot, 0);
@@ -101,13 +122,10 @@ export async function buildCampaignReadout(
   ]);
 
   // Bounded ranges = sums over disjoint days, trailing and INCLUDING today.
-  const day = 24 * 60 * 60 * 1000;
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
-  const rangeFrom = (days: number) => iso(new Date(ref.getTime() - (days - 1) * day));
   const ranges = {
-    day: sumDays(daily.filter((p) => p.date >= rangeFrom(RANGE_DAYS.day))),
-    week: sumDays(daily.filter((p) => p.date >= rangeFrom(RANGE_DAYS.week))),
-    month: sumDays(daily.filter((p) => p.date >= rangeFrom(RANGE_DAYS.month))),
+    day: sumDays(daily.filter((p) => p.date >= resolveRangeWindow("day", ref).start)),
+    week: sumDays(daily.filter((p) => p.date >= resolveRangeWindow("week", ref).start)),
+    month: sumDays(daily.filter((p) => p.date >= resolveRangeWindow("month", ref).start)),
     // Lifetime figures come from the cached Meta read — the per-day rows only
     // reach back DAILY_LOOKBACK_DAYS, so summing them would silently
     // under-report an older campaign's "all time".

@@ -6,6 +6,45 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-15 — AIC-95: audience panel follows the range switcher, honest empty reasons
+Product input on a real screenshot: the audience/per-ad detail panel always
+read the engine's own fixed 7-day window regardless of the customer's
+day/week/month/allTime selection above it, disclosed only via small-print
+disclaimer (`D.windowNote`) rather than fixed — "a panel that opts out of
+[following the switcher] and announces so in small print reintroduces
+exactly what the switcher was built to fix." Fixed: `buildCampaignAudiences`
+now resolves the same window as the KPI cards (`resolveRangeWindow`, shared
+with `readout.ts`) and reads new per-object disjoint-daily aggregates
+(`creativeRangeStats`/`adsetRangeStats`/`mostRecentObjectDataDate`,
+`snapshot-store.ts`) instead of the engine's fixed rolling row. Empty windows
+now return `{ reason, mostRecentDataDate }` (`started_today` /
+`no_data_in_range` / `no_data_yet`) instead of a bare empty array — the
+panel states why rather than rendering nothing, the third confirmed instance
+of the "never blank when the reason is known" house rule (`CLAUDE.md`).
+
+**A real gap surfaced live-verifying this against real accounts, not the
+seeded fixture:** `GraphMetaClient.getDailyInsights` — the only thing that
+writes the disjoint-daily rows this feature reads — pulled campaign grain
+only. Real accounts had **zero** adset/creative-grain rows in the daily
+table; the panel would have shown `no_data_yet` forever for every real
+customer. Fixed (test-first, `client.test.ts`): `getDailyInsights` now pulls
+all three levels with `time_increment=1`, deriving creative rows from ad
+rows exactly like `getInsights` already does. Verified against the real
+GelNails account: a live ingestion tick backfilled real per-day adset/ad/
+creative rows for the first time, and the audience panel now shows real data
+(₪81.27 / 7 leads / ₪11.61 CPL, matching the campaign-grain total exactly)
+instead of the permanent empty state it would otherwise have shown.
+
+Item #2 of the ticket ("separate describing from judging," suppress only a
+comparison layer) was scoped out with a transparency comment on AIC-95 —
+`campaign-audiences.ts` has no evidence-gate/ranking logic today, so there
+was no such coupling to un-suppress.
+
+Full suite green (428 unit, 228/230 integration — only the 2 known
+pre-existing flakes), typecheck + web build clean. Docs:
+[customer-overview.md](features/customer-overview.md#opt-in-audience-details-aic-37-redesigned-aic-73),
+[insights-ingestion.md](features/insights-ingestion.md).
+
 ### 2026-08-15 — Fix: activation left the dashboard stale — no delivery/status refresh
 Reported live on the real free_beta campaign, seconds after the first-ever
 customer launch approval through this app: Meta genuinely showed 2 ads

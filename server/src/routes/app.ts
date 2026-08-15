@@ -14,6 +14,7 @@ import {
   requestBudgetChange,
 } from "../services/customer-actions.js";
 import { buildCampaignAudiences } from "../services/campaign-audiences.js";
+import { RANGE_KEYS, type RangeKey } from "../services/readout.js";
 import { getPendingLaunch, approveLaunch } from "../services/customer-launch.js";
 import { buildLaunchWriter, buildLaunchReader } from "../launch/writer.js";
 import { OpsQueue } from "../services/ops-queue.js";
@@ -166,7 +167,12 @@ appRouter.post("/budget-request", requireAuth, async (req, res) => {
 // Collapsed by default on Home; this is the door, not the room.
 appRouter.get("/audiences", requireAuth, async (req, res) => {
   try {
-    const result = await buildCampaignAudiences(pool, (req as AuthedRequest).userId!);
+    // AIC-95: follows the same range switcher the KPI cards do. An unknown
+    // value falls back to "week" (the switcher's own default) rather than
+    // 400ing — a stale client sending an old value shouldn't hard-fail.
+    const rawRange = req.query.range;
+    const range: RangeKey = (RANGE_KEYS as readonly string[]).includes(rawRange as string) ? (rawRange as RangeKey) : "week";
+    const result = await buildCampaignAudiences(pool, (req as AuthedRequest).userId!, range);
     if (!result) {
       res.status(404).json({ error: "no managed campaign" });
       return;

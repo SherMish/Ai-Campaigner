@@ -195,21 +195,36 @@ own per-creative breakdown. Backed by `services/campaign-audiences.ts`
 layer, which doesn't exist yet — there's no event sink to write to, so this
 isn't half-built here.
 
-**The panel's window silently disagreed with the KPI cards above it (bug fix,
-2026-08-14).** The top KPI cards follow the customer's range switcher
-(day/week/month/all — `ranges[range]`, a *trailing* window that INCLUDES
-today). `buildCampaignAudiences` always reads `rollingPeriods(ref).current` —
-the engine's own fixed 7-*complete*-day window (EXCLUDING today), the same
-one recommendations are evaluated on, unrelated to the range switcher.
-Confirmed live: top KPIs showed ₪78.6/6 leads (week, includes today) while
-the panel showed ₪43.9/5 leads (the fixed engine window) for the same
-account, no label explaining why. Not a double-count bug (each number was
-independently correct for its own window) — a missing label that made two
-honest, differently-scoped numbers on one screen read as broken. Fixed with
-`D.windowNote` (`web/src/strings.ts`), a line stating the window explicitly
-whenever the panel is open — the panel's window itself was left as-is
-(deliberately: it must keep matching what the engine evaluated, not whatever
-range the customer happens to have selected).
+**The panel follows the range switcher (AIC-95).** The top KPI cards and the
+audience panel read the exact same window — both resolve it via
+`resolveRangeWindow(range, ref)` (`server/src/services/readout.ts`), the one
+shared implementation of the day/week/month/allTime switcher's date math.
+Selecting a range changes what the panel shows; there is no disclaimer
+because there is no longer a mismatch to disclose. (An earlier version of
+this panel always read the engine's own fixed 7-complete-day window,
+unrelated to the switcher, and only disclosed the mismatch in small print —
+that disclaimer is gone because the underlying disagreement is gone.)
+
+This needed a new read path, not just a new query: the pre-existing
+`creativeStats`/`adsetStats` return one ROLLING-window row per object — the
+engine's own evidence for recommendations, structurally incapable of serving
+an arbitrary customer-selected range. `creativeRangeStats`/`adsetRangeStats`/
+`mostRecentObjectDataDate` (`server/src/meta/snapshot-store.ts`) instead sum
+the disjoint-daily rows (`insight_snapshot_daily`, migration 030) per object
+within `[start, end]` — the per-object equivalent of the per-campaign
+`dailySeries` readout already used for the KPI cards' own daily graph.
+
+**Empty windows state the reason instead of rendering nothing.**
+`buildCampaignAudiences` returns `empty: { reason, mostRecentDataDate }`
+rather than a bare empty array when the selected window has no audience
+rows: `"started_today"` (the campaign's newest data is today, but the
+selected range doesn't include today — e.g. opening "day" before today's
+first tick has landed), `"no_data_in_range"` (there's older data, just not
+in this window — states the most recent date the campaign does have data
+for), or `"no_data_yet"` (no per-object data at all yet). `Home.tsx` renders
+distinct copy for each (`D.emptyStartedToday`/`D.emptyNoDataInRange`/
+`D.empty`) rather than a silent blank card — see CLAUDE.md's "never blank
+when the reason is known" house rule, of which this is the origin case.
 
 **AIC-73 fixed the actual root cause of the raw-name leak.**
 `deriveAudienceLabels` used to label a dimension only when it DIFFERED across

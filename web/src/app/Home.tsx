@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { strings } from "../strings";
 import {
@@ -340,7 +340,7 @@ export function Home() {
           )}
 
           {/* opt-in per-audience / per-creative details (AIC-37) — collapsed by default */}
-          {ov.campaign && <AudienceDetails activeAds={activeAds} />}
+          {ov.campaign && <AudienceDetails activeAds={activeAds} range={range} />}
 
           {/* Bug fix, 2026-08-14: a pending recommendation while state is ok/
               collecting is now folded straight into the hero above (see
@@ -505,7 +505,7 @@ function Metric({ label, value, small }: { label: string; value: string; small?:
 // applied preemptively to the ~95% who have one audience.
 const ADAPTIVE_COLLAPSE_ABOVE = 3;
 
-function AudienceDetails({ activeAds }: { activeAds: number }) {
+function AudienceDetails({ activeAds, range }: { activeAds: number; range: RangeKey }) {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<CampaignAudiences | null>(null);
   const [loading, setLoading] = useState(false);
@@ -521,22 +521,24 @@ function AudienceDetails({ activeAds }: { activeAds: number }) {
   // the change happened. Cleared as soon as another action starts.
   const [successId, setSuccessId] = useState<string | null>(null);
 
+  function fetchAudiences(r: RangeKey) {
+    setLoading(true);
+    getCampaignAudiences(r)
+      .then((d) => {
+        setData(d);
+        // Only collapse when there's genuinely enough volume to manage.
+        if (d.audiences.length > ADAPTIVE_COLLAPSE_ABOVE) {
+          setCollapsed(new Set(d.audiences.map((x) => x.adSetId)));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }
+
   function toggle() {
     const next = !open;
     setOpen(next);
-    if (next && !data) {
-      setLoading(true);
-      getCampaignAudiences()
-        .then((d) => {
-          setData(d);
-          // Only collapse when there's genuinely enough volume to manage.
-          if (d.audiences.length > ADAPTIVE_COLLAPSE_ABOVE) {
-            setCollapsed(new Set(d.audiences.map((x) => x.adSetId)));
-          }
-        })
-        .catch(() => {})
-        .finally(() => setLoading(false));
-    }
+    if (next && !data) fetchAudiences(range);
     if (next && !ctl) getControlState().then(setCtl).catch(() => {});
     if (next && media.size === 0) {
       getAdMedia()
@@ -544,6 +546,18 @@ function AudienceDetails({ activeAds }: { activeAds: number }) {
         .catch(() => {}); // degrade to names, never break the panel
     }
   }
+
+  // AIC-95: the panel now follows the switcher, so a range change while it's
+  // already open must refetch — not just the first-open fetch above. Skipped
+  // while closed (AIC-37's opt-in principle: nothing about audiences is
+  // fetched until the customer actually opens the panel), and skipped on the
+  // very first render (that's `toggle`'s job, guarded by `!data`).
+  const isFirstRangeEffect = useRef(true);
+  useEffect(() => {
+    if (isFirstRangeEffect.current) { isFirstRangeEffect.current = false; return; }
+    if (open) fetchAudiences(range);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range]);
 
   const isPaused = (kind: "ad" | "ad_set", id: string) =>
     (kind === "ad" ? ctl?.adStatuses[id] : ctl?.adSetStatuses[id]) === "paused";
@@ -600,11 +614,25 @@ function AudienceDetails({ activeAds }: { activeAds: number }) {
 
       {open && (
         <div style={{ marginTop: 10 }}>
-          <p className="muted" style={{ fontSize: "0.8rem", marginBottom: 10 }}>{D.windowNote}</p>
+          {/* Same provisional-today note the KPI cards show for "היום" —
+              AIC-95 reuses it here rather than inventing a second one, since
+              this panel now reads the exact same still-updating window. */}
+          {range === "day" && <p className="muted" style={{ fontSize: "0.8rem", marginBottom: 10 }}>{h.provisional}</p>}
           {ctlFailed && <p className="muted" style={{ color: "var(--orange)", marginBottom: 10 }}>{CT.failed}</p>}
           {loading ? (
             <p className="muted">{a.loading}</p>
-          ) : !data || data.audiences.length === 0 ? (
+          ) : !data ? (
+            <p className="muted">{D.empty}</p>
+          ) : data.empty?.reason === "started_today" ? (
+            <p className="muted">{D.emptyStartedToday}</p>
+          ) : data.empty?.reason === "no_data_in_range" ? (
+            <p className="muted">
+              {D.emptyNoDataInRange}
+              {data.empty.mostRecentDataDate ? fmtDate(data.empty.mostRecentDataDate) : ""}
+            </p>
+          ) : data.audiences.length === 0 ? (
+            // data.empty?.reason === "no_data_yet", or the defensive fallback
+            // for a response with neither rows nor a reason.
             <p className="muted">{D.empty}</p>
           ) : (
             <div className="stack gap8">

@@ -6,14 +6,17 @@ import { pool } from "../db/pool.js";
 import { createApp } from "../app.js";
 import { signAuthToken } from "../auth/tokens.js";
 import { PgSnapshotStore } from "../meta/snapshot-store.js";
-import { rollingPeriods } from "../meta/scheduled-ingestion.js";
 import { upsertAdSetMeta } from "./audience-meta-cache.js";
 import { buildCampaignAudiences } from "./campaign-audiences.js";
 import type { SnapshotUpsert } from "../meta/insights.js";
 
 const HAS_DB = !!process.env.DATABASE_URL;
 const d = HAS_DB ? describe : describe.skip;
-const { current: CUR } = rollingPeriods();
+// A disjoint DAILY row (period_start = period_end) on today — inside every
+// range's window by construction (day/week/month/allTime all end at "today"
+// per resolveRangeWindow), so existing fixtures don't need to know or care
+// which range a given test exercises.
+const TODAY = new Date().toISOString().slice(0, 10);
 
 async function seedChain(tag: string) {
   const cust = await pool.query<{ id: string }>(
@@ -44,7 +47,7 @@ async function seedChain(tag: string) {
 function snap(campaignId: string, o: Partial<SnapshotUpsert> & Pick<SnapshotUpsert, "grain" | "metaObjectId">): SnapshotUpsert {
   return {
     campaignId, parentMetaId: null, creativeName: null,
-    periodStart: CUR.start, periodEnd: CUR.end, spendAgorot: 0, leads: 0, cplAgorot: null,
+    periodStart: TODAY, periodEnd: TODAY, spendAgorot: 0, leads: 0, cplAgorot: null,
     impressions: 0, linkClicks: 0, deliveryStatus: "active", raw: {}, ...o,
   };
 }
@@ -142,6 +145,68 @@ d("campaign audiences (DB + HTTP)", () => {
     const result = await buildCampaignAudiences(pool, userId);
     expect(result?.audiences).toHaveLength(1);
     expect(result?.audiences[0].adSetId).toBe("as_real");
+  });
+
+  // AIC-95: the panel used to always read the engine's fixed 7-complete-day
+  // window (rollingPeriods().current), completely ignoring the day/week/
+  // month/all-time switcher — its own disclaimer said so. This is the
+  // regression test for the actual fix: two otherwise-identical days, one
+  // inside the selected window and one outside it, must change what renders.
+  it("follows the selected range — a day outside the window is excluded, changing the total", async () => {
+    const { userId, campaignId } = await seedChain("range");
+    const store = new PgSnapshotStore(pool);
+    const longAgo = "2026-01-05"; // outside "day"/"week"/"month", inside "allTime"
+    await store.upsert([
+      snap(campaignId, { grain: "adset", metaObjectId: "as_x", spendAgorot: 1000, leads: 1, cplAgorot: 1000 }), // today
+      snap(campaignId, { grain: "adset", metaObjectId: "as_x", periodStart: longAgo, periodEnd: longAgo, spendAgorot: 5000, leads: 5, cplAgorot: 1000 }),
+    ]);
+    await upsertAdSetMeta(pool, campaignId, [
+      { adSetId: "as_x", name: "Set X", ageMin: 25, ageMax: 40, genders: "all", geoSummary: "", isDynamicCreative: false },
+    ]);
+
+    const day = await buildCampaignAudiences(pool, userId, "day");
+    expect(day?.audiences[0].spendAgorot).toBe(1000); // only today
+
+    const allTime = await buildCampaignAudiences(pool, userId, "allTime");
+    expect(allTime?.audiences[0].spendAgorot).toBe(6000); // today + the old day
+  });
+
+  // The panel's core honesty fix: never a bare empty array.
+  describe("empty windows state the reason instead of rendering nothing", () => {
+    it("started_today: no historical data, but today has real rows the meta-cache hasn't caught up to yet", async () => {
+      const { userId, campaignId } = await seedChain("started-today");
+      const store = new PgSnapshotStore(pool);
+      // Real data exists for today, but the ad set was never cached (AIC-65's
+      // exclusion) — the exact shape of "day 1, before the first generation tick".
+      await store.upsert([snap(campaignId, { grain: "adset", metaObjectId: "as_uncached", spendAgorot: 1000, leads: 1 })]);
+
+      const result = await buildCampaignAudiences(pool, userId, "week");
+      expect(result?.audiences).toEqual([]);
+      expect(result?.empty).toEqual({ reason: "started_today", mostRecentDataDate: TODAY });
+    });
+
+    it("no_data_in_range: real historical data exists, just not inside the selected window", async () => {
+      const { userId, campaignId } = await seedChain("gap");
+      const store = new PgSnapshotStore(pool);
+      const longAgo = "2026-01-05";
+      await store.upsert([
+        snap(campaignId, { grain: "adset", metaObjectId: "as_x", periodStart: longAgo, periodEnd: longAgo, spendAgorot: 5000, leads: 5 }),
+      ]);
+      await upsertAdSetMeta(pool, campaignId, [
+        { adSetId: "as_x", name: "Set X", ageMin: 25, ageMax: 40, genders: "all", geoSummary: "", isDynamicCreative: false },
+      ]);
+
+      const result = await buildCampaignAudiences(pool, userId, "week"); // longAgo is well outside "week"
+      expect(result?.audiences).toEqual([]);
+      expect(result?.empty).toEqual({ reason: "no_data_in_range", mostRecentDataDate: longAgo });
+    });
+
+    it("no_data_yet: never had any per-object data at all", async () => {
+      const { userId } = await seedChain("never");
+      const result = await buildCampaignAudiences(pool, userId, "week");
+      expect(result?.audiences).toEqual([]);
+      expect(result?.empty).toEqual({ reason: "no_data_yet", mostRecentDataDate: null });
+    });
   });
 
   it("rejects the endpoint without a token, and returns null for a user with no campaign", async () => {

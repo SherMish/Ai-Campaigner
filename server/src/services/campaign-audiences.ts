@@ -2,7 +2,7 @@ import type pg from "pg";
 import { PgSnapshotStore } from "../meta/snapshot-store.js";
 import { listAdSetMeta } from "./audience-meta-cache.js";
 import { deriveAudienceLabels, type AdSetMeta } from "../meta/audience-label.js";
-import { rollingPeriods } from "../meta/scheduled-ingestion.js";
+import { resolveRangeWindow, type RangeKey } from "./readout.js";
 import { resolveCampaignId } from "./customer-recommendations.js";
 
 // The opt-in "details" view (AIC-37): per-audience (ad set) breakdown, each with
@@ -11,6 +11,14 @@ import { resolveCampaignId } from "./customer-recommendations.js";
 // framed labels only (the human audience dimension, never "ad set N"); raw
 // ad-jargon metrics (CPM/CTR/etc.) stay out, same boundary as the rest of the
 // customer surface.
+//
+// AIC-95: this used to always read the engine's own fixed 7-complete-day
+// window (`rollingPeriods().current`), completely ignoring the day/week/
+// month/all-time switcher at the top of Home — its own disclaimer said so.
+// It now takes the customer's selected `range` and resolves the SAME window
+// the KPI cards use (`resolveRangeWindow`, shared with readout.ts so the two
+// can't drift), reading the disjoint-daily range-stat methods instead of the
+// single current-rolling-window row.
 
 export interface AudienceCreativeRow {
   metaObjectId: string;
@@ -30,9 +38,24 @@ export interface AudienceRow {
   creatives: AudienceCreativeRow[];
 }
 
+// Why the panel has nothing to show for the selected window — never a bare
+// empty array with no explanation (the house rule this ticket is the origin
+// of: any surface that can be empty must render a reason).
+//   started_today          — no per-object data before today, but today has
+//                             some (a campaign that just started/resumed
+//                             delivering); the selected window just doesn't
+//                             reach far enough into today to show it yet.
+//   no_data_in_range       — the campaign HAS real per-object data, just not
+//                             within the selected window (e.g. paused for
+//                             weeks, "week" happens to land in the gap).
+//   no_data_yet            — never had any real per-object data at all.
+export type AudienceEmptyReason = "started_today" | "no_data_in_range" | "no_data_yet";
+
 export interface CampaignAudiences {
   campaignId: string;
+  range: RangeKey;
   audiences: AudienceRow[];
+  empty?: { reason: AudienceEmptyReason; mostRecentDataDate: string | null };
 }
 
 // Ownership-scoped: resolves the caller's own campaign, never another
@@ -41,16 +64,17 @@ export interface CampaignAudiences {
 export async function buildCampaignAudiences(
   pool: pg.Pool,
   userId: string,
+  range: RangeKey = "week",
   ref: Date = new Date(),
 ): Promise<CampaignAudiences | null> {
   const campaignId = await resolveCampaignId(pool, userId);
   if (!campaignId) return null;
 
-  const { current } = rollingPeriods(ref);
+  const window = resolveRangeWindow(range, ref);
   const store = new PgSnapshotStore(pool);
   const [adsetStats, creativeStats, meta] = await Promise.all([
-    store.adsetStats(campaignId, current.start, current.end),
-    store.creativeStats(campaignId, current.start, current.end),
+    store.adsetRangeStats(campaignId, window.start, window.end),
+    store.creativeRangeStats(campaignId, window.start, window.end),
     listAdSetMeta(pool, campaignId),
   ]);
 
@@ -103,5 +127,11 @@ export async function buildCampaignAudiences(
   }));
   audiences.sort((a, b) => b.spendAgorot - a.spendAgorot);
 
-  return { campaignId, audiences };
+  if (audiences.length > 0) return { campaignId, range, audiences };
+
+  const mostRecentDataDate = await store.mostRecentObjectDataDate(campaignId);
+  const today = ref.toISOString().slice(0, 10);
+  const reason: AudienceEmptyReason =
+    mostRecentDataDate === null ? "no_data_yet" : mostRecentDataDate === today ? "started_today" : "no_data_in_range";
+  return { campaignId, range, audiences, empty: { reason, mostRecentDataDate } };
 }
