@@ -719,7 +719,38 @@ export const strings = {
         budgetLine: "תקציב יומי",
         maxSpendLine: "הוצאה מקסימלית מוערכת לחודש",
         adsLine: "מודעות",
+        // Bug fix, 2026-08-14: this row was a single hardcoded "פניות אל
+        // וואטסאפ" whose value was `whatsapp_destination` — '' for any
+        // non-WhatsApp campaign, so a real Pixel campaign rendered a WhatsApp
+        // label with a BLANK value on the screen where ₪600/month is approved.
+        // The label now follows the campaign's actual lead destination.
         whatsappLine: "פניות אל וואטסאפ",
+        websiteLine: "פניות מהאתר",
+        // Which action on the site counts as a lead. Named in plain Hebrew,
+        // not as the Meta event id — an SMB owner can't verify
+        // "CompleteRegistration", and this screen exists to be verified. The
+        // raw event name is the fallback for custom conversions, where we have
+        // no standard name and inventing one would be a guess.
+        leadEvent: {
+          COMPLETE_REGISTRATION: "הרשמה",
+          LEAD: "יצירת קשר",
+          PURCHASE: "רכישה",
+          ADD_TO_CART: "הוספה לעגלה",
+          INITIATED_CHECKOUT: "התחלת תשלום",
+          CONTENT_VIEW: "צפייה בתוכן",
+          SUBMIT_APPLICATION: "שליחת טופס",
+          CONTACT: "יצירת קשר",
+          SCHEDULE: "קביעת תור",
+          SUBSCRIBE: "הרשמה לרשימה",
+          START_TRIAL: "התחלת ניסיון",
+        } as Record<string, string>,
+        // Approval is blocked. Each reason names the missing precondition
+        // plainly — never a disabled button with no explanation.
+        blocked: {
+          no_ads: "אין מודעות פעילות בקמפיין, כך שהפעלה לא תציג כלום ולא תוציא תקציב. נטפל בזה ונעדכן.",
+          unknown_destination: "לא הצלחנו לוודא לאן הפניות אמורות להגיע, ולכן לא נבקש מכם לאשר הפעלה. אנחנו בודקים.",
+          verification_unavailable: "לא הצלחנו לבדוק מול Meta את מצב הקמפיין כרגע. נסו שוב בעוד רגע.",
+        } as Record<string, string>,
         approveCta: "אישור והפעלה",
         approving: "מפעיל…",
         cancel: "לא עכשיו",

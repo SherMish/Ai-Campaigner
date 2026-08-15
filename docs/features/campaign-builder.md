@@ -468,10 +468,48 @@ Meta-linked campaign surfaces as a new `ready_to_launch` home state (it
 outranks delivery/collecting — a PAUSED campaign has no delivery data to
 judge, and the one actionable thing is the launch itself). Approving opens a
 modal showing exactly what will run — campaign name, daily budget, **the
-estimated monthly max spend** (daily × 30), ad count, WhatsApp destination —
+estimated monthly max spend** (daily × 30), ad count, lead destination —
 then a single "אישור והפעלה". This is the AIC-23 informed-approval pattern:
 the customer sees budget + max spend before anything spends. Approving is the
 only thing that flips the campaign live.
+
+#### Two rules that apply because it's a consent surface (bug fix, 2026-08-14)
+
+Every row exists so the customer can check "is this what I think I'm
+approving?" before real money moves. Two facts on this modal were derived
+from assumptions that AIC-87 (per-campaign lead definitions) and connecting
+an externally-created campaign both invalidated:
+
+- **The destination row was hardcoded to WhatsApp.** Its label was a fixed
+  `"פניות אל וואטסאפ"` and its value was `whatsapp_destination` — a column
+  that is `NOT NULL DEFAULT ''`, so for the real connected Pixel campaign it
+  rendered a confident WhatsApp label beside a **blank value**. It now
+  resolves through `services/launch-destination.ts` into one of three states:
+  `whatsapp` (the number), `website` (which action counts as a lead, named in
+  plain Hebrew via `strings.launch.leadEvent`, plus the pixel's host — e.g.
+  "הרשמה — pisga.app"), or `unknown`. The event is deliberately named in the
+  customer's language, not as `CompleteRegistration`: an SMB owner cannot
+  verify a Meta event id, and verification is this screen's whole purpose.
+  The standard-event mapping is the inverse of AIC-88's `PIXEL_EVENT_ACTION`
+  (`standardEventForAction`), reused rather than copied so the two can't drift.
+- **The ad count came from our own build history.** It was `COUNT(*)` over
+  `action_history` rows with `action_type='create_ad'` — ads *we* created —
+  which reads 0 for any campaign connected from outside the builder even when
+  real ads exist. It now reads live Meta state (`getCampaignState().adStatuses`),
+  the same honest source AIC-71 uses for the delivering-ad count.
+
+**Rule 1 — never render a fact we don't have.** A row whose value is unknown
+is omitted, not printed blank. A confident label beside an empty value
+asserts something untrue at the worst possible moment.
+
+**Rule 2 — if we can't verify, block.** `LaunchBlocker` is `no_ads` (Meta
+reports zero live ads — approving would spend nothing and do nothing),
+`unknown_destination` (we can't say where leads arrive), or
+`verification_unavailable` (Meta unreachable — *not* the same as "fine",
+including the ordinary case of an ad-account API rate limit). Each disables
+approval **with its reason stated**, never a silently dead button. Blockers
+are re-checked server-side in `approveLaunch` and return `409` — the disabled
+button is a courtesy, not the gate.
 
 **Verification**: the two integration suites named above (13 tests total),
 plus a real-browser walk of a locally-seeded review-approved campaign — the

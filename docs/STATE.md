@@ -6,6 +6,49 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-14 — Bugfix: the launch consent screen asserted a WhatsApp destination it didn't have
+Reported live on the real connected Pixel campaign: the launch-approval modal
+showed "פניות אל וואטסאפ" — a hardcoded label — with a **blank value**, and
+"מודעות 0" for a campaign that really has one ad. Both on the screen where a
+customer authorises ₪600/month.
+
+Two independent root causes, both assumptions invalidated earlier the same
+day: the destination was `whatsapp_destination` (`NOT NULL DEFAULT ''`, so
+empty rather than null for any campaign AIC-87 made non-WhatsApp), and the ad
+count was `COUNT(*)` over our own `action_history` `create_ad` rows — ads *we*
+built — which reads 0 for any externally-connected campaign.
+
+Fixed with two rules that apply because it's a consent surface. **Never render
+a fact we don't have**: the destination resolves to `whatsapp` / `website` /
+`unknown` (new pure `services/launch-destination.ts`), and an unknown row is
+omitted rather than printed blank. **If we can't verify, block**: new
+`LaunchBlocker` (`no_ads` / `unknown_destination` / `verification_unavailable`)
+disables approval with the reason stated, and `approveLaunch` re-checks
+server-side and returns 409 — the disabled button is a courtesy, not the gate.
+The website value names the lead action in plain Hebrew plus the pixel's host
+("הרשמה — pisga.app") rather than the Meta event id, because an SMB owner
+can't verify `CompleteRegistration` and verification is the screen's purpose;
+the mapping reuses AIC-88's `PIXEL_EVENT_ACTION` inverted, not a second copy.
+Ad count now reads live `getCampaignState().adStatuses`.
+
+Test-first (7 pure cases incl. the exact real-campaign shape, + 4 new route
+integration cases). Full suite green (395 unit, 214/216 integration — only the
+2 known pre-existing flakes), typecheck + web build clean. Verified against the
+real campaign: destination resolves to `COMPLETE_REGISTRATION` + `pisga.app`.
+Live ad count correctly reported `verification_unavailable` during a Meta
+ad-account rate limit — the blocker behaving exactly as designed rather than
+defaulting to a reassuring zero. Docs:
+[campaign-builder.md](features/campaign-builder.md).
+
+**Found while sweeping for the same bug class, NOT fixed here** — higher-severity
+siblings, logged for AIC-89: `AddContent.tsx` seeds an empty WhatsApp number
+into a real Meta creative write with a `WHATSAPP_MESSAGE` CTA (unvalidated),
+and `addAdSetToExistingCampaign` hardcodes `CONVERSATIONS`/`WHATSAPP`, so
+adding an ad set to a Pixel campaign would create one whose conversions can
+never be counted. Also: the `ready_to_launch` hero copy claims "בנינו את
+הקמפיין והוא עבר בדיקה" (we built it, it passed review) — false for a
+connected campaign.
+
 ### 2026-08-14 — AIC-88: guard against a lead-definition/Meta-config mismatch
 The blocker named in AIC-87's own investigation: a Pixel campaign can be
 connected with the wrong `lead_event_types` (exactly what happened with

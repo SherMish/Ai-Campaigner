@@ -500,13 +500,23 @@ export const buildCampaign = (body: BuildCampaignBody) =>
   api<BuildCampaignResult>("/app/builder/build", { method: "POST", body: JSON.stringify(body) });
 
 // ── Launch gate (AIC-53) ────────────────────────────────────────────────────
+// Where leads actually arrive. Three-valued: `unknown` blocks launch rather
+// than rendering a blank value beside a confident label (the bug this fixed).
+export type LaunchDestination =
+  | { kind: "whatsapp"; whatsappNumber: string }
+  | { kind: "website"; eventKey: string; domain: string | null }
+  | { kind: "unknown" };
+
+export type LaunchBlocker = "no_ads" | "unknown_destination" | "verification_unavailable";
+
 export interface LaunchSummary {
   campaignId: string;
   name: string;
   dailyBudgetAgorot: number;
   budgetPeriod: "daily" | "monthly";
-  whatsappDestination: string;
-  adCount: number;
+  destination: LaunchDestination;
+  adCount: number | null; // null = Meta unreachable, NOT zero
+  blockers: LaunchBlocker[];
 }
 export const getPendingLaunch = () => api<{ launch: LaunchSummary | null }>("/app/launch");
 export type LaunchApproveOutcome = "activated" | "already_launched" | "not_approved" | "not_linked" | "failed";

@@ -760,6 +760,9 @@ function LaunchModal({ onClose }: { onClose: () => void }) {
   }
 
   const maxMonthly = summary && summary.budgetPeriod === "daily" ? summary.dailyBudgetAgorot * 30 : summary?.dailyBudgetAgorot ?? 0;
+  // Why approval isn't offered. Server-computed and server-enforced — this
+  // only decides what the button looks like and what we tell the customer.
+  const blockers = summary?.blockers ?? [];
 
   return (
     <div className="op-modal-backdrop" onClick={onClose}>
@@ -782,11 +785,42 @@ function LaunchModal({ onClose }: { onClose: () => void }) {
             <div className="summary-row"><span className="k">{LN.nameLine}</span><b>{summary.name}</b></div>
             <div className="summary-row"><span className="k">{LN.budgetLine}</span><b>{shekels(summary.dailyBudgetAgorot)} {L.perDay}</b></div>
             <div className="summary-row"><span className="k">{LN.maxSpendLine}</span><b>{shekels(maxMonthly)} {LN.perMonth}</b></div>
-            <div className="summary-row"><span className="k">{LN.adsLine}</span><b>{summary.adCount}</b></div>
-            <div className="summary-row"><span className="k">{LN.whatsappLine}</span><b>{summary.whatsappDestination}</b></div>
+            {/* Every row states a fact we actually have. A row whose value is
+                unknown is omitted rather than rendered blank — on a consent
+                screen a confident label beside an empty value asserts
+                something untrue. The missing fact becomes a blocker below. */}
+            {summary.adCount !== null && (
+              <div className="summary-row"><span className="k">{LN.adsLine}</span><b>{summary.adCount}</b></div>
+            )}
+            {summary.destination.kind === "whatsapp" && (
+              <div className="summary-row">
+                <span className="k">{LN.whatsappLine}</span>
+                <b>{summary.destination.whatsappNumber}</b>
+              </div>
+            )}
+            {summary.destination.kind === "website" && (
+              <div className="summary-row">
+                <span className="k">{LN.websiteLine}</span>
+                <b>
+                  {LN.leadEvent[summary.destination.eventKey] ?? summary.destination.eventKey}
+                  {summary.destination.domain ? ` — ${summary.destination.domain}` : ""}
+                </b>
+              </div>
+            )}
+            {blockers.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                {blockers.map((b) => (
+                  <p key={b} className="muted" style={{ color: "var(--orange)", marginBottom: 6 }}>
+                    {LN.blocked[b] ?? b}
+                  </p>
+                ))}
+              </div>
+            )}
             {error && <p className="muted" style={{ marginTop: 14, color: "var(--orange)" }}>{LN.failed}</p>}
             <div className="row gap12" style={{ marginTop: 22 }}>
-              <button className="btn btn-primary" onClick={approve} disabled={approving}>{approving ? LN.approving : LN.approveCta}</button>
+              {/* Disabled on a real precondition, with the reason stated above
+                  — never a silently dead button. The server re-checks. */}
+              <button className="btn btn-primary" onClick={approve} disabled={approving || blockers.length > 0}>{approving ? LN.approving : LN.approveCta}</button>
               <button className="btn btn-outline" onClick={onClose} disabled={approving}>{LN.cancel}</button>
             </div>
           </div>

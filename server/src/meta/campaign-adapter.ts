@@ -289,6 +289,39 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     }));
   }
 
+  // The host a pixel actually fires on — the confirming half of the launch
+  // gate's "where do my leads come from" row (AIC-89 slice). Read-only.
+  //
+  // Deliberately the PIXEL's host, not the ad's link URL: an externally-created
+  // ad exposes no destination through the creative (verified live — every URL
+  // field comes back empty for an ad we didn't build), and more importantly
+  // the customer needs to know where the action that COUNTS as a lead happens,
+  // which can differ from where the ad click lands.
+  //
+  // Returns the highest-volume host, or null when the pixel has no recent
+  // traffic. Null degrades the row to the action name alone; it never blocks
+  // launch, because the action is the load-bearing fact and the domain is
+  // context. NOTE: `/stats` is capped at a rolling ~28-day window and silently
+  // ignores an older `start_time` — fine here (we want "currently"), but it is
+  // why this endpoint must never be used for historical reconciliation.
+  async getPixelTopHost(pixelId: string): Promise<string | null> {
+    const body = await this.get(`${pixelId}/stats?aggregation=host`);
+    const totals = new Map<string, number>();
+    for (const bucket of (body.data as Array<Record<string, unknown>>) ?? []) {
+      for (const e of (bucket.data as Array<Record<string, unknown>>) ?? []) {
+        const host = String(e.value ?? "");
+        if (!host) continue;
+        totals.set(host, (totals.get(host) ?? 0) + Number(e.count ?? 0));
+      }
+    }
+    let top: string | null = null;
+    let best = 0;
+    for (const [host, count] of totals) {
+      if (count > best) { top = host; best = count; }
+    }
+    return top;
+  }
+
   // ── Create-writes (AIC-50, the builder) ────────────────────────────────────
   // Every create is status=PAUSED — the builder NEVER produces a live, spending
   // object directly (the hard rule this ticket exists to enforce). Activation

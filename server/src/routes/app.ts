@@ -15,7 +15,7 @@ import {
 } from "../services/customer-actions.js";
 import { buildCampaignAudiences } from "../services/campaign-audiences.js";
 import { getPendingLaunch, approveLaunch } from "../services/customer-launch.js";
-import { buildLaunchWriter } from "../launch/writer.js";
+import { buildLaunchWriter, buildLaunchReader } from "../launch/writer.js";
 
 // Customer-facing data API (AIC-22/24). Every route is scoped to the caller's
 // own customer via the JWT — the service only ever reads rows owned by req.userId.
@@ -181,7 +181,10 @@ appRouter.get("/audiences", requireAuth, async (req, res) => {
 // campaign to spending, never review approval alone.
 appRouter.get("/launch", requireAuth, async (req, res) => {
   try {
-    const launch = await getPendingLaunch(pool, (req as AuthedRequest).userId!);
+    // The same token-gated adapter the writer uses. Null (no token) is NOT
+    // treated as "fine" — getPendingLaunch reports `verification_unavailable`
+    // and blocks approval, since we can't confirm what we'd be turning on.
+    const launch = await getPendingLaunch(pool, (req as AuthedRequest).userId!, buildLaunchReader());
     res.json({ launch });
   } catch (e) {
     console.error("[app] launch summary failed", e);
@@ -196,9 +199,14 @@ appRouter.post("/launch/approve", requireAuth, async (req, res) => {
       res.status(503).json({ error: "execution temporarily unavailable" });
       return;
     }
-    const result = await approveLaunch(pool, writer, (req as AuthedRequest).userId!);
+    const result = await approveLaunch(pool, writer, (req as AuthedRequest).userId!, buildLaunchReader());
     if (result.outcome === "not_found") {
       res.status(404).json({ error: "nothing pending launch" });
+      return;
+    }
+    // Re-checked server-side: a disabled button is a courtesy, not the gate.
+    if (result.outcome === "blocked") {
+      res.status(409).json({ error: "launch preconditions not met", blockers: result.blockers });
       return;
     }
     res.json(result);

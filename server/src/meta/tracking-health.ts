@@ -88,7 +88,27 @@ const PIXEL_EVENT_ACTION: Record<string, string> = {
 // The messaging-conversation event, the P0 Click-to-WhatsApp lead. The base
 // type — `extractLeads`' priority list also accepts the _7d variant, and
 // membership of EITHER counts as a match (see `matches` below).
-const MESSAGING_ACTION = "onsite_conversion.messaging_conversation_started";
+export const MESSAGING_ACTION = "onsite_conversion.messaging_conversation_started";
+
+// The inverse of PIXEL_EVENT_ACTION: given an Insights action type we COUNT,
+// which standard Meta event is it? Exported so the launch gate can name the
+// lead action for the customer without a second, drifting copy of this table
+// (`services/launch-destination.ts`). Returns null for a custom conversion —
+// there is no standard name to give, and inventing one would be a guess shown
+// on a consent screen.
+export function standardEventForAction(actionType: string): string | null {
+  for (const [event, action] of Object.entries(PIXEL_EVENT_ACTION)) {
+    if (action === actionType) return event;
+  }
+  return null;
+}
+
+// Is this action type the Click-to-WhatsApp messaging lead (either attribution
+// variant)? Shared with the launch gate so "is this a WhatsApp campaign" has
+// one definition.
+export function isMessagingAction(actionType: string): boolean {
+  return actionType === MESSAGING_ACTION || actionType === `${MESSAGING_ACTION}_7d`;
+}
 
 // What Insights action type will this ad set's conversions arrive as?
 // Returns null when the configuration doesn't determine one — an ad set that
