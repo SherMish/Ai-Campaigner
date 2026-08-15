@@ -139,7 +139,7 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
     expect((await request(app).post("/api/app/additions/ad")).status).toBe(401);
   });
 
-  it("/context 409s a customer with no managed campaign yet (the builder's job, not this one)", async () => {
+  it("/context 409s with reason 'no_campaign' when nothing's been built yet (the builder's job, not this one)", async () => {
     const notReady = await pool.query<{ id: string }>(
       `INSERT INTO customers (business_name, is_test, onboarding_status) VALUES ('__it_additions_nocamp', true, 'ready') RETURNING id`,
     );
@@ -149,6 +149,50 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
     );
     const res = await request(app).get("/api/app/additions/context").set("Authorization", `Bearer ${signAuthToken(nrUser.rows[0].id)}`);
     expect(res.status).toBe(409);
+    expect(res.body.reason).toBe("no_campaign");
+  });
+
+  // REGRESSION (real live bug, reported on production): a customer with an
+  // ACTIVE, spending campaign got "you don't have a campaign yet — go build
+  // one" — false, and a dead end, since the builder itself refuses to run
+  // once a campaign exists. The real cause was a connection precondition
+  // (missing page_id), not the absence of a campaign.
+  it("/context 409s with reason 'not_launched' when a campaign row exists but was never linked to Meta", async () => {
+    const cust = await pool.query<{ id: string }>(
+      `INSERT INTO customers (business_name, is_test, onboarding_status) VALUES ('__it_additions_notlaunched', true, 'ready') RETURNING id`,
+    );
+    const user = await pool.query<{ id: string }>(
+      `INSERT INTO app_users (email, password_hash, customer_id) VALUES ('__it_additions_notlaunched@example.com', 'x', $1) RETURNING id`,
+      [cust.rows[0].id],
+    );
+    const conn = await pool.query<{ id: string }>(
+      `INSERT INTO meta_connections (customer_id, access_health, page_id) VALUES ($1, 'ok', 'page_it_1') RETURNING id`,
+      [cust.rows[0].id],
+    );
+    const acct = await pool.query<{ id: string }>(
+      `INSERT INTO ad_accounts (connection_id, meta_ad_account_id, name) VALUES ($1, 'act_notlaunched', 'IT Ad Account') RETURNING id`,
+      [conn.rows[0].id],
+    );
+    await pool.query(
+      // meta_campaign_id left NULL — a local campaign row exists (still mid-
+      // builder, or launch never approved) but was never linked to Meta.
+      `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, name) VALUES ($1, $2, 'under_review', 'Draft Campaign')`,
+      [cust.rows[0].id, acct.rows[0].id],
+    );
+    const res = await request(app).get("/api/app/additions/context").set("Authorization", `Bearer ${signAuthToken(user.rows[0].id)}`);
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe("not_launched");
+  });
+
+  it("/context 409s with reason 'connection_issue' when the campaign is real and linked but the connection can't support writes (missing page_id — the real production case)", async () => {
+    const { token, customerId } = await seedExistingCampaign("noPage");
+    // seedExistingCampaign's connection has a page_id; null it out to match
+    // the real production row this reproduces (a campaign whose ads use a
+    // Facebook Page our System User doesn't hold access to yet).
+    await pool.query(`UPDATE meta_connections SET page_id = NULL WHERE customer_id = $1`, [customerId]);
+    const res = await request(app).get("/api/app/additions/context").set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe("connection_issue");
   });
 
   it("/context 200s with the existing campaign's name + category for a ready customer", async () => {

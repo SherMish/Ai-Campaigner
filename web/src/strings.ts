@@ -1042,9 +1042,19 @@ export const strings = {
       navLabel: "הוספת תוכן",
       eyebrow: "הקמפיין הקיים שלכם",
       title: "הוספת תוכן לקמפיין",
+      // Three distinct reasons GET /context can 409 with — never collapsed
+      // into one message. A customer with an active, spending campaign was
+      // told "go build your first campaign," which is both false and a dead
+      // end (the builder itself refuses to run once a campaign exists).
       notReadyTitle: "עוד אין קמפיין להוסיף לו תוכן",
       notReadyBody: "צריך קודם ליצור את הקמפיין הראשון שלכם.",
       goToBuilder: "ליצירת הקמפיין",
+      notLaunchedTitle: "הקמפיין שלכם עדיין לא פעיל",
+      notLaunchedBody: "יש לכם קמפיין, אבל הוא עדיין לא אושר להפעלה מול Meta. אשרו את ההפעלה בדף הבית לפני שמוסיפים תוכן.",
+      goToHome: "לדף הבית",
+      connectionIssueTitle: "יש בעיה בחיבור לחשבון הפרסום",
+      connectionIssueBody: "הקמפיין שלכם קיים ופעיל, אבל כרגע אי אפשר להוסיף לו תוכן בגלל בעיה בחיבור ל-Meta. בדקו את החיבור בהגדרות, או דברו איתנו ונטפל בזה.",
+      goToSettings: "להגדרות",
       unavailable: "הוספת תוכן לא זמינה כרגע. נסו שוב בעוד כמה דקות.",
       modeAd: "הוספת מודעה",
       modeAdSet: "הוספת קבוצת מודעות",

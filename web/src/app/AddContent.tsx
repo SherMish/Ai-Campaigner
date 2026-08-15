@@ -6,7 +6,7 @@ import {
   getAdditionContext, getExistingAdSets, getPendingAdditions, approveAddition,
   addAd, addAdSet, ApiError,
   uploadAdditionFile, getAdditionPosts, createAdditionCreative,
-  type ExistingAdSet, type PendingAddition,
+  type ExistingAdSet, type PendingAddition, type AdditionUnavailableReason,
 } from "../api";
 import { StatusPill, SupportCard } from "./components";
 import { AudienceFields, type Gender } from "./AudienceFields";
@@ -20,6 +20,7 @@ function freshKey(): string {
 
 export function AddContent() {
   const [phase, setPhase] = useState<"loading" | "not_ready" | "ready" | "error">("loading");
+  const [notReadyReason, setNotReadyReason] = useState<AdditionUnavailableReason>("no_campaign");
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [mode, setMode] = useState<"ad" | "ad_set">("ad");
 
@@ -54,7 +55,15 @@ export function AddContent() {
         setAudience({ ageMin: d.ageMin, ageMax: d.ageMax, gender: d.genders });
         setPhase("ready");
       })
-      .catch((e) => setPhase(e instanceof ApiError && e.status === 409 ? "not_ready" : "error"));
+      .catch((e) => {
+        if (e instanceof ApiError && e.status === 409) {
+          const reason = (e.body as { reason?: AdditionUnavailableReason } | undefined)?.reason;
+          setNotReadyReason(reason ?? "no_campaign");
+          setPhase("not_ready");
+          return;
+        }
+        setPhase("error");
+      });
     refreshPending();
   }, []);
 
@@ -149,12 +158,22 @@ export function AddContent() {
 
   if (phase === "loading") return <div className="wrap page"><p className="muted">{strings.he.app.loading}</p></div>;
   if (phase === "not_ready") {
+    // Three distinct reasons, three distinct destinations — sending a
+    // customer with an already-active campaign to the builder (which itself
+    // refuses to run once a campaign exists) is the exact dead end this
+    // branch exists to avoid.
+    const content =
+      notReadyReason === "not_launched"
+        ? { title: s.notLaunchedTitle, body: s.notLaunchedBody, cta: s.goToHome, to: "/app" }
+        : notReadyReason === "connection_issue"
+          ? { title: s.connectionIssueTitle, body: s.connectionIssueBody, cta: s.goToSettings, to: "/app/settings" }
+          : { title: s.notReadyTitle, body: s.notReadyBody, cta: s.goToBuilder, to: "/app/builder" };
     return (
       <div className="wrap page">
         <div className="card">
-          <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 8 }}>{s.notReadyTitle}</b>
-          <p className="muted" style={{ marginBottom: 16 }}>{s.notReadyBody}</p>
-          <Link className="btn btn-primary btn-sm" to="/app/builder">{s.goToBuilder}</Link>
+          <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 8 }}>{content.title}</b>
+          <p className="muted" style={{ marginBottom: 16 }}>{content.body}</p>
+          <Link className="btn btn-primary btn-sm" to={content.to}>{content.cta}</Link>
         </div>
       </div>
     );

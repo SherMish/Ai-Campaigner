@@ -6,6 +6,28 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-15 — Fix: add-content collapsed six unavailable reasons into one wrong message
+Reported live on production (ads-agent.co.il): a customer with an ACTIVE,
+spending campaign saw "עוד אין קמפיין להוסיף לו תוכן — צריך קודם ליצור את
+הקמפיין הראשון שלכם" (no campaign yet, build your first one). `resolveAdditionContext`
+409s identically for six different preconditions (no customer/no campaign/
+not linked to Meta/unhealthy connection/no ad account/no Page), and the
+frontend always showed the "build your first campaign" copy with a CTA into
+the builder — which itself refuses to run once a campaign exists, a dead
+end. The real cause for this account: `meta_connections.page_id` was NULL
+— confirmed live that the account's real Meta campaign ads use a Facebook
+Page (`1216278568228263`) our System User doesn't hold read/write access to,
+a Meta Business Manager permission gap outside what the app can self-heal.
+
+Fixed with the same "distinct reasons, distinct copy" pattern as the earlier
+WhatsApp-write refusal guard: new `resolveAdditionAvailability` classifies
+`no_campaign` / `not_launched` / `connection_issue`, each with its own
+Hebrew copy and destination (builder / Home / Settings).
+`resolveAdditionContext` itself untouched — still the blunt null the eight
+write routes need. Test-first: 3 integration cases on `GET /context`
+(228/230 → still 228/230, no new flakes), full suite green (428 unit),
+typecheck + web build clean. Docs: [campaign-builder.md](features/campaign-builder.md#add-to-an-existing-campaign-aic-63).
+
 ### 2026-08-15 — AIC-95: audience panel follows the range switcher, honest empty reasons
 Product input on a real screenshot: the audience/per-ad detail panel always
 read the engine's own fixed 7-day window regardless of the customer's

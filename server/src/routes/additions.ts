@@ -3,7 +3,10 @@ import multer from "multer";
 import { validateCreativeCopy, MAX_VIDEO_BYTES, FIXED_DESTINATION } from "@aic/shared";
 import { pool } from "../db/pool.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
-import { resolveAdditionContext, buildAdditionWriter, acceptsWhatsappWrites, whatsappWriteBlock, type WhatsappWriteBlock } from "../additions/session.js";
+import {
+  resolveAdditionContext, resolveAdditionAvailability, buildAdditionWriter,
+  acceptsWhatsappWrites, whatsappWriteBlock, type WhatsappWriteBlock,
+} from "../additions/session.js";
 import { addAdToExistingCampaign, addAdSetToExistingCampaign } from "../additions/add-content.js";
 import { approveAddition, listPendingAdditions } from "../additions/approve.js";
 import { createCreativeIdempotent, uploadCreativeMedia, type CreativeSpec } from "../builder/creative-create.js";
@@ -61,8 +64,18 @@ function refuseWhatsappWrite(res: import("express").Response, block: WhatsappWri
 // possible right now at all.
 additionsRouter.get("/context", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
-    if (!ctx) return notReady(res);
+    const availability = await resolveAdditionAvailability(pool, (req as AuthedRequest).userId!);
+    if (!availability.ctx) {
+      // Same 409 shape as before, plus WHY — resolveAdditionContext alone
+      // can't tell "no campaign yet" from "campaign exists but our Meta
+      // connection can't support writes right now", and collapsing both
+      // into "go build your first campaign" sent a customer with an active,
+      // spending campaign into a builder that itself refuses to run because
+      // a campaign already exists — a dead end, not a fix.
+      res.status(409).json({ error: "additions unavailable", reason: availability.reason });
+      return;
+    }
+    const ctx = availability.ctx;
     // `whatsappDestination` is "" (not null) when this campaign doesn't use
     // WhatsApp — the client prefills a number field from it, and an empty
     // prefill is correct there. `canAddContent` is the honest signal for

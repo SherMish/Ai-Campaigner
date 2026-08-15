@@ -62,19 +62,21 @@ export function acceptsWhatsappWrites(ctx: AdditionContext): boolean {
   return whatsappWriteBlock(ctx) === null;
 }
 
-export async function resolveAdditionContext(pool: pg.Pool, userId: string): Promise<AdditionContext | null> {
-  const { rows } = await pool.query<{
-    customer_id: string | null;
-    category: string | null;
-    campaign_id: string | null;
-    campaign_name: string | null;
-    meta_campaign_id: string | null;
-    whatsapp_destination: string | null;
-    lead_event_types: string[] | null;
-    access_health: string | null;
-    meta_ad_account_id: string | null;
-    page_id: string | null;
-  }>(
+type AdditionContextRow = {
+  customer_id: string | null;
+  category: string | null;
+  campaign_id: string | null;
+  campaign_name: string | null;
+  meta_campaign_id: string | null;
+  whatsapp_destination: string | null;
+  lead_event_types: string[] | null;
+  access_health: string | null;
+  meta_ad_account_id: string | null;
+  page_id: string | null;
+};
+
+async function fetchAdditionContextRow(pool: pg.Pool, userId: string): Promise<AdditionContextRow | undefined> {
+  const { rows } = await pool.query<AdditionContextRow>(
     `SELECT u.customer_id, c.category, mc.id AS campaign_id, mc.name AS campaign_name,
             mc.meta_campaign_id, mc.whatsapp_destination, mc.lead_event_types,
             conn.access_health, aa.meta_ad_account_id, conn.page_id
@@ -87,9 +89,10 @@ export async function resolveAdditionContext(pool: pg.Pool, userId: string): Pro
      LIMIT 1`,
     [userId],
   );
-  const r = rows[0];
-  if (!r || !r.customer_id || !r.campaign_id || !r.meta_campaign_id) return null;
-  if (r.access_health !== "ok" || !r.meta_ad_account_id || !r.page_id) return null;
+  return rows[0];
+}
+
+function toContext(r: AdditionContextRow): AdditionContext {
   const leadEventTypes = r.lead_event_types ?? [];
   const number = (r.whatsapp_destination ?? "").trim();
   // A real number AND a messaging lead definition. Either alone is not enough:
@@ -99,16 +102,55 @@ export async function resolveAdditionContext(pool: pg.Pool, userId: string): Pro
     ? number.length > 0 // pre-AIC-87 rows default to the WhatsApp pair, so an empty list only happens on a hand-made row
     : leadEventTypes.some(isMessagingAction);
   return {
-    customerId: r.customer_id,
-    localCampaignId: r.campaign_id,
-    metaCampaignId: r.meta_campaign_id,
-    metaAdAccountId: r.meta_ad_account_id,
-    pageId: r.page_id,
+    customerId: r.customer_id!,
+    localCampaignId: r.campaign_id!,
+    metaCampaignId: r.meta_campaign_id!,
+    metaAdAccountId: r.meta_ad_account_id!,
+    pageId: r.page_id!,
     whatsappNumber: isMessaging && number ? number : null,
     leadEventTypes,
     campaignName: r.campaign_name ?? "",
     category: r.category ?? "",
   };
+}
+
+export async function resolveAdditionContext(pool: pg.Pool, userId: string): Promise<AdditionContext | null> {
+  const r = await fetchAdditionContextRow(pool, userId);
+  if (!r || !r.customer_id || !r.campaign_id || !r.meta_campaign_id) return null;
+  if (r.access_health !== "ok" || !r.meta_ad_account_id || !r.page_id) return null;
+  return toContext(r);
+}
+
+// Why additions aren't available yet — the customer-facing counterpart to
+// resolveAdditionContext's blunt null. A real live bug: a customer with an
+// active, spending campaign got "you don't have a campaign yet — go build
+// one", which is both false and a dead end (the builder itself refuses to
+// run when a campaign already exists). resolveAdditionContext collapses SIX
+// different preconditions into one null because every write route just
+// needs a yes/no; this function exists for the ONE place (GET /context) that
+// has to tell the customer the truth about which one failed.
+//   no_campaign        — nothing built yet. The only case "go build one" is
+//                         actually correct for.
+//   not_launched       — a local campaign row exists but was never linked to
+//                         a real Meta campaign (still mid-builder, or the
+//                         launch was never approved).
+//   connection_issue    — the campaign IS linked and running, but our Meta
+//                         connection can't support writing to it right now
+//                         (unhealthy connection, no ad account on file, or
+//                         no Page access) — not something "create a
+//                         campaign" fixes, and not something the customer
+//                         can diagnose from this screen alone.
+export type AdditionUnavailableReason = "no_campaign" | "not_launched" | "connection_issue";
+
+export async function resolveAdditionAvailability(
+  pool: pg.Pool,
+  userId: string,
+): Promise<{ ctx: AdditionContext } | { ctx: null; reason: AdditionUnavailableReason }> {
+  const r = await fetchAdditionContextRow(pool, userId);
+  if (!r || !r.customer_id || !r.campaign_id) return { ctx: null, reason: "no_campaign" };
+  if (!r.meta_campaign_id) return { ctx: null, reason: "not_launched" };
+  if (r.access_health !== "ok" || !r.meta_ad_account_id || !r.page_id) return { ctx: null, reason: "connection_issue" };
+  return { ctx: toContext(r) };
 }
 
 // Same token-gated factory pattern as buildBuilderWriter/buildLaunchWriter.

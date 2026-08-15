@@ -669,6 +669,36 @@ error. Both routes (`POST /creative`, `POST /ad-set`) return `409` with
 destinations is AIC-89's scope, not this fix's — this only ensures the
 flow never attempts a write it can't get right.
 
+**"No campaign" collapsed six different reasons into one wrong message
+(bug fix, 2026-08-15, found live).** `resolveAdditionContext` 409s (with no
+detail) whenever ANY of six preconditions fails — no customer, no campaign
+row, campaign not linked to Meta, unhealthy connection, no ad account, or no
+Page on file. The frontend showed one generic message for all six: "עוד אין
+קמפיין להוסיף לו תוכן — צריך קודם ליצור את הקמפיין הראשון שלכם" (no campaign
+yet — build your first one), with a CTA into the builder. Confirmed live: a
+customer with an ACTIVE, spending campaign hit this exact screen — their
+connection's `page_id` was `NULL` (our System User also turned out to lack
+read access to that campaign's actual Facebook Page, a Meta Business Manager
+permission gap the app can't self-heal). Telling that customer to "build
+your first campaign" is both false and a dead end — the builder itself
+refuses to run once a campaign already exists (`resolveBuilderContext`'s
+own opposite precondition).
+
+Fixed with the same "distinct reasons need distinct copy" pattern as the
+WhatsApp guard above, not a bigger collapse: `resolveAdditionAvailability`
+(`session.ts`) classifies the failure into `no_campaign` (genuinely build
+one — the only case the original CTA was ever correct for), `not_launched`
+(a local campaign row exists but was never linked to a real Meta campaign —
+CTA to Home to review/launch), or `connection_issue` (the campaign is real
+and running, but the Meta connection can't support writes right now — CTA
+to Settings, not the builder). `resolveAdditionContext` itself is untouched
+(still a blunt `AdditionContext | null` for the eight write routes that only
+ever need a yes/no); `resolveAdditionAvailability` is a second, thin
+function over the same row-fetch, used only by `GET /context` — the one
+place that has to explain the "no" to the customer. `ApiError` on the web
+client gained a `body` field so `AddContent.tsx` can read the 409's
+`reason` without a second round trip.
+
 **Customer surface** (`web/src/app/AddContent.tsx`): reached via a new
 persistent sidebar entry ("הוספת תוכן"), shown whenever a managed campaign
 exists — the opposite gate from the builder's `no_campaign`-only Home CTA.
@@ -705,8 +735,8 @@ since more than one addition can be pending at once.
    the builder's and both add-content submit buttons.
 
 **Verification**: `add-content.integration.test.ts` (8) +
-`additions.integration.test.ts` (7, full HTTP through the real adapter with
-mocked `fetch`) + `campaign-adapter.test.ts` (+5: `getAdSetStatus`/`getAdStatus`
+`additions.integration.test.ts` (14, full HTTP through the real adapter with
+mocked `fetch`, including the three `GET /context` unavailable-reason cases) + `campaign-adapter.test.ts` (+5: `getAdSetStatus`/`getAdStatus`
 reads, `activateAdSet`/`activateAd` always-ACTIVE, honest throws, `getAdSetMeta`
 carrying `effective_status`). Real-browser walk at both desktop and 375px
 mobile against a locally-seeded customer with an existing linked campaign:

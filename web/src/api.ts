@@ -27,8 +27,11 @@ export const setAuthToken = (t: string) => setLs(AUTH_TOKEN_KEY, t);
 export const clearAuthToken = () => delLs(AUTH_TOKEN_KEY);
 
 // Thrown so callers can show the server's message (e.g. "email already registered").
+// `body` carries the full parsed JSON error body when there is one, so a
+// caller that needs more than the message (e.g. a `reason` discriminant) can
+// read it without a second round trip.
 export class ApiError extends Error {
-  constructor(public readonly status: number, message: string) {
+  constructor(public readonly status: number, message: string, public readonly body?: unknown) {
     super(message);
     this.name = "ApiError";
   }
@@ -544,6 +547,10 @@ export interface AdditionContext {
   category: string;
   whatsappDestination: string;
 }
+// Mirrors server/src/additions/session.ts's AdditionUnavailableReason — why
+// GET /context 409'd, read off ApiError.body. See campaign-audiences.ts's
+// AudienceEmptyReason for the same pattern (a reason, not a bare failure).
+export type AdditionUnavailableReason = "no_campaign" | "not_launched" | "connection_issue";
 export const getAdditionContext = () => api<AdditionContext>("/app/additions/context");
 
 export interface ExistingAdSet {
@@ -656,11 +663,12 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, { ...init, headers });
   if (!res.ok) {
     let msg = `API ${path} failed: ${res.status}`;
+    let body: unknown;
     try {
-      const body = (await res.json()) as { error?: string };
-      if (body?.error) msg = body.error;
+      body = (await res.json()) as { error?: string };
+      if ((body as { error?: string })?.error) msg = (body as { error: string }).error;
     } catch { /* non-JSON */ }
-    throw new ApiError(res.status, msg);
+    throw new ApiError(res.status, msg, body);
   }
   return res.json() as Promise<T>;
 }
