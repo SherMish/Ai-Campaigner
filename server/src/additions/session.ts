@@ -134,13 +134,22 @@ export async function resolveAdditionContext(pool: pg.Pool, userId: string): Pro
 //   not_launched       — a local campaign row exists but was never linked to
 //                         a real Meta campaign (still mid-builder, or the
 //                         launch was never approved).
-//   connection_issue    — the campaign IS linked and running, but our Meta
-//                         connection can't support writing to it right now
-//                         (unhealthy connection, no ad account on file, or
-//                         no Page access) — not something "create a
-//                         campaign" fixes, and not something the customer
-//                         can diagnose from this screen alone.
-export type AdditionUnavailableReason = "no_campaign" | "not_launched" | "connection_issue";
+//   missing_page       — the campaign IS linked and running, our ad account
+//                         access is fine, but we don't have the Facebook
+//                         Page on file. Split out from connection_issue
+//                         (not just collapsed further into it) because it's
+//                         both the MOST common real-world cause (confirmed
+//                         live: an active, spending campaign hit exactly
+//                         this) and the one with a precise, known fix —
+//                         onboarding's Connect screen already has the exact
+//                         copy for it (missingBody/fixSteps), just unreachable
+//                         once onboarding is behind you. Reused here rather
+//                         than duplicated.
+//   connection_issue   — the rarer remainder: unhealthy connection or no ad
+//                         account on file. No equally precise fix exists yet
+//                         (reconnect via Settings is the best available
+//                         next step), so it stays a single catch-all.
+export type AdditionUnavailableReason = "no_campaign" | "not_launched" | "missing_page" | "connection_issue";
 
 export async function resolveAdditionAvailability(
   pool: pg.Pool,
@@ -149,7 +158,8 @@ export async function resolveAdditionAvailability(
   const r = await fetchAdditionContextRow(pool, userId);
   if (!r || !r.customer_id || !r.campaign_id) return { ctx: null, reason: "no_campaign" };
   if (!r.meta_campaign_id) return { ctx: null, reason: "not_launched" };
-  if (r.access_health !== "ok" || !r.meta_ad_account_id || !r.page_id) return { ctx: null, reason: "connection_issue" };
+  if (r.access_health !== "ok" || !r.meta_ad_account_id) return { ctx: null, reason: "connection_issue" };
+  if (!r.page_id) return { ctx: null, reason: "missing_page" };
   return { ctx: toContext(r) };
 }
 

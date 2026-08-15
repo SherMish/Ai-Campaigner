@@ -13,6 +13,7 @@ import { AudienceFields, type Gender } from "./AudienceFields";
 import { BuilderCreatives, newAdDraft, type AdDraft } from "./BuilderCreatives";
 
 const s = strings.he.additions;
+const c = strings.he.app.connect;
 
 function freshKey(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -158,10 +159,30 @@ export function AddContent() {
 
   if (phase === "loading") return <div className="wrap page"><p className="muted">{strings.he.app.loading}</p></div>;
   if (phase === "not_ready") {
-    // Three distinct reasons, three distinct destinations — sending a
-    // customer with an already-active campaign to the builder (which itself
-    // refuses to run once a campaign exists) is the exact dead end this
-    // branch exists to avoid.
+    // Four distinct reasons, four distinct responses — sending a customer
+    // with an already-active campaign to the builder (which itself refuses
+    // to run once a campaign exists) is the exact dead end this branch
+    // exists to avoid. missing_page gets its own branch rather than folding
+    // into the generic "check settings" message: it's both the most common
+    // real cause and the one with a precise, known fix — the exact copy
+    // onboarding's Connect screen already has (missingBody/fixSteps),
+    // reused here rather than duplicated, since it's otherwise invisible to
+    // anyone past onboarding.
+    if (notReadyReason === "missing_page") {
+      return (
+        <div className="wrap page">
+          <div className="card">
+            <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 8 }}>{c.missingTitle}</b>
+            <p className="muted" style={{ marginBottom: 16 }}>{c.missingBody}</p>
+            <b>{c.howToFix}</b>
+            <ol className="muted" style={{ margin: "8px 0 20px", paddingInlineStart: 20 }}>
+              {c.fixSteps.map((f, i) => <li key={i}>{f}</li>)}
+            </ol>
+            <Link className="btn btn-primary btn-sm" to="/app/settings">{s.goToSettings}</Link>
+          </div>
+        </div>
+      );
+    }
     const content =
       notReadyReason === "not_launched"
         ? { title: s.notLaunchedTitle, body: s.notLaunchedBody, cta: s.goToHome, to: "/app" }

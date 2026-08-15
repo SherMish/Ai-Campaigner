@@ -550,7 +550,7 @@ export interface AdditionContext {
 // Mirrors server/src/additions/session.ts's AdditionUnavailableReason — why
 // GET /context 409'd, read off ApiError.body. See campaign-audiences.ts's
 // AudienceEmptyReason for the same pattern (a reason, not a bare failure).
-export type AdditionUnavailableReason = "no_campaign" | "not_launched" | "connection_issue";
+export type AdditionUnavailableReason = "no_campaign" | "not_launched" | "missing_page" | "connection_issue";
 export const getAdditionContext = () => api<AdditionContext>("/app/additions/context");
 
 export interface ExistingAdSet {

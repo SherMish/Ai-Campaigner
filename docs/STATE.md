@@ -6,6 +6,21 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-15 — Fix: "connection issue" wasn't helpful either — split out missing_page with the real fix steps
+Follow-up to the same day's add-content fix, reported live testing it: the
+new `connection_issue` message ("check your connection in Settings") was
+itself unhelpful for the most common real cause — it didn't say what was
+wrong or how to fix it, even though onboarding's Connect screen already had
+exactly that copy (`missingTitle`/`missingBody`/`howToFix`/`fixSteps`),
+simply unreachable once onboarding is behind you. `resolveAdditionAvailability`
+now checks `page_id` separately, giving `missing_page` its own reason;
+`AddContent.tsx` renders the same `app.connect` strings Connect.tsx already
+uses rather than duplicating them. Test-first: split the existing
+"connection_issue" regression test into `missing_page` (the real production
+case) and a genuine `connection_issue` case (unhealthy `access_health`).
+Full suite green (428 unit, 15/15 on `additions.integration.test.ts`).
+Docs: [campaign-builder.md](features/campaign-builder.md#add-to-an-existing-campaign-aic-63).
+
 ### 2026-08-15 — Rebrand: Ads Manager → Ads Agent
 The live domain (`ads-agent.co.il`) already used the new name; the app's own
 displayed name hadn't caught up. Renamed everywhere the product refers to

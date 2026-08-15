@@ -184,12 +184,20 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
     expect(res.body.reason).toBe("not_launched");
   });
 
-  it("/context 409s with reason 'connection_issue' when the campaign is real and linked but the connection can't support writes (missing page_id — the real production case)", async () => {
+  it("/context 409s with reason 'missing_page' when the campaign is real and linked but we don't have the Facebook Page on file (the real production case)", async () => {
     const { token, customerId } = await seedExistingCampaign("noPage");
     // seedExistingCampaign's connection has a page_id; null it out to match
     // the real production row this reproduces (a campaign whose ads use a
     // Facebook Page our System User doesn't hold access to yet).
     await pool.query(`UPDATE meta_connections SET page_id = NULL WHERE customer_id = $1`, [customerId]);
+    const res = await request(app).get("/api/app/additions/context").set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe("missing_page");
+  });
+
+  it("/context 409s with reason 'connection_issue' when the connection itself is unhealthy (not just a missing Page)", async () => {
+    const { token, customerId } = await seedExistingCampaign("badConn");
+    await pool.query(`UPDATE meta_connections SET access_health = 'needs_reconnect' WHERE customer_id = $1`, [customerId]);
     const res = await request(app).get("/api/app/additions/context").set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(409);
     expect(res.body.reason).toBe("connection_issue");

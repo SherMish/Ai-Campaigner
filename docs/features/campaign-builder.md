@@ -689,15 +689,31 @@ WhatsApp guard above, not a bigger collapse: `resolveAdditionAvailability`
 (`session.ts`) classifies the failure into `no_campaign` (genuinely build
 one — the only case the original CTA was ever correct for), `not_launched`
 (a local campaign row exists but was never linked to a real Meta campaign —
-CTA to Home to review/launch), or `connection_issue` (the campaign is real
-and running, but the Meta connection can't support writes right now — CTA
-to Settings, not the builder). `resolveAdditionContext` itself is untouched
-(still a blunt `AdditionContext | null` for the eight write routes that only
-ever need a yes/no); `resolveAdditionAvailability` is a second, thin
-function over the same row-fetch, used only by `GET /context` — the one
-place that has to explain the "no" to the customer. `ApiError` on the web
-client gained a `body` field so `AddContent.tsx` can read the 409's
+CTA to Home to review/launch), `missing_page` (the campaign is real and the
+ad account access is fine, but we don't have the Facebook Page — CTA to
+Settings), or `connection_issue` (the rarer remainder: unhealthy connection
+or no ad account on file — also CTA to Settings). `resolveAdditionContext`
+itself is untouched (still a blunt `AdditionContext | null` for the eight
+write routes that only ever need a yes/no); `resolveAdditionAvailability` is
+a second, thin function over the same row-fetch, used only by `GET /context`
+— the one place that has to explain the "no" to the customer. `ApiError` on
+the web client gained a `body` field so `AddContent.tsx` can read the 409's
 `reason` without a second round trip.
+
+**`missing_page` got its own message, not just its own reason (bug fix, same
+day, found live testing the fix above).** The generic `connection_issue`
+copy ("check your connection in Settings") was itself unhelpful for the most
+common real case — it didn't say *what* was wrong or how to fix it, even
+though that exact explanation already existed: onboarding's Connect screen
+(`web/src/app/Connect.tsx`) has had precise, tested copy for "ad account
+connected, Page access missing" since AIC-5 (`missingTitle`/`missingBody`/
+`howToFix`/`fixSteps` — the two-step Meta Business Settings fix: share the
+Page to our Business Portfolio by ID, then assign it to the System User).
+That copy was simply unreachable once onboarding was behind you.
+`resolveAdditionAvailability` now checks `page_id` separately from the rest
+of `connection_issue`, and `AddContent.tsx` renders the exact same
+`app.connect` strings rather than duplicating them — same problem, same
+explanation, wherever a customer encounters it.
 
 **Customer surface** (`web/src/app/AddContent.tsx`): reached via a new
 persistent sidebar entry ("הוספת תוכן"), shown whenever a managed campaign
