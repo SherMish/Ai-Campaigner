@@ -3,7 +3,7 @@ import multer from "multer";
 import { validateCreativeCopy, MAX_VIDEO_BYTES } from "@aic/shared";
 import { pool } from "../db/pool.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
-import { resolveAdditionContext, buildAdditionWriter } from "../additions/session.js";
+import { resolveAdditionContext, buildAdditionWriter, acceptsWhatsappWrites, whatsappWriteBlock, type WhatsappWriteBlock } from "../additions/session.js";
 import { addAdToExistingCampaign, addAdSetToExistingCampaign } from "../additions/add-content.js";
 import { approveAddition, listPendingAdditions } from "../additions/approve.js";
 import { createCreativeIdempotent, uploadCreativeMedia, type CreativeSpec } from "../builder/creative-create.js";
@@ -27,6 +27,35 @@ function unavailable(res: import("express").Response): void {
   res.status(503).json({ error: "execution temporarily unavailable" });
 }
 
+// The additions flow emits WhatsApp-shaped Meta objects unconditionally: a
+// `WHATSAPP_MESSAGE` call-to-action, and `CONVERSATIONS`/`WHATSAPP` ad sets.
+// Both are wrong for any other lead type — a Pixel campaign would get an ad
+// with an empty `whatsapp_number`, or an ad set whose conversions can never
+// match its lead definition (real spend, zero countable leads, and AIC-88
+// would then flag the campaign as broken).
+//
+// So we REFUSE rather than write. Until the flow supports other destinations
+// (AIC-89), attempting a malformed write is strictly worse than declining one.
+// Note this is a LEAD-TYPE check, not a "was it connected from outside"
+// check — a Pixel campaign our own builder created would be equally wrong.
+// TWO causes, two messages — collapsing them would tell a Click-to-WhatsApp
+// customer their leads don't come from WhatsApp, which is simply untrue.
+// Confirmed against the real accounts: GelNails is genuinely a WhatsApp
+// campaign whose number we never captured (connected from outside the
+// builder), and it hits `missing_number`, not `not_whatsapp`.
+function refuseWhatsappWrite(res: import("express").Response, block: WhatsappWriteBlock): void {
+  res.status(409).json({
+    reason: block,
+    error:
+      block === "not_whatsapp"
+        ? "this campaign's leads don't arrive over WhatsApp, and adding content to " +
+          "non-WhatsApp campaigns isn't supported yet — we'd have to create a " +
+          "WhatsApp ad that could never work. Talk to us and we'll add it for you."
+        : "we don't have this campaign's WhatsApp number on file, so any ad we " +
+          "created would have nowhere to send people. Talk to us and we'll add it.",
+  });
+}
+
 // GET /context — the existing campaign's name/category/WhatsApp destination
 // (for the add-ad-set audience step's prefill), and whether additions are
 // possible right now at all.
@@ -34,7 +63,16 @@ additionsRouter.get("/context", requireAuth, async (req, res) => {
   try {
     const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
     if (!ctx) return notReady(res);
-    res.json({ campaignName: ctx.campaignName, category: ctx.category, whatsappDestination: ctx.whatsappDestination });
+    // `whatsappDestination` is "" (not null) when this campaign doesn't use
+    // WhatsApp — the client prefills a number field from it, and an empty
+    // prefill is correct there. `canAddContent` is the honest signal for
+    // whether the write routes will accept anything at all.
+    res.json({
+      campaignName: ctx.campaignName,
+      category: ctx.category,
+      whatsappDestination: ctx.whatsappNumber ?? "",
+      canAddContent: acceptsWhatsappWrites(ctx),
+    });
   } catch (e) {
     console.error("[additions] context failed", e);
     res.status(500).json({ error: "failed to load context" });
@@ -112,6 +150,10 @@ additionsRouter.post("/creative", requireAuth, async (req, res) => {
   try {
     const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
     if (!ctx) return notReady(res);
+    // Refused BEFORE any Meta call — the creative we'd build carries a
+    // WHATSAPP_MESSAGE CTA that this campaign can't use.
+    const block = whatsappWriteBlock(ctx);
+    if (block) return refuseWhatsappWrite(res, block);
     const body = req.body as CreativeBody;
     if (!body.clientKey || !body.name) { res.status(400).json({ error: "clientKey and name are required" }); return; }
 
@@ -208,6 +250,11 @@ additionsRouter.post("/ad-set", requireAuth, async (req, res) => {
   try {
     const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
     if (!ctx) return notReady(res);
+    // Refused BEFORE validation and before any Meta call: createAdSet
+    // hardcodes CONVERSATIONS/WHATSAPP, which would spend real budget on an
+    // ad set whose conversions this campaign can never count.
+    const block = whatsappWriteBlock(ctx);
+    if (block) return refuseWhatsappWrite(res, block);
     const body = req.body as AddAdSetBody;
     if (!body.name?.trim()) { res.status(400).json({ error: "name is required" }); return; }
     if (!body.targeting) { res.status(400).json({ error: "targeting is required" }); return; }

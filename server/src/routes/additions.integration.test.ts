@@ -78,7 +78,17 @@ function mockMetaFetch(existingAdSets: Array<{ id: string; name: string; status?
 
 // An EXISTING, already-linked managed campaign — the addition flow's
 // precondition, opposite of the builder's no-campaign-yet gate.
-async function seedExistingCampaign(tag: string, category = "beautician") {
+async function seedExistingCampaign(
+  tag: string,
+  category = "beautician",
+  // Defaults to the P0 Click-to-WhatsApp shape. Pass the Pixel shape to
+  // exercise the refusal guard.
+  leadEventTypes: string[] = [
+    "onsite_conversion.messaging_conversation_started_7d",
+    "onsite_conversion.messaging_conversation_started",
+  ],
+  whatsappDestination = "972500000000",
+) {
   const cust = await pool.query<{ id: string }>(
     `INSERT INTO customers (business_name, is_test, onboarding_status, category) VALUES ($1, true, 'ready', $2) RETURNING id`,
     [`__it_additions_${tag}`, category],
@@ -97,12 +107,16 @@ async function seedExistingCampaign(tag: string, category = "beautician") {
     [conn.rows[0].id, `act_add_${conn.rows[0].id.slice(0, 8)}`],
   );
   const camp = await pool.query<{ id: string }>(
-    `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, meta_campaign_id, name)
-     VALUES ($1, $2, 'active', 'meta_camp_existing', 'IT Campaign') RETURNING id`,
-    [customerId, acct.rows[0].id],
+    `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, meta_campaign_id, name, lead_event_types, whatsapp_destination)
+     VALUES ($1, $2, 'active', 'meta_camp_existing', 'IT Campaign', $3, $4) RETURNING id`,
+    [customerId, acct.rows[0].id, leadEventTypes, whatsappDestination],
   );
   return { customerId, campaignId: camp.rows[0].id, token: signAuthToken(user.rows[0].id) };
 }
+
+// The Pixel-campaign shape: leads are website conversions, and there is no
+// WhatsApp number (the column is NOT NULL DEFAULT '', so it's empty).
+const PIXEL_LEAD = ["offsite_conversion.fb_pixel_complete_registration"];
 
 d("add-to-existing-campaign routes (DB + HTTP)", () => {
   const app = createApp();
@@ -258,5 +272,86 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
     } finally {
       process.env.META_SYSTEM_USER_TOKEN = saved;
     }
+  });
+
+  // ── The WhatsApp-write refusal guard ─────────────────────────────────────
+  // The additions path emits WhatsApp-shaped Meta objects unconditionally: a
+  // `WHATSAPP_MESSAGE` call-to-action carrying `whatsapp_destination` (which
+  // is '' for a Pixel campaign, so an empty number reaches a REAL Meta write),
+  // and an ad set hardcoded to CONVERSATIONS/WHATSAPP whose conversions could
+  // never match a Pixel campaign's lead definition — real spend, zero
+  // countable leads, and AIC-88 would then flag the campaign as broken.
+  //
+  // Both are wrong for ANY non-messaging campaign, including one our own
+  // builder created. Until the additions flow supports other destinations
+  // (AIC-89), the honest behaviour is to REFUSE the write, not to attempt a
+  // malformed one. Enforced at `resolveAdditionContext`, the single chokepoint
+  // every additions route already passes through, so it cannot be reached by
+  // forgetting a per-route check.
+  describe("refuses WhatsApp-shaped writes on a non-WhatsApp campaign", () => {
+    it("refuses to create a creative (never sends an empty whatsapp_number to Meta)", async () => {
+      const { fetchMock } = mockMetaFetch();
+      vi.stubGlobal("fetch", fetchMock);
+      const { token } = await seedExistingCampaign("pixel-creative", "beautician", PIXEL_LEAD, "");
+      const res = await request(app)
+        .post("/api/app/additions/creative")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ clientKey: "ck1", name: "Ad", headline: "כותרת טובה", primaryText: "טקסט מספיק ארוך כדי לעבור ולידציה", media: { kind: "image", url: "https://x/y.jpg" } });
+      expect(res.status).toBe(409);
+      expect(res.body.reason).toBe("not_whatsapp");
+      expect(res.body.error).toMatch(/whatsapp/i);
+      // The load-bearing assertion: no Meta write was attempted at all.
+      const posts = fetchMock.mock.calls.filter((c) => (c[1]?.method ?? "GET").toUpperCase() === "POST");
+      expect(posts).toHaveLength(0);
+    });
+
+    // GelNails' real shape: genuinely Click-to-WhatsApp, but connected from
+    // outside the builder so we never captured its number. Collapsing this
+    // into "not_whatsapp" would be a wrong statement to a real customer.
+    it("distinguishes 'missing the number' from 'not a WhatsApp campaign'", async () => {
+      const { fetchMock } = mockMetaFetch();
+      vi.stubGlobal("fetch", fetchMock);
+      const { token } = await seedExistingCampaign(
+        "wa-no-number",
+        "beautician",
+        ["onsite_conversion.messaging_conversation_started_7d", "onsite_conversion.messaging_conversation_started"],
+        "", // the real GelNails shape: messaging lead type, empty number
+      );
+      const res = await request(app)
+        .post("/api/app/additions/creative")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ clientKey: "ck3", name: "Ad", headline: "כותרת טובה", primaryText: "טקסט מספיק ארוך כדי לעבור ולידציה", media: { kind: "image", url: "https://x/y.jpg" } });
+      expect(res.status).toBe(409);
+      expect(res.body.reason).toBe("missing_number");
+      expect(res.body.error).not.toMatch(/don't arrive over WhatsApp/);
+      const posts = fetchMock.mock.calls.filter((c) => (c[1]?.method ?? "GET").toUpperCase() === "POST");
+      expect(posts).toHaveLength(0);
+    });
+
+    it("refuses to add an ad set (never creates a CONVERSATIONS ad set in a Pixel campaign)", async () => {
+      const { fetchMock } = mockMetaFetch();
+      vi.stubGlobal("fetch", fetchMock);
+      const { token, campaignId } = await seedExistingCampaign("pixel-adset", "beautician", PIXEL_LEAD, "");
+      const res = await request(app)
+        .post("/api/app/additions/ad-set")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ name: "New audience", additionKey: "k1", targeting: {}, ads: [] });
+      expect(res.status).toBe(409);
+      const posts = fetchMock.mock.calls.filter((c) => (c[1]?.method ?? "GET").toUpperCase() === "POST");
+      expect(posts).toHaveLength(0);
+      const pending = await pool.query(`SELECT count(*)::int AS n FROM pending_additions WHERE campaign_id = $1`, [campaignId]);
+      expect(pending.rows[0].n).toBe(0);
+    });
+
+    it("still allows both on a real WhatsApp campaign — the guard is narrow", async () => {
+      const { fetchMock } = mockMetaFetch();
+      vi.stubGlobal("fetch", fetchMock);
+      const { token } = await seedExistingCampaign("wa-allowed");
+      const res = await request(app)
+        .post("/api/app/additions/creative")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ clientKey: "ck2", name: "Ad", headline: "כותרת טובה", primaryText: "טקסט מספיק ארוך כדי לעבור ולידציה", media: { kind: "image", url: "https://x/y.jpg" } });
+      expect(res.status).not.toBe(409);
+    });
   });
 });

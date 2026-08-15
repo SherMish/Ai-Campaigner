@@ -5,6 +5,7 @@ import type { CreativeWriter } from "../builder/creative-types.js";
 import type { AdditionWriter } from "./types.js";
 import type { DeliveryReader } from "../meta/delivery-health.js";
 import type { AdMediaReader } from "../meta/ad-media.js";
+import { isMessagingAction } from "../meta/tracking-health.js";
 
 // The inverse precondition of builder/session.ts's resolveBuilderContext:
 // that one requires NO managed campaign (first-time build only); this one
@@ -16,9 +17,49 @@ export interface AdditionContext {
   metaCampaignId: string;
   metaAdAccountId: string; // "act_..." — what every real Meta API call needs
   pageId: string;
-  whatsappDestination: string;
+  // NULL when this campaign's leads do NOT arrive over WhatsApp — the type is
+  // deliberately nullable so every consumer has to decide what to do about it
+  // rather than silently passing '' into a real Meta write.
+  //
+  // The bug this prevents: `whatsapp_destination` is `NOT NULL DEFAULT ''`, so
+  // a Pixel campaign carried an EMPTY STRING through to
+  // `call_to_action: { type: "WHATSAPP_MESSAGE", value: { whatsapp_number: "" } }`
+  // — `validateCreativeCopy` checks media/headline/text but never the number,
+  // so the empty value reached Meta.
+  whatsappNumber: string | null;
+  // What this campaign actually counts as a lead (AIC-87). Present so callers
+  // can reason about destination without re-querying.
+  leadEventTypes: string[];
   campaignName: string;
   category: string; // for the add-ad-set audience step's business-type prefill, same as the builder
+}
+
+// Why this campaign can't accept the WhatsApp-shaped writes the additions flow
+// currently emits (a `WHATSAPP_MESSAGE` CTA and `CONVERSATIONS`/`WHATSAPP` ad
+// sets). `null` = it can.
+//
+// TWO distinct causes, deliberately not collapsed — they are different facts
+// and need different copy. Found by checking the guard against the real
+// accounts: GelNails IS a Click-to-WhatsApp campaign, but it was connected
+// from outside our builder so we never captured its number
+// (`whatsapp_destination` is `''`). Telling that customer "your leads don't
+// arrive over WhatsApp" would be simply untrue — the honest statement is that
+// WE are missing the number.
+export type WhatsappWriteBlock =
+  // Leads arrive some other way (e.g. Pixel conversions). Not supported yet.
+  | "not_whatsapp"
+  // Genuinely a WhatsApp campaign, but we don't hold the number, so any ad we
+  // built would carry an empty `whatsapp_number`. Fixable by capturing it.
+  | "missing_number";
+
+export function whatsappWriteBlock(ctx: AdditionContext): WhatsappWriteBlock | null {
+  if (ctx.whatsappNumber) return null;
+  const messaging = ctx.leadEventTypes.length === 0 || ctx.leadEventTypes.some(isMessagingAction);
+  return messaging ? "missing_number" : "not_whatsapp";
+}
+
+export function acceptsWhatsappWrites(ctx: AdditionContext): boolean {
+  return whatsappWriteBlock(ctx) === null;
 }
 
 export async function resolveAdditionContext(pool: pg.Pool, userId: string): Promise<AdditionContext | null> {
@@ -29,12 +70,13 @@ export async function resolveAdditionContext(pool: pg.Pool, userId: string): Pro
     campaign_name: string | null;
     meta_campaign_id: string | null;
     whatsapp_destination: string | null;
+    lead_event_types: string[] | null;
     access_health: string | null;
     meta_ad_account_id: string | null;
     page_id: string | null;
   }>(
     `SELECT u.customer_id, c.category, mc.id AS campaign_id, mc.name AS campaign_name,
-            mc.meta_campaign_id, mc.whatsapp_destination,
+            mc.meta_campaign_id, mc.whatsapp_destination, mc.lead_event_types,
             conn.access_health, aa.meta_ad_account_id, conn.page_id
      FROM app_users u
      LEFT JOIN customers c ON c.id = u.customer_id
@@ -48,13 +90,22 @@ export async function resolveAdditionContext(pool: pg.Pool, userId: string): Pro
   const r = rows[0];
   if (!r || !r.customer_id || !r.campaign_id || !r.meta_campaign_id) return null;
   if (r.access_health !== "ok" || !r.meta_ad_account_id || !r.page_id) return null;
+  const leadEventTypes = r.lead_event_types ?? [];
+  const number = (r.whatsapp_destination ?? "").trim();
+  // A real number AND a messaging lead definition. Either alone is not enough:
+  // a leftover number on a Pixel campaign doesn't make WhatsApp writes correct,
+  // and a messaging lead type with no number can't produce a valid CTA.
+  const isMessaging = leadEventTypes.length === 0
+    ? number.length > 0 // pre-AIC-87 rows default to the WhatsApp pair, so an empty list only happens on a hand-made row
+    : leadEventTypes.some(isMessagingAction);
   return {
     customerId: r.customer_id,
     localCampaignId: r.campaign_id,
     metaCampaignId: r.meta_campaign_id,
     metaAdAccountId: r.meta_ad_account_id,
     pageId: r.page_id,
-    whatsappDestination: r.whatsapp_destination ?? "",
+    whatsappNumber: isMessaging && number ? number : null,
+    leadEventTypes,
     campaignName: r.campaign_name ?? "",
     category: r.category ?? "",
   };
