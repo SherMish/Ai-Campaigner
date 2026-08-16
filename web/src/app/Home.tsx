@@ -125,7 +125,7 @@ function StatusInfo({ tooltipKey }: { tooltipKey: ReturnType<typeof statusToolti
         onBlur={() => setOpen(false)}
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
       >
-        i
+        <span className="info-affordance-dot">i</span>
       </button>
       {open && (
         <div

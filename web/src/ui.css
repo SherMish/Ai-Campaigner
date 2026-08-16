@@ -91,17 +91,28 @@ button { font-family: inherit; }
 
 /* AIC-97: the "מצב" badge's info affordance — always visible (never
    hover-revealed, which would be undiscoverable on a phone), 44px hit
-   target though visually a small 10px circle. Bug fix, 2026-08-16: shipped
-   first at 18px/12px-font (too large/heavy), then 13px/9px (still reported
-   too big) — sized down again to sit as a quiet mark roughly matching the
-   מצב label's own lowercase x-height, not a second badge competing with it. */
+   target though visually a small 10px dot.
+   Bug fix, 2026-08-16 (real fix, after two no-op attempts): `border` +
+   `border-radius: 50%` were on the SAME element as the touch-target
+   padding — border always draws around the OUTER edge of padding, so the
+   visible circle was pinned to the full ~44px box the whole time,
+   regardless of `width`. Shrinking width from 18px to 13px to 10px changed
+   nothing visible; that's why it kept reading "still too big". Split into
+   two elements: `.info-affordance` (the <button>, padding-only, invisible,
+   sizes the tap target) wrapping `.info-affordance-dot` (a plain <span>,
+   the actual small bordered circle, no padding of its own) — now the
+   visible size is exactly what it says. */
 .info-affordance {
-  width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--line);
-  background: transparent; color: var(--muted); font: italic 700 7px/1 Georgia, serif;
-  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  background: transparent; border: none; color: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
   padding: 17px; margin: -17px; flex-shrink: 0;
 }
-.info-affordance:hover, .info-affordance:focus-visible { border-color: var(--muted); color: var(--ink); }
+.info-affordance-dot {
+  width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--line);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--muted); font: italic 700 7px/1 Georgia, serif;
+}
+.info-affordance:hover .info-affordance-dot, .info-affordance:focus-visible .info-affordance-dot { border-color: var(--muted); color: var(--ink); }
 .info-popover {
   z-index: 200; background: var(--cream); border: 1px solid var(--line); border-radius: 14px;
   padding: 12px 14px; box-shadow: 0 8px 24px rgba(23, 23, 23, 0.16);

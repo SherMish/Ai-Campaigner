@@ -6,6 +6,22 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-16 — Fix (the actual bug, after two no-op attempts): מצב icon
+The two previous size entries below (18px→13px, then 13px→10px) had zero
+visible effect — reported live, correctly, as "still too big" both times.
+Root cause: `border` + `border-radius: 50%` were on the SAME element that
+also carried the 44px-touch-target `padding`. A border always draws around
+the OUTER edge of padding, so the visible circle was pinned to the full
+~44px box the entire time — changing `width` changed only the invisible
+content box inside it, never what was actually rendered. Verified this
+time with a real DOM measurement (`getBoundingClientRect()`), not a
+screenshot eyeball: confirmed 10.0×10.0px before shipping.
+
+Split into two elements: `.info-affordance` (the `<button>` — padding-only,
+sizes the invisible 44px tap target, no border of its own) wrapping
+`.info-affordance-dot` (a plain `<span>` — the actual small bordered circle,
+carries no padding). The visible size now is exactly what the CSS says.
+
 ### 2026-08-16 — Fix: מצב row's info icon still read too large at 13px
 Reported live again, right after the previous entry's 18px→13px shrink
 shipped: still too big. Shrunk further to a 10px circle / 7px mark — sized
