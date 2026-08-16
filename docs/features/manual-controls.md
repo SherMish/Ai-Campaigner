@@ -8,15 +8,18 @@ missing table stakes.
 
 **Source of truth:**
 - Core: `server/src/controls/manual-controls.ts` (`setObjectStatus`, `assertOwnedByCampaign`)
-- Types + test double: `server/src/controls/types.ts` (`ControlWriter`, `FakeControlWriter`, `ManualObjectStatus`)
-- Meta writes: `server/src/meta/campaign-adapter.ts` (`setAdStatus`, `setAdSetStatus`)
+- Types + test double: `server/src/controls/types.ts` (`ControlWriter`, `FakeControlWriter`, `ManualObjectStatus`, `intentStatus`)
+- Meta writes + reads: `server/src/meta/campaign-adapter.ts` (`setAdStatus`, `setAdSetStatus`, `getCampaignState`)
 - Customer routes: `server/src/routes/controls.ts` (`/api/app/controls/*`)
 - Operator routes: `server/src/routes/admin.ts` (`POST /admin/campaigns/:id/objects/:action`)
 - Client: `web/src/api.ts` (`getControlState`, `setObjectPaused`, `adminObjectControl`)
+- Resolved delivery (AIC-100): `web/src/app/delivery-status.ts` (`deliveryStatus`, `AD_DELIVERY_BADGE`, `AD_DELIVERY_TONE`)
 - Screens: `web/src/app/Home.tsx` (`AudienceDetails`), `web/src/admin/AdminMeta.tsx` (`ObjectControls`)
 
 **Lock-in tests:** `server/src/controls/manual-controls.integration.test.ts` (11),
-`server/src/routes/controls.integration.test.ts` (12).
+`server/src/routes/controls.integration.test.ts` (14), `server/src/controls/types.test.ts` (2),
+`server/src/meta/campaign-adapter.test.ts`'s `getCampaignState` cases (2),
+`web/src/app/delivery-status.test.ts` (9).
 
 ---
 
@@ -231,11 +234,62 @@ verified `newStatus`, so `onToggle` applies it straight to the row's local
 `ctl` state and shows an inline "הושהה"/"הופעל" confirmation — no re-fetch, no
 dependence on `effective_status` freshness, no manual refresh required.
 
-**Not done**: the ticket's proposed systemic fix — named accessors
-(`intentStatus`/`deliveryStatus`) so every future consumer picks one
-deliberately instead of touching the raw fields, plus a sweep of existing
-consumers — is real remaining scope, left for a dedicated pass rather than
-folded into this bug fix.
+**The named accessors landed with AIC-100** (below) — `intentStatus`
+(`server/src/controls/types.ts`) is now the one place a raw Meta `status`
+string becomes `"active" | "paused"`, used for ad, ad set, and campaign
+alike. A sweep of every OTHER pre-existing consumer (delivery-health.ts,
+generation.ts, the read-back verifiers) was deliberately left out — see
+AIC-100's own scope note below.
+
+## An ad can show מפרסם while nothing is actually showing (AIC-100)
+
+Real bug, reported live: the פירוט panel showed an ad set as **מושהה על
+ידך** while an ad inside it showed **מפרסם**. Root cause — the fourth
+recurrence of the SAME shape as AIC-70 above: the ad's badge came from
+`ctl.adStatuses[adId]`, the ad's OWN status, never cross-referenced against
+its ad set's (or the campaign's) status. An ad's own switch being on doesn't
+mean it's delivering — its parents can still block it.
+
+**The fix is composition, not a new Meta field.** `getCampaignState`
+already fetches an ad's own status AND its ad set's own status in the same
+call (and now the campaign's own status too — `campaignStatus`, read via
+`intentStatus(camp.status)`, the same field/reasoning AIC-70 established for
+the other two). All three are already fresh and instantly-updated on their
+own respective toggle (`Home.tsx`'s `onToggle` trusts the write result, per
+AIC-70). `deliveryStatus` (`web/src/app/delivery-status.ts`) composes the
+three into one of four states — `delivering` / `paused_by_you` /
+`blocked_by_adset` / `blocked_by_campaign` — entirely client-side, with zero
+dependency on Meta's own `effective_status` and therefore zero read-after-
+write lag risk, the exact trap `effective_status` sets (see AIC-70 above).
+
+**Precedence**: the ad's own pause always wins (most specific, and what the
+customer just did) — never phrased as a parent's problem. Between the two
+parent causes, campaign outranks ad set: if the whole campaign is paused,
+"resume the ad set" isn't the actual fix.
+
+**Copy is exhaustive, per AIC-98.** `AD_DELIVERY_BADGE`/`AD_DELIVERY_TONE`
+(`Record<AdDeliveryState, …>`) live in `web/src/app/delivery-status.ts`,
+tested for non-empty + distinct copy the same way `state-copy.ts` is — see
+[state-copy.md](state-copy.md). `blocked_by_adset` gets a CTA-bearing name
+("לא מתפרסם · הקהל מושהה" — the customer can act, right here);
+`blocked_by_campaign` doesn't ("לא מתפרסם · הקמפיין מושהה" — same "who acts
+next: nobody, from this panel" reasoning as the home `paused` state).
+
+**השהיית המודעה on an already-not-delivering ad isn't a no-op** — it sets
+the ad's own intent, so it stays paused once the parent resumes — but the
+button gave no indication of that, reading as an action with no effect.
+`PauseLink`'s title tooltip now states this (`CT.pauseBlockedNote`) whenever
+`deliveryStatus` resolves to a parent-blocked state and the button offered is
+still "pause" (the ad's own intent is active).
+
+**Scope, deliberately narrow**: this migrates the פירוט card onto the new
+accessors, per the ticket's own instruction. It does NOT sweep the other
+pre-existing raw-status readers (`delivery-health.ts`'s `normalizeAdSet`,
+`generation.ts`'s filtering, the read-back verifiers) onto `intentStatus` —
+those already have their own correct, tested logic for their own questions
+(AIC-39's "is this actually delivering", not this ticket's "what does the
+customer's own switch say"). Enforcing "no raw status field outside
+`intentStatus`" everywhere is a lint-rule-sized follow-up, not done here.
 
 ## Operator surface
 

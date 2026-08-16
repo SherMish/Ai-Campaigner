@@ -530,6 +530,31 @@ describe("GraphCampaignAdapter getCampaignState — status vs effective_status (
     expect(state.adSetStatuses.as_1).toBe("active"); // trusts status, not the stale effective_status
     expect(state.adStatuses.ad_1).toBe("paused");
   });
+
+  // AIC-100: campaignStatus joins adStatuses/adSetStatuses, read from the
+  // campaign's own `status` (same intent-vs-effective reasoning above) so
+  // the customer app can resolve an ad's real delivery from all three
+  // own-intents instead of a single ambiguous field.
+  it("also reports the campaign's own status (campaignStatus)", async () => {
+    const mock = vi.fn(async (url: string) => ({
+      ok: true, status: 200,
+      json: async () => {
+        const u = String(url);
+        if (u.includes("/adsets?")) return { data: [{ id: "as_1", daily_budget: null, status: "ACTIVE" }] };
+        if (u.includes("/ads?")) return { data: [{ id: "ad_1", status: "ACTIVE" }] };
+        // campaign itself is paused, even though everything under it reads active
+        return { daily_budget: "3000", status: "PAUSED", effective_status: "PAUSED", name: "Camp" };
+      },
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const state = await adapter.getCampaignState("meta_camp_1");
+
+    expect(state.campaignStatus).toBe("paused");
+    expect(state.adStatuses.ad_1).toBe("active");
+    expect(state.adSetStatuses.as_1).toBe("active");
+  });
 });
 
 describe("GraphCampaignAdapter getLifetimeLeads (AIC-67 follow-up)", () => {

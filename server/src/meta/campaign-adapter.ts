@@ -12,7 +12,7 @@ import type {
 } from "../builder/creative-types.js";
 import type { LaunchWriter, MetaCampaignStatus } from "../launch/types.js";
 import type { AdditionWriter } from "../additions/types.js";
-import type { ControlWriter, ManualObjectStatus } from "../controls/types.js";
+import { intentStatus, type ControlWriter, type ManualObjectStatus, type ObjectIntent } from "../controls/types.js";
 import { shekelToAgorot, resolveDestinationShape } from "@aic/shared";
 import { extractLeads } from "./insights.js";
 import { normalizeAdMedia, type AdMedia, type AdMediaReader, type RawAdMedia } from "./ad-media.js";
@@ -90,18 +90,24 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // and still see it as paused here until Meta's computed field caught up.
   // `status` is what was just set — instant, authoritative for "what did I
   // set", which is exactly the question this method answers.
-  async getCampaignState(metaCampaignId: string): Promise<LiveCampaignState> {
-    const camp = await this.get(`${metaCampaignId}?fields=daily_budget,effective_status,name`);
+  async getCampaignState(metaCampaignId: string): Promise<LiveCampaignState & { campaignStatus: ObjectIntent }> {
+    // AIC-100: `status`, not `effective_status` — same reason as every other
+    // own-status read in this method (see the read-after-write comment
+    // above). campaignStatus joins adStatuses/adSetStatuses so the customer
+    // app can resolve an ad's real delivery from all three own-intents
+    // instead of a single ambiguous field.
+    const camp = await this.get(`${metaCampaignId}?fields=daily_budget,status,name`);
     let budgetObjId = metaCampaignId;
     let dailyBudgetAgorot = camp.daily_budget != null ? Number(camp.daily_budget) : NaN;
+    const campaignStatus = intentStatus(camp.status as string | undefined);
 
     // Always read ad sets: for their statuses (the audience rule + pause_adset
     // verify) and, when the campaign has no CBO budget, the ad-set-level budget.
     const adsetsBody = await this.get(`${metaCampaignId}/adsets?fields=id,daily_budget,status&limit=100`);
     const adsets = (adsetsBody.data as Array<Record<string, unknown>>) ?? [];
-    const adSetStatuses: Record<string, "active" | "paused"> = {};
+    const adSetStatuses: Record<string, ObjectIntent> = {};
     for (const a of adsets) {
-      adSetStatuses[String(a.id)] = a.status === "ACTIVE" ? "active" : "paused";
+      adSetStatuses[String(a.id)] = intentStatus(a.status as string | undefined);
     }
     if (!(dailyBudgetAgorot > 0)) {
       const withBudget = adsets.find((a) => a.daily_budget != null);
@@ -113,11 +119,11 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     this.budgetObj.set(metaCampaignId, budgetObjId);
 
     const ads = await this.get(`${metaCampaignId}/ads?fields=id,status&limit=100`);
-    const adStatuses: Record<string, "active" | "paused"> = {};
+    const adStatuses: Record<string, ObjectIntent> = {};
     for (const ad of (ads.data as Array<Record<string, unknown>>) ?? []) {
-      adStatuses[String(ad.id)] = ad.status === "ACTIVE" ? "active" : "paused";
+      adStatuses[String(ad.id)] = intentStatus(ad.status as string | undefined);
     }
-    return { dailyBudgetAgorot: dailyBudgetAgorot > 0 ? dailyBudgetAgorot : 0, adStatuses, adSetStatuses };
+    return { dailyBudgetAgorot: dailyBudgetAgorot > 0 ? dailyBudgetAgorot : 0, adStatuses, adSetStatuses, campaignStatus };
   }
 
   async setDailyBudget(metaCampaignId: string, agorot: number): Promise<void> {

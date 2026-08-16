@@ -67,8 +67,11 @@ tell you a key is missing.
 
 ## What's covered today
 
-`HomeState`, `AttentionKind`, `NoActionReason`. Deliberately narrow — this
-ticket set the standard rather than retrofitting every surface at once.
+`HomeState`, `AttentionKind`, `NoActionReason`, and, since AIC-100,
+`AdDeliveryState` (`web/src/app/delivery-status.ts` — the פירוט panel's
+per-ad status pill: delivering / paused by you / blocked by a paused ad set
+/ blocked by a paused campaign). Deliberately narrow — this ticket set the
+standard rather than retrofitting every surface at once.
 
 `NoActionReason` gained customer copy for `delivery_blocked` and
 `tracking_broken` in the same change. Both route the campaign to the

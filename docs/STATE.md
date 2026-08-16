@@ -6,6 +6,35 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-16 — AIC-100: an ad showed מפרסם while its ad set was paused
+Real live bug: the פירוט panel showed an ad set as מושהה על ידך while an ad
+inside it showed מפרסם — the fourth recurrence of AIC-70's exact shape (code
+reading an object's OWN status instead of its resolved one). Root cause:
+`isPaused("ad", id)` read only `ctl.adStatuses[id]`, never cross-referenced
+against the ad's ad set or campaign.
+
+Introduced the named accessors the AIC-70 doc note had flagged as remaining
+scope: `intentStatus` (`server/src/controls/types.ts`) is now the one place
+a raw Meta `status` string becomes `"active"|"paused"`, used for ad, ad set,
+AND (new) campaign. `getCampaignState` now also returns `campaignStatus`.
+`deliveryStatus` (new `web/src/app/delivery-status.ts`) composes all three
+already-fresh own-statuses into one of four states — delivering / paused by
+you / blocked by ad set / blocked by campaign — entirely client-side, with
+no dependency on Meta's `effective_status` and therefore no read-after-write
+lag risk. Ad's own pause always wins precedence; between the two parent
+causes, campaign outranks ad set (resuming the ad set isn't the real fix
+when the whole campaign is paused).
+
+Copy is exhaustive per AIC-98 (`AD_DELIVERY_BADGE`/`AD_DELIVERY_TONE`,
+tested non-empty + distinct). `PauseLink`'s pause button now states its
+actual effect when offered on an ad that's already blocked by a parent —
+previously read as an action with no effect.
+
+Deliberately narrow, per the ticket's own scope: migrates this one card
+onto the accessors; does not sweep the other pre-existing raw-status readers
+(delivery-health.ts, generation.ts) that already answer a different question
+correctly. Full detail in [manual-controls.md](features/manual-controls.md).
+
 ### 2026-08-16 — AIC-98: "never render a blank where a reason exists" is now a compile error
 The same defect had shipped on four surfaces (AIC-64/85 no-rec reasons,
 AIC-89 launch destination, AIC-95 audience panel, AIC-97 מצב badge), each

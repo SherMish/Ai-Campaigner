@@ -327,6 +327,10 @@ export type ControlOutcome = "changed" | "already" | "not_found" | "failed";
 export interface ControlState {
   adStatuses: Record<string, "active" | "paused">;
   adSetStatuses: Record<string, "active" | "paused">;
+  // AIC-100: the campaign's own intent — an ad and its ad set can both read
+  // "active" while the campaign itself is paused, so resolving an ad's real
+  // delivery needs all three. See app/delivery-status.ts.
+  campaignStatus: "active" | "paused";
 }
 export const getControlState = () => api<ControlState>("/app/controls/state");
 

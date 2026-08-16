@@ -17,7 +17,9 @@ function jsonRes(body: unknown) {
 }
 
 // Models the campaign's live tree + per-object status reads/writes.
-function mockMeta(ads: string[], adSets: string[]) {
+// AIC-100: `campaignStatus` defaults to ACTIVE (matching every existing call
+// site's assumption) — pass "PAUSED" to simulate a campaign-level pause.
+function mockMeta(ads: string[], adSets: string[], campaignStatus: "ACTIVE" | "PAUSED" = "ACTIVE") {
   const statuses = new Map<string, string>([...ads, ...adSets].map((id) => [id, "ACTIVE"]));
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     const u = String(url);
@@ -38,8 +40,8 @@ function mockMeta(ads: string[], adSets: string[]) {
         const st = statuses.get(id) ?? "ACTIVE";
         return jsonRes({ status: st, effective_status: st });
       }
-      // the campaign object itself (budget probe)
-      return jsonRes({ id: "meta_camp_ctl", daily_budget: "3000", effective_status: "ACTIVE" });
+      // the campaign object itself (budget probe + AIC-100's campaignStatus)
+      return jsonRes({ id: "meta_camp_ctl", daily_budget: "3000", status: campaignStatus, effective_status: campaignStatus });
     }
     // POST = a status write to an object id
     const id = u.split("/").pop()!;
@@ -228,6 +230,23 @@ d("manual controls routes (AIC-66)", () => {
     expect(res.status).toBe(200);
     expect(res.body.adStatuses).toMatchObject({ ad_1: "paused" });
     expect(res.body.adSetStatuses).toMatchObject({ as_1: "active" });
+    expect(res.body.campaignStatus).toBe("active");
+  });
+
+  // AIC-100: campaignStatus is read from the campaign's own `status`
+  // (intent), the same field/reasoning as adStatuses/adSetStatuses — so an
+  // ad and its ad set can both read ACTIVE while the campaign itself is
+  // paused, and the client can resolve that the ad isn't really delivering.
+  it("GET /state reports the campaign's own status even when every ad/ad set under it is active", async () => {
+    const { token } = await seed("state-campaign-paused");
+    const { fetchMock } = mockMeta(["ad_1"], ["as_1"], "PAUSED");
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await request(app).get("/api/app/controls/state").set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.adStatuses).toMatchObject({ ad_1: "active" });
+    expect(res.body.adSetStatuses).toMatchObject({ as_1: "active" });
+    expect(res.body.campaignStatus).toBe("paused");
   });
 
   // AIC-73 round 2: thumbnails come from a live read on panel open, the same

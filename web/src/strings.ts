@@ -641,6 +641,12 @@ export const strings = {
           // saying why.
           readUnavailable: "אי אפשר כרגע להציג תמונות מודעות או לעצור/להפעיל אותן — יש בעיה בחיבור לחשבון הפרסום.",
           goToSettings: "לבדיקה בהגדרות",
+          // AIC-100: השהיית המודעה on an ad that's already not delivering
+          // isn't a no-op — it sets the ad's own intent so it stays paused
+          // once the parent resumes — but nothing on screen said so before,
+          // reading as an action with no effect. Shown as the button's title
+          // tooltip in that exact case.
+          pauseBlockedNote: "המודעה כבר לא מוצגת כרגע. השהיה תשמור אותה מושהית גם אחרי שהקהל יחזור לפעול.",
         },
         details: {
           show: "הצג פירוט",
@@ -679,6 +685,14 @@ export const strings = {
           // without inferring it from which direction the action button points.
           statusRunning: "מפרסם",
           statusPausedByYou: "מושהה על ידך",
+          // AIC-100, real live bug: an ad showed מפרסם while its own ad set
+          // was מושהה — the ad's own switch is on, but nothing delivers,
+          // because its parent is off. Two distinct causes, two distinct
+          // fixes: the customer can resume the ad set themselves; a
+          // campaign-level pause is ours to lift, so no CTA is offered for
+          // it (same "who acts next" reasoning as h.states.paused).
+          statusBlockedByAdSet: "לא מתפרסם · הקהל מושהה",
+          statusBlockedByCampaign: "לא מתפרסם · הקמפיין מושהה",
           // Ad-level heading. `assetCount` comes from what Meta actually
           // reports for the creative — NOT from splitting the ad's name (the
           // real ad is named "almond green, french, video, pink lines" but has

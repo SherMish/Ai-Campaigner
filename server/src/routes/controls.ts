@@ -56,7 +56,7 @@ controlsRouter.get("/state", requireAuth, async (req, res) => {
     const writer = buildAdditionWriter() as ControlWriter | null;
     if (!writer) return unavailable(res);
     const state = await writer.getCampaignState(availability.ctx.metaCampaignId);
-    res.json({ adStatuses: state.adStatuses, adSetStatuses: state.adSetStatuses });
+    res.json({ adStatuses: state.adStatuses, adSetStatuses: state.adSetStatuses, campaignStatus: state.campaignStatus });
   } catch (e) {
     console.error("[controls] state failed", e);
     res.status(502).json({ error: "failed to read current state" });

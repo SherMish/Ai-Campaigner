@@ -16,6 +16,21 @@ export type ManualObjectStatus = "ACTIVE" | "PAUSED" | "ARCHIVED" | "DELETED";
 
 export type ControlObjectKind = "ad" | "ad_set";
 
+// AIC-100. An object's own configured switch — "did WE/the customer turn
+// this off" — as opposed to its resolved delivery (which also depends on
+// every parent's own switch; see web/src/app/delivery-status.ts for that
+// composition). This is the one place a raw Meta `status` string becomes our
+// two-value vocabulary. The bug this ticket names has recurred four times
+// (a deleted ad set counted as live, a stale `effective_status` right after
+// a write, recommendations generated for already-paused ads, and this
+// ticket's own card) and is always the same shape: code reading a raw status
+// field directly instead of through a named accessor. Every reader of an
+// object's own status — ad, ad set, or campaign — goes through this.
+export type ObjectIntent = "active" | "paused";
+export function intentStatus(rawStatus: string | null | undefined): ObjectIntent {
+  return rawStatus === "ACTIVE" ? "active" : "paused";
+}
+
 // What a manual control needs from Meta. Deliberately read + parameterized-write
 // only — no create, no budget. The parameterized write is the whole point (see
 // campaign-adapter.ts's "caller-supplied status" comment).
@@ -26,9 +41,16 @@ export interface ControlWriter {
   setAdSetStatus(adSetId: string, status: ManualObjectStatus): Promise<void>;
   // Used to prove the object belongs to the caller's own campaign before any
   // write — never trust a client-supplied Meta id.
+  //
+  // AIC-100: campaignStatus joined adStatuses/adSetStatuses so the customer
+  // app can resolve an ad's real delivery (own intent + every ancestor's) —
+  // see web/src/app/delivery-status.ts. Read the same way as the other two:
+  // via intentStatus() on the campaign's own `status`, not its
+  // `effective_status` (see campaign-adapter.ts's read-after-write comment).
   getCampaignState(metaCampaignId: string): Promise<{
-    adStatuses: Record<string, "active" | "paused">;
-    adSetStatuses: Record<string, "active" | "paused">;
+    adStatuses: Record<string, ObjectIntent>;
+    adSetStatuses: Record<string, ObjectIntent>;
+    campaignStatus: ObjectIntent;
   }>;
 }
 
@@ -43,6 +65,9 @@ export class FakeControlWriter implements ControlWriter {
   // What getCampaignState reports as living under the campaign.
   public campaignAds: string[] = [];
   public campaignAdSets: string[] = [];
+  // AIC-100: settable so a test can simulate an ad/ad-set reading ACTIVE
+  // while the campaign itself is paused.
+  public campaignStatus: ManualObjectStatus = "ACTIVE";
   // Simulate Meta accepting the write but not actually applying it, so the
   // read-back verify has something real to catch.
   public ignoreNextWrite = 0;
@@ -75,8 +100,12 @@ export class FakeControlWriter implements ControlWriter {
   async getCampaignState(_metaCampaignId: string) {
     const collapse = (ids: string[]) =>
       Object.fromEntries(
-        ids.map((id) => [id, (this.statuses.get(id) ?? "ACTIVE") === "ACTIVE" ? "active" : "paused"]),
-      ) as Record<string, "active" | "paused">;
-    return { adStatuses: collapse(this.campaignAds), adSetStatuses: collapse(this.campaignAdSets) };
+        ids.map((id) => [id, intentStatus(this.statuses.get(id) ?? "ACTIVE")]),
+      ) as Record<string, ObjectIntent>;
+    return {
+      adStatuses: collapse(this.campaignAds),
+      adSetStatuses: collapse(this.campaignAdSets),
+      campaignStatus: intentStatus(this.campaignStatus),
+    };
   }
 }

@@ -27,6 +27,7 @@ import {
 } from "../api";
 import { assertNever } from "@aic/shared";
 import { ATTENTION_COPY, HOME_STATE_BADGE, noRecCopy } from "./state-copy";
+import { AD_DELIVERY_BADGE, AD_DELIVERY_TONE, deliveryStatus } from "./delivery-status";
 import { StatusPill } from "./components";
 import { useSharedOverview, invalidateOverview } from "./overview-store";
 
@@ -408,7 +409,7 @@ export function Home() {
 // element in the row after the title. Reading order should be
 // "what is this → how is it doing → (quietly) what can I do".
 function PauseLink({
-  kind, metaObjectId, paused, busy, justSucceeded, onToggle,
+  kind, metaObjectId, paused, busy, justSucceeded, onToggle, alreadyNotDelivering,
 }: {
   kind: "ad" | "ad_set";
   metaObjectId: string;
@@ -418,10 +419,22 @@ function PauseLink({
   // confirmation instead of silence (which read as "did my click work?").
   justSucceeded: boolean;
   onToggle: (kind: "ad" | "ad_set", id: string, pause: boolean) => void;
+  // AIC-100: the ad's own switch is on, but it isn't actually showing (a
+  // parent is paused) — offering "השהיית המודעה" here isn't a no-op (it sets
+  // the ad's own intent so it stays paused once the parent resumes), but
+  // nothing said so, reading as an action with no effect.
+  alreadyNotDelivering?: boolean;
 }) {
   const label = kind === "ad_set"
     ? (paused ? CT.resumeAdSet : CT.pauseAdSet)
     : (paused ? CT.resumeAd : CT.pauseAd);
+  const title = kind === "ad_set" && !paused
+    ? CT.adSetNote
+    : paused
+      ? CT.resumeNote
+      : alreadyNotDelivering
+        ? CT.pauseBlockedNote
+        : undefined;
   return (
     <span className="row gap8" style={{ alignItems: "center" }}>
       {justSucceeded && !busy && (
@@ -433,7 +446,7 @@ function PauseLink({
         className="link"
         disabled={busy}
         style={{ background: "none", border: "none", padding: "6px 2px", fontSize: "0.82rem", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}
-        title={kind === "ad_set" && !paused ? CT.adSetNote : paused ? CT.resumeNote : undefined}
+        title={title}
         onClick={(e) => { e.stopPropagation(); onToggle(kind, metaObjectId, !paused); }}
       >
         {busy ? CT.working : label}
@@ -446,11 +459,11 @@ function PauseLink({
 // detail row, and previously absent: you could only infer "is this running?"
 // from which way the action button pointed. Uses AIC-71's state vocabulary:
 // a customer's own pause is distinct from a problem.
-function RowStatus({ paused }: { paused: boolean }) {
+function RowStatus({ label, tone }: { label: string; tone: "ok" | "warn" | "neutral" }) {
   return (
-    <span className={`pill ${paused ? "neutral" : "ok"}`} style={{ padding: "2px 10px", fontSize: "0.72rem", whiteSpace: "nowrap" }}>
+    <span className={`pill ${tone}`} style={{ padding: "2px 10px", fontSize: "0.72rem", whiteSpace: "nowrap" }}>
       <span className="dot" />
-      {paused ? D.statusPausedByYou : D.statusRunning}
+      {label}
     </span>
   );
 }
@@ -585,7 +598,7 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
       // row update immediately instead of occasionally showing the pre-write
       // state until a manual refresh.
       setCtl((prev) => {
-        const base = prev ?? { adStatuses: {}, adSetStatuses: {} };
+        const base = prev ?? { adStatuses: {}, adSetStatuses: {}, campaignStatus: "active" as const };
         const key = kind === "ad" ? "adStatuses" : "adSetStatuses";
         return { ...base, [key]: { ...base[key], [id]: result.status === "ACTIVE" ? "active" : "paused" } };
       });
@@ -677,7 +690,7 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
                             <Chevron open={shown} />
                           </button>
                         )}
-                        <RowStatus paused={audPaused} />
+                        <RowStatus label={audPaused ? D.statusPausedByYou : D.statusRunning} tone={audPaused ? "neutral" : "ok"} />
                         <b><bdi>{aud.label}</bdi></b>
                       </div>
                       {ctl && (
@@ -711,12 +724,21 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
                           <div className="stack gap12">
                             {aud.creatives.map((c) => {
                               const adPaused = isPaused("ad", c.metaObjectId);
+                              // AIC-100: resolved delivery, not the ad's own
+                              // status alone — an ad set can carry this
+                              // "active" while its ad set (or the campaign)
+                              // is paused, and nothing then actually shows.
+                              const adDelivery = deliveryStatus(
+                                adPaused ? "paused" : "active",
+                                isPaused("ad_set", aud.adSetId) ? "paused" : "active",
+                                ctl?.campaignStatus ?? "active",
+                              );
                               const m = media.get(c.metaObjectId);
                               return (
                                 <div key={c.metaObjectId}>
                                   <div className="row between" style={{ gap: 10, alignItems: "flex-start" }}>
                                     <div className="row gap8" style={{ flexWrap: "wrap", alignItems: "center" }}>
-                                      <RowStatus paused={adPaused} />
+                                      <RowStatus label={AD_DELIVERY_BADGE[adDelivery]} tone={AD_DELIVERY_TONE[adDelivery]} />
                                       {/* Honest count: what Meta actually
                                           reports for this creative, never
                                           inferred from the ad's name. */}
@@ -729,6 +751,7 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
                                         kind="ad" metaObjectId={c.metaObjectId}
                                         paused={adPaused} busy={busyId === c.metaObjectId}
                                         justSucceeded={successId === c.metaObjectId} onToggle={onToggle}
+                                        alreadyNotDelivering={adDelivery === "blocked_by_adset" || adDelivery === "blocked_by_campaign"}
                                       />
                                     )}
                                   </div>
