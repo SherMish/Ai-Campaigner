@@ -67,11 +67,15 @@ tell you a key is missing.
 
 ## What's covered today
 
-`HomeState`, `AttentionKind`, `NoActionReason`, and, since AIC-100,
+`HomeState`, `AttentionKind`, `NoActionReason`; since AIC-100,
 `AdDeliveryState` (`web/src/app/delivery-status.ts` — the פירוט panel's
 per-ad status pill: delivering / paused by you / blocked by a paused ad set
-/ blocked by a paused campaign). Deliberately narrow — this ticket set the
-standard rather than retrofitting every surface at once.
+/ blocked by a paused campaign); since AIC-97, `StatusTooltipKey`
+(`state-copy.ts` — the rail's "מצב" badge's info popover, composing
+`HomeState` + `AttentionKind` + the `no_campaign` connected/onboarding split
+into the same 10 real states `hero()` itself branches on). Deliberately
+narrow — this ticket set the standard rather than retrofitting every surface
+at once.
 
 `NoActionReason` gained customer copy for `delivery_blocked` and
 `tracking_broken` in the same change. Both route the campaign to the

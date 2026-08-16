@@ -600,6 +600,32 @@ export const strings = {
           // the customer can undo themselves, right here.
           stopped: { badge: "לא מתפרסם", title: "אין כרגע מודעות שמוצגות ללקוחות", body: "כל קבוצות הפרסום מושהות, כך שאין כרגע חשיפה או פניות. אפשר להפעיל מחדש בלחיצה — פתחו את פירוט הקהלים למטה.", cta: "" },
         },
+        // AIC-97: the compact "מצב" badge in the rail (unlike the hero card
+        // above, which already carries a title+body) shows a bare pill with
+        // no explanation. Three of the seven HomeState values share צריך
+        // טיפול with different causes, and none say whether money is being
+        // spent right now or who needs to act — both real, currently
+        // invisible facts a customer paying for ads actually has. Every
+        // entry answers the same three questions, in the same order, so the
+        // popover is scannable instead of ten bespoke paragraphs. Ten
+        // entries, not seven: `attention` gets its 3 causes, `no_campaign`
+        // its 2 (still onboarding vs. connected-and-ready) — see
+        // state-copy.ts's `statusTooltipKey`.
+        statusTooltip: {
+          infoLabel: "מידע על סטטוס הקמפיין",
+          spendQuestion: "מוציא תקציב?",
+          whoActsQuestion: "מי פועל?",
+          ok: { meaning: "הקמפיין רץ ואנחנו רואים נתונים.", spend: "מוציא תקציב", whoActs: "אנחנו עוקבים" },
+          collecting: { meaning: "המודעות רצות, אבל עדיין לא נרשמו הוצאה או פניות. זה נורמלי בשעות הראשונות.", spend: "מוציא תקציב", whoActs: "אף אחד — צריך זמן" },
+          paused: { meaning: "השהינו את הקמפיין. הסיבה מופיעה ב״מה קרה לאחרונה״.", spend: "לא מוציא תקציב", whoActs: "אנחנו" },
+          stopped: { meaning: "כל קבוצות המודעות מושהות, ולכן אף מודעה לא מוצגת.", spend: "לא מוציא תקציב", whoActs: "אתם" },
+          readyToLaunch: { meaning: "הקמפיין מוכן אבל עדיין לא הופעל.", spend: "לא מוציא תקציב", whoActs: "אתם — צריך אישור" },
+          noCampaignSetup: { meaning: "אנחנו עדיין מחברים את החשבון.", spend: "לא מוציא תקציב", whoActs: "אנחנו" },
+          noCampaignReadyToBuild: { meaning: "החשבון מחובר, אפשר לבנות קמפיין.", spend: "לא מוציא תקציב", whoActs: "אנחנו" },
+          attentionConnection: { meaning: "איבדנו גישה לחשבון המודעות ולא נוכל לנהל את הקמפיין.", spend: "ייתכן שכן", whoActs: "אתם — צריך לחדש הרשאה" },
+          attentionTracking: { meaning: "יש פער בין מה שאנחנו סופרים כפנייה להגדרות במטא. המספרים כאן עלולים להיות לא מדויקים.", spend: "מוציא תקציב", whoActs: "אנחנו" },
+          attentionDelivery: { meaning: "אחת מקבוצות המודעות לא מצליחה להתפרסם.", spend: "חלקית", whoActs: "אנחנו" },
+        },
         live: {
           vsPrev: "מהתקופה הקודמת",
           noCompare: "אין תקופה קודמת להשוואה",

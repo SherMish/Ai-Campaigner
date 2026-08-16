@@ -1,3 +1,4 @@
+import { assertNever } from "@aic/shared";
 import { strings } from "../strings";
 import type { AttentionKind, HomeState, NoActionReason } from "../api";
 
@@ -81,3 +82,65 @@ export function noRecCopy(reason: NoActionReason | null): NoRecCopy {
   if (reason === null) return { title: h.noActionTitle, body: h.noAction };
   return NO_REC_COPY[reason];
 }
+
+// AIC-97 — the "מצב" badge's info popover. Not simply HomeState: `attention`
+// carries 3 distinguishable causes and `no_campaign` carries 2 (still
+// onboarding vs. connected-and-ready-to-build) — 10 real states, not 7. This
+// mirrors hero()'s own branching in Home.tsx exactly, so the badge and its
+// popover can never describe two different situations.
+export type StatusTooltipKey =
+  | "ok" | "collecting" | "paused" | "stopped" | "ready_to_launch"
+  | "no_campaign_setup" | "no_campaign_ready_to_build"
+  | "attention_connection" | "attention_tracking" | "attention_delivery";
+
+export function statusTooltipKey(
+  state: HomeState,
+  attentionKind: AttentionKind | null,
+  readyToBuild: boolean,
+): StatusTooltipKey {
+  switch (state) {
+    case "ok": return "ok";
+    case "collecting": return "collecting";
+    case "paused": return "paused";
+    case "stopped": return "stopped";
+    case "ready_to_launch": return "ready_to_launch";
+    case "no_campaign": return readyToBuild ? "no_campaign_ready_to_build" : "no_campaign_setup";
+    case "attention": {
+      const kind = attentionKind ?? "connection";
+      switch (kind) {
+        case "connection": return "attention_connection";
+        case "tracking": return "attention_tracking";
+        case "delivery": return "attention_delivery";
+        default: return assertNever(kind, "AttentionKind");
+      }
+    }
+    default:
+      return assertNever(state, "HomeState");
+  }
+}
+
+export interface StatusTooltipCopy {
+  meaning: string;
+  spend: string;
+  whoActs: string;
+}
+
+const st = strings.he.app.home.statusTooltip;
+
+// Every tooltip answers the same three questions in the same order (the
+// ticket's own design constraint): what it means, is budget being spent
+// right now, and who acts next. The three `attention` causes and the two
+// `no_campaign` variants each get distinct meaning+whoActs text — same
+// underlying badge, genuinely different situations.
+export const STATUS_TOOLTIP_COPY: Record<StatusTooltipKey, StatusTooltipCopy> = {
+  ok: st.ok,
+  collecting: st.collecting,
+  paused: st.paused,
+  stopped: st.stopped,
+  ready_to_launch: st.readyToLaunch,
+  no_campaign_setup: st.noCampaignSetup,
+  no_campaign_ready_to_build: st.noCampaignReadyToBuild,
+  attention_connection: st.attentionConnection,
+  attention_tracking: st.attentionTracking,
+  attention_delivery: st.attentionDelivery,
+};

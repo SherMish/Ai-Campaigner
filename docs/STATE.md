@@ -6,6 +6,42 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-16 — AIC-97: the rail's מצב badge explains itself on demand
+The hero card already carries a title+body for whatever `HomeState` is
+active; the rail's compact מצב summary row only ever showed the bare badge.
+Three of the seven states share "צריך טיפול" with different causes, and
+nothing said whether budget is being spent right now or who needs to act —
+both real facts a customer paying for ads actually has, invisible without
+navigating away from Home.
+
+New `StatusInfo` (`Home.tsx`): an always-visible `i` affordance (never
+hover-revealed — undiscoverable on the phones customers check campaigns on)
+that opens on hover, tap, and keyboard focus; dismisses on Escape or a
+pointer-down outside; positions itself in JS off the button's own
+`getBoundingClientRect()` so it clamps against the real viewport and never
+clips at an edge.
+
+`statusTooltipKey` (new export in `state-copy.ts`) composes the exact same
+branch `hero()` already uses — `attention`'s 3 causes, `no_campaign`'s 2 (still
+onboarding vs. connected-and-ready) — into 10 real states, not 7, so the
+tooltip and the hero can never describe two different situations for the
+same badge. Every entry answers the same three questions in the same order:
+what it means, is budget being spent right now, who acts next. `who acts
+next` is a genuinely new fact — even the hero's own free-text body never
+stated it explicitly before.
+
+Enforced per AIC-98: `STATUS_TOOLTIP_COPY` is an exhaustive
+`Record<StatusTooltipKey, …>`; `state-copy.test.ts` asserts every entry is
+non-empty and that no two share the same meaning+whoActs.
+
+Copy for `no_campaign`'s connected-and-ready state follows the ticket's own
+table verbatim ("אנחנו" for who-acts) — flagged in the closing Linear
+comment as possibly inconsistent with the state's own CTA ("בניית הקמפיין",
+which asks the customer to act), since changing given copy unilaterally
+risked introducing a different error than the one being fixed.
+
+Full detail in [customer-overview.md](features/customer-overview.md).
+
 ### 2026-08-16 — AIC-100: an ad showed מפרסם while its ad set was paused
 Real live bug: the פירוט panel showed an ad set as מושהה על ידך while an ad
 inside it showed מפרסם — the fourth recurrence of AIC-70's exact shape (code

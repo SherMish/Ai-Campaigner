@@ -89,6 +89,21 @@ button { font-family: inherit; }
 .pill.neutral { background: var(--cream-2); color: var(--muted); }
 .pill.neutral .dot { background: var(--muted); }
 
+/* AIC-97: the "מצב" badge's info affordance — always visible (never
+   hover-revealed, which would be undiscoverable on a phone), 44px hit
+   target though visually an 18px circle. */
+.info-affordance {
+  width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line);
+  background: transparent; color: var(--muted); font: italic 700 12px/1 Georgia, serif;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  padding: 13px; margin: -13px; flex-shrink: 0;
+}
+.info-affordance:hover, .info-affordance:focus-visible { border-color: var(--muted); color: var(--ink); }
+.info-popover {
+  z-index: 200; background: var(--cream); border: 1px solid var(--line); border-radius: 14px;
+  padding: 12px 14px; box-shadow: 0 8px 24px rgba(23, 23, 23, 0.16);
+}
+
 /* form fields */
 .field { display: flex; flex-direction: column; gap: 7px; }
 .field label { font-size: 0.9rem; font-weight: 500; }

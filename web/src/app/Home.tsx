@@ -26,7 +26,7 @@ import {
   RANGE_KEYS,
 } from "../api";
 import { assertNever } from "@aic/shared";
-import { ATTENTION_COPY, HOME_STATE_BADGE, noRecCopy } from "./state-copy";
+import { ATTENTION_COPY, HOME_STATE_BADGE, noRecCopy, STATUS_TOOLTIP_COPY, statusTooltipKey } from "./state-copy";
 import { AD_DELIVERY_BADGE, AD_DELIVERY_TONE, deliveryStatus } from "./delivery-status";
 import { StatusPill } from "./components";
 import { useSharedOverview, invalidateOverview } from "./overview-store";
@@ -36,12 +36,119 @@ const h = a.home;
 const L = h.live;
 const D = h.details;
 const CT = h.controls;
+const ST = h.statusTooltip;
 
 // AIC-98: the reason -> copy binding now lives in state-copy.ts as an
 // exhaustive Record, so a new engine reason is a compile error instead of
 // silently falling through to the generic "we're watching the campaign"
 // message. This wrapper only keeps the call sites below unchanged.
 const noRecCard = noRecCopy;
+
+// AIC-97: the compact "מצב" badge (rail) shows a bare pill with no
+// explanation — three of the seven HomeState values share צריך טיפול with
+// different causes, and none say whether budget is being spent right now or
+// who needs to act, both real facts a customer paying for ads actually has.
+// Every tooltip answers the same three questions in the same order (design
+// constraint from the ticket) so it's scannable rather than a bespoke
+// paragraph per state.
+//
+// A `position: fixed` popover, positioned in JS off the button's own
+// bounding rect rather than pure CSS: the compact-clip-avoidance
+// requirement (must not clip at viewport edges) needs the actual button
+// position and viewport size, which CSS alone can't clamp against reliably.
+// Opens on hover, tap (click), AND keyboard focus — hover-only is
+// unusable on the phones customers actually check campaigns on.
+function StatusInfo({ tooltipKey }: { tooltipKey: ReturnType<typeof statusTooltipKey> }) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 280 });
+  const copy = STATUS_TOOLTIP_COPY[tooltipKey];
+  const popId = "status-info-popover";
+
+  useEffect(() => {
+    if (!open) return;
+    function reposition() {
+      const btn = btnRef.current;
+      if (!btn) return;
+      const margin = 8;
+      const width = Math.min(280, window.innerWidth - margin * 2);
+      const r = btn.getBoundingClientRect();
+      let left = r.left + r.width / 2 - width / 2;
+      left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
+      const estHeight = popRef.current?.offsetHeight ?? 150;
+      let top = r.bottom + 8;
+      if (top + estHeight > window.innerHeight - margin) top = Math.max(margin, r.top - estHeight - 8);
+      setPos({ top, left, width });
+    }
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setOpen(false); }
+    function onPointerDown(e: PointerEvent) {
+      const target = e.target as Node;
+      if (btnRef.current?.contains(target) || popRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [open]);
+
+  return (
+    // Hover on the wrapper (not just the button) so moving the pointer from
+    // the "i" into the popover itself doesn't close it before it's read.
+    <span
+      style={{ position: "relative", display: "inline-flex" }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        ref={btnRef}
+        type="button"
+        className="info-affordance"
+        aria-label={ST.infoLabel}
+        aria-expanded={open}
+        aria-describedby={open ? popId : undefined}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+      >
+        i
+      </button>
+      {open && (
+        <div
+          id={popId}
+          role="tooltip"
+          ref={popRef}
+          className="info-popover"
+          style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width }}
+        >
+          <p style={{ margin: 0, fontSize: "0.85rem" }}>{copy.meaning}</p>
+          <div className="row between" style={{ marginTop: 8, fontSize: "0.78rem" }}>
+            <span className="muted">{ST.spendQuestion}</span>
+            <b>{copy.spend}</b>
+          </div>
+          <div className="row between" style={{ marginTop: 4, fontSize: "0.78rem" }}>
+            <span className="muted">{ST.whoActsQuestion}</span>
+            <b>{copy.whoActs}</b>
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
 
 const PILL: Record<HomeState, "ok" | "info" | "neutral" | "attn"> = {
   ok: "ok", collecting: "neutral", paused: "neutral", attention: "attn", no_campaign: "neutral", ready_to_launch: "info", stopped: "neutral",
@@ -228,6 +335,7 @@ export function Home() {
   const state = ov.homeState;
   const readyToBuild = ov.connection?.accessHealth === "ok" && !!ov.connection.adAccount && !!ov.connection.pageId;
   const hd = hero(state, ov.attentionKind, readyToBuild, ov.campaign?.noRecReason ?? null, ov.campaign?.wasBuiltHere ?? false);
+  const tooltipKey = statusTooltipKey(state, ov.attentionKind, readyToBuild);
   // A pending recommendation (including the AIC-86 advisory type, which fires
   // before any evidence gate) outranks the "nothing to report" hero — it IS
   // the current status. Scoped to ok/collecting: attention/paused/stopped
@@ -378,7 +486,10 @@ export function Home() {
           <div className="card">
             <b style={{ fontSize: "0.98rem" }}>{ov.campaign?.name || h.summaryTitle}</b>
             <div style={{ marginTop: 12 }}>
-              <div className="summary-row"><span className="k">{h.sMode}</span><StatusPill variant={PILL[state]}>{hd.badge}</StatusPill></div>
+              <div className="summary-row">
+                <span className="k" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{h.sMode}<StatusInfo tooltipKey={tooltipKey} /></span>
+                <StatusPill variant={PILL[state]}>{hd.badge}</StatusPill>
+              </div>
               <div className="summary-row"><span className="k">{h.sBudget}</span><b>{ov.campaign ? `${shekels(ov.campaign.liveBudgetAgorot ?? ov.campaign.agreedBudgetAgorot)} ${period}` : L.none}</b></div>
               <div className="summary-row"><span className="k">{h.sAds}</span><b>{activeAds > 0 ? `${activeAds} ${L.adsActive}` : L.none}</b></div>
               <div className="summary-row"><span className="k">{h.sLeads}</span><b>{leads}</b></div>

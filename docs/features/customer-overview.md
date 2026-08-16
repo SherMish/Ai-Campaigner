@@ -131,6 +131,39 @@ engine/manual discriminator). `Home.tsx`'s hero switches copy on it: same
 badge and CTA either way, but a `wasBuiltHere: false` campaign gets an honest
 "we found your campaign on Meta, it's still paused" body instead.
 
+## The compact "מצב" badge explains itself on demand (AIC-97)
+
+The hero card above already carries a title+body for whatever `homeState` is
+active. The rail's compact "מצב" summary row does not — it renders a bare
+`StatusPill` with just the badge text, and three of the seven `HomeState`
+values (plus the `no_campaign` split above) share a badge with genuinely
+different causes. A customer reading "צריך טיפול" there has no way to tell,
+without navigating away, whether their budget is being spent right now or
+whether the fix is theirs to make.
+
+`StatusInfo` (`Home.tsx`) adds an always-visible `i` affordance beside the
+badge — never hover-revealed, which would be undiscoverable on the phones
+customers actually check campaigns on. Opens on hover, tap, **and** keyboard
+focus; dismissible on Escape or a pointer-down outside; positioned in JS off
+the button's own `getBoundingClientRect()` (not pure CSS) so it can clamp
+against the actual viewport size and never clip at an edge.
+
+**Ten states, not seven.** `statusTooltipKey` (`state-copy.ts`) composes the
+same branch `hero()` itself uses — `attention`'s 3 causes, `no_campaign`'s 2
+(still onboarding vs. connected-and-ready-to-build) — into one of ten keys,
+so the tooltip and the hero can never describe two different situations for
+the same `homeState`. Every entry answers the same three questions in the
+same order: what it means, is budget being spent right now, who acts next
+(us / the customer / nobody). The first two facts were previously invisible
+outside the hero's own free-text body; naming "who acts next" explicitly is
+new even there.
+
+Enforced per AIC-98: `STATUS_TOOLTIP_COPY` is an exhaustive
+`Record<StatusTooltipKey, …>` (a missing key fails `tsc`), and
+`state-copy.test.ts` asserts every entry is non-empty and that no two share
+the same meaning+whoActs — `attention`'s three causes and the `no_campaign`
+split are exactly the case that guard exists for.
+
 ## Honest delivery state, not the management flag (AIC-71)
 
 `campaign.status` (`paused` above) is a DB flag meaning "are **we** managing
