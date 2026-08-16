@@ -6,6 +6,22 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-16 — Fix: מצב row's info icon read too large next to the label
+The previous entry's fix (below) turned out to be the wrong diagnosis,
+corrected live within the hour: further feedback showed the clustered
+label+pill layout was itself wrong — every OTHER summary row (תקציב,
+מודעות, and every summary row across Builder/Connect/Settings/admin) keeps
+label-right/value-left, and the מצב row should match them, not be the odd
+one out. The actual problem was the new `i` circle itself reading too large
+and heavy (18px, 12px bold serif) next to a two-letter label, competing
+with the pill instead of sitting quietly beside the text.
+
+Reverted the row back to plain `.summary-row` (pill left, label+icon right,
+same as every sibling); fixed `.info-affordance` at the source instead —
+shrunk to a 13px circle with a 9px mark, touch target unchanged at 44px
+(padding/negative-margin trick recalculated: 13 + 2×15.5 = 44). Verified in
+the same isolated static repro used for the entry below.
+
 ### 2026-08-16 — Fix: מצב row's label and pill stretched to opposite edges
 Reported live right after AIC-97 shipped, screenshot showing the מצב label
 and the status pill pulled to opposite ends of the rail card with a large
@@ -24,6 +40,9 @@ Fixed locally, only on this one row (`Home.tsx`) — `justifyContent:
 touching `.summary-row` itself, which every other summary row across the
 app still needs unchanged. Verified in an isolated static repro against the
 real `ui.css` before and after.
+
+**Superseded by the entry above within the hour**: further live feedback
+showed this diagnosis was wrong — see above for what actually fixed it.
 
 ### 2026-08-16 — AIC-97: the rail's מצב badge explains itself on demand
 The hero card already carries a title+body for whatever `HomeState` is

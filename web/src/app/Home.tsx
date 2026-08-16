@@ -486,18 +486,17 @@ export function Home() {
           <div className="card">
             <b style={{ fontSize: "0.98rem" }}>{ov.campaign?.name || h.summaryTitle}</b>
             <div style={{ marginTop: 12 }}>
-              {/* Bug fix, 2026-08-16: `.summary-row`'s justify-content:
-                  space-between (shared by every summary row across the app —
-                  never touch it here) stretched the label and the pill to
-                  opposite edges of the card once the rail collapses to full
-                  page width (≤1024px). Fine for a text VALUE that reads
-                  naturally far from its label ("תקציב ... ₪20 ביום"), broken
-                  for a small badge — it read as two unrelated things.
-                  Overridden locally, only for this row: label+icon and pill
-                  now sit together as one cluster, still right where the row
-                  starts. */}
-              <div className="summary-row" style={{ justifyContent: "flex-start", gap: 10 }}>
-                <span className="k" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{h.sMode}<StatusInfo tooltipKey={tooltipKey} /></span>
+              {/* Bug fix, 2026-08-16 (reverted same day): first tried
+                  overriding this row's justify-content to cluster the label
+                  and the pill together — wrong call, reported live: every
+                  other summary row keeps label-right/value-left (RTL), and
+                  this one should match it, not be the odd one out. The
+                  actual problem was the `i` circle reading too large/heavy
+                  next to a short two-letter label — fixed at the source in
+                  `.info-affordance` (ui.css) instead of fighting the shared
+                  row layout. */}
+              <div className="summary-row">
+                <span className="k" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{h.sMode}<StatusInfo tooltipKey={tooltipKey} /></span>
                 <StatusPill variant={PILL[state]}>{hd.badge}</StatusPill>
               </div>
               <div className="summary-row"><span className="k">{h.sBudget}</span><b>{ov.campaign ? `${shekels(ov.campaign.liveBudgetAgorot ?? ov.campaign.agreedBudgetAgorot)} ${period}` : L.none}</b></div>
