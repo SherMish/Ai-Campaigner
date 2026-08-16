@@ -6,6 +6,25 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-16 — Fix: מצב row's label and pill stretched to opposite edges
+Reported live right after AIC-97 shipped, screenshot showing the מצב label
+and the status pill pulled to opposite ends of the rail card with a large
+gap between them. Root cause: `.summary-row`'s `justify-content:
+space-between` (shared by every summary row across the whole app — Builder,
+Connect, Settings, admin screens, dozens of call sites) stretches its two
+children to the row's edges, which reads fine for a text value naturally far
+from its label ("תקציב ... ₪20 ביום") but wrong for a small badge sitting
+right next to its own label — it read as two unrelated pieces of UI. Made
+worse by the rail collapsing to full page width below 1024px (`.dash-grid`'s
+single-column breakpoint), and more visible now that the label carries the
+new `i` affordance too.
+
+Fixed locally, only on this one row (`Home.tsx`) — `justifyContent:
+"flex-start"` overrides the shared class via inline style rather than
+touching `.summary-row` itself, which every other summary row across the
+app still needs unchanged. Verified in an isolated static repro against the
+real `ui.css` before and after.
+
 ### 2026-08-16 — AIC-97: the rail's מצב badge explains itself on demand
 The hero card already carries a title+body for whatever `HomeState` is
 active; the rail's compact מצב summary row only ever showed the bare badge.
