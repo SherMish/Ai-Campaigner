@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { strings } from "../strings";
+import { offersOnboarding } from "./user-row-status";
 
 const u = strings.he.adminUsers;
 const t = strings.he.ops;
@@ -48,7 +49,15 @@ export function AdminUsers() {
     return row.email.toLowerCase().includes(q) || row.name.toLowerCase().includes(q);
   });
 
-  async function openOnboarding(row: UserRow) {
+  async function handleRowClick(row: UserRow) {
+    // Already fully connected — the wizard would only create a duplicate
+    // connection/campaign for this customer (provisionConnection always
+    // inserts, never upserts). Send the operator to the real customer
+    // record instead, same jump-to pattern the Overview search uses.
+    if (!offersOnboarding(row)) {
+      navigate(`/admin/customers?focus=${row.customerId}`);
+      return;
+    }
     if (row.customerId) {
       navigate(`/admin/onboarding/${row.customerId}`);
       return;
@@ -96,7 +105,7 @@ export function AdminUsers() {
             </thead>
             <tbody>
               {filtered.map((row) => (
-                <tr key={row.id} onClick={() => openOnboarding(row)}>
+                <tr key={row.id} onClick={() => handleRowClick(row)}>
                   <td>{row.email}</td>
                   <td>{row.name || a.noData}</td>
                   <td>{new Date(row.createdAt).toLocaleDateString("he-IL")}</td>
@@ -105,7 +114,9 @@ export function AdminUsers() {
                     {provisioningId === row.id ? (
                       <span className="muted" style={{ marginInlineStart: 8, fontSize: "0.78rem" }}>{u.provisioning}</span>
                     ) : (
-                      <span className="link" style={{ marginInlineStart: 8, fontSize: "0.82rem" }}>{u.startOnboarding}</span>
+                      <span className="link" style={{ marginInlineStart: 8, fontSize: "0.82rem" }}>
+                        {offersOnboarding(row) ? u.startOnboarding : u.viewCustomer}
+                      </span>
                     )}
                   </td>
                   <td>{row.subscriptionStatus ?? t.none}</td>

@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-16 — Fix: /admin/users offered onboarding to already-connected users
+Reported live right after shipping the Users view (below): Pisga and
+free_beta test — both fully connected — still showed "start onboarding,"
+and clicking it would have run provisioning a second time, inserting a
+duplicate connection/ad_account/campaign for a customer that already has a
+working one (provisioning always inserts, never upserts). Added
+`offersOnboarding` (`web/src/admin/user-row-status.ts`, unit-tested): withheld
+once `connectionReadiness === null` (fully ready); still offered for no
+business yet or any readiness gap short of that. A fully-connected row's
+action now links to `/admin/customers?focus=<id>` instead.
+
 ### 2026-08-16 — Cleanup: removed 44 integration-test artifact customers
 Deleted 44 `customers` rows (`__it_outbox` ×37, `__it_snap` ×4, `__it_readout`
 ×2, `__it_ro_today` ×1) left behind by the DB integration test suite, which

@@ -149,6 +149,19 @@ wizard on the new id. Idempotent: a user who already has a business (whether
 from a prior click or hand-created separately) gets that same id back, never
 a second row.
 
+**The onboarding CTA is withheld once a user is already fully connected**
+(`offersOnboarding`, `web/src/admin/user-row-status.ts`, unit-tested) — a
+real gap in the first version, caught live: with no guard, Pisga and
+free_beta test (both fully connected) still showed "start onboarding," and
+clicking it would have run `provisionConnection` a second time — INSERTing a
+duplicate connection/ad_account/campaign for a customer that already has a
+working one (provisioning always inserts, never upserts). The rule mirrors
+`connectionReadiness`: `null` (fully ready) withholds the CTA; a business
+with no `customerId` yet, or any readiness gap short of fully ready, still
+gets it, since those are exactly the cases the wizard exists to finish or
+fix. A fully-connected row's action links to `/admin/customers?focus=<id>`
+instead — the same jump-to-drilldown pattern the Overview search uses.
+
 **Payment details and trial state are explicitly out of scope for now**
 (2026-08-16 product decision) — `subscriptions` still lives on `customers`,
 not `app_users`. If billing ever moves to be per-login rather than
@@ -159,7 +172,9 @@ Routes: `GET /admin/users`, `POST /admin/users/:id/customer`. Tests:
 `users-admin.integration.test.ts` (a bare user shows null business/connection;
 a fully-linked user reflects real connection state; `ensureCustomerForUser`
 creates+links once and is idempotent on repeat; falls back to email when the
-user has no name; full HTTP round trip including the admin-only gate).
+user has no name; full HTTP round trip including the admin-only gate),
+`user-row-status.test.ts` (`offersOnboarding`'s three cases — no business,
+fully connected, every readiness gap short of that).
 
 ## Customer CRUD + admin audit log (AIC-44)
 

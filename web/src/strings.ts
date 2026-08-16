@@ -117,6 +117,10 @@ export const strings = {
       colCampaign: "קמפיין",
       noBusiness: "טרם קושר לעסק",
       startOnboarding: "התחלת קליטה ←",
+      // Shown instead of "start onboarding" once the connection is already
+      // fully working — re-running the wizard would only create a duplicate
+      // connection/campaign for the same customer.
+      viewCustomer: "לצפייה בלקוח ←",
       provisioning: "יוצר רשומת עסק…",
       provisionError: "יצירת רשומת העסק נכשלה.",
     },
