@@ -91,15 +91,15 @@ button { font-family: inherit; }
 
 /* AIC-97: the "מצב" badge's info affordance — always visible (never
    hover-revealed, which would be undiscoverable on a phone), 44px hit
-   target though visually a small 13px circle. Bug fix, 2026-08-16: shipped
-   first at 18px/12px-font, reported live as reading too large/heavy next to
-   the short מצב label — shrunk to sit as a quiet mark beside the text,
-   not a second badge competing with it. */
+   target though visually a small 10px circle. Bug fix, 2026-08-16: shipped
+   first at 18px/12px-font (too large/heavy), then 13px/9px (still reported
+   too big) — sized down again to sit as a quiet mark roughly matching the
+   מצב label's own lowercase x-height, not a second badge competing with it. */
 .info-affordance {
-  width: 13px; height: 13px; border-radius: 50%; border: 1px solid var(--line);
-  background: transparent; color: var(--muted); font: italic 700 9px/1 Georgia, serif;
+  width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--line);
+  background: transparent; color: var(--muted); font: italic 700 7px/1 Georgia, serif;
   display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
-  padding: 15.5px; margin: -15.5px; flex-shrink: 0;
+  padding: 17px; margin: -17px; flex-shrink: 0;
 }
 .info-affordance:hover, .info-affordance:focus-visible { border-color: var(--muted); color: var(--ink); }
 .info-popover {

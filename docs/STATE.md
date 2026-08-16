@@ -6,6 +6,12 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-16 — Fix: מצב row's info icon still read too large at 13px
+Reported live again, right after the previous entry's 18px→13px shrink
+shipped: still too big. Shrunk further to a 10px circle / 7px mark — sized
+to roughly the label text's own x-height rather than picked by feel a
+second time. Touch target recalculated again: 10 + 2×17 = 44px.
+
 ### 2026-08-16 — Fix: מצב row's info icon read too large next to the label
 The previous entry's fix (below) turned out to be the wrong diagnosis,
 corrected live within the hour: further feedback showed the clustered
