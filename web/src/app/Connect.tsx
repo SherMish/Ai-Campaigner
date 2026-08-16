@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { strings, META_BUSINESS_PORTFOLIO_ID } from "../strings";
-import { getOverview, recheckConnection, type CustomerOverview } from "../api";
+import { strings } from "../strings";
+import { getOverview, getConfig, recheckConnection, type CustomerOverview } from "../api";
 import { Brand, StatusPill, WA } from "./components";
 
 const a = strings.he.app;
@@ -13,6 +13,7 @@ export function Connect() {
   const [ov, setOv] = useState<CustomerOverview | null>(null);
   const [check, setCheck] = useState<Check>("idle");
   const [copied, setCopied] = useState(false);
+  const [portfolioId, setPortfolioId] = useState<string | null>(null);
   const nav = useNavigate();
 
   useEffect(() => {
@@ -21,6 +22,7 @@ export function Connect() {
       // reflect the already-known connection state on load
       if (o.connection) setCheck(o.connection.accessHealth === "ok" ? "connected" : "missing");
     }).catch(() => {});
+    getConfig().then((c) => setPortfolioId(c.businessPortfolioId)).catch(() => {});
   }, []);
 
   const name = ov?.account.name?.trim();
@@ -62,8 +64,16 @@ export function Connect() {
                 {i === 2 && (
                   <div className="copybox" style={{ marginTop: 10 }}>
                     <span className="mono muted" style={{ fontSize: "0.7rem" }}>{c.businessId}</span>
-                    <b>{META_BUSINESS_PORTFOLIO_ID}</b>
-                    <button onClick={() => { navigator.clipboard?.writeText(META_BUSINESS_PORTFOLIO_ID); setCopied(true); }}>
+                    {/* Never render a blank/placeholder value while this
+                        loads — the whole point of AIC-101 moving this off a
+                        hardcoded constant was to stop a fake-looking ID from
+                        ever being copyable. A brief loading dash beats a
+                        confident but wrong number. */}
+                    <b>{portfolioId ?? "…"}</b>
+                    <button
+                      disabled={!portfolioId}
+                      onClick={() => { if (portfolioId) { navigator.clipboard?.writeText(portfolioId); setCopied(true); } }}
+                    >
                       {copied ? c.copied : c.copy}
                     </button>
                   </div>

@@ -7,6 +7,7 @@ import { AdminCustomers } from "./admin/AdminCustomers";
 import { AdminMeta } from "./admin/AdminMeta";
 import { AdminRecommendations } from "./admin/AdminRecommendations";
 import { AdminOperators } from "./admin/AdminOperators";
+import { AdminOnboarding } from "./admin/AdminOnboarding";
 import { AdminGate } from "./admin/AdminGate";
 import { AppShell } from "./app/AppShell";
 import { Signup, Login, Forgot, Reset } from "./app/Auth";
@@ -60,6 +61,7 @@ export function App() {
         <Route element={<AdminGate><AdminShell /></AdminGate>}>
           <Route path="/admin" element={<AdminOverview />} />
           <Route path="/admin/customers" element={<AdminCustomers />} />
+          <Route path="/admin/onboarding/:id" element={<AdminOnboarding />} />
           <Route path="/admin/meta" element={<AdminMeta />} />
           <Route path="/admin/recommendations" element={<AdminRecommendations />} />
           <Route path="/admin/operators" element={<AdminOperators />} />

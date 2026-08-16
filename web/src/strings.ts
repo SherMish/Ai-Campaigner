@@ -1,15 +1,14 @@
-// Our Meta Business Portfolio ID — what a customer actually enters in Meta
-// Business Settings to grant us partner access (docs/META_SETUP.md's
-// verified identifiers table). Meta partners are added by this numeric ID,
-// never by searching a name — the portfolio and our app share the display
-// name "AI Campaigner", so a name search is unreliable (documented as the
-// "naming trap" in META_SETUP.md). A real, stable identifier, not
-// translatable copy, so it lives here as its own constant rather than
-// inside `strings` — and NOT `strings.he.app.mock`, which Connect.tsx used
-// to (accidentally) pull this value from: a real bug, found live, where the
-// onboarding screen showed a fake placeholder ID ("418 552 907 431") with a
-// working copy button, indistinguishable from the real one.
-export const META_BUSINESS_PORTFOLIO_ID = "2491237118040524";
+// Our Meta Business Portfolio ID used to live here as a hardcoded literal.
+// AIC-101 moved it to server config (server/src/config/meta-identity.ts,
+// served unauthenticated at GET /api/config) — the exact "read from config,
+// never hardcoded" it flagged: a value duplicated into the frontend bundle
+// is a value the AIC-99 rename could silently strand. Consumers call
+// `getConfig()` (web/src/api.ts) instead of importing a constant.
+//
+// (Earlier history: before this, Connect.tsx read the ID from
+// `strings.he.app.mock` — a real bug, found live, where the onboarding
+// screen showed a fake placeholder ID with a working copy button,
+// indistinguishable from the real one.)
 
 // All user-facing copy lives here — never hard-code Hebrew inside a component.
 // (The static landing page is the one exception; its copy lives in landing/.)
@@ -33,6 +32,9 @@ export const strings = {
       noData: "—",
       noCampaigns: "אין עדיין קמפיין מנוהל עם נתונים.",
       loading: "טוען…",
+      // AIC-101: entry point from a customer's detail card into the guided
+      // connection wizard.
+      onboardingWizard: "אשף חיבור Meta",
     },
 
     // Ops console (P0.4)
@@ -337,6 +339,102 @@ export const strings = {
       entityTypeLabels: {
         customer: "לקוח", recommendation: "המלצה", operator: "מפעיל", campaign: "קמפיין",
       } as Record<string, string>,
+    },
+
+    // AIC-101 — the guided, live-verified onboarding call. Replaces an
+    // operator reading docs/META_SETUP.md aloud off a second screen. Every
+    // step's script is readable aloud (short sentences, one instruction per
+    // line — this is spoken on a live call, not skimmed), and every check
+    // hits the real Graph API rather than trusting what the Business
+    // Settings UI shows (META_SETUP.md: "the UI can look completely correct
+    // while the backend still has zero access").
+    //
+    // Step 1's actual click-by-click script is NOT duplicated here — it
+    // reads directly from `app.connect.steps`/`fixSteps`, the same strings
+    // the customer's own Connect screen shows. One definition: the operator
+    // and the customer are describing the identical clicks, and Meta has
+    // already changed this flow under us once (2026-08-15) — two copies
+    // would mean the next change silently rotting whichever one nobody
+    // notices.
+    onboardingWizard: {
+      title: "אשף חיבור Meta",
+      subtitle: "תסריט לשיחה עם הלקוח, עם אימות חי בכל שלב — לא רק הוראות.",
+      backToCustomer: "חזרה לכרטיס הלקוח",
+      resumedNote: "ממשיכים מהשלב האחרון שנשמר.",
+      stepOf: "שלב {n} מתוך 5",
+
+      step1Title: "שלב 1 — הלקוח משתף גישה",
+      step1Sub: "בשיחה, עם הלקוח מול המסך שלו.",
+      step2Title: "שלב 2 — אנחנו מקצים למשתמש המערכת",
+      step2Sub: "אצלנו, בהגדרות העסק.",
+      step2Script: [
+        "הנכסים המשותפים מופיעים עכשיו תחת שותפים (Partners) בפורטפוליו שלנו.",
+        "משתמשים (Users) ← משתמשי מערכת (System Users) ← \"AdPilot backend\" ← הקצאת נכסים (Assign Assets).",
+        "בוחרים את חשבון הפרסום ואת העמוד, נותנים הרשאות, שומרים.",
+      ],
+      step2Warning: "זה שלב נפרד משלב 1. עמוד ששותף אבל לא הוקצה למשתמש המערכת בלתי נראה מבחינתנו.",
+      step3Title: "שלב 3 — בדיקת הרשאות הטוקן",
+      step3Sub: "אם הבדיקות למעלה נכשלות למרות ששלבים 1–2 בוצעו, זה כמעט תמיד כאן.",
+      step4Title: "שלב 4 — הקמת הרשומות",
+      step4Sub: "יוצרים את החיבור, חשבון הפרסום והקמפיין במערכת. בלי SQL.",
+      step5Title: "שלב 5 — אימות סופי",
+      step5Sub: "אותה בדיקה שהמנוע עצמו מריץ.",
+
+      checkAdAccount: "בדיקת חשבון פרסום",
+      checkPage: "בדיקת עמוד",
+      checking: "בודקים…",
+      checkTokenCta: "בדיקת טוקן",
+      lastChecked: "נבדק לאחרונה:",
+      neverChecked: "עדיין לא נבדק",
+
+      // Every diagnosis needs distinct copy — same house rule as AIC-98's
+      // state-copy.ts, applied here because this is the exact shape it
+      // exists for: three failures that look identical from the Business
+      // Settings UI, and collapsing them destroys the only actionable part.
+      diagnosisOk: { title: "תקין", body: "הגישה מאומתת ונקראת בהצלחה עכשיו." },
+      diagnosisNotShared: {
+        title: "הלקוח עדיין לא שיתף",
+        body: "הנכס לא מופיע תחת הפורטפוליו שלנו. חוזרים על שלב 1 עם הלקוח.",
+      },
+      diagnosisNotAssigned: {
+        title: "שותף, אבל לא הוקצה אצלנו",
+        body: "הלקוח שיתף נכון, אבל משתמש המערכת שלנו עדיין לא רואה את זה. מריצים את שלב 2.",
+      },
+      diagnosisTokenMissingScopes: {
+        title: "לטוקן חסרות הרשאות — הקצאה לא תעזור",
+        body: "שלבים 1–2 תקינים, אבל הטוקן נוצר לפני שהורשה הזה נוסף. הרשאות טוקן קפואות בזמן היצירה — הפתרון היחיד הוא יצירת טוקן חדש (שלב 3) וסיבוב הסוד ב-Railway.",
+      },
+      diagnosisUnreadableUnknown: {
+        title: "כל שלושת השלבים תקינים, ועדיין לא נקרא",
+        body: "לא נמצא הסבר באחד משלושת השלבים. לא ממציאים סיבה — פרטים טכניים למטה, ואפשר לנסות שוב בעוד רגע.",
+      },
+      diagnosisUnknown: { title: "עדיין לא נבדק", body: "לוחצים על בדיקה כדי לדעת." },
+      technicalDetail: "פרטים טכניים",
+
+      // Step 4 — provisioning (AIC-68).
+      provisionTitle: "פרטי החיבור",
+      fieldAdAccountId: "מזהה חשבון פרסום (act_…)",
+      fieldPageId: "מזהה עמוד (לא חובה)",
+      fieldInstagramId: "מזהה אינסטגרם (לא חובה)",
+      fieldCampaignId: "מזהה קמפיין ב-Meta",
+      fieldCampaignName: "שם הקמפיין",
+      fieldBudget: "תקציב יומי (₪)",
+      fieldLeadEventTypes: "סוג פנייה (מתקדם — ברירת מחדל: וואטסאפ)",
+      fieldPixelId: "מזהה Pixel (רק לקמפיין Pixel)",
+      provisionSubmit: "יצירת הרשומות",
+      provisionSuccess: "נוצר בהצלחה.",
+      // AIC-69: the hard constraint the wizard enforces, not just documents.
+      pageGateNote: "אי אפשר לשמור מזהה עמוד שלא נקרא בהצלחה — מזהה כזה יהפוך את כל החיבור ל־revoked ויעצור את מנוע ההמלצות בשקט.",
+      pageGateBlocked: "לא ניתן לשמור — בדיקת העמוד לא עברה. בודקים שוב או ממשיכים בלי עמוד.",
+
+      finalizeCta: "אימות והשלמה",
+      finalizing: "מאמתים…",
+      finalizeOk: "החיבור אומת ותקין. האשף הושלם.",
+      finalizeNotOk: "עדיין לא תקין — חוזרים לשלב שנכשל.",
+      finalizeNeedsProvision: "יוצרים קודם את הרשומות בשלב 4.",
+
+      errorTokenNotConfigured: "META_SYSTEM_USER_TOKEN לא מוגדר בשרת — זו בעיה אצלנו, לא אצל הלקוח.",
+      errorGeneric: "הפעולה נכשלה. אפשר לנסות שוב.",
     },
 
     // Fleet-wide overview (AIC-43) — the operator's landing snapshot.

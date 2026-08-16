@@ -14,4 +14,13 @@ describe("server smoke", () => {
     const res = await request(createApp()).get("/api/does-not-exist");
     expect(res.status).toBe(404);
   });
+
+  // AIC-101/AIC-99: unauthenticated on purpose — Connect.tsx/AddContent.tsx
+  // need it before/without a customer session, and it's a public identifier
+  // we already print in front of customers, not a secret.
+  it("GET /api/config returns the Business Portfolio ID with no auth", async () => {
+    const res = await request(createApp()).get("/api/config");
+    expect(res.status).toBe(200);
+    expect(res.body.businessPortfolioId).toMatch(/^\d+$/);
+  });
 });

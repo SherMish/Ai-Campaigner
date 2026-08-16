@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { normalizeBusinessCategory, resolveAudienceDefault, type BusinessCategory } from "@aic/shared";
-import { strings, META_BUSINESS_PORTFOLIO_ID } from "../strings";
+import { strings } from "../strings";
 import {
   getAdditionContext, getExistingAdSets, getPendingAdditions, approveAddition,
-  addAd, addAdSet, ApiError,
+  addAd, addAdSet, ApiError, getConfig,
   uploadAdditionFile, getAdditionPosts, createAdditionCreative,
   type ExistingAdSet, type PendingAddition, type AdditionUnavailableReason,
 } from "../api";
@@ -23,6 +23,7 @@ export function AddContent() {
   const [phase, setPhase] = useState<"loading" | "not_ready" | "ready" | "error">("loading");
   const [notReadyReason, setNotReadyReason] = useState<AdditionUnavailableReason>("no_campaign");
   const [idCopied, setIdCopied] = useState(false);
+  const [portfolioId, setPortfolioId] = useState<string | null>(null);
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [mode, setMode] = useState<"ad" | "ad_set">("ad");
 
@@ -67,6 +68,7 @@ export function AddContent() {
         setPhase("error");
       });
     refreshPending();
+    getConfig().then((c) => setPortfolioId(c.businessPortfolioId)).catch(() => {});
   }, []);
 
   function refreshPending() {
@@ -183,8 +185,11 @@ export function AddContent() {
                   {i === 2 && (
                     <div className="copybox" style={{ marginTop: 10 }}>
                       <span className="mono muted" style={{ fontSize: "0.7rem" }}>{c.businessId}</span>
-                      <b>{META_BUSINESS_PORTFOLIO_ID}</b>
-                      <button onClick={() => { navigator.clipboard?.writeText(META_BUSINESS_PORTFOLIO_ID); setIdCopied(true); }}>
+                      <b>{portfolioId ?? "…"}</b>
+                      <button
+                        disabled={!portfolioId}
+                        onClick={() => { if (portfolioId) { navigator.clipboard?.writeText(portfolioId); setIdCopied(true); } }}
+                      >
                         {idCopied ? c.copied : c.copy}
                       </button>
                     </div>

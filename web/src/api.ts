@@ -659,6 +659,13 @@ export type ApproveAdditionOutcome = "approved" | "already_approved" | "failed";
 export const approveAddition = (id: string) =>
   api<{ outcome: ApproveAdditionOutcome; reason?: string }>(`/app/additions/${id}/approve`, { method: "POST" });
 
+// AIC-101/AIC-99: our Business Portfolio ID, read from server config —
+// unauthenticated (it's a public identifier we already print in front of
+// customers, not a secret) and never a literal baked into this bundle. See
+// server/src/config/meta-identity.ts for why: a customer adds us as a
+// partner BY ID, and that ID has to survive the "Ads Agent" rename unchanged.
+export const getConfig = () => api<{ businessPortfolioId: string }>("/config");
+
 export const getOverview = () => api<CustomerOverview>("/app/overview");
 // AIC-67: `relevant` answers about the PENDING delta only — the server reads
 // how many leads are pending from the caller's own watermark, never a

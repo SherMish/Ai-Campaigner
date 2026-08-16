@@ -26,6 +26,16 @@ import { buildFleetOverview } from "../services/fleet-overview.js";
 import { buildCampaignExplorer } from "../services/campaign-explorer.js";
 import { listRecommendationsForAdmin, flagRecommendation, unflagRecommendation, getOutcomeAggregate } from "../services/recommendation-oversight.js";
 import { RECOMMENDATION_STATE, RECOMMENDATION_TYPE, type RecommendationState, type RecommendationType } from "@aic/shared";
+import { AccessProbe } from "../meta/access-probe.js";
+import { REQUIRED_SCOPES, type CheckedAsset } from "../meta/access-layers.js";
+import { OUR_BUSINESS_PORTFOLIO_ID } from "../config/meta-identity.js";
+import {
+  getOrCreateOnboarding, setStep, recordCheck, markComplete,
+  provisionConnection, PageNotReadableError, CHECK_FOR_ASSET,
+} from "../services/customer-onboarding.js";
+import { ConnectionService } from "../meta/connection-service.js";
+import { PgConnectionStore } from "../meta/connection-store.js";
+import { GraphMetaClient } from "../meta/client.js";
 
 // Internal admin surfaces. Reads only from our DB (insight_snapshots) — never a
 // live Meta call at render time (AIC-7).
@@ -463,4 +473,215 @@ adminRouter.delete("/operators/:id", requireFullAdmin, async (req, res) => {
 adminRouter.get("/audit", async (req, res) => {
   const { actorUserId, entityType, entityId } = req.query as Record<string, string | undefined>;
   res.json({ entries: await listAuditLog(pool, { actorUserId, entityType, entityId }) });
+});
+
+// ── Onboarding wizard (AIC-101 + AIC-68) ────────────────────────────────────
+// The guided, live-verified connection call. Every step VERIFIES against the
+// real Graph API rather than just rendering instructions — a wizard that only
+// showed the runbook with nicer formatting would reproduce the exact failure
+// it exists to prevent (docs/META_SETUP.md: "the Business Settings UI can look
+// completely correct while the backend still has zero access").
+//
+// Internal only: mounted on adminRouter, so it inherits requireAdmin. The
+// customer never sees this — they're on the phone looking at their own Meta
+// settings while the operator reads the script.
+
+function probeOrNull(): AccessProbe | null {
+  const token = process.env.META_SYSTEM_USER_TOKEN;
+  if (!token) return null;
+  return new AccessProbe({ token, businessPortfolioId: OUR_BUSINESS_PORTFOLIO_ID });
+}
+
+// Current wizard state — resumable: calls get interrupted (the customer has to
+// find their password, or fetch whoever actually has admin), and losing the
+// operator's place would make this worse than the markdown file it replaces.
+adminRouter.get("/customers/:id/onboarding", async (req, res) => {
+  const state = await getOrCreateOnboarding(pool, req.params.id);
+  res.json({ state, businessPortfolioId: OUR_BUSINESS_PORTFOLIO_ID });
+});
+
+adminRouter.post("/customers/:id/onboarding/step", async (req, res) => {
+  const step = Number(req.body?.step);
+  if (!Number.isInteger(step) || step < 1) {
+    res.status(400).json({ error: "step must be a positive integer" });
+    return;
+  }
+  res.json({ state: await setStep(pool, req.params.id, step) });
+});
+
+// The live check. Runs all three layers against Meta for one asset and
+// reports WHICH layer failed plus its specific fix — the difference between
+// "connection failed" and "the customer hasn't shared the Page yet", on the
+// call, while they can still act on it.
+adminRouter.post("/customers/:id/onboarding/check", async (req, res) => {
+  const asset = String(req.body?.asset ?? "") as CheckedAsset;
+  const assetId = String(req.body?.assetId ?? "").trim();
+  if (asset !== "page" && asset !== "ad_account") {
+    res.status(400).json({ error: "asset must be 'page' or 'ad_account'" });
+    return;
+  }
+  if (!assetId) {
+    res.status(400).json({ error: "assetId is required" });
+    return;
+  }
+
+  const probe = probeOrNull();
+  if (!probe) {
+    // No token configured is an OPERATOR-side problem, not a customer one —
+    // never let it render as "the customer didn't share the asset".
+    res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
+    return;
+  }
+
+  try {
+    await getOrCreateOnboarding(pool, req.params.id);
+    const result = await probe.probeAsset(asset, assetId);
+    const state = await recordCheck(
+      pool, req.params.id, CHECK_FOR_ASSET[asset], result.verdict, result.detail,
+    );
+    res.json({ result, state });
+  } catch (e) {
+    console.error("[admin] onboarding check failed", e);
+    res.status(502).json({ error: "the access check could not be completed" });
+  }
+});
+
+// Layer 3 on its own: what scopes does the token actually carry? Separate
+// endpoint because this is the one failure that asset assignment can NEVER
+// fix — it needs a token regeneration + Railway secret rotation, and that
+// isn't inferable from the error message Meta returns.
+adminRouter.post("/customers/:id/onboarding/token-check", async (req, res) => {
+  const probe = probeOrNull();
+  if (!probe) {
+    res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
+    return;
+  }
+  const scopes = await probe.tokenScopes();
+  const missing = scopes === null
+    ? null
+    : (["ad_account", "page"] as CheckedAsset[]).flatMap((a) =>
+        REQUIRED_SCOPES[a].filter((s) => !scopes.includes(s)));
+  const ok = scopes !== null && (missing?.length ?? 1) === 0;
+
+  await getOrCreateOnboarding(pool, req.params.id);
+  const state = await recordCheck(
+    pool, req.params.id, "token",
+    ok
+      ? { ok: true, layer: null, diagnosis: "ok" }
+      : { ok: false, layer: 3, diagnosis: scopes === null ? "unknown" : "token_missing_scopes" },
+    scopes === null ? "could not read the token's scopes" : `missing: ${missing!.join(", ") || "none"}`,
+  );
+  res.json({ scopes, missing, ok, state });
+});
+
+// Step 4 — provision the records (AIC-68). This is what replaces hand-written
+// SQL against production, which is how a blank page_id shipped unnoticed.
+//
+// The page_id is re-verified HERE, immediately before the write, rather than
+// trusting an earlier passing check or anything the client sends: the whole
+// failure mode is that access looks fine and isn't.
+adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
+  const b = req.body ?? {};
+  const pageId = b.pageId ? String(b.pageId).trim() : null;
+
+  if (!b.metaAdAccountId || !b.metaCampaignId || !b.campaignName) {
+    res.status(400).json({ error: "metaAdAccountId, metaCampaignId and campaignName are required" });
+    return;
+  }
+  const budget = Number(b.agreedBudgetAgorot);
+  if (!Number.isInteger(budget) || budget <= 0) {
+    res.status(400).json({ error: "agreedBudgetAgorot must be a positive integer (agorot)" });
+    return;
+  }
+
+  let pageVerdict = null as Awaited<ReturnType<AccessProbe["probeAsset"]>>["verdict"] | null;
+  if (pageId) {
+    const probe = probeOrNull();
+    if (!probe) {
+      res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
+      return;
+    }
+    pageVerdict = (await probe.probeAsset("page", pageId)).verdict;
+  }
+
+  try {
+    const result = await provisionConnection(pool, {
+      customerId: req.params.id,
+      systemUserId: String(b.systemUserId ?? process.env.META_SYSTEM_USER_ID ?? ""),
+      businessPortfolioId: b.businessPortfolioId ? String(b.businessPortfolioId) : null,
+      metaAdAccountId: String(b.metaAdAccountId),
+      adAccountName: b.adAccountName ? String(b.adAccountName) : null,
+      currency: b.currency ? String(b.currency) : null,
+      pageId,
+      instagramId: b.instagramId ? String(b.instagramId) : null,
+      metaCampaignId: String(b.metaCampaignId),
+      campaignName: String(b.campaignName),
+      objective: b.objective ? String(b.objective) : undefined,
+      agreedBudgetAgorot: budget,
+      budgetPeriod: b.budgetPeriod === "monthly" ? "monthly" : "daily",
+      leadEventTypes: Array.isArray(b.leadEventTypes) && b.leadEventTypes.length > 0
+        ? b.leadEventTypes.map(String) : null,
+      trackingPixelId: b.trackingPixelId ? String(b.trackingPixelId) : null,
+    }, pageVerdict);
+
+    const actor = await actorFor(req as AuthedRequest);
+    await logAdminAction(pool, {
+      actorUserId: actor.userId,
+      actorLabel: actor.label,
+      action: "customer.onboarding.provision",
+      entityType: "customer",
+      entityId: req.params.id,
+      entityLabel: `${b.metaAdAccountId} / ${b.metaCampaignId}`,
+      // Records whether a page_id was saved AND the verdict that allowed it —
+      // so "was the Page genuinely verified when this was provisioned" is
+      // answerable later without re-deriving it.
+      detail: JSON.stringify({ ...result, pageVerdict }),
+    });
+
+    res.json({ result });
+  } catch (e) {
+    if (e instanceof PageNotReadableError) {
+      // 409, not 500: this is a refusal, and the operator can act on it.
+      res.status(409).json({ error: e.message, diagnosis: e.diagnosis, pageVerdict });
+      return;
+    }
+    console.error("[admin] provisioning failed", e);
+    res.status(500).json({ error: (e as Error).message });
+  }
+});
+
+// Step 5 — the real ConnectionService.verify(), the same check the engine
+// relies on. Health ≠ ok sends the operator back to the failing layer rather
+// than letting a half-connected customer look finished.
+adminRouter.post("/customers/:id/onboarding/finalize", async (req, res) => {
+  const { rows } = await pool.query<{ id: string }>(
+    `SELECT id FROM meta_connections WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 1`,
+    [req.params.id],
+  );
+  if (rows.length === 0) {
+    res.status(409).json({ error: "no connection to verify — provision first" });
+    return;
+  }
+  const token = process.env.META_SYSTEM_USER_TOKEN;
+  if (!token) {
+    res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
+    return;
+  }
+
+  const service = new ConnectionService(new PgConnectionStore(pool), new GraphMetaClient(token));
+  const health = await service.verify(rows[0].id);
+
+  await getOrCreateOnboarding(pool, req.params.id);
+  const state = await recordCheck(
+    pool, req.params.id, "connection",
+    health === "ok"
+      ? { ok: true, layer: null, diagnosis: "ok" }
+      : { ok: false, layer: null, diagnosis: `health_${health}` },
+    null,
+  );
+  // Only a genuinely verified connection completes the wizard — "onboarded"
+  // is never inferred from rows someone created.
+  if (health === "ok") await markComplete(pool, req.params.id);
+
+  res.json({ health, state: health === "ok" ? await getOrCreateOnboarding(pool, req.params.id) : state });
 });

@@ -9,6 +9,7 @@ import { authRouter } from "./routes/auth.js";
 import { builderRouter } from "./routes/builder.js";
 import { additionsRouter } from "./routes/additions.js";
 import { controlsRouter } from "./routes/controls.js";
+import { OUR_BUSINESS_PORTFOLIO_ID } from "./config/meta-identity.js";
 
 // Locate the built web (web/dist with the landing at index.html). Robust to the
 // working directory: prod runs `npm --workspace server run start` (cwd = server/),
@@ -52,6 +53,18 @@ export function createApp() {
   // API routers mount under /api so single-origin deploys line up with the web
   // client's /api prefix (web/src/api.ts).
   const api = express.Router();
+
+  // AIC-101/AIC-99: our Business Portfolio ID, from config — not a literal
+  // baked into the frontend bundle. It's the one value on the Connect screen
+  // that has to survive the "Ads Agent" rename unchanged (customers add us as
+  // a partner BY ID, never by name — see docs/META_SETUP.md's naming trap).
+  // Unauthenticated: this is a public identifier we already print in front of
+  // customers, not a secret, and Connect.tsx/AddContent.tsx need it before
+  // the customer signs in on some flows.
+  api.get("/config", (_req, res) => {
+    res.json({ businessPortfolioId: OUR_BUSINESS_PORTFOLIO_ID });
+  });
+
   api.use("/auth", authRouter);
   api.use("/app", appRouter);
   api.use("/app/builder", builderRouter);

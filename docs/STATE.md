@@ -6,6 +6,20 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-16 — AIC-101 + AIC-68: admin Meta connection onboarding wizard
+Replaced the "no console UI, hand-written SQL against prod" gap
+[META_SETUP.md](features/ops-console.md#meta-connection-onboarding-wizard-aic-101--aic-68)
+used to flag with `/admin/onboarding/:id` — a live, five-step, on-call wizard
+covering the partner-grant script (reusing the customer Connect screen's copy
+verbatim, not a third duplicate), a live three-layer Graph API access check
+per asset (`server/src/meta/access-layers.ts` + `access-probe.ts`), token-scope
+verification, provisioning (`server/src/services/customer-onboarding.ts`), and
+a final connection-health verify. The AIC-69 page_id ordering rule is now
+enforced in code: provisioning re-probes the Page live immediately before the
+write and refuses to save an unreadable `page_id`, regardless of what an
+earlier check reported. Internal-admin only, never customer-facing. 57 new
+tests; live-verified against real Meta and the real DB.
+
 ### 2026-08-16 — Tweak: מצב icon 30% larger (10px → 13px)
 Requested live once the size-vs-touch-target split (below) actually made
 the dot controllable. Scaled both the dot and its mark proportionally

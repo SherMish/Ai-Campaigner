@@ -456,6 +456,9 @@ export function AdminCustomers() {
 
           {/* CRUD actions */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "14px 0" }}>
+            {/* AIC-101: the guided, live-verified Meta connection call —
+                replaces reading META_SETUP.md aloud off a second screen. */}
+            <Link className="btn btn-outline btn-sm" to={`/admin/onboarding/${selected.id}`}>{a.onboardingWizard}</Link>
             {!editing && <button className="btn btn-outline btn-sm" onClick={startEdit} disabled={!detail}>{cc.edit}</button>}
             <button className="btn btn-outline btn-sm" onClick={toggleActive}>{selected.isActive ? cc.deactivate : cc.reactivate}</button>
             <button className="btn btn-outline btn-sm" style={{ color: "#c0362c", borderColor: "#c0362c" }} onClick={() => { setShowDelete(true); setDeleteText(""); setDeleteError(null); }}>

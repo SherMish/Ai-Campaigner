@@ -197,14 +197,17 @@ the token predates Page support → **regenerate it** (§2) with `pages_show_lis
 `pages_read_engagement` and update `META_SYSTEM_USER_TOKEN` in Railway.
 
 ### 4. Add them in the AI Campaigner console **[operator]**
-Create the customer (business info, offer, budget, contact) and link their ad
-account + campaign.
-
-> **Known gap:** there is currently **no console UI** for provisioning the
-> `meta_connections` / `ad_accounts` / `managed_campaigns` rows — today this is
-> hand-written SQL against prod, which is how a blank `page_id` shipped unnoticed.
-> Tracked in [AIC-68](https://linear.app/pisga-app/issue/AIC-68), which also covers
-> validating Page reachability at save time instead of discovering it later.
+Create the customer (business info, offer, budget, contact), then open
+**Admin → Customers → the customer → "אשף חיבור Meta"** (`/admin/onboarding/:id`,
+AIC-101) to link their ad account + Page + campaign. The wizard walks steps 1–5
+of this runbook on one screen — the same partner-grant script as step 1 above,
+a live per-asset access check (steps 2–3, using the exact three-layer classifier
+this doc describes), the provisioning form (step 4), and a final connection
+verify (step 5) — so an operator can run the whole call without leaving the
+page or falling back to hand-written SQL. It refuses to save a `page_id` the
+backend can't read (re-verifying live at save time, never trusting an earlier
+check), which is the AIC-68/AIC-69 ordering rule below enforced in code, not
+just in this doc. See [ops-console.md](features/ops-console.md#meta-connection-onboarding-wizard-aic-101--aic-68).
 
 ### 5. Verify
 Ingestion pulls their campaign within a tick — spend / leads / CPL appear in the

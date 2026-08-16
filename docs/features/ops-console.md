@@ -333,6 +333,95 @@ one ad set that's excluded from evidence by AIC-39's delivery-health check) —
 verified with realistic seeded-then-cleaned-up data on prod instead of real
 engine output. Re-verify with real recs once the engine actually proposes one.
 
+## Meta connection onboarding wizard (AIC-101 + AIC-68)
+
+Replaces the "hand-written SQL against prod" gap [META_SETUP.md](../META_SETUP.md)
+used to flag — the exact path that let a blank `page_id` ship unnoticed for
+months. `/admin/onboarding/:id` (`web/src/admin/AdminOnboarding.tsx`), linked
+from a customer's detail card ("אשף חיבור Meta"). **Internal only** — admin-gated,
+never customer-facing; the operator runs it live on the onboarding call while
+the customer is in their own Meta Business Settings.
+
+**All five steps render on one screen, not a strict wizard.** A small step
+indicator persists which step the call is on (`POST .../onboarding/step`,
+`customer_onboarding.current_step`) so closing the tab mid-call doesn't lose
+the operator's place, but nothing is hidden behind "next" — an operator on a
+live call doesn't want to click through screens mid-conversation.
+
+**Step 1 (customer grants partner access) reuses `strings.he.app.connect.steps`
+verbatim** — the exact same script and Business-Portfolio-ID copybox the
+customer-facing Connect screen renders — rather than a third hand-copy of the
+instructions (the wizard/runbook/Connect screen would otherwise drift, which
+is exactly the class of bug the AIC-98 distinct-copy discipline exists to
+prevent). The portfolio ID itself comes from the unauthenticated
+`GET /api/config` (`server/src/config/meta-identity.ts`), so it's never
+hardcoded in the frontend a second time.
+
+**Every check step is a live Graph API call, never just instructions.**
+`server/src/meta/access-layers.ts` (`classifyAccess`) is the pure three-layer
+classifier this doc's [access model](../META_SETUP.md#the-three-layers-of-access-all-three-must-be-satisfied)
+describes as code: `directReadOk` (ground truth) short-circuits to `ok`;
+otherwise layer 1 (`sharedToPortfolio`) is reported before a simultaneously-
+failing layer 3, because sending an operator to regenerate a production token
+while the customer hasn't even shared the asset yet wastes an expensive,
+disruptive action for nothing. Six diagnoses (`ok` / `not_shared` /
+`not_assigned` / `token_missing_scopes` / `unreadable_unknown_cause` /
+`unknown`), each with distinct Hebrew title+body in
+`web/src/admin/onboarding-copy.ts` — three of them (`not_shared`/
+`not_assigned`/`token_missing_scopes`) look identical from the Business
+Settings UI, which is the entire premise of the ticket, so a distinctness
+test (`onboarding-copy.test.ts`) guards against ever collapsing them back
+into one message. `server/src/meta/access-probe.ts` (`AccessProbe`) does the
+actual Graph reads (`client_pages`/`client_ad_accounts` for layer 1,
+`me/accounts` for layer 2 — Pages only, ad accounts have no equivalent edge —
+`debug_token` for layer 3, plus a direct object read as ground truth),
+normalizing ad-account ids with/without the `act_` prefix since Meta returns
+them inconsistently across edges. A network failure is treated as unknown,
+never rendered as a confident denial. `POST .../onboarding/check` (asset +
+Page, step 1) and `POST .../onboarding/token-check` (step 3) persist results
+into `customer_onboarding.checks` (JSONB, merged per-key so checking one
+asset never clobbers another's stored result).
+
+**Step 4 provisioning (AIC-68) is where AIC-69's ordering rule is enforced in
+code, not just documented.** `server/src/services/customer-onboarding.ts`
+`provisionConnection` writes the `meta_connections` / `ad_accounts` /
+`managed_campaigns` trio in one transaction, and **refuses to write a
+`page_id` unless a passed `AccessVerdict` for that exact Page is `ok`** —
+`POST .../onboarding/provision` never trusts a verdict the client sends up
+from an earlier check; it re-probes the Page live, immediately before the
+write, every time. A `page_id` the backend can't read flips the whole
+connection's health to `revoked` (worst-health-wins across all granted
+assets), which drops the campaign out of `listEligibleForGeneration` and
+silently stops the recommendation engine — strictly worse than not setting
+`page_id` at all, so the refusal is a hard 409 (with the diagnosis on the
+body, rendered as a known reason in the UI, not a generic failure) rather
+than a soft warning. `lead_event_types` defaults to the WhatsApp pair (AIC-87)
+when left blank, so a plain WhatsApp-lead campaign needs no extra input.
+
+**Step 5 finalize runs the real `ConnectionService.verify()`** — the exact
+check the recommendation engine's own tick relies on — and only marks
+`customer_onboarding.completed_at` on a genuine `ok`, never on an assumption
+that provisioning succeeding implies the connection is healthy.
+
+Routes (all under `requireAdmin`, `server/src/routes/admin.ts`):
+`GET .../onboarding`, `POST .../onboarding/step`, `POST .../onboarding/check`,
+`POST .../onboarding/token-check`, `POST .../onboarding/provision`,
+`POST .../onboarding/finalize`. Source: `server/src/meta/access-layers.ts`,
+`server/src/meta/access-probe.ts`, `server/src/services/customer-onboarding.ts`.
+Tests: `access-layers.test.ts` (10, every diagnosis + the layer-1-before-
+layer-3 ordering + ground-truth-overrides-edges), `access-probe.test.ts` (8,
+mocked Graph responses for every layer/detail/id-format/network-failure case),
+`customer-onboarding.integration.test.ts` (13, resumability, per-check merge,
+the three page_id-gate refusal cases, atomic no-partial-write on refusal,
+lead-type defaulting, the connected-campaign-has-no-`create_campaign`-row
+regression), `onboarding.integration.test.ts` (15, full HTTP round trip
+including the specific scenario this doc calls out above — a Page that passed
+an earlier check is re-verified, and fails, at provision time). Live-verified
+against real Meta and the real DB (2026-08-16): a known-good real Page and ad
+account both return `ok`; a bogus Page id returns a clean `not_shared`; the
+full onboarding-open → customer-basics → check → token-check round trip
+returns real data end to end for `test@test.com`'s connection.
+
 ## Needs-attention queue (AIC-17)
 
 `OpsQueue` is the single prioritized worklist over `ops_queue_item` across all
