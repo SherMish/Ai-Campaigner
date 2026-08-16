@@ -6,6 +6,33 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-16 — Cleanup: removed 44 integration-test artifact customers
+Deleted 44 `customers` rows (`__it_outbox` ×37, `__it_snap` ×4, `__it_readout`
+×2, `__it_ro_today` ×1) left behind by the DB integration test suite, which
+runs against the same Neon database as production rather than an isolated
+test DB. None had a login attached; 41 even carried `is_test = false`, so
+they'd have silently counted as real customers in growth stats. Deleted via
+the real audited `deleteCustomer` path (confirm-to-type enforced server-side,
+cascades through connections/ad accounts/campaigns, logged to
+`admin_audit_log` with a before-state snapshot per row) — same mechanism the
+admin UI's delete button uses. Only 2 real customers remain (Pisga,
+free_beta test). Newly-added integration tests should clean up their own
+`__it_*` rows same as the existing ones already do — this was pollution from
+runs that didn't, not a gap in the cleanup convention itself.
+
+### 2026-08-16 — Admin: separate Users view, entry point into onboarding
+New `/admin/users` page — deliberately separate from `/admin/customers`,
+not a replacement (explicit product decision): a **user** (`app_users`:
+email/password/name) is the login, distinct from a **customer**
+(`customers`: the business the Meta connection hangs off), and the customers
+page can't show a real signup that has no business linked yet since it
+queries `customers` first. This page queries `app_users` first instead, so
+every login gets a row. Clicking one opens the AIC-101 onboarding wizard —
+auto-creating and linking a bare business record on first click
+(`ensureCustomerForUser`, idempotent) if the user doesn't have one yet.
+Payment details and trial state are explicitly deferred — not built.
+See [ops-console.md](features/ops-console.md#users-view-separate-from-customers-2026-08-16).
+
 ### 2026-08-16 — AIC-101 + AIC-68: admin Meta connection onboarding wizard
 Replaced the "no console UI, hand-written SQL against prod" gap
 [META_SETUP.md](features/ops-console.md#meta-connection-onboarding-wizard-aic-101--aic-68)

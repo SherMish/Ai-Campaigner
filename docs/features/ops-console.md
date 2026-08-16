@@ -40,6 +40,7 @@ shell CSS, AIC-40) + `AdminSidebar.tsx`, wrapping the section routes:
 | --- | --- | --- |
 | `/admin` | `AdminOverview.tsx` — fleet snapshot + global search | live (AIC-43) |
 | `/admin/customers` | `AdminCustomers.tsx` — needs-attention queue + all customers + drill-down (readout + review) | live (carried over from the pre-shell single dashboard) |
+| `/admin/users` | `AdminUsers.tsx` — every signed-up login, separate from the customers/business view (see below) | live (2026-08-16) |
 | `/admin/meta` | `AdminMeta.tsx` — full Meta data explorer (see below) | live (AIC-45) |
 | `/admin/recommendations` | `AdminRecommendations.tsx` — all recs, all customers (see below) | live (AIC-46) |
 | `/admin/operators` | `AdminOperators.tsx` — operator accounts + the full admin action log (see below) | live (AIC-47) |
@@ -114,6 +115,51 @@ shows a `pill warn` badge with the reason next to the raw `accessHealth`
 in both the list row and the detail card, and a fourth filter tab
 ("בעיית חיבור") narrows the list to exactly these customers — an operator
 no longer has to wait for a customer to report it.
+
+## Users view (separate from Customers, 2026-08-16)
+
+A **user** is the login (`app_users`: email, password hash, name) — distinct
+from a **customer** (`customers`: the business the Meta connection hangs off).
+The two are deliberately decoupled (`app_users.customer_id`, nullable), which
+means a real signup with no business linked yet is invisible on the Customers
+page above — that page queries `customers`, so it only shows what already has
+a business record. This page exists to close that gap: it queries `app_users`
+first, so every login gets a row whether or not onboarding has happened yet.
+
+Kept as a **separate page from `/admin/customers`**, not a replacement —
+explicit product decision: the two answer different questions ("who signed
+up" vs "which businesses are we managing"), and businesses will keep existing
+independently of a login (an operator can still hand-create one via "+ לקוח
+חדש" for a phone-onboarded customer with no self-serve account).
+
+`listAppUsers(pool)` (`server/src/services/users-admin.ts`) starts from
+`app_users`, LEFT JOINs each one out to its business/subscription/connection/
+campaign if it has one — the same `connectionReadiness` classification the
+Customers view uses (`connection-readiness.ts`), `null` for a user with no
+business yet rather than a misleading "ready."
+
+**Clicking a row is the entry point into the AIC-101 onboarding wizard.** If
+the user already has a linked business, it navigates straight to
+`/admin/onboarding/:customerId`. If not, `ensureCustomerForUser(pool, actor,
+userId)` first creates a bare `customers` row (business name defaults to the
+user's name, falling back to their email if blank; `contact_email` seeded
+from their login email) and links `app_users.customer_id` to it — logged to
+`admin_audit_log` as `user.provision_customer` — then navigates into the
+wizard on the new id. Idempotent: a user who already has a business (whether
+from a prior click or hand-created separately) gets that same id back, never
+a second row.
+
+**Payment details and trial state are explicitly out of scope for now**
+(2026-08-16 product decision) — `subscriptions` still lives on `customers`,
+not `app_users`. If billing ever moves to be per-login rather than
+per-business, that's a real schema decision (not just a rename), flagged here
+for whoever picks it up.
+
+Routes: `GET /admin/users`, `POST /admin/users/:id/customer`. Tests:
+`users-admin.integration.test.ts` (a bare user shows null business/connection;
+a fully-linked user reflects real connection state; `ensureCustomerForUser`
+creates+links once and is idempotent on repeat; falls back to email when the
+user has no name; full HTTP round trip including the admin-only gate).
 
 ## Customer CRUD + admin audit log (AIC-44)
 

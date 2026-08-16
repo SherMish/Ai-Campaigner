@@ -90,6 +90,7 @@ export const strings = {
       brandSub: "ניהול",
       navOverview: "סקירה כללית",
       navCustomers: "לקוחות",
+      navUsers: "משתמשים",
       navMeta: "נתוני Meta",
       navRecs: "המלצות",
       navOperators: "מפעילים",
@@ -97,6 +98,27 @@ export const strings = {
       logout: "יציאה",
       searchPlaceholder: "חיפוש לקוח או קמפיין…",
       searchNoResults: "לא נמצאו תוצאות.",
+    },
+
+    // Users view — separate from the Customers (business) page (2026-08-16):
+    // every signed-up login, whether or not a business is linked yet. Clicking
+    // a row jumps straight into the AIC-101 onboarding wizard, creating a bare
+    // business record first if the user doesn't have one.
+    adminUsers: {
+      title: "משתמשים",
+      searchPlaceholder: "חיפוש לפי אימייל או שם…",
+      noResults: "לא נמצאו משתמשים.",
+      colEmail: "אימייל",
+      colName: "שם",
+      colJoined: "הצטרפות",
+      colBusiness: "עסק",
+      colSubscription: "מנוי",
+      colConnection: "חיבור",
+      colCampaign: "קמפיין",
+      noBusiness: "טרם קושר לעסק",
+      startOnboarding: "התחלת קליטה ←",
+      provisioning: "יוצר רשומת עסק…",
+      provisionError: "יצירת רשומת העסק נכשלה.",
     },
 
     // Customer CRUD (AIC-44) — create/edit/deactivate/delete, on the customers page.

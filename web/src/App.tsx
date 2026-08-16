@@ -4,6 +4,7 @@ import { getAuthToken } from "./api";
 import { AdminShell } from "./admin/AdminShell";
 import { AdminOverview } from "./admin/AdminOverview";
 import { AdminCustomers } from "./admin/AdminCustomers";
+import { AdminUsers } from "./admin/AdminUsers";
 import { AdminMeta } from "./admin/AdminMeta";
 import { AdminRecommendations } from "./admin/AdminRecommendations";
 import { AdminOperators } from "./admin/AdminOperators";
@@ -61,6 +62,7 @@ export function App() {
         <Route element={<AdminGate><AdminShell /></AdminGate>}>
           <Route path="/admin" element={<AdminOverview />} />
           <Route path="/admin/customers" element={<AdminCustomers />} />
+          <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/onboarding/:id" element={<AdminOnboarding />} />
           <Route path="/admin/meta" element={<AdminMeta />} />
           <Route path="/admin/recommendations" element={<AdminRecommendations />} />

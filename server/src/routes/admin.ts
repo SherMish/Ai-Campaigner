@@ -13,6 +13,7 @@ import {
 import { ControlService, PgControlStore } from "../execution/control-service.js";
 import { listCampaignActionHistory, condense } from "../services/action-history.js";
 import { listCustomers, getCustomerDetail } from "../services/customers.js";
+import { listAppUsers, ensureCustomerForUser } from "../services/users-admin.js";
 import { createCustomer, updateCustomer, deactivateCustomer, reactivateCustomer, deleteCustomer } from "../services/customer-admin.js";
 import { listAuditLog, logAdminAction, type Actor } from "../services/admin-audit.js";
 import { listOperators, addOperator, setOperatorRole, removeOperator } from "../services/operator-accounts.js";
@@ -231,6 +232,27 @@ adminRouter.get("/customers/:id", async (req, res) => {
     return;
   }
   res.json(detail);
+});
+
+// Users view — separate from Customers (explicit product decision, 2026-08-16):
+// every signed-up login (app_users), joined out to their business/connection/
+// subscription if they have one. Surfaces a real signup with no business yet,
+// which the customers-only view can't show.
+adminRouter.get("/users", async (_req, res) => {
+  res.json({ users: await listAppUsers(pool) });
+});
+
+// The bridge into the onboarding wizard (AIC-101), which is keyed by
+// customerId — a user with none yet gets a bare business row created and
+// linked on first click, idempotent on repeat clicks.
+adminRouter.post("/users/:id/customer", async (req, res) => {
+  const actor = await actorFor(req as AuthedRequest);
+  try {
+    const r = await ensureCustomerForUser(pool, actor, req.params.id);
+    res.json(r);
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : "failed to provision customer for user" });
+  }
 });
 
 // Customer CRUD (AIC-44): manual onboarding entry point + the operator's daily

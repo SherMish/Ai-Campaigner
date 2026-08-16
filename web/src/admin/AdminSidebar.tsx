@@ -1,13 +1,14 @@
 import { NavLink } from "react-router-dom";
-import { LayoutGrid, Users, Database, Sparkles, ShieldCheck, LogOut } from "lucide-react";
+import { LayoutGrid, Users, UserRound, Database, Sparkles, ShieldCheck, LogOut } from "lucide-react";
 import { strings } from "../strings";
 import { clearAuthToken } from "../api";
 
 const n = strings.he.adminShell;
 
-// Right-side nav for the internal admin console (AIC-43). All five sections
-// are now live: Overview (AIC-43), Customers (AIC-16/44), Meta explorer
-// (AIC-45), Recommendations oversight (AIC-46), Operators + audit (AIC-47).
+// Right-side nav for the internal admin console (AIC-43). Six sections live:
+// Overview (AIC-43), Customers (AIC-16/44), Users (2026-08-16 — logins,
+// separate from the Customers/business view), Meta explorer (AIC-45),
+// Recommendations oversight (AIC-46), Operators + audit (AIC-47).
 export function AdminSidebar() {
   const cls = ({ isActive }: { isActive: boolean }) => "ap-nav-item" + (isActive ? " active" : "");
   const logout = () => { clearAuthToken(); window.location.assign("/login"); };
@@ -23,6 +24,9 @@ export function AdminSidebar() {
         </NavLink>
         <NavLink to="/admin/customers" className={cls}>
           <span className="ic"><Users size={18} /></span><span>{n.navCustomers}</span>
+        </NavLink>
+        <NavLink to="/admin/users" className={cls}>
+          <span className="ic"><UserRound size={18} /></span><span>{n.navUsers}</span>
         </NavLink>
         <NavLink to="/admin/meta" className={cls}>
           <span className="ic"><Database size={18} /></span><span>{n.navMeta}</span>
