@@ -105,12 +105,13 @@ button { font-family: inherit; }
 .info-affordance {
   background: transparent; border: none; color: inherit; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
-  padding: 17px; margin: -17px; flex-shrink: 0;
+  padding: 15.5px; margin: -15.5px; flex-shrink: 0;
 }
 .info-affordance-dot {
-  width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--line);
+  /* 30% larger than the 10px it shipped at, requested live. */
+  width: 13px; height: 13px; border-radius: 50%; border: 1px solid var(--line);
   display: inline-flex; align-items: center; justify-content: center;
-  color: var(--muted); font: italic 700 7px/1 Georgia, serif;
+  color: var(--muted); font: italic 700 9px/1 Georgia, serif;
 }
 .info-affordance:hover .info-affordance-dot, .info-affordance:focus-visible .info-affordance-dot { border-color: var(--muted); color: var(--ink); }
 .info-popover {

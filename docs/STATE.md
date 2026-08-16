@@ -6,6 +6,12 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-16 — Tweak: מצב icon 30% larger (10px → 13px)
+Requested live once the size-vs-touch-target split (below) actually made
+the dot controllable. Scaled both the dot and its mark proportionally
+(10px→13px, 7px→9px font); touch-target padding recalculated to keep the
+44px hit area: (44−13)/2 = 15.5px.
+
 ### 2026-08-16 — Fix (the actual bug, after two no-op attempts): מצב icon
 The two previous size entries below (18px→13px, then 13px→10px) had zero
 visible effect — reported live, correctly, as "still too big" both times.
