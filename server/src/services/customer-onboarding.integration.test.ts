@@ -143,6 +143,26 @@ d("customer onboarding (DB)", () => {
       expect(c.rows[0].tracking_pixel_id).toBe("984664453249037");
     });
 
+    it("carries a website destination URL through when one is given (AIC-102)", async () => {
+      const customerId = await seedCustomer("websiteurl");
+      const r = await provisionConnection(pool, {
+        ...base(customerId),
+        leadEventTypes: ["offsite_conversion.fb_pixel_complete_registration"],
+        websiteUrl: "https://pisga.app/signup",
+      }, null);
+      const c = await pool.query<{ website_url: string | null }>(
+        `SELECT website_url FROM managed_campaigns WHERE id = $1`, [r.campaignId]);
+      expect(c.rows[0].website_url).toBe("https://pisga.app/signup");
+    });
+
+    it("leaves website_url null when none is given — a WhatsApp campaign needs no destination URL", async () => {
+      const customerId = await seedCustomer("nourl");
+      const r = await provisionConnection(pool, base(customerId), null);
+      const c = await pool.query<{ website_url: string | null }>(
+        `SELECT website_url FROM managed_campaigns WHERE id = $1`, [r.campaignId]);
+      expect(c.rows[0].website_url).toBeNull();
+    });
+
     // ── The guard (AIC-69) ──────────────────────────────────────────────
     it("REFUSES to save a page_id the backend cannot read", async () => {
       const customerId = await seedCustomer("pagegate");

@@ -458,6 +458,10 @@ silently stops the recommendation engine — strictly worse than not setting
 body, rendered as a known reason in the UI, not a generic failure) rather
 than a soft warning. `lead_event_types` defaults to the WhatsApp pair (AIC-87)
 when left blank, so a plain WhatsApp-lead campaign needs no extra input.
+`website_url` (AIC-102) is the counterpart for a Pixel/website campaign — what
+the additions/creative flow reads to build a link-CTA ad
+([add-content.md](add-content.md)); left blank for a WhatsApp campaign, which
+needs no destination URL.
 
 **Step 5 finalize runs the real `ConnectionService.verify()`** — the exact
 check the recommendation engine's own tick relies on — and only marks

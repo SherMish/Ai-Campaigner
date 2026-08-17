@@ -49,8 +49,19 @@ export interface DestinationShape {
   ctaType: string;
 }
 
+// AIC-102: the additions/creative flow's second destination — a Pixel/
+// website-lead campaign, the exact type this map's own comment anticipated.
+// Only the creative CTA shape (ctaType) is consumed today, by
+// createCreativeFromUpload for a campaign that already exists and is already
+// configured; optimizationGoal/destinationType are filled in now for when
+// AIC-89 adds create-time ad-set support for this destination, so that work
+// extends this map rather than re-deriving the shape.
+export const WEBSITE_DESTINATION = "website";
+export const WEBSITE_CTA = "LEARN_MORE"; // Meta call_to_action.type for a website-click ad
+
 const DESTINATION_SHAPES: Record<string, DestinationShape> = {
   [FIXED_DESTINATION]: { optimizationGoal: "CONVERSATIONS", destinationType: "WHATSAPP", ctaType: FIXED_CTA },
+  [WEBSITE_DESTINATION]: { optimizationGoal: "OFFSITE_CONVERSIONS", destinationType: "WEBSITE", ctaType: WEBSITE_CTA },
 };
 
 export function resolveDestinationShape(destination: string): DestinationShape {

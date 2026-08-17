@@ -157,6 +157,10 @@ export interface ProvisionInput {
   budgetPeriod?: "daily" | "monthly";
   leadEventTypes?: string[] | null;
   trackingPixelId?: string | null;
+  // AIC-102: the website/Pixel lead type's landing-page URL — what
+  // additions/session.ts's resolveCreativeDestination reads to build a
+  // link-CTA creative. Unused (left null) for a messaging campaign.
+  websiteUrl?: string | null;
 }
 
 export class PageNotReadableError extends Error {
@@ -241,11 +245,11 @@ export async function provisionConnection(
     const camp = await client.query<{ id: string }>(
       `INSERT INTO managed_campaigns
          (customer_id, ad_account_id, meta_campaign_id, name, status, objective,
-          agreed_budget_agorot, budget_period, lead_event_types, tracking_pixel_id)
+          agreed_budget_agorot, budget_period, lead_event_types, tracking_pixel_id, website_url)
        VALUES ($1,$2,$3,$4,'active',$5,$6,$7,
                COALESCE($8::text[], ARRAY['onsite_conversion.messaging_conversation_started_7d',
                                           'onsite_conversion.messaging_conversation_started']),
-               $9)
+               $9,$10)
        RETURNING id`,
       [
         input.customerId,
@@ -257,6 +261,7 @@ export async function provisionConnection(
         input.budgetPeriod ?? "daily",
         input.leadEventTypes ?? null,
         input.trackingPixelId ?? null,
+        input.websiteUrl ?? null,
       ],
     );
 

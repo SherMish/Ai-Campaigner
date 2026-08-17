@@ -32,3 +32,4 @@ See also: [STATE.md](STATE.md) (dated changelog) · [features/_TEMPLATE.md](feat
 | State → copy mapping — the exhaustive copy maps that enforce "never blank" | [features/state-copy.md](features/state-copy.md) |
 | Customer recommendations — approve/dismiss over the safe-execute pipeline | [features/customer-recommendations.md](features/customer-recommendations.md) |
 | Campaign builder (P1) — recommended defaults, create-writes, guided UI, launch gate | [features/campaign-builder.md](features/campaign-builder.md) |
+| Add content to an existing campaign — new ad/ad-set, destination shapes | [features/add-content.md](features/add-content.md) |

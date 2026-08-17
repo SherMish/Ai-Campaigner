@@ -5,6 +5,8 @@ import {
   RECOMMENDED_SPECIAL_AD_CATEGORY,
   FIXED_DESTINATION,
   FIXED_CTA,
+  WEBSITE_DESTINATION,
+  WEBSITE_CTA,
   normalizeBusinessCategory,
   resolveAudienceDefault,
   resolveSpecialAdCategoryHint,
@@ -88,10 +90,20 @@ describe("resolveDestinationShape", () => {
     });
   });
 
+  // AIC-102: website/Pixel is now a second recognized destination, resolved
+  // from this same map — the additions/creative flow's link-CTA branch.
+  it("website resolves to the link-based creative shape, sourced from the constants", () => {
+    expect(resolveDestinationShape(WEBSITE_DESTINATION)).toEqual({
+      optimizationGoal: "OFFSITE_CONVERSIONS",
+      destinationType: "WEBSITE",
+      ctaType: WEBSITE_CTA,
+    });
+  });
+
   it("REGRESSION: an unrecognized destination throws — never silently returns the WhatsApp shape", () => {
     // The exact failure mode this replaces: a Pixel campaign's write silently
     // reusing the WhatsApp shape because nothing checked the destination.
-    expect(() => resolveDestinationShape("website")).toThrow(/website/);
+    expect(() => resolveDestinationShape("something_unrecognized")).toThrow(/something_unrecognized/);
     expect(() => resolveDestinationShape("")).toThrow();
   });
 });

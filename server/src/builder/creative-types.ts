@@ -32,6 +32,10 @@ export interface CreateUploadCreativeParams {
   headline: string;
   primaryText: string;
   whatsappNumber: string;
+  // AIC-102: the website/Pixel destination's counterpart to whatsappNumber —
+  // set only when destination resolves to the WEBSITE shape, used for both
+  // link_data.link and the LEARN_MORE call_to_action's value.
+  destinationUrl?: string;
   media: CreativeMedia;
   // Same contract as CreateAdSetParams.destination — resolved via
   // resolveDestinationShape, never assumed inside the adapter.

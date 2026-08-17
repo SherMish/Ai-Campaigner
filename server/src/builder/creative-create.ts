@@ -31,7 +31,7 @@ export async function uploadCreativeMedia(
 }
 
 export type CreativeSpec =
-  | { kind: "upload"; adAccountId: string; pageId: string; name: string; headline: string; primaryText: string; whatsappNumber: string; media: CreativeMedia; destination: string }
+  | { kind: "upload"; adAccountId: string; pageId: string; name: string; headline: string; primaryText: string; whatsappNumber: string; destinationUrl?: string; media: CreativeMedia; destination: string }
   | { kind: "existing_post"; adAccountId: string; pageId: string; name: string; postId: string };
 
 function asCreatingWriter(writer: CreativeWriter, spec: CreativeSpec): CreatingWriter {
@@ -58,7 +58,7 @@ export async function createCreativeIdempotent(
   const outbox = new WriteOutbox(pool);
   const payload: Record<string, unknown> =
     spec.kind === "upload"
-      ? { adAccountId: spec.adAccountId, pageId: spec.pageId, name: spec.name, headline: spec.headline, primaryText: spec.primaryText, whatsappNumber: spec.whatsappNumber, media: spec.media, destination: spec.destination }
+      ? { adAccountId: spec.adAccountId, pageId: spec.pageId, name: spec.name, headline: spec.headline, primaryText: spec.primaryText, whatsappNumber: spec.whatsappNumber, destinationUrl: spec.destinationUrl, media: spec.media, destination: spec.destination }
       : { adAccountId: spec.adAccountId, pageId: spec.pageId, name: spec.name, postId: spec.postId };
 
   return outbox.applyIdempotent(

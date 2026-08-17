@@ -644,6 +644,7 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
       leadEventTypes: Array.isArray(b.leadEventTypes) && b.leadEventTypes.length > 0
         ? b.leadEventTypes.map(String) : null,
       trackingPixelId: b.trackingPixelId ? String(b.trackingPixelId) : null,
+      websiteUrl: b.websiteUrl ? String(b.websiteUrl) : null,
     }, pageVerdict);
 
     const actor = await actorFor(req as AuthedRequest);

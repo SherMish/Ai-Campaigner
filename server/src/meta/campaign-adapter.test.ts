@@ -5,7 +5,7 @@
 // reversible dogfood test instead; this one gets a unit test too because the
 // paused-invariant is safety-critical and cheap to pin down here directly).
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { FIXED_DESTINATION, FIXED_CTA } from "@aic/shared";
+import { FIXED_DESTINATION, FIXED_CTA, WEBSITE_DESTINATION, WEBSITE_CTA } from "@aic/shared";
 import { GraphCampaignAdapter } from "./campaign-adapter.js";
 
 function fakeFetch(respond: { id: string }) {
@@ -79,10 +79,37 @@ describe("GraphCampaignAdapter create-writes — always PAUSED", () => {
         adAccountId: "act_123", metaCampaignId: "meta_camp_1", name: "Adset",
         targeting: { ageMin: 18, ageMax: 45, genders: [], countries: ["IL"] },
         pageId: "page_1",
-        destination: "website",
+        destination: "something_unrecognized",
       }),
-    ).rejects.toThrow(/website/);
+    ).rejects.toThrow(/something_unrecognized/);
     expect(mock).not.toHaveBeenCalled();
+  });
+
+  // AIC-102: "website" is now a recognized destination (resolveDestinationShape),
+  // but createAdSet itself is deliberately NOT extended to build a website-shaped
+  // ad set yet — that's AIC-89's territory. Confirms the two don't drift apart:
+  // resolving the shape and USING it to create an ad set are still separate.
+  it("createAdSet still only sends the WHATSAPP shape — website ad-set creation is AIC-89, not built here", async () => {
+    const mock = fakeFetch({ id: "meta_adset_2" });
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const id = await adapter.createAdSet({
+      adAccountId: "act_123", metaCampaignId: "meta_camp_1", name: "Adset",
+      targeting: { ageMin: 18, ageMax: 45, genders: [], countries: ["IL"] },
+      pageId: "page_1",
+      destination: WEBSITE_DESTINATION,
+    });
+
+    expect(id).toBe("meta_adset_2");
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    const body = new URLSearchParams(String(init.body));
+    // resolveDestinationShape(WEBSITE_DESTINATION) DOES resolve now — this
+    // documents that createAdSet passes whatever it resolves straight through,
+    // so an actual website ad-set create (AIC-89) is a UI/route change, not an
+    // adapter one.
+    expect(body.get("optimization_goal")).toBe("OFFSITE_CONVERSIONS");
+    expect(body.get("destination_type")).toBe("WEBSITE");
   });
 
   it("createAd sends status=PAUSED and is created on the ad account's edge with adset_id + creative in the body", async () => {
@@ -256,6 +283,34 @@ describe("GraphCampaignAdapter creative handling (AIC-51)", () => {
     expect(spec.link_data.call_to_action).toEqual({ type: FIXED_CTA, value: { whatsapp_number: "972500000000" } });
   });
 
+  // AIC-102: the website/Pixel destination's counterpart to the WhatsApp test
+  // above — Pisga's own free_beta_signups_leads campaign needed exactly this
+  // shape (a link CTA, no phone number) to add content to its own campaign.
+  it("createCreativeFromUpload sends a link-based object_story_spec for the website destination", async () => {
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ id: "crea_3" }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const id = await adapter.createCreativeFromUpload({
+      adAccountId: "act_123", pageId: "page_1", name: "Ad 1",
+      headline: "הרשמה עכשיו", primaryText: "לחצו כדי להירשם",
+      whatsappNumber: "",
+      destinationUrl: "https://pisga.app/signup",
+      media: { kind: "image", imageHash: "img_hash_1" },
+      destination: WEBSITE_DESTINATION,
+    });
+
+    expect(id).toBe("crea_3");
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    const body = new URLSearchParams(String(init.body));
+    const spec = JSON.parse(body.get("object_story_spec") ?? "{}");
+    expect(spec.link_data.image_hash).toBe("img_hash_1");
+    expect(spec.link_data.link).toBe("https://pisga.app/signup");
+    expect(spec.link_data.call_to_action).toEqual({ type: WEBSITE_CTA, value: { link: "https://pisga.app/signup" } });
+    // Never leaks a WhatsApp field into a website-shaped creative.
+    expect(spec.link_data.call_to_action.value.whatsapp_number).toBeUndefined();
+  });
+
   it("createCreativeFromUpload REFUSES an unrecognized destination rather than silently emitting a WhatsApp CTA", async () => {
     const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ id: "crea_1" }) } as unknown as Response));
     vi.stubGlobal("fetch", mock);
@@ -267,9 +322,9 @@ describe("GraphCampaignAdapter creative handling (AIC-51)", () => {
         headline: "מבצע קיץ", primaryText: "20% הנחה",
         whatsappNumber: "",
         media: { kind: "image", imageHash: "img_hash_1" },
-        destination: "website",
+        destination: "something_unrecognized",
       }),
-    ).rejects.toThrow(/website/);
+    ).rejects.toThrow(/something_unrecognized/);
     expect(mock).not.toHaveBeenCalled();
   });
 

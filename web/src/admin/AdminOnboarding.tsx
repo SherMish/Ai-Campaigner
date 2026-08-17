@@ -82,7 +82,7 @@ export function AdminOnboarding() {
   const [form, setForm] = useState({
     metaAdAccountId: "", pageIdForm: "", instagramId: "",
     metaCampaignId: "", campaignName: "", budgetShekels: "",
-    leadEventTypes: "", trackingPixelId: "",
+    leadEventTypes: "", trackingPixelId: "", websiteUrl: "",
   });
   const [provisioning, setProvisioning] = useState(false);
   const [provisionResult, setProvisionResult] = useState<string | null>(null);
@@ -154,6 +154,7 @@ export function AdminOnboarding() {
           agreedBudgetAgorot: budgetAgorot,
           leadEventTypes: form.leadEventTypes.trim() ? form.leadEventTypes.split(",").map((s) => s.trim()) : null,
           trackingPixelId: form.trackingPixelId.trim() || null,
+          websiteUrl: form.websiteUrl.trim() || null,
         }),
       },
     )
@@ -307,6 +308,8 @@ export function AdminOnboarding() {
             <input value={form.leadEventTypes} onChange={(e) => setForm({ ...form, leadEventTypes: e.target.value })} /></div>
           <div className="field"><label>{w.fieldPixelId}</label>
             <input value={form.trackingPixelId} onChange={(e) => setForm({ ...form, trackingPixelId: e.target.value })} /></div>
+          <div className="field"><label>{w.fieldWebsiteUrl}</label>
+            <input value={form.websiteUrl} onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })} placeholder="https://…" /></div>
         </div>
 
         <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={provisioning} onClick={submitProvision}>

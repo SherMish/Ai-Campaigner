@@ -1,11 +1,12 @@
 import { Router } from "express";
 import multer from "multer";
-import { validateCreativeCopy, MAX_VIDEO_BYTES, FIXED_DESTINATION } from "@aic/shared";
+import { validateCreativeCopy, MAX_VIDEO_BYTES, FIXED_DESTINATION, WEBSITE_DESTINATION } from "@aic/shared";
 import { pool } from "../db/pool.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import {
   resolveAdditionContext, resolveAdditionAvailability, buildAdditionWriter,
   acceptsWhatsappWrites, whatsappWriteBlock, type WhatsappWriteBlock,
+  resolveCreativeDestination, type CreativeBlockReason,
 } from "../additions/session.js";
 import { addAdToExistingCampaign, addAdSetToExistingCampaign } from "../additions/add-content.js";
 import { approveAddition, listPendingAdditions } from "../additions/approve.js";
@@ -55,6 +56,23 @@ function refuseWhatsappWrite(res: import("express").Response, block: WhatsappWri
           "non-WhatsApp campaigns isn't supported yet — we'd have to create a " +
           "WhatsApp ad that could never work. Talk to us and we'll add it for you."
         : "we don't have this campaign's WhatsApp number on file, so any ad we " +
+          "created would have nowhere to send people. Talk to us and we'll add it.",
+  });
+}
+
+// AIC-102 — the /creative route's upload-path refusal. Narrower than
+// refuseWhatsappWrite above: by the time this fires, resolveCreativeDestination
+// has already decided the campaign COULD take a website-shaped write but is
+// missing the one piece of data it needs, not that its destination is
+// unsupported outright.
+function refuseCreativeWrite(res: import("express").Response, reason: CreativeBlockReason): void {
+  res.status(409).json({
+    reason,
+    error:
+      reason === "missing_number"
+        ? "we don't have this campaign's WhatsApp number on file, so any ad we " +
+          "created would have nowhere to send people. Talk to us and we'll add it."
+        : "we don't have this campaign's destination website on file, so any ad we " +
           "created would have nowhere to send people. Talk to us and we'll add it.",
   });
 }
@@ -152,7 +170,6 @@ interface CreativeBody {
   name?: string;
   headline?: string;
   primaryText?: string;
-  whatsappNumber?: string;
   media?: CreativeMedia;
   postId?: string;
 }
@@ -163,10 +180,6 @@ additionsRouter.post("/creative", requireAuth, async (req, res) => {
   try {
     const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
     if (!ctx) return notReady(res);
-    // Refused BEFORE any Meta call — the creative we'd build carries a
-    // WHATSAPP_MESSAGE CTA that this campaign can't use.
-    const block = whatsappWriteBlock(ctx);
-    if (block) return refuseWhatsappWrite(res, block);
     const body = req.body as CreativeBody;
     if (!body.clientKey || !body.name) { res.status(400).json({ error: "clientKey and name are required" }); return; }
 
@@ -175,8 +188,19 @@ additionsRouter.post("/creative", requireAuth, async (req, res) => {
 
     let spec: CreativeSpec;
     if (body.postId) {
+      // AIC-102: an existing-post creative carries NO destination fields at
+      // all — createCreativeFromExistingPost just references the post's own
+      // object_story_id, and Meta reuses whatever CTA/link that post already
+      // has. So this path needs no WhatsApp-vs-website decision and was never
+      // the thing the old blanket refusal should have blocked.
       spec = { kind: "existing_post", adAccountId: ctx.metaAdAccountId, pageId: ctx.pageId, name: body.name, postId: body.postId };
     } else {
+      // The new-content path DOES need a destination — refused BEFORE any
+      // Meta call if this campaign has neither a WhatsApp number nor a
+      // website URL on file for its lead type.
+      const destination = resolveCreativeDestination(ctx);
+      if (destination.kind === "blocked") return refuseCreativeWrite(res, destination.reason);
+
       const validation = validateCreativeCopy({
         headline: body.headline ?? "",
         primaryText: body.primaryText ?? "",
@@ -190,12 +214,10 @@ additionsRouter.post("/creative", requireAuth, async (req, res) => {
         name: body.name,
         headline: body.headline!,
         primaryText: body.primaryText!,
-        whatsappNumber: body.whatsappNumber ?? "",
+        whatsappNumber: destination.kind === "whatsapp" ? destination.number : "",
+        destinationUrl: destination.kind === "website" ? destination.url : undefined,
         media: body.media!,
-        // The refusal guard above already confirmed this campaign can accept
-        // WhatsApp writes — FIXED_DESTINATION is the only value that can
-        // reach here today. resolveDestinationShape() re-asserts it.
-        destination: FIXED_DESTINATION,
+        destination: destination.kind === "whatsapp" ? FIXED_DESTINATION : WEBSITE_DESTINATION,
       };
     }
     const creativeId = await createCreativeIdempotent(pool, writer, ctx.localCampaignId, body.clientKey, spec);

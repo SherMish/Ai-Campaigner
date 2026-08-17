@@ -28,6 +28,16 @@ export interface AdditionContext {
   // — `validateCreativeCopy` checks media/headline/text but never the number,
   // so the empty value reached Meta.
   whatsappNumber: string | null;
+  // AIC-102: the website/Pixel counterpart to whatsappNumber — non-null only
+  // when this campaign's leads do NOT arrive over WhatsApp AND a destination
+  // URL is on file (managed_campaigns.website_url). Same nullable-on-purpose
+  // discipline as whatsappNumber: every consumer must decide what to do about
+  // a missing one rather than building a creative with an empty link.
+  websiteUrl: string | null;
+  // The messaging-vs-not classification itself, computed once here so
+  // resolveCreativeDestination doesn't re-derive it from leadEventTypes a
+  // second time (AIC-102's own "share AIC-87's resolution, don't duplicate").
+  isMessaging: boolean;
   // What this campaign actually counts as a lead (AIC-87). Present so callers
   // can reason about destination without re-querying.
   leadEventTypes: string[];
@@ -63,6 +73,32 @@ export function acceptsWhatsappWrites(ctx: AdditionContext): boolean {
   return whatsappWriteBlock(ctx) === null;
 }
 
+// AIC-102 — what shape the CREATIVE (add-content, new-content path) should
+// take. Deliberately separate from whatsappWriteBlock above: that guard is
+// unchanged and still gates AD-SET creation (`POST /ad-set`), which genuinely
+// still only knows how to build a WhatsApp-shaped ad set (AIC-89's territory).
+// This one governs `POST /creative`'s upload path, which now supports two
+// shapes — reusing ctx.isMessaging/whatsappNumber/websiteUrl (AIC-87's
+// classification, computed once in toContext) rather than re-deriving it.
+//
+// The existing-post creative path needs neither branch of this at all —
+// createCreativeFromExistingPost carries no destination fields; Meta reuses
+// whatever CTA/link the original Page post already has.
+export type CreativeDestination =
+  | { kind: "whatsapp"; number: string }
+  | { kind: "website"; url: string };
+
+export type CreativeBlockReason = "missing_number" | "missing_website_url";
+
+export function resolveCreativeDestination(
+  ctx: AdditionContext,
+): CreativeDestination | { kind: "blocked"; reason: CreativeBlockReason } {
+  if (ctx.isMessaging) {
+    return ctx.whatsappNumber ? { kind: "whatsapp", number: ctx.whatsappNumber } : { kind: "blocked", reason: "missing_number" };
+  }
+  return ctx.websiteUrl ? { kind: "website", url: ctx.websiteUrl } : { kind: "blocked", reason: "missing_website_url" };
+}
+
 type AdditionContextRow = {
   customer_id: string | null;
   category: string | null;
@@ -70,6 +106,7 @@ type AdditionContextRow = {
   campaign_name: string | null;
   meta_campaign_id: string | null;
   whatsapp_destination: string | null;
+  website_url: string | null;
   lead_event_types: string[] | null;
   access_health: string | null;
   meta_ad_account_id: string | null;
@@ -79,7 +116,7 @@ type AdditionContextRow = {
 async function fetchAdditionContextRow(pool: pg.Pool, userId: string): Promise<AdditionContextRow | undefined> {
   const { rows } = await pool.query<AdditionContextRow>(
     `SELECT u.customer_id, c.category, mc.id AS campaign_id, mc.name AS campaign_name,
-            mc.meta_campaign_id, mc.whatsapp_destination, mc.lead_event_types,
+            mc.meta_campaign_id, mc.whatsapp_destination, mc.website_url, mc.lead_event_types,
             conn.access_health, aa.meta_ad_account_id, conn.page_id
      FROM app_users u
      LEFT JOIN customers c ON c.id = u.customer_id
@@ -96,6 +133,7 @@ async function fetchAdditionContextRow(pool: pg.Pool, userId: string): Promise<A
 function toContext(r: AdditionContextRow): AdditionContext {
   const leadEventTypes = r.lead_event_types ?? [];
   const number = (r.whatsapp_destination ?? "").trim();
+  const url = (r.website_url ?? "").trim();
   // A real number AND a messaging lead definition. Either alone is not enough:
   // a leftover number on a Pixel campaign doesn't make WhatsApp writes correct,
   // and a messaging lead type with no number can't produce a valid CTA.
@@ -109,6 +147,8 @@ function toContext(r: AdditionContextRow): AdditionContext {
     metaAdAccountId: r.meta_ad_account_id!,
     pageId: r.page_id!,
     whatsappNumber: isMessaging && number ? number : null,
+    websiteUrl: !isMessaging && url ? url : null,
+    isMessaging,
     leadEventTypes,
     campaignName: r.campaign_name ?? "",
     category: r.category ?? "",

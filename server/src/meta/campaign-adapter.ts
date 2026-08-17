@@ -482,15 +482,24 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       params.media.kind === "image"
         ? { image_hash: params.media.imageHash }
         : { video_id: params.media.videoId, image_url: params.media.thumbnailUrl };
+    // AIC-102: the WhatsApp shape's call_to_action.value carries a phone
+    // number; the website shape's carries the destination link instead, and
+    // link_data itself needs the same link at the top level (the field Meta
+    // actually navigates to on click — the CTA's `link` value mirrors it).
+    const callToAction =
+      shape.destinationType === "WEBSITE"
+        ? { type: shape.ctaType, value: { link: params.destinationUrl } }
+        : { type: shape.ctaType, value: { whatsapp_number: params.whatsappNumber } };
     return this.postCreate(params.adAccountId, "adcreatives", {
       name: params.name,
       object_story_spec: {
         page_id: params.pageId,
         link_data: {
           ...linkData,
+          ...(shape.destinationType === "WEBSITE" ? { link: params.destinationUrl } : {}),
           message: params.primaryText,
           name: params.headline,
-          call_to_action: { type: shape.ctaType, value: { whatsapp_number: params.whatsappNumber } },
+          call_to_action: callToAction,
         },
       },
     });

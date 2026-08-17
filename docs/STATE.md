@@ -6,6 +6,36 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-17 — AIC-102: additions/creative flow supports website/Pixel campaigns
+Found live: Pisga's own dogfood campaign (`free_beta_signups_leads`, a real
+Pixel/website campaign) could not add an ad to its own campaign through its
+own product — `additions/session.ts`'s `whatsappWriteBlock` refused ALL
+non-WhatsApp campaigns unconditionally, with no alternative shape for the
+type Pisga itself runs. New `resolveCreativeDestination` governs the creative
+(add-ad) path only, branching on the same messaging-vs-not classification
+AIC-87 already derives: WhatsApp unchanged; website/Pixel now builds a
+`link_data` + `LEARN_MORE` creative from a new `managed_campaigns.website_url`
+column (migration 040), set through the AIC-101 wizard's provisioning form.
+Missing the needed field on either branch refuses with a distinct 409 reason
+before any Meta call. Ad-set creation (`POST /additions/ad-set`) is
+deliberately **unchanged** — still WhatsApp-only, still AIC-89's territory.
+
+Second, independent fix in the same investigation: an existing-post creative
+(`postId` given) needs no destination fields at all —
+`createCreativeFromExistingPost` only ever sent `object_story_id`, reusing
+whatever CTA the original Page post already has — but the old blanket refusal
+ran before checking which creative kind was being built, so it was blocked
+for no real reason. Both Meta-side ads on the flow's real regression test
+(new-content and existing-post) were confirmed working against a real Meta
+mock; new doc: [features/add-content.md](features/add-content.md) (no owning
+doc existed for this area before).
+
+Related, same session: 44 integration-test-artifact `customers` rows removed
+(the DB-pollution cleanup below); Pisga's real Meta connection was
+archived — not deleted — to a dedicated archive customer (preserving 50
+insight_snapshots + 1 recommendation intact) so the AIC-101 onboarding wizard
+could be tested end-to-end against a genuinely fresh account.
+
 ### 2026-08-16 — Fix: /admin/users offered onboarding to already-connected users
 Reported live right after shipping the Users view (below): Pisga and
 free_beta test — both fully connected — still showed "start onboarding,"

@@ -447,6 +447,9 @@ export const strings = {
       fieldBudget: "תקציב יומי (₪)",
       fieldLeadEventTypes: "סוג פנייה (מתקדם — ברירת מחדל: וואטסאפ)",
       fieldPixelId: "מזהה Pixel (רק לקמפיין Pixel)",
+      // AIC-102: the additions/creative flow's website-destination fix needs
+      // a real landing-page URL on file for a Pixel campaign to add content.
+      fieldWebsiteUrl: "כתובת אתר היעד (לקמפיין Pixel/אתר)",
       provisionSubmit: "יצירת הרשומות",
       provisionSuccess: "נוצר בהצלחה.",
       // AIC-69: the hard constraint the wizard enforces, not just documents.

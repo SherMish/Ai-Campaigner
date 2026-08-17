@@ -88,6 +88,7 @@ async function seedExistingCampaign(
     "onsite_conversion.messaging_conversation_started",
   ],
   whatsappDestination = "972500000000",
+  websiteUrl: string | null = null,
 ) {
   const cust = await pool.query<{ id: string }>(
     `INSERT INTO customers (business_name, is_test, onboarding_status, category) VALUES ($1, true, 'ready', $2) RETURNING id`,
@@ -107,9 +108,9 @@ async function seedExistingCampaign(
     [conn.rows[0].id, `act_add_${conn.rows[0].id.slice(0, 8)}`],
   );
   const camp = await pool.query<{ id: string }>(
-    `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, meta_campaign_id, name, lead_event_types, whatsapp_destination)
-     VALUES ($1, $2, 'active', 'meta_camp_existing', 'IT Campaign', $3, $4) RETURNING id`,
-    [customerId, acct.rows[0].id, leadEventTypes, whatsappDestination],
+    `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, meta_campaign_id, name, lead_event_types, whatsapp_destination, website_url)
+     VALUES ($1, $2, 'active', 'meta_camp_existing', 'IT Campaign', $3, $4, $5) RETURNING id`,
+    [customerId, acct.rows[0].id, leadEventTypes, whatsappDestination, websiteUrl],
   );
   return { customerId, campaignId: camp.rows[0].id, token: signAuthToken(user.rows[0].id) };
 }
@@ -326,41 +327,34 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
     }
   });
 
-  // ── The WhatsApp-write refusal guard ─────────────────────────────────────
-  // The additions path emits WhatsApp-shaped Meta objects unconditionally: a
-  // `WHATSAPP_MESSAGE` call-to-action carrying `whatsapp_destination` (which
-  // is '' for a Pixel campaign, so an empty number reaches a REAL Meta write),
-  // and an ad set hardcoded to CONVERSATIONS/WHATSAPP whose conversions could
-  // never match a Pixel campaign's lead definition — real spend, zero
-  // countable leads, and AIC-88 would then flag the campaign as broken.
-  //
-  // Both are wrong for ANY non-messaging campaign, including one our own
-  // builder created. Until the additions flow supports other destinations
-  // (AIC-89), the honest behaviour is to REFUSE the write, not to attempt a
-  // malformed one. Enforced at `resolveAdditionContext`, the single chokepoint
-  // every additions route already passes through, so it cannot be reached by
-  // forgetting a per-route check.
-  describe("refuses WhatsApp-shaped writes on a non-WhatsApp campaign", () => {
-    it("refuses to create a creative (never sends an empty whatsapp_number to Meta)", async () => {
+  // ── The creative-destination guard ───────────────────────────────────────
+  // AIC-102, found live: Pisga's own Pixel campaign (free_beta_signups_leads)
+  // couldn't add content to its own campaign through its own product, because
+  // the additions/creative route refused ANY non-WhatsApp campaign
+  // unconditionally — even though createCreativeFromExistingPost needs no
+  // destination fields at all, and createCreativeFromUpload only needed a
+  // link instead of a phone number. Ad-SET creation (POST /ad-set) is
+  // deliberately UNCHANGED below — building a new ad set for a website/Pixel
+  // campaign still needs full AIC-89 destination-shape work.
+  describe("the creative-destination guard (AIC-102)", () => {
+    it("refuses new-content on a Pixel campaign with no website_url on file — distinct reason from 'not_whatsapp'", async () => {
       const { fetchMock } = mockMetaFetch();
       vi.stubGlobal("fetch", fetchMock);
-      const { token } = await seedExistingCampaign("pixel-creative", "beautician", PIXEL_LEAD, "");
+      const { token } = await seedExistingCampaign("pixel-no-url", "beautician", PIXEL_LEAD, "", null);
       const res = await request(app)
         .post("/api/app/additions/creative")
         .set("Authorization", `Bearer ${token}`)
         .send({ clientKey: "ck1", name: "Ad", headline: "כותרת טובה", primaryText: "טקסט מספיק ארוך כדי לעבור ולידציה", media: { kind: "image", url: "https://x/y.jpg" } });
       expect(res.status).toBe(409);
-      expect(res.body.reason).toBe("not_whatsapp");
-      expect(res.body.error).toMatch(/whatsapp/i);
+      expect(res.body.reason).toBe("missing_website_url");
       // The load-bearing assertion: no Meta write was attempted at all.
       const posts = fetchMock.mock.calls.filter((c) => (c[1]?.method ?? "GET").toUpperCase() === "POST");
       expect(posts).toHaveLength(0);
     });
 
     // GelNails' real shape: genuinely Click-to-WhatsApp, but connected from
-    // outside the builder so we never captured its number. Collapsing this
-    // into "not_whatsapp" would be a wrong statement to a real customer.
-    it("distinguishes 'missing the number' from 'not a WhatsApp campaign'", async () => {
+    // outside the builder so we never captured its number.
+    it("distinguishes 'missing the number' from 'missing the website'", async () => {
       const { fetchMock } = mockMetaFetch();
       vi.stubGlobal("fetch", fetchMock);
       const { token } = await seedExistingCampaign(
@@ -375,15 +369,52 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
         .send({ clientKey: "ck3", name: "Ad", headline: "כותרת טובה", primaryText: "טקסט מספיק ארוך כדי לעבור ולידציה", media: { kind: "image", url: "https://x/y.jpg" } });
       expect(res.status).toBe(409);
       expect(res.body.reason).toBe("missing_number");
-      expect(res.body.error).not.toMatch(/don't arrive over WhatsApp/);
       const posts = fetchMock.mock.calls.filter((c) => (c[1]?.method ?? "GET").toUpperCase() === "POST");
       expect(posts).toHaveLength(0);
     });
 
-    it("refuses to add an ad set (never creates a CONVERSATIONS ad set in a Pixel campaign)", async () => {
+    // The actual fix: Pisga's own campaign, once website_url is on file.
+    it("REGRESSION: a Pixel campaign WITH a website_url creates a link-CTA creative — the real free_beta_signups_leads shape", async () => {
       const { fetchMock } = mockMetaFetch();
       vi.stubGlobal("fetch", fetchMock);
-      const { token, campaignId } = await seedExistingCampaign("pixel-adset", "beautician", PIXEL_LEAD, "");
+      const { token } = await seedExistingCampaign("pixel-with-url", "beautician", PIXEL_LEAD, "", "https://pisga.app/signup");
+      const res = await request(app)
+        .post("/api/app/additions/creative")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ clientKey: "ck4", name: "Ad", headline: "כותרת טובה", primaryText: "טקסט מספיק ארוך כדי לעבור ולידציה", media: { kind: "image", url: "https://x/y.jpg" } });
+      expect(res.status).toBe(200);
+      const creativeCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith("/adcreatives"));
+      expect(creativeCall).toBeDefined();
+      const sent = new URLSearchParams(String(creativeCall![1]?.body));
+      const spec = JSON.parse(sent.get("object_story_spec")!);
+      expect(spec.link_data.link).toBe("https://pisga.app/signup");
+      expect(spec.link_data.call_to_action).toEqual({ type: "LEARN_MORE", value: { link: "https://pisga.app/signup" } });
+    });
+
+    // The OTHER half of the fix: an existing-post creative carries no
+    // destination fields at all, so it was never actually blocked by
+    // anything other than the old blanket refusal — works even with NO
+    // website_url on file, unlike the new-content path above.
+    it("REGRESSION: an existing-post creative works on a Pixel campaign with no website_url — needs no destination at all", async () => {
+      const { fetchMock } = mockMetaFetch();
+      vi.stubGlobal("fetch", fetchMock);
+      const { token } = await seedExistingCampaign("pixel-existing-post", "beautician", PIXEL_LEAD, "", null);
+      const res = await request(app)
+        .post("/api/app/additions/creative")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ clientKey: "ck5", name: "Ad", postId: "post_1" });
+      expect(res.status).toBe(200);
+      const creativeCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith("/adcreatives"));
+      expect(creativeCall).toBeDefined();
+      const sent = new URLSearchParams(String(creativeCall![1]?.body));
+      expect(sent.get("object_story_id")).toBe("page_it_1_post_1");
+      expect(sent.get("object_story_spec")).toBeNull(); // no destination fields at all
+    });
+
+    it("refuses to add an ad set (never creates a CONVERSATIONS ad set in a Pixel campaign) — unchanged, still AIC-89's territory", async () => {
+      const { fetchMock } = mockMetaFetch();
+      vi.stubGlobal("fetch", fetchMock);
+      const { token, campaignId } = await seedExistingCampaign("pixel-adset", "beautician", PIXEL_LEAD, "", "https://pisga.app/signup");
       const res = await request(app)
         .post("/api/app/additions/ad-set")
         .set("Authorization", `Bearer ${token}`)
@@ -395,7 +426,7 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
       expect(pending.rows[0].n).toBe(0);
     });
 
-    it("still allows both on a real WhatsApp campaign — the guard is narrow", async () => {
+    it("still allows creative creation on a real WhatsApp campaign — unaffected by the website branch", async () => {
       const { fetchMock } = mockMetaFetch();
       vi.stubGlobal("fetch", fetchMock);
       const { token } = await seedExistingCampaign("wa-allowed");
