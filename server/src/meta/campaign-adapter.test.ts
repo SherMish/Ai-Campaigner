@@ -319,6 +319,27 @@ describe("GraphCampaignAdapter creative handling (AIC-51)", () => {
     expect((postsInit.headers as Record<string, string>).Authorization).toBe("Bearer PAGE_TOKEN");
   });
 
+  it("REGRESSION (found live 2026-08-17): strips Meta's own compound page_post id down to the bare post id", async () => {
+    // Meta's real /posts edge returns id as "{page-id}_{post-id}", not bare —
+    // confirmed against the live API. Passing that straight through as
+    // `postId` made createCreativeFromExistingPost double-prefix it into
+    // "page_1_page_1_post_1", which Meta rejected with (#100) Invalid
+    // post_id parameter, surfaced to the customer as a raw 502.
+    const mock = vi.fn(async (url: string) => ({
+      ok: true, status: 200,
+      json: async () =>
+        url.includes("me/accounts")
+          ? { data: [{ id: "page_1", access_token: "PAGE_TOKEN" }] }
+          : { data: [{ id: "page_1_post_1", message: "hello", full_picture: null, created_time: "2026-08-17T00:00:00Z" }] },
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("SYSTEM_TOKEN");
+
+    const posts = await adapter.listPromotablePosts("page_1");
+
+    expect(posts[0].id).toBe("post_1");
+  });
+
   it("listPromotablePosts fails honestly when the Page isn't assigned to the System User", async () => {
     const mock = vi.fn(async (_url: string) => ({
       ok: true, status: 200, json: async () => ({ data: [] }), // no Pages reachable

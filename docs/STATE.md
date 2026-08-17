@@ -6,6 +6,23 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — fix: existing-post creative 502'd on a real page post (double-prefixed object_story_id)
+Found live while verifying AIC-102: the "existing post" path — designed to
+need zero destination data — failed with a raw 502 on a real attempt.
+Root cause: `listPromotablePosts` passed Meta's own `/posts` edge `id`
+through unchanged, but that `id` already comes back in Meta's compound
+`"{page-id}_{post-id}"` story-id form; `createCreativeFromExistingPost`
+then re-prefixed `pageId` onto it, doubling the prefix into a malformed
+`object_story_id`. Meta rejected it with `(#100) Invalid post_id parameter`,
+which the route's generic catch-all turned into an opaque 502 — the real
+Meta error was never visible to the customer or in the client-facing
+message. Fixed at the source: `listPromotablePosts` now strips a leading
+`"{pageId}_"` off Meta's `id` before returning it, so `postId` means "the
+post's own id" everywhere downstream, matching what
+`createCreativeFromExistingPost` already assumed.
+[add-content.md](features/add-content.md). New regression test in
+`meta/campaign-adapter.test.ts` mocks Meta's real compound id shape.
+
 ### 2026-08-18 — AIC-89: builder can create website/Pixel campaigns, not just WhatsApp
 Destination becomes a real builder step (WhatsApp remains the recommended
 default) — the create-path counterpart to AIC-102's additions fix. New

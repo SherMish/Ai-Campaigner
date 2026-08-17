@@ -527,12 +527,25 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       `${pageId}/posts?fields=id,message,full_picture,created_time&limit=25`,
       pageToken,
     );
-    return ((body.data as Array<Record<string, unknown>>) ?? []).map((p) => ({
-      id: String(p.id),
-      message: p.message ? String(p.message) : null,
-      pictureUrl: p.full_picture ? String(p.full_picture) : null,
-      createdAt: String(p.created_time ?? ""),
-    }));
+    // Found live 2026-08-17: a Page's own /posts edge returns `id` ALREADY in
+    // Meta's compound "{page-id}_{post-id}" story-id form, not the post's bare
+    // id. createCreativeFromExistingPost re-prefixes pageId onto whatever we
+    // hand it as postId, so passing the compound id straight through doubled
+    // the prefix — Meta rejected the malformed object_story_id with
+    // "(#100) Invalid post_id parameter", surfaced to the customer as a raw
+    // 502. Stripping the known prefix here keeps `id` meaning "the post's own
+    // id" everywhere downstream, matching what createCreativeFromExistingPost
+    // (and its test) already assume.
+    const prefix = `${pageId}_`;
+    return ((body.data as Array<Record<string, unknown>>) ?? []).map((p) => {
+      const raw = String(p.id);
+      return {
+        id: raw.startsWith(prefix) ? raw.slice(prefix.length) : raw,
+        message: p.message ? String(p.message) : null,
+        pictureUrl: p.full_picture ? String(p.full_picture) : null,
+        createdAt: String(p.created_time ?? ""),
+      };
+    });
   }
 
   async createCreativeFromUpload(params: CreateUploadCreativeParams): Promise<string> {
