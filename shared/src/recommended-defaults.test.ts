@@ -7,10 +7,12 @@ import {
   FIXED_CTA,
   WEBSITE_DESTINATION,
   WEBSITE_CTA,
+  LEAD_CONVERSION_EVENTS,
   normalizeBusinessCategory,
   resolveAudienceDefault,
   resolveSpecialAdCategoryHint,
   resolveDestinationShape,
+  resolveLeadActionType,
 } from "./recommended-defaults.js";
 
 describe("normalizeBusinessCategory", () => {
@@ -105,5 +107,32 @@ describe("resolveDestinationShape", () => {
     // reusing the WhatsApp shape because nothing checked the destination.
     expect(() => resolveDestinationShape("something_unrecognized")).toThrow(/something_unrecognized/);
     expect(() => resolveDestinationShape("")).toThrow();
+  });
+});
+
+// AIC-89: the conversion-event picker's single source of truth for the
+// Meta Insights action_type each event reports as.
+describe("resolveLeadActionType", () => {
+  it("resolves every curated event to its exact Insights action_type", () => {
+    for (const e of LEAD_CONVERSION_EVENTS) {
+      expect(resolveLeadActionType(e.value)).toBe(e.leadActionType);
+    }
+  });
+
+  it("REGRESSION: COMPLETE_REGISTRATION resolves to the exact live-verified shape (free_beta_signups_leads)", () => {
+    expect(resolveLeadActionType("COMPLETE_REGISTRATION")).toBe("offsite_conversion.fb_pixel_complete_registration");
+  });
+
+  it("throws for an unrecognized event rather than silently returning nothing", () => {
+    expect(() => resolveLeadActionType("SOMETHING_MADE_UP")).toThrow(/SOMETHING_MADE_UP/);
+  });
+
+  it("every curated event has a non-empty, distinct leadActionType", () => {
+    const seen = new Set<string>();
+    for (const e of LEAD_CONVERSION_EVENTS) {
+      expect(e.leadActionType.length).toBeGreaterThan(0);
+      expect(seen.has(e.leadActionType)).toBe(false);
+      seen.add(e.leadActionType);
+    }
   });
 });

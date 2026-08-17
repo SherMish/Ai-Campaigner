@@ -1,5 +1,5 @@
 import type pg from "pg";
-import { FIXED_DESTINATION } from "@aic/shared";
+import { resolveDestinationShape, resolveLeadActionType } from "@aic/shared";
 import { WriteOutbox, builderKey, type WriteKind, type CreatingWriter } from "../execution/write-outbox.js";
 import type { BuilderWriter, CreateAdSetTargeting } from "./types.js";
 
@@ -34,7 +34,14 @@ export interface BuildCampaignInput {
   dailyBudgetAgorot: number;
   specialAdCategories: string[]; // [] for none
   bidStrategy: string;
-  whatsappDestination: string; // stored on the campaign row for the customer app to display
+  // AIC-89 — destination is now a real choice, not always FIXED_DESTINATION.
+  // Resolved via resolveDestinationShape; an unrecognized value throws before
+  // any Meta call (same discipline as the additions flow, AIC-102).
+  destination: string;
+  whatsappDestination: string; // stored on the campaign row for the customer app to display; "" for website
+  destinationUrl?: string; // website only
+  pixelId?: string; // website only
+  conversionEvent?: string; // website only — a LEAD_CONVERSION_EVENTS value
   adSets: BuilderAdSetSpec[];
 }
 
@@ -109,6 +116,11 @@ export async function buildCampaignOnMeta(
   writer: BuilderWriter,
   input: BuildCampaignInput,
 ): Promise<BuildCampaignResult> {
+  // Throws BEFORE any Meta call for an unrecognized destination — same
+  // discipline as the additions flow (AIC-102): never a malformed write.
+  resolveDestinationShape(input.destination);
+  const leadEventTypes = input.conversionEvent ? [resolveLeadActionType(input.conversionEvent)] : null;
+
   const outbox = new WriteOutbox(pool);
   const creator = asCreatingWriter(writer);
 
@@ -144,9 +156,12 @@ export async function buildCampaignOnMeta(
           name: as.name,
           targeting: as.targeting,
           pageId: input.pageId,
-          // P0-fixed: the builder only ever creates Click-to-WhatsApp
-          // campaigns (AIC-89 is what would make this a real choice).
-          destination: FIXED_DESTINATION,
+          // AIC-89: destination is now a real choice, resolved from the
+          // input rather than hardcoded — pixelId/conversionEvent are
+          // ignored by the adapter for a WhatsApp destination.
+          destination: input.destination,
+          pixelId: input.pixelId,
+          conversionEvent: input.conversionEvent,
         },
       },
       creator,
@@ -182,9 +197,14 @@ export async function buildCampaignOnMeta(
   await pool.query(
     `UPDATE managed_campaigns
      SET meta_campaign_id = $2, name = $3, objective = 'leads',
-         whatsapp_destination = $4, agreed_budget_agorot = $5, budget_period = 'daily'
+         whatsapp_destination = $4, agreed_budget_agorot = $5, budget_period = 'daily',
+         website_url = $6, tracking_pixel_id = $7,
+         lead_event_types = COALESCE($8::text[], lead_event_types)
      WHERE id = $1`,
-    [input.localCampaignId, metaCampaignId, input.name, input.whatsappDestination, input.dailyBudgetAgorot],
+    [
+      input.localCampaignId, metaCampaignId, input.name, input.whatsappDestination, input.dailyBudgetAgorot,
+      input.destinationUrl ?? null, input.pixelId ?? null, leadEventTypes,
+    ],
   );
 
   return { metaCampaignId, adSets: adSetResults };

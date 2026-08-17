@@ -44,7 +44,11 @@ export function newAdDraft(index: number): AdDraft {
 // resolves it server-side from the caller's context instead, so it's never
 // part of this shared shape.
 export type AdCreativeBody =
-  | { clientKey: string; name: string; headline: string; primaryText: string; whatsappNumber: string; media: UploadedMedia }
+  | {
+      clientKey: string; name: string; headline: string; primaryText: string;
+      whatsappNumber?: string; destination?: string; destinationUrl?: string;
+      media: UploadedMedia;
+    }
   | { clientKey: string; name: string; postId: string };
 
 interface Props {
@@ -54,7 +58,13 @@ interface Props {
   // omit when passing a custom createCreativeFn (AIC-63's screen resolves
   // its campaign server-side instead).
   localCampaignId?: string;
-  whatsappNumber: string;
+  // AIC-89: both optional now — a website-destination build passes
+  // destination/destinationUrl instead of whatsappNumber. AddContent.tsx
+  // (AIC-63) passes neither; the additions server infers the destination
+  // from the existing campaign's own configuration.
+  whatsappNumber?: string;
+  destination?: string;
+  destinationUrl?: string;
   // AIC-63: injectable so AddContent.tsx can point creative creation at
   // /app/additions/* instead of /app/builder/* — same component and UI,
   // different backend routes. Defaults to the builder's own endpoints.
@@ -64,7 +74,7 @@ interface Props {
 }
 
 export function BuilderCreatives({
-  ads, onChange, localCampaignId, whatsappNumber,
+  ads, onChange, localCampaignId, whatsappNumber, destination, destinationUrl,
   getPosts = getPromotablePosts,
   uploadFile = uploadCreativeFile,
   createCreativeFn = (body) => createCreative({ ...body, localCampaignId } as CreateCreativeBody),
@@ -110,7 +120,8 @@ export function BuilderCreatives({
           ? { clientKey: ad.clientKey, name: ad.name, postId: ad.postId! }
           : {
               clientKey: ad.clientKey, name: ad.name,
-              headline: ad.headline, primaryText: ad.primaryText, whatsappNumber, media: ad.media!,
+              headline: ad.headline, primaryText: ad.primaryText,
+              whatsappNumber, destination, destinationUrl, media: ad.media!,
             };
       const { creativeId } = await createCreativeFn(body);
       update(ad.clientKey, { creativeId, status: "created" });

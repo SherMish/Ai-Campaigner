@@ -1,7 +1,7 @@
 import type { LiveCampaignState, MetaReader, ExecWriter } from "../execution/safe-executor.js";
 import { normalizeAdSet, isProblem, type AdSetHealth, type DeliveryReader, type RawAdSetDelivery } from "./delivery-health.js";
 import { normalizeAdSetMeta, type AdSetMeta, type RawAdSetMeta } from "./audience-label.js";
-import type { BuilderWriter, CreateCampaignParams, CreateAdSetParams, CreateAdParams } from "../builder/types.js";
+import type { BuilderWriter, CreateCampaignParams, CreateAdSetParams, CreateAdParams, PixelOption, PixelRecencyCheck } from "../builder/types.js";
 import type {
   CreativeWriter,
   UploadedImage,
@@ -328,6 +328,52 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     return top;
   }
 
+  // AIC-89 — the website-destination builder step's Pixel picker. Every
+  // Pixel/dataset visible on the ad account, for the operator/customer to
+  // choose from rather than typing a raw id (the AIC-87 free-text capture
+  // this replaces for the CREATE path specifically).
+  async listPixels(adAccountId: string): Promise<PixelOption[]> {
+    const body = await this.get(`${adAccountId}/adspixels?fields=id,name`);
+    return ((body.data as Array<Record<string, unknown>>) ?? []).map((p) => ({
+      id: String(p.id),
+      name: p.name ? String(p.name) : String(p.id),
+    }));
+  }
+
+  // AIC-89's build-time guardrail: warn before creating a website campaign
+  // against a Pixel that isn't actually seeing the chosen event. Adapted from
+  // getPixelTopHost's proven `/stats` pattern, bucketed by event name instead
+  // of host. Field-shape confidence note: `aggregation=host` above is
+  // live-verified; `aggregation=event` is this adapter's best-effort reading
+  // of the same edge, not yet confirmed against a real Pixel with real
+  // events — treat the first live check as the real verification.
+  //
+  // Returns `hasRecentEvents: null` (never a confident `false`) on any read
+  // failure or an unparseable response — the same "never a confident denial
+  // from an ambiguous read" discipline as AccessProbe (AIC-101): a network
+  // hiccup must never tell an operator a healthy Pixel is dead.
+  async checkPixelEventRecency(pixelId: string, eventName: string): Promise<PixelRecencyCheck> {
+    try {
+      const body = await this.get(`${pixelId}/stats?aggregation=event`);
+      let total = 0;
+      let sawEvent = false;
+      for (const bucket of (body.data as Array<Record<string, unknown>>) ?? []) {
+        for (const e of (bucket.data as Array<Record<string, unknown>>) ?? []) {
+          if (String(e.value ?? "") !== eventName) continue;
+          sawEvent = true;
+          total += Number(e.count ?? 0);
+        }
+      }
+      // The event bucket never appearing at all is a different, weaker signal
+      // than appearing with a real zero — both read as "no recent events" for
+      // this warning's purpose, but only a genuine response (not a thrown
+      // error) earns a definite answer either way.
+      return { hasRecentEvents: sawEvent ? total > 0 : false };
+    } catch {
+      return { hasRecentEvents: null };
+    }
+  }
+
   // ── Create-writes (AIC-50, the builder) ────────────────────────────────────
   // Every create is status=PAUSED — the builder NEVER produces a live, spending
   // object directly (the hard rule this ticket exists to enforce). Activation
@@ -360,6 +406,19 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     // Throws for anything not yet supported rather than silently defaulting
     // to the WhatsApp shape — the specific defect this replaces.
     const shape = resolveDestinationShape(params.destination);
+    // AIC-89: promoted_object shape follows the destination, same as the
+    // creative's CTA shape (createCreativeFromUpload). Field-shape confidence
+    // note: page_id/WhatsApp was live-verified against a real create; the
+    // pixel_id/custom_event_type pair below is this adapter's best-effort
+    // reading of Meta's OFFSITE_CONVERSIONS API, matching the real shape
+    // observed on Pisga's own free_beta_signups_leads campaign
+    // (promoted_object: { pixel_id, custom_event_type: COMPLETE_REGISTRATION })
+    // — treat the first live create-write on an account we control as the
+    // real verification, not this code review.
+    const promotedObject =
+      shape.destinationType === "WEBSITE"
+        ? { pixel_id: params.pixelId, custom_event_type: params.conversionEvent }
+        : { page_id: params.pageId };
     return this.postCreate(params.adAccountId, "adsets", {
       name: params.name,
       campaign_id: params.metaCampaignId,
@@ -367,7 +426,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       billing_event: "IMPRESSIONS",
       optimization_goal: shape.optimizationGoal,
       destination_type: shape.destinationType,
-      promoted_object: { page_id: params.pageId },
+      promoted_object: promotedObject,
       targeting: {
         age_min: params.targeting.ageMin,
         age_max: params.targeting.ageMax,

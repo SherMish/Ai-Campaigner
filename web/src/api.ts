@@ -503,7 +503,16 @@ export class CreativeValidationError extends Error {
   }
 }
 export type CreateCreativeBody =
-  | { localCampaignId: string; clientKey: string; name: string; headline: string; primaryText: string; whatsappNumber: string; media: UploadedMedia }
+  | {
+      localCampaignId: string; clientKey: string; name: string; headline: string; primaryText: string;
+      whatsappNumber?: string;
+      // AIC-89 — only meaningful for the builder's own /creative endpoint,
+      // which has no existing campaign to infer a destination from yet
+      // (unlike additions/creative, which derives it server-side).
+      destination?: string;
+      destinationUrl?: string;
+      media: UploadedMedia;
+    }
   | { localCampaignId: string; clientKey: string; name: string; postId: string };
 
 // Bypasses api() too: a 400 here carries {errors: code[]}, not {error: string} —
@@ -528,7 +537,11 @@ export interface BuildCampaignBody {
   name: string;
   dailyBudgetAgorot: number;
   specialAdCategories: string[];
+  destination?: string; // AIC-89 — defaults server-side to WhatsApp when omitted
   whatsappDestination: string;
+  destinationUrl?: string;
+  pixelId?: string;
+  conversionEvent?: string;
   targeting: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[] };
   ads: Array<{ clientKey: string; name: string; creativeId: string }>;
 }
@@ -538,6 +551,15 @@ export interface BuildCampaignResult {
 }
 export const buildCampaign = (body: BuildCampaignBody) =>
   api<BuildCampaignResult>("/app/builder/build", { method: "POST", body: JSON.stringify(body) });
+
+// AIC-89 — the website-destination step's Pixel picker + recency guard.
+export interface PixelOption { id: string; name: string; }
+export const getBuilderPixels = () => api<{ pixels: PixelOption[] }>("/app/builder/pixels");
+export const checkBuilderPixel = (pixelId: string, conversionEvent: string) =>
+  api<{ hasRecentEvents: boolean | null }>("/app/builder/pixel-check", {
+    method: "POST",
+    body: JSON.stringify({ pixelId, conversionEvent }),
+  });
 
 // ── Launch gate (AIC-53) ────────────────────────────────────────────────────
 // Where leads actually arrive. Three-valued: `unknown` blocks launch rather
@@ -606,8 +628,12 @@ export async function uploadAdditionFile(file: File): Promise<UploadedMedia> {
 
 export const getAdditionPosts = () => api<{ posts: PromotablePost[] }>("/app/additions/posts");
 
+// whatsappNumber is vestigial here — the additions server (AIC-102) derives
+// the destination from the campaign's own stored configuration, never from
+// the client. Kept optional rather than removed to avoid touching every
+// AddContent.tsx call site for a field the server already ignores.
 export type AddContentCreativeBody =
-  | { clientKey: string; name: string; headline: string; primaryText: string; whatsappNumber: string; media: UploadedMedia }
+  | { clientKey: string; name: string; headline: string; primaryText: string; whatsappNumber?: string; media: UploadedMedia }
   | { clientKey: string; name: string; postId: string };
 
 // Bypasses api() too — a 400 here carries {errors: code[]}, matching createCreative.

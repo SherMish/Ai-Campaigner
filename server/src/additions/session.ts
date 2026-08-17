@@ -7,6 +7,13 @@ import type { DeliveryReader } from "../meta/delivery-health.js";
 import type { AdMediaReader } from "../meta/ad-media.js";
 import { isMessagingAction } from "../meta/tracking-health.js";
 import { classifyConnectionReadiness, type ConnectionReadinessReason } from "../services/connection-readiness.js";
+import { resolveCreativeDestination, type CreativeDestination, type CreativeBlockReason } from "../meta/destination.js";
+
+// Re-exported for existing consumers (routes/additions.ts, session.test.ts) —
+// the classification itself now lives in meta/destination.ts (AIC-89), shared
+// with the builder's create-path, since AdditionContext already structurally
+// satisfies DestinationInputs (isMessaging/whatsappNumber/websiteUrl).
+export { resolveCreativeDestination, type CreativeDestination, type CreativeBlockReason };
 
 // The inverse precondition of builder/session.ts's resolveBuilderContext:
 // that one requires NO managed campaign (first-time build only); this one
@@ -73,31 +80,15 @@ export function acceptsWhatsappWrites(ctx: AdditionContext): boolean {
   return whatsappWriteBlock(ctx) === null;
 }
 
-// AIC-102 — what shape the CREATIVE (add-content, new-content path) should
-// take. Deliberately separate from whatsappWriteBlock above: that guard is
+// (resolveCreativeDestination now lives in meta/destination.ts, re-exported
+// above — AdditionContext already satisfies its DestinationInputs shape.)
+// Deliberately separate from whatsappWriteBlock above: that guard is
 // unchanged and still gates AD-SET creation (`POST /ad-set`), which genuinely
 // still only knows how to build a WhatsApp-shaped ad set (AIC-89's territory).
-// This one governs `POST /creative`'s upload path, which now supports two
-// shapes — reusing ctx.isMessaging/whatsappNumber/websiteUrl (AIC-87's
-// classification, computed once in toContext) rather than re-deriving it.
-//
-// The existing-post creative path needs neither branch of this at all —
-// createCreativeFromExistingPost carries no destination fields; Meta reuses
-// whatever CTA/link the original Page post already has.
-export type CreativeDestination =
-  | { kind: "whatsapp"; number: string }
-  | { kind: "website"; url: string };
-
-export type CreativeBlockReason = "missing_number" | "missing_website_url";
-
-export function resolveCreativeDestination(
-  ctx: AdditionContext,
-): CreativeDestination | { kind: "blocked"; reason: CreativeBlockReason } {
-  if (ctx.isMessaging) {
-    return ctx.whatsappNumber ? { kind: "whatsapp", number: ctx.whatsappNumber } : { kind: "blocked", reason: "missing_number" };
-  }
-  return ctx.websiteUrl ? { kind: "website", url: ctx.websiteUrl } : { kind: "blocked", reason: "missing_website_url" };
-}
+// resolveCreativeDestination governs `POST /creative`'s upload path only,
+// which supports two shapes. The existing-post creative path needs neither
+// branch at all — createCreativeFromExistingPost carries no destination
+// fields; Meta reuses whatever CTA/link the original Page post already has.
 
 type AdditionContextRow = {
   customer_id: string | null;

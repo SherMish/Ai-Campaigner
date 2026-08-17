@@ -87,14 +87,19 @@ every step, in `shared/src/recommended-defaults.ts` — consumed by both the
 server and the web app (it's in the shared workspace, same as `money.ts`),
 so no UI component hardcodes an opinion independently. Every value here is a
 **recommendation**: overridable in the builder (AIC-52), never a hard
-constraint — except the three P0-fixed choices, which the builder won't even
-present as a choice:
+constraint — except two P0-fixed choices, which the builder won't even
+present as a choice, plus one former-fixed choice that AIC-89 turned real:
 
 | Fixed choice | Value |
 | --- | --- |
 | Objective | `OUTCOME_LEADS` (`FIXED_OBJECTIVE`) |
 | Buying type | `AUCTION` (`FIXED_BUYING_TYPE`) |
-| Destination | WhatsApp (`FIXED_DESTINATION`) |
+
+**Destination is now a real choice (AIC-89), not fixed.** WhatsApp
+(`FIXED_DESTINATION`) remains the **recommended default** — simplest for the
+customer, no website needed, on-platform tracking that can't silently break
+— but a business with a converting website can choose Website
+(`WEBSITE_DESTINATION`) instead. See "The destination choice (AIC-89)" below.
 
 **Structure** (`RECOMMENDED_STRUCTURE`): 1 ad set, 3–5 ads — the AIC-38
 single-ad-set ideal, presented here as what it's always been: a
@@ -213,20 +218,80 @@ Meta's Click-to-WhatsApp API and are **not yet live-verified** the way
 The AC's "dogfood on an account we control" step is what actually verifies
 this shape — treat that live test, not this code, as the real confirmation.
 
-**The destination fields are resolved, not hardcoded (bug fix, 2026-08-14).**
-`createAdSet` used to write `"CONVERSATIONS"`/`"WHATSAPP"` as inline string
-literals — the same literals `shared/src/recommended-defaults.ts`'s
-`FIXED_DESTINATION`/`FIXED_CTA` constants existed to own, but nothing
-actually read them. That's exactly how a Pixel campaign could reach this
-code with a WhatsApp shape: the campaign's real lead type never entered the
-decision. `CreateAdSetParams` now carries an explicit `destination: string`,
-resolved by `shared/src/recommended-defaults.ts`'s
-`resolveDestinationShape()` — the single place every Meta field for a
-destination lives. It **throws** for anything it doesn't recognize rather
-than silently returning the WhatsApp shape, so a caller can never emit a
-wrong write by omission. The builder always passes `FIXED_DESTINATION`
-(P0-fixed, unchanged behaviour); a second destination (AIC-89) extends this
-one map instead of requiring another literal hunt.
+**The destination fields are resolved, never hardcoded.** `CreateAdSetParams`
+carries an explicit `destination: string`, resolved by
+`shared/src/recommended-defaults.ts`'s `resolveDestinationShape()` — the
+single place every Meta field for a destination lives (`optimizationGoal`/
+`destinationType`/`ctaType`). It **throws** for anything it doesn't recognize
+rather than silently returning the WhatsApp shape — the fix for a real bug
+(2026-08-14) where `createAdSet` wrote `"CONVERSATIONS"`/`"WHATSAPP"` as
+inline literals nothing actually resolved from the campaign's real lead type,
+which is exactly how a Pixel campaign once reached Meta with a WhatsApp shape.
+
+### The destination choice (AIC-89)
+
+**Destination is a real builder step now, not a P0-fixed value.** Step 1
+("יעד הפנייה") lets the customer choose WhatsApp (recommended default) or
+Website — this is the CREATE-time counterpart to AIC-102's fix on the
+additions (add-content-to-an-existing-campaign) flow, which taught the
+existing-campaign path to build a website-shaped creative but never touched
+how a *new* campaign gets created.
+
+**`CreateAdSetParams` gained `pixelId`/`conversionEvent`, used only for the
+WEBSITE destination.** `createAdSet` branches its `promoted_object` the same
+way `createCreativeFromUpload` already branches its `call_to_action`
+(AIC-102): `{ page_id }` for WhatsApp, `{ pixel_id, custom_event_type }` for
+website. Both fields are ignored/absent for a WhatsApp ad set — no cross-talk
+between the two shapes. **Field-shape confidence note, same discipline as
+the WhatsApp shape above:** `pixel_id`/`custom_event_type` is this adapter's
+best-effort reading of Meta's `OFFSITE_CONVERSIONS` API, matching the real
+shape observed live on Pisga's own `free_beta_signups_leads` campaign during
+the AIC-87 investigation — not yet independently live-verified as a *create*
+write (as opposed to a read), same as every other builder create-write
+before its own first live dogfood test.
+
+**The conversion-event picker is curated, not free-text.** `LEAD_CONVERSION_EVENTS`
+(`shared/src/recommended-defaults.ts`) lists five of Meta's own standard
+lead-relevant events (`LEAD`, `COMPLETE_REGISTRATION`, `SUBMIT_APPLICATION`,
+`SCHEDULE`, `CONTACT`) — each paired with the exact Insights `action_type` it
+reports as (`resolveLeadActionType()`), so `managed_campaigns.lead_event_types`
+is never built from an inline string transform at a call site. Throws for an
+unrecognized event rather than silently building a wrong lead definition.
+
+**The Pixel picker replaces free-text entry for the create path.**
+`GraphCampaignAdapter.listPixels(adAccountId)` (`GET act_.../adspixels`) —
+new; AIC-87's free-text `tracking_pixel_id` capture (during onboarding) is
+unaffected and still exists for the *manage-an-existing-connection* path
+(AIC-101's wizard).
+
+**The Pixel-recency guardrail never renders a confident "the Pixel is dead."**
+`checkPixelEventRecency(pixelId, eventName)` — adapted from the already-proven
+`getPixelTopHost`'s `/stats` pattern, bucketed by event name instead of host.
+Three-valued: `true` (recent volume), `false` (the event genuinely has zero
+recent volume, or never appears in the response at all), `null` (the check
+itself failed — network error, unparseable response). The UI treats `null`
+the same as `true` (no warning) — warning on an inconclusive signal would cry
+wolf, the same principle `docs/features/tracking-health.md` documents for
+why a pixel-recency check was originally deferred at all. Unlike that
+deferred check (which would have run *after* a campaign was already
+spending), this one runs at **build time**, before anything is created —
+genuinely lower-risk than the design that was rejected there.
+
+**Switching destination mid-wizard clears the other branch's fields**
+(`Builder.tsx`'s `chooseDestination`) — a customer who types a WhatsApp
+number then switches to Website never has that stale number silently
+submitted alongside a URL.
+
+Tests: `shared/recommended-defaults.test.ts` (`resolveDestinationShape`/
+`resolveLeadActionType` for the website shape, unrecognized-value throws),
+`server/src/meta/campaign-adapter.test.ts` (`createAdSet`'s website
+`promoted_object`, `listPixels`, `checkPixelEventRecency`'s three-valued
+result including the never-a-confident-false-on-network-failure case),
+`server/src/builder/campaign-create.integration.test.ts` (a full
+website-destination build persists `website_url`/`tracking_pixel_id`/
+`lead_event_types` correctly; an unrecognized destination throws before any
+Meta call), `server/src/routes/builder.integration.test.ts` (`GET /pixels`,
+`POST /pixel-check`, and the full website-destination HTTP happy path).
 
 Tests: `campaign-adapter.test.ts` (created-PAUSED + correct endpoint/field
 shape per object, mocked `fetch`), `write-outbox.integration.test.ts`
@@ -274,16 +339,16 @@ Page's `promotable_posts` edge; `createCreativeFromExistingPost` creates the
 ad creative via `object_story_id` (`{pageId}_{postId}`) — no
 `object_story_spec`, no upload, at all.
 
-**The WhatsApp creative shape** (`createCreativeFromUpload`'s
-`object_story_spec.link_data.call_to_action = {type: FIXED_CTA,
-value: {whatsapp_number}}`) is, like AIC-50's ad-set destination fields, a
-best-effort reading of Meta's Click-to-WhatsApp API — **not yet
-live-verified**. It rides along with AIC-50's pending dogfood test rather
-than needing a separate one. The CTA type is resolved via the same
-`resolveDestinationShape()` as the ad-set fields (bug fix, 2026-08-14, see
-AIC-50's section above) — it used to be the inline literal
-`"WHATSAPP_MESSAGE"`, which is how a Pixel campaign's creative write once
-carried a WhatsApp CTA nobody had checked was correct.
+**The creative's CTA shape follows the destination** (`createCreativeFromUpload`),
+resolved via the same `resolveDestinationShape()` as the ad-set fields:
+`object_story_spec.link_data.call_to_action = {type: FIXED_CTA, value:
+{whatsapp_number}}` for WhatsApp, `{type: WEBSITE_CTA, value: {link}}` plus
+a top-level `link_data.link` for website (AIC-89) — the exact branch AIC-102
+built first for the additions (existing-campaign) flow, reused here unchanged
+for the create path. Both remain this adapter's best-effort reading of
+Meta's respective APIs — **not yet independently live-verified as a create
+write** — treat the first live create-write dogfood test on an account we
+control as the real confirmation, not this code.
 
 **Idempotent the same way as AIC-50's creates** (`builder/creative-create.ts`,
 `createCreativeIdempotent` → `WriteOutbox.applyIdempotent`, migration 021
@@ -308,7 +373,7 @@ clientKey).
 
 ### The guided builder UI + HTTP routes (AIC-52)
 
-The step flow: 8 steps (goal, WhatsApp, budget, special ad category,
+The step flow: 8 steps (goal, destination choice, budget, special ad category,
 audience, placements, creatives, review), each showing its recommended
 default already filled in — "accept every default and click through" is a
 real, working path, not just a design intent. Every real choice is a live,

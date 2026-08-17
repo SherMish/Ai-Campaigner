@@ -58,15 +58,17 @@ its own campaign through its own product — the primary account failing the
 primary workflow. Root cause: the guard refused ALL non-WhatsApp campaigns
 unconditionally, with no alternative shape for the type Pisga itself runs.
 
-### Adding an ad set — WhatsApp only, unchanged (still AIC-89's territory)
+### Adding an ad set — WhatsApp only, unchanged
 
 `POST /additions/ad-set` still gates on `whatsappWriteBlock` alone — a
 narrower, unchanged function returning `not_whatsapp` / `missing_number` /
-`null`. Building a new ad set for a website/Pixel campaign needs
-`optimization_goal` / `destination_type` / `promoted_object` fields this flow
-doesn't build yet — deliberately left for
-[AIC-89](https://linear.app/pisga-app/issue/AIC-89), which will extend
-`resolveDestinationShape`'s consumers rather than this guard. The two guards
+`null`. Building a new ad set for a website/Pixel campaign under an
+*existing* campaign needs the same `promoted_object` construction AIC-89
+already built for the builder's create path
+([campaign-builder.md](campaign-builder.md#the-destination-choice-aic-89)) —
+just not wired up on THIS route yet, since AIC-89 was scoped to campaign
+creation, not additions. A real, separate, currently-unbuilt gap if a
+customer with a website campaign ever needs a second ad set. The two guards
 are intentionally separate now (AIC-102) so fixing the creative path didn't
 have to wait on the harder ad-set one, and so ad-set creation can't
 accidentally inherit a shape it isn't ready to build.
@@ -91,7 +93,10 @@ source for every Meta field a destination needs
 and the builder's create-writes. `resolveDestinationShape` throws for an
 unrecognized destination rather than silently falling back to the WhatsApp
 shape — the specific defect class (`WEBSITE_DESTINATION` added AIC-102,
-`FIXED_DESTINATION`/WhatsApp original P0). `createAdSet` passes through
-whatever shape resolves for ANY destination (proven by test), but this flow
-never calls it for a non-WhatsApp campaign yet — resolving the shape and
-using it to create an ad set are deliberately still separate, until AIC-89.
+`FIXED_DESTINATION`/WhatsApp original P0). `createAdSet` now fully builds the
+website `promoted_object` shape (`pixel_id`/`custom_event_type`) — AIC-89
+shipped that for the **builder's create-a-new-campaign path**
+([campaign-builder.md](campaign-builder.md#the-destination-choice-aic-89)).
+This flow's own `POST /ad-set` route (adding a new ad set to an *existing*
+campaign) still never calls it for a non-WhatsApp campaign — still genuinely
+separate, unbuilt scope, tracked below if it's ever needed.

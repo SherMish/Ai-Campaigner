@@ -27,6 +27,12 @@ function mockMetaFetch() {
     if (u.includes("/posts?")) {
       return jsonRes({ data: [{ id: "post_1", message: "hi", full_picture: "https://x/p.jpg", created_time: "2026-01-01T00:00:00Z" }] });
     }
+    if (u.includes("/adspixels")) {
+      return jsonRes({ data: [{ id: "984664453249037", name: "Pisga Pixel" }] });
+    }
+    if (u.includes("/stats?aggregation=event")) {
+      return jsonRes({ data: [{ data: [{ value: "CompleteRegistration", count: 5 }] }] });
+    }
     if (u.endsWith("/adimages")) return jsonRes({ images: { "photo.jpg": { hash: "img_hash_1", url: "https://x/photo.jpg" } } });
     if (u.endsWith("/adcreatives")) return jsonRes({ id: `crea_${++counter}` });
     if (u.endsWith("/campaigns")) return jsonRes({ id: `meta_camp_${++counter}` });
@@ -192,6 +198,74 @@ d("guided builder routes (DB + HTTP)", () => {
       .set("Authorization", `Bearer ${b.token}`)
       .send({ localCampaignId, clientKey: "adset-1-ad-1", name: "Ad 1", postId: "post_1" });
     expect(stolen.status).toBe(404);
+  });
+
+  // AIC-89 — the website-destination step's Pixel picker + recency guard,
+  // and the full website-destination build end-to-end.
+  it("GET /pixels lists Pixels on the ad account", async () => {
+    vi.stubGlobal("fetch", mockMetaFetch());
+    const { token } = await seedReadyCustomer("pixels");
+    const res = await request(app).get("/api/app/builder/pixels").set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.pixels).toEqual([{ id: "984664453249037", name: "Pisga Pixel" }]);
+  });
+
+  it("POST /pixel-check reports recency for the chosen Pixel + event", async () => {
+    vi.stubGlobal("fetch", mockMetaFetch());
+    const { token } = await seedReadyCustomer("pixel-check");
+    const res = await request(app)
+      .post("/api/app/builder/pixel-check")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ pixelId: "984664453249037", conversionEvent: "CompleteRegistration" });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ hasRecentEvents: true });
+  });
+
+  it("full website-destination happy path: build creates a link-CTA ad and persists website_url/lead_event_types/tracking_pixel_id", async () => {
+    vi.stubGlobal("fetch", mockMetaFetch());
+    const { token } = await seedReadyCustomer("website-happy");
+
+    const start = await request(app).post("/api/app/builder/start").set("Authorization", `Bearer ${token}`);
+    const localCampaignId = start.body.localCampaignId as string;
+
+    const creative = await request(app)
+      .post("/api/app/builder/creative")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        localCampaignId, clientKey: "adset-1-ad-1", name: "Ad 1",
+        headline: "כותרת טובה", primaryText: "טקסט מספיק ארוך כדי לעבור ולידציה",
+        media: { kind: "image", imageHash: "img_hash_1" },
+        destination: "website", destinationUrl: "https://pisga.app/signup",
+      });
+    expect(creative.status).toBe(200);
+    const creativeId = creative.body.creativeId as string;
+
+    const build = await request(app)
+      .post("/api/app/builder/build")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        localCampaignId,
+        name: "Pisga website campaign",
+        dailyBudgetAgorot: 4000,
+        specialAdCategories: [],
+        destination: "website",
+        whatsappDestination: "",
+        destinationUrl: "https://pisga.app/signup",
+        pixelId: "984664453249037",
+        conversionEvent: "COMPLETE_REGISTRATION",
+        targeting: { ageMin: 18, ageMax: 45, genders: "all" },
+        ads: [{ clientKey: "adset-1-ad-1", name: "Ad 1", creativeId }],
+      });
+    expect(build.status).toBe(200);
+    expect(build.body.metaCampaignId).toBeTruthy();
+
+    const camp = await pool.query<{ website_url: string; tracking_pixel_id: string; lead_event_types: string[] }>(
+      `SELECT website_url, tracking_pixel_id, lead_event_types FROM managed_campaigns WHERE id = $1`,
+      [localCampaignId],
+    );
+    expect(camp.rows[0].website_url).toBe("https://pisga.app/signup");
+    expect(camp.rows[0].tracking_pixel_id).toBe("984664453249037");
+    expect(camp.rows[0].lead_event_types).toEqual(["offsite_conversion.fb_pixel_complete_registration"]);
   });
 
   it("503s honestly when no META_SYSTEM_USER_TOKEN is configured", async () => {

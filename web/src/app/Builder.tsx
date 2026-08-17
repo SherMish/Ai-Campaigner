@@ -3,22 +3,29 @@ import { useNavigate } from "react-router-dom";
 import {
   RECOMMENDED_BUDGET_AGOROT_PER_DAY, RECOMMENDED_SPECIAL_AD_CATEGORY,
   SPECIAL_AD_CATEGORY, resolveAudienceDefault, normalizeBusinessCategory,
+  FIXED_DESTINATION, WEBSITE_DESTINATION, LEAD_CONVERSION_EVENTS,
   type SpecialAdCategory, type BusinessCategory,
 } from "@aic/shared";
 import { strings } from "../strings";
 import {
-  getBuilderContext, startBuilder, buildCampaign, ApiError,
-  type BuildCampaignResult,
+  getBuilderContext, startBuilder, buildCampaign, getBuilderPixels, checkBuilderPixel, ApiError,
+  type BuildCampaignResult, type PixelOption,
 } from "../api";
 import { Stepper, StatusPill, SupportCard, Recommended } from "./components";
 import { BuilderCreatives, newAdDraft, type AdDraft } from "./BuilderCreatives";
 import { AudienceFields, type Gender } from "./AudienceFields";
 
 const b = strings.he.builder;
-const g = b.goal, w = b.whatsapp, bg = b.budget, sc = b.specialCategory, au = b.audience, pl = b.placements, rv = b.review;
+const g = b.goal, ds = b.destination, bg = b.budget, sc = b.specialCategory, au = b.audience, pl = b.placements, rv = b.review;
 
 interface WizardState {
+  // AIC-89: a real choice now — FIXED_DESTINATION (WhatsApp, the
+  // recommended default) or WEBSITE_DESTINATION.
+  destination: string;
   whatsappNumber: string;
+  destinationUrl: string;
+  pixelId: string;
+  conversionEvent: string;
   dailyBudgetShekels: number;
   specialCategory: SpecialAdCategory;
   ageMin: number;
@@ -38,6 +45,13 @@ export function Builder() {
   const [buildError, setBuildError] = useState<string | null>(null);
   const [buildResult, setBuildResult] = useState<BuildCampaignResult | null>(null);
 
+  // AIC-89: the Pixel picker's own data, loaded only once the website
+  // destination is actually chosen (never fetched for the WhatsApp path).
+  const [pixels, setPixels] = useState<PixelOption[] | null>(null);
+  const [pixelsLoading, setPixelsLoading] = useState(false);
+  const [pixelRecent, setPixelRecent] = useState<boolean | null>(null);
+  const [pixelChecking, setPixelChecking] = useState(false);
+
   useEffect(() => {
     getBuilderContext()
       .then((ctx) => {
@@ -45,12 +59,16 @@ export function Builder() {
         // selector shows a real, correctable option (never a blank/mystery).
         const cat = normalizeBusinessCategory(ctx.category);
         setCategory(cat);
-        const d = resolveAudienceDefault(cat);
+        const aud = resolveAudienceDefault(cat);
         setWizard({
+          destination: FIXED_DESTINATION,
           whatsappNumber: "",
+          destinationUrl: "",
+          pixelId: "",
+          conversionEvent: "",
           dailyBudgetShekels: RECOMMENDED_BUDGET_AGOROT_PER_DAY.recommended / 100,
           specialCategory: RECOMMENDED_SPECIAL_AD_CATEGORY,
-          ageMin: d.ageMin, ageMax: d.ageMax, gender: d.genders,
+          ageMin: aud.ageMin, ageMax: aud.ageMax, gender: aud.genders,
         });
         return startBuilder();
       })
@@ -84,10 +102,40 @@ export function Builder() {
     setWizard((prev) => (prev ? { ...prev, ...p } : prev));
   }
 
+  function chooseDestination(dest: string) {
+    // Switching destination clears the other branch's fields rather than
+    // leaving stale data that could accidentally be sent — a customer who
+    // picks website after typing a WhatsApp number never has that number
+    // silently submitted alongside a URL.
+    patch(dest === FIXED_DESTINATION
+      ? { destination: dest, destinationUrl: "", pixelId: "", conversionEvent: "" }
+      : { destination: dest, whatsappNumber: "" });
+    setPixelRecent(null);
+    if (dest === WEBSITE_DESTINATION && pixels === null && !pixelsLoading) {
+      setPixelsLoading(true);
+      getBuilderPixels().then((r) => setPixels(r.pixels)).catch(() => setPixels([])).finally(() => setPixelsLoading(false));
+    }
+  }
+
+  // Re-checks recency whenever BOTH the pixel and event are chosen — never a
+  // stale warning left over from a previous selection.
+  function runPixelCheck(pixelId: string, conversionEvent: string) {
+    if (!pixelId || !conversionEvent) { setPixelRecent(null); return; }
+    setPixelChecking(true);
+    checkBuilderPixel(pixelId, conversionEvent)
+      .then((r) => setPixelRecent(r.hasRecentEvents))
+      .catch(() => setPixelRecent(null))
+      .finally(() => setPixelChecking(false));
+  }
+
   const createdAds = ads.filter((a) => a.creativeId);
+  const isWebsite = wizard.destination === WEBSITE_DESTINATION;
+  const destinationValid = isWebsite
+    ? /^https?:\/\/.+/.test(wizard.destinationUrl) && !!wizard.pixelId && !!wizard.conversionEvent
+    : /^\d{6,15}$/.test(wizard.whatsappNumber);
   const canNext = [
     true, // goal
-    /^\d{6,15}$/.test(wizard.whatsappNumber),
+    destinationValid,
     Number.isFinite(wizard.dailyBudgetShekels) && wizard.dailyBudgetShekels > 0,
     true, // special category
     wizard.ageMin >= 13 && wizard.ageMax > wizard.ageMin && wizard.ageMax <= 65,
@@ -106,7 +154,11 @@ export function Builder() {
         name: strings.he.appName,
         dailyBudgetAgorot: Math.round(wizard.dailyBudgetShekels * 100),
         specialAdCategories: wizard.specialCategory === "NONE" ? [] : [wizard.specialCategory],
-        whatsappDestination: wizard.whatsappNumber,
+        destination: wizard.destination,
+        whatsappDestination: isWebsite ? "" : wizard.whatsappNumber,
+        destinationUrl: isWebsite ? wizard.destinationUrl : undefined,
+        pixelId: isWebsite ? wizard.pixelId : undefined,
+        conversionEvent: isWebsite ? wizard.conversionEvent : undefined,
         targeting: { ageMin: wizard.ageMin, ageMax: wizard.ageMax, genders: wizard.gender },
         ads: createdAds.map((a) => ({ clientKey: a.clientKey, name: a.name, creativeId: a.creativeId! })),
       });
@@ -155,13 +207,83 @@ export function Builder() {
 
           {step === 1 && (
             <div>
-              <b style={{ fontSize: "1.2rem" }}>{w.title}</b>
-              <p className="muted" style={{ margin: "12px 0" }}>{w.body}</p>
-              <div className="field">
-                <label>{w.label}</label>
-                <input type="tel" placeholder={w.placeholder} value={wizard.whatsappNumber} onChange={(e) => patch({ whatsappNumber: e.target.value.replace(/[^\d]/g, "") })} />
+              <b style={{ fontSize: "1.2rem" }}>{ds.title}</b>
+              <p className="muted" style={{ margin: "12px 0" }}>{ds.body}</p>
+
+              <div className="stack gap12" style={{ marginBottom: 16 }}>
+                <label className="row gap12" style={{ alignItems: "center", cursor: "pointer" }}>
+                  <input type="radio" name="destination" checked={!isWebsite} onChange={() => chooseDestination(FIXED_DESTINATION)} />
+                  <span>{ds.optionWhatsapp}</span>
+                  <Recommended />
+                </label>
+                <label className="row gap12" style={{ alignItems: "center", cursor: "pointer" }}>
+                  <input type="radio" name="destination" checked={isWebsite} onChange={() => chooseDestination(WEBSITE_DESTINATION)} />
+                  <span>{ds.optionWebsite}</span>
+                </label>
               </div>
-              {wizard.whatsappNumber && !canNext && <p className="muted" style={{ marginTop: 8 }}>{w.invalid}</p>}
+
+              {!isWebsite ? (
+                <>
+                  <p className="muted" style={{ marginBottom: 12 }}>{ds.whatsappBody}</p>
+                  <div className="field">
+                    <label>{ds.whatsappLabel}</label>
+                    <input
+                      type="tel" placeholder={ds.whatsappPlaceholder} value={wizard.whatsappNumber}
+                      onChange={(e) => patch({ whatsappNumber: e.target.value.replace(/[^\d]/g, "") })}
+                    />
+                  </div>
+                  {wizard.whatsappNumber && !canNext && <p className="muted" style={{ marginTop: 8 }}>{ds.whatsappInvalid}</p>}
+                </>
+              ) : (
+                <>
+                  <p className="muted" style={{ marginBottom: 12 }}>{ds.websiteBody}</p>
+                  <div className="field">
+                    <label>{ds.urlLabel}</label>
+                    <input
+                      type="url" placeholder={ds.urlPlaceholder} value={wizard.destinationUrl}
+                      onChange={(e) => patch({ destinationUrl: e.target.value })}
+                    />
+                  </div>
+                  {wizard.destinationUrl && !/^https?:\/\/.+/.test(wizard.destinationUrl) && (
+                    <p className="muted" style={{ marginTop: 4, marginBottom: 12 }}>{ds.urlInvalid}</p>
+                  )}
+
+                  <div className="field" style={{ marginTop: 12 }}>
+                    <label>{ds.pixelLabel}</label>
+                    {pixelsLoading ? (
+                      <p className="muted">{ds.pixelLoading}</p>
+                    ) : pixels && pixels.length === 0 ? (
+                      <p className="muted">{ds.pixelNone}</p>
+                    ) : (
+                      <select
+                        value={wizard.pixelId}
+                        onChange={(e) => { patch({ pixelId: e.target.value }); runPixelCheck(e.target.value, wizard.conversionEvent); }}
+                      >
+                        <option value="">{ds.pixelPlaceholder}</option>
+                        {(pixels ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    )}
+                  </div>
+
+                  <div className="field" style={{ marginTop: 12 }}>
+                    <label>{ds.eventLabel}</label>
+                    <select
+                      value={wizard.conversionEvent}
+                      onChange={(e) => { patch({ conversionEvent: e.target.value }); runPixelCheck(wizard.pixelId, e.target.value); }}
+                    >
+                      <option value="">{ds.eventPlaceholder}</option>
+                      {LEAD_CONVERSION_EVENTS.map((ev) => (
+                        <option key={ev.value} value={ev.value}>{ds.eventOptions[ev.value] ?? ev.value}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {pixelChecking && <p className="muted" style={{ marginTop: 10 }}>{ds.recencyChecking}</p>}
+                  {!pixelChecking && pixelRecent === false && (
+                    <p className="muted" style={{ marginTop: 10, color: "var(--orange)" }}>{ds.recencyWarning}</p>
+                  )}
+                </>
+              )}
             </div>
           )}
 
@@ -212,7 +334,12 @@ export function Builder() {
           {step === 6 && (
             <div>
               <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 12 }}>{b.creatives.title}</b>
-              <BuilderCreatives ads={ads} onChange={setAds} localCampaignId={localCampaignId} whatsappNumber={wizard.whatsappNumber} />
+              <BuilderCreatives
+                ads={ads} onChange={setAds} localCampaignId={localCampaignId}
+                whatsappNumber={isWebsite ? undefined : wizard.whatsappNumber}
+                destination={isWebsite ? wizard.destination : undefined}
+                destinationUrl={isWebsite ? wizard.destinationUrl : undefined}
+              />
             </div>
           )}
 
@@ -220,7 +347,10 @@ export function Builder() {
             <div>
               <b style={{ fontSize: "1.2rem" }}>{rv.title}</b>
               <p className="muted" style={{ margin: "12px 0 20px" }}>{rv.body}</p>
-              <div className="summary-row"><span className="k">{rv.whatsappLine}</span><b>{wizard.whatsappNumber}</b></div>
+              <div className="summary-row">
+                <span className="k">{rv.destinationLine}</span>
+                <b>{isWebsite ? wizard.destinationUrl : wizard.whatsappNumber}</b>
+              </div>
               <div className="summary-row"><span className="k">{rv.budgetLine}</span><b>₪{wizard.dailyBudgetShekels}</b></div>
               <div className="summary-row"><span className="k">{rv.businessLine}</span><b>{au.businessTypes[category]}</b></div>
               <div className="summary-row"><span className="k">{rv.audienceLine}</span><b>{wizard.ageMin}–{wizard.ageMax}, {au.genderOptions[wizard.gender]} · {rv.geoValue}</b></div>

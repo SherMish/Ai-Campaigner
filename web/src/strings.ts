@@ -1121,7 +1121,7 @@ export const strings = {
       recommended: "מומלץ",
       next: "הבא",
       back: "חזרה",
-      stepNames: ["מטרה", "וואטסאפ", "תקציב", "קטגוריה מיוחדת", "קהל", "מיקומים", "מודעות", "סיכום"],
+      stepNames: ["מטרה", "יעד הפנייה", "תקציב", "קטגוריה מיוחדת", "קהל", "מיקומים", "מודעות", "סיכום"],
       notReadyTitle: "עוד לא מוכנים להתחיל",
       notReadyBody: "צריך קודם לחבר חשבון פרסום ועמוד פעילים ב-Meta, או שכבר יש לכם קמפיין מנוהל.",
       backToAccount: "לדף הראשי",
@@ -1129,17 +1129,49 @@ export const strings = {
 
       goal: {
         title: "המטרה של הקמפיין",
-        body: "נאסוף פניות דרך וואטסאפ — הדרך הכי טבעית ללקוחות בישראל ליצור איתכם קשר ישירות מהמודעה.",
+        // AIC-89: destination-neutral — the goal is "get leads," not
+        // "get leads over WhatsApp." The next step is where the channel
+        // is actually chosen.
+        body: "נאסוף פניות מהקהל שלכם. בשלב הבא תבחרו איך הן יגיעו אליכם — וואטסאפ או האתר שלכם.",
         objectiveLabel: "יעד הקמפיין",
-        objectiveValue: "פניות לוואטסאפ",
+        objectiveValue: "פניות (Leads)",
         fixedNote: "הגדרות הרכש (Auction) קבועות בשלב הזה ולא מוצגות כבחירה.",
       },
-      whatsapp: {
-        title: "מספר וואטסאפ",
-        body: "לקוחות שילחצו על המודעה ייצרו איתכם קשר במספר הזה.",
-        label: "מספר וואטסאפ, עם קידומת מדינה",
-        placeholder: "972501234567",
-        invalid: "מספר לא תקין — רק ספרות, כולל קידומת מדינה (למשל 972501234567).",
+      // AIC-89: destination is a real choice now — WhatsApp remains the
+      // recommended default (simplest for the customer, no website needed,
+      // on-platform tracking that can't silently break); website is the
+      // alternative for a business that already has a converting site.
+      destination: {
+        title: "לאן מגיעות הפניות?",
+        body: "רוב העסקים בישראל בוחרים בוואטסאפ — הכי טבעי ללקוחות, ופשוט לנהל. יש לכם אתר עם טופס פנייה או הרשמה? אפשר לחבר גם את זה.",
+        optionWhatsapp: "וואטסאפ",
+        optionWebsite: "אתר / דף נחיתה",
+        whatsappBody: "לקוחות שילחצו על המודעה ייצרו איתכם קשר במספר הזה.",
+        whatsappLabel: "מספר וואטסאפ, עם קידומת מדינה",
+        whatsappPlaceholder: "972501234567",
+        whatsappInvalid: "מספר לא תקין — רק ספרות, כולל קידומת מדינה (למשל 972501234567).",
+        websiteBody: "לקוחות שילחצו על המודעה יגיעו לכתובת הזו. חשוב שה-Pixel של מטא יהיה מותקן באתר כדי שנוכל לספור את הפניות.",
+        urlLabel: "כתובת דף היעד",
+        urlPlaceholder: "https://example.co.il/signup",
+        urlInvalid: "כתובת לא תקינה — חייבת להתחיל ב-https://",
+        pixelLabel: "Pixel לניטור",
+        pixelLoading: "טוען Pixels…",
+        pixelNone: "לא נמצאו Pixels בחשבון הפרסום. יש לוודא שה-Pixel מחובר לחשבון הפרסום שלכם ב-Meta.",
+        pixelPlaceholder: "בחרו Pixel",
+        eventLabel: "פעולה שנחשבת כפנייה",
+        eventPlaceholder: "בחרו פעולה",
+        eventOptions: {
+          LEAD: "פנייה (Lead)",
+          COMPLETE_REGISTRATION: "השלמת הרשמה",
+          SUBMIT_APPLICATION: "שליחת טופס בקשה",
+          SCHEDULE: "קביעת פגישה",
+          CONTACT: "יצירת קשר",
+        } as Record<string, string>,
+        recencyChecking: "בודקים נתוני Pixel…",
+        // AIC-89's build-time guardrail — never a confident "the Pixel is
+        // dead," only "we haven't seen this event recently, double-check
+        // the setup" (hasRecentEvents: null renders no warning at all).
+        recencyWarning: "לא ראינו את הפעולה הזו ב-Pixel לאחרונה. כדאי לוודא שה-Pixel מותקן נכון באתר ושהאירוע אכן נשלח — אחרת הקמפיין ירוץ בלי לספור פניות.",
       },
       budget: {
         title: "תקציב יומי",
@@ -1240,7 +1272,9 @@ export const strings = {
         title: "סיכום לפני יצירה",
         body: "כל מה שנוצר עכשיו יהיה במצב מושהה — לא יוצא כסף עד שתאשרו את ההפעלה בנפרד.",
         goalLine: "יעד",
-        whatsappLine: "וואטסאפ",
+        // AIC-89: same label, destination-aware value — Builder.tsx shows
+        // the phone number or the URL depending on what was chosen.
+        destinationLine: "יעד הפנייה",
         budgetLine: "תקציב יומי",
         businessLine: "סוג העסק",
         audienceLine: "קהל",

@@ -27,11 +27,13 @@ export interface CreateAdSetParams {
   targeting: CreateAdSetTargeting;
   pageId: string; // the connected Page — Meta routes WhatsApp destination via its connected number
   // Resolved via shared/src/recommended-defaults.ts's resolveDestinationShape
-  // — NEVER a caller-hardcoded "whatsapp"/"CONVERSATIONS" literal. Every
-  // caller today passes FIXED_DESTINATION (the only supported value); this
-  // parameter exists so that fact is explicit and load-bearing at the call
-  // site rather than assumed three layers down in the adapter.
+  // — NEVER a caller-hardcoded "whatsapp"/"CONVERSATIONS" literal.
   destination: string;
+  // AIC-89 — only meaningful when destination resolves to the WEBSITE shape:
+  // promoted_object becomes { pixel_id, custom_event_type } instead of
+  // { page_id }. Absent/ignored for a WhatsApp ad set.
+  pixelId?: string;
+  conversionEvent?: string;
 }
 
 export interface CreateAdParams {
@@ -41,10 +43,25 @@ export interface CreateAdParams {
   creativeId: string; // an existing Meta ad creative id (AIC-51 produces these)
 }
 
+// AIC-89 — the website-destination builder step's Pixel picker.
+export interface PixelOption {
+  id: string;
+  name: string;
+}
+
+// null = couldn't determine (network failure, or the check itself is
+// inconclusive) — never a confident "no events" from an ambiguous read, same
+// discipline as AccessProbe (AIC-101).
+export interface PixelRecencyCheck {
+  hasRecentEvents: boolean | null;
+}
+
 export interface BuilderWriter {
   createCampaign(params: CreateCampaignParams): Promise<string>; // → new meta_campaign_id
   createAdSet(params: CreateAdSetParams): Promise<string>; // → new meta_ad_set_id
   createAd(params: CreateAdParams): Promise<string>; // → new meta_ad_id
+  listPixels(adAccountId: string): Promise<PixelOption[]>;
+  checkPixelEventRecency(pixelId: string, eventName: string): Promise<PixelRecencyCheck>;
 }
 
 // Deterministic fake for tests: records every create call (so a test can
@@ -77,5 +94,14 @@ export class FakeBuilderWriter implements BuilderWriter {
     }
     this.adCalls.push(params);
     return `meta_ad_${++this.counter}`;
+  }
+
+  public pixels: PixelOption[] = [];
+  public pixelRecency: PixelRecencyCheck = { hasRecentEvents: true };
+  async listPixels(_adAccountId: string): Promise<PixelOption[]> {
+    return this.pixels;
+  }
+  async checkPixelEventRecency(_pixelId: string, _eventName: string): Promise<PixelRecencyCheck> {
+    return this.pixelRecency;
   }
 }

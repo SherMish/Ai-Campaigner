@@ -85,11 +85,12 @@ describe("GraphCampaignAdapter create-writes — always PAUSED", () => {
     expect(mock).not.toHaveBeenCalled();
   });
 
-  // AIC-102: "website" is now a recognized destination (resolveDestinationShape),
-  // but createAdSet itself is deliberately NOT extended to build a website-shaped
-  // ad set yet — that's AIC-89's territory. Confirms the two don't drift apart:
-  // resolving the shape and USING it to create an ad set are still separate.
-  it("createAdSet still only sends the WHATSAPP shape — website ad-set creation is AIC-89, not built here", async () => {
+  // AIC-89: createAdSet now builds the full website-destination shape,
+  // including promoted_object — the create-path counterpart to AIC-102's
+  // creative fix. pixelId/conversionEvent replace page_id in promoted_object
+  // ONLY for the website destination; a WhatsApp ad set (test above) is
+  // completely unaffected.
+  it("createAdSet builds pixel_id/custom_event_type promoted_object for the website destination", async () => {
     const mock = fakeFetch({ id: "meta_adset_2" });
     vi.stubGlobal("fetch", mock);
     const adapter = new GraphCampaignAdapter("tok");
@@ -99,17 +100,19 @@ describe("GraphCampaignAdapter create-writes — always PAUSED", () => {
       targeting: { ageMin: 18, ageMax: 45, genders: [], countries: ["IL"] },
       pageId: "page_1",
       destination: WEBSITE_DESTINATION,
+      pixelId: "984664453249037",
+      conversionEvent: "COMPLETE_REGISTRATION",
     });
 
     expect(id).toBe("meta_adset_2");
     const [, init] = mock.mock.calls[0] as [string, RequestInit];
     const body = new URLSearchParams(String(init.body));
-    // resolveDestinationShape(WEBSITE_DESTINATION) DOES resolve now — this
-    // documents that createAdSet passes whatever it resolves straight through,
-    // so an actual website ad-set create (AIC-89) is a UI/route change, not an
-    // adapter one.
     expect(body.get("optimization_goal")).toBe("OFFSITE_CONVERSIONS");
     expect(body.get("destination_type")).toBe("WEBSITE");
+    expect(JSON.parse(body.get("promoted_object") ?? "{}")).toEqual({
+      pixel_id: "984664453249037",
+      custom_event_type: "COMPLETE_REGISTRATION",
+    });
   });
 
   it("createAd sends status=PAUSED and is created on the ad account's edge with adset_id + creative in the body", async () => {
@@ -142,6 +145,74 @@ describe("GraphCampaignAdapter create-writes — always PAUSED", () => {
       adAccountId: "act_123", name: "Test", dailyBudgetAgorot: 4000,
       specialAdCategories: [], bidStrategy: "LOWEST_COST_WITHOUT_CAP",
     })).rejects.toThrow(/Invalid parameter/);
+  });
+});
+
+// AIC-89 — the website-destination builder step's Pixel picker + recency guard.
+describe("GraphCampaignAdapter Pixel discovery + recency (AIC-89)", () => {
+  it("listPixels returns every Pixel on the ad account", async () => {
+    const mock = vi.fn(async (_url: string) => ({
+      ok: true, status: 200,
+      json: async () => ({ data: [{ id: "984664453249037", name: "Pisga Pixel" }, { id: "111", name: "" }] }),
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const pixels = await adapter.listPixels("act_123");
+
+    expect(pixels).toEqual([
+      { id: "984664453249037", name: "Pisga Pixel" },
+      { id: "111", name: "111" }, // falls back to the id when Meta returns no name
+    ]);
+    const [url] = mock.mock.calls[0] as [string];
+    expect(url).toContain("act_123/adspixels");
+  });
+
+  it("checkPixelEventRecency reports true when the chosen event has recent volume", async () => {
+    const mock = vi.fn(async (_url: string) => ({
+      ok: true, status: 200,
+      json: async () => ({
+        data: [
+          { data: [{ value: "PageView", count: 40 }, { value: "CompleteRegistration", count: 3 }] },
+          { data: [{ value: "CompleteRegistration", count: 2 }] },
+        ],
+      }),
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const result = await adapter.checkPixelEventRecency("984664453249037", "CompleteRegistration");
+    expect(result).toEqual({ hasRecentEvents: true });
+  });
+
+  it("checkPixelEventRecency reports false — never null — when the event genuinely has zero recent volume", async () => {
+    const mock = vi.fn(async (_url: string) => ({
+      ok: true, status: 200,
+      json: async () => ({ data: [{ data: [{ value: "CompleteRegistration", count: 0 }] }] }),
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    expect(await adapter.checkPixelEventRecency("984664453249037", "CompleteRegistration")).toEqual({ hasRecentEvents: false });
+  });
+
+  it("checkPixelEventRecency reports false when the event never appears in the response at all", async () => {
+    const mock = vi.fn(async (_url: string) => ({
+      ok: true, status: 200,
+      json: async () => ({ data: [{ data: [{ value: "PageView", count: 40 }] }] }),
+    } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    expect(await adapter.checkPixelEventRecency("984664453249037", "CompleteRegistration")).toEqual({ hasRecentEvents: false });
+  });
+
+  it("REGRESSION: checkPixelEventRecency reports null (never a confident false) on a network/read failure", async () => {
+    const mock = vi.fn(async () => { throw new Error("network down"); });
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    expect(await adapter.checkPixelEventRecency("984664453249037", "CompleteRegistration")).toEqual({ hasRecentEvents: null });
   });
 });
 

@@ -3,6 +3,7 @@
 // stands in; the real adapter shape is verified by the live dogfood test.
 import { describe, it, expect, afterAll } from "vitest";
 import { pool } from "../db/pool.js";
+import { FIXED_DESTINATION, WEBSITE_DESTINATION } from "@aic/shared";
 import { startBuilderCampaign, buildCampaignOnMeta, type BuildCampaignInput } from "./campaign-create.js";
 import { FakeBuilderWriter } from "./types.js";
 
@@ -26,6 +27,7 @@ function baseInput(localCampaignId: string, adAccountId: string): BuildCampaignI
     dailyBudgetAgorot: 4000,
     specialAdCategories: [],
     bidStrategy: "LOWEST_COST_WITHOUT_CAP",
+    destination: FIXED_DESTINATION,
     whatsappDestination: "972500000000",
     adSets: [
       {
@@ -123,5 +125,49 @@ d("campaign builder create-writes (DB)", () => {
     expect(writer.campaignCalls).toHaveLength(1);
     expect(writer.adSetCalls).toHaveLength(1);
     expect(writer.adCalls).toHaveLength(2);
+  });
+
+  // AIC-89: the builder can now create a WEBSITE-destination campaign, not
+  // just WhatsApp — the create-path counterpart to AIC-102's additions fix.
+  it("a website-destination build passes pixelId/conversionEvent to the ad set and persists website_url/lead_event_types/tracking_pixel_id", async () => {
+    const { customerId, adAccountId } = await makeCustomer("website");
+    const { id: localCampaignId } = await startBuilderCampaign(pool, customerId, adAccountId);
+    const writer = new FakeBuilderWriter();
+
+    const input: BuildCampaignInput = {
+      ...baseInput(localCampaignId, adAccountId),
+      destination: WEBSITE_DESTINATION,
+      whatsappDestination: "",
+      destinationUrl: "https://pisga.app/signup",
+      pixelId: "984664453249037",
+      conversionEvent: "COMPLETE_REGISTRATION",
+    };
+    const result = await buildCampaignOnMeta(pool, writer, input);
+
+    expect(result.metaCampaignId).toBeTruthy();
+    expect(writer.adSetCalls[0]).toMatchObject({
+      destination: WEBSITE_DESTINATION,
+      pixelId: "984664453249037",
+      conversionEvent: "COMPLETE_REGISTRATION",
+    });
+
+    const camp = await pool.query<{ website_url: string; tracking_pixel_id: string; lead_event_types: string[]; whatsapp_destination: string }>(
+      `SELECT website_url, tracking_pixel_id, lead_event_types, whatsapp_destination FROM managed_campaigns WHERE id = $1`,
+      [localCampaignId],
+    );
+    expect(camp.rows[0].website_url).toBe("https://pisga.app/signup");
+    expect(camp.rows[0].tracking_pixel_id).toBe("984664453249037");
+    expect(camp.rows[0].lead_event_types).toEqual(["offsite_conversion.fb_pixel_complete_registration"]);
+    expect(camp.rows[0].whatsapp_destination).toBe("");
+  });
+
+  it("REGRESSION: an unrecognized destination throws before any Meta call", async () => {
+    const { customerId, adAccountId } = await makeCustomer("baddest");
+    const { id: localCampaignId } = await startBuilderCampaign(pool, customerId, adAccountId);
+    const writer = new FakeBuilderWriter();
+
+    const input: BuildCampaignInput = { ...baseInput(localCampaignId, adAccountId), destination: "something_unrecognized" };
+    await expect(buildCampaignOnMeta(pool, writer, input)).rejects.toThrow(/something_unrecognized/);
+    expect(writer.campaignCalls).toHaveLength(0);
   });
 });

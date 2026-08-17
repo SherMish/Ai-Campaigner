@@ -64,6 +64,40 @@ const DESTINATION_SHAPES: Record<string, DestinationShape> = {
   [WEBSITE_DESTINATION]: { optimizationGoal: "OFFSITE_CONVERSIONS", destinationType: "WEBSITE", ctaType: WEBSITE_CTA },
 };
 
+// AIC-89 — the website-destination builder step's conversion-event picker.
+// A curated set of Meta's own standard events relevant to lead generation
+// (not every event Meta supports — the builder is Leads-objective only).
+// `leadActionType` is the exact Insights action_type this event reports as,
+// sourced here once so managed_campaigns.lead_event_types is never built
+// from an inline string-transform at a call site (the same "one source of
+// truth per Meta-field-literal" rule as DESTINATION_SHAPES) — verified live
+// for COMPLETE_REGISTRATION against the real free_beta_signups_leads
+// campaign during the AIC-87 investigation; the other four follow the exact
+// same `offsite_conversion.fb_pixel_<snake_case>` shape Meta documents.
+// COPY-FREE: Hebrew labels live in web/src/strings.ts, keyed by `value`.
+export interface LeadConversionEventOption {
+  value: string; // Meta promoted_object.custom_event_type enum
+  leadActionType: string; // Meta Insights action_type this event reports as
+}
+
+export const LEAD_CONVERSION_EVENTS: LeadConversionEventOption[] = [
+  { value: "LEAD", leadActionType: "offsite_conversion.fb_pixel_lead" },
+  { value: "COMPLETE_REGISTRATION", leadActionType: "offsite_conversion.fb_pixel_complete_registration" },
+  { value: "SUBMIT_APPLICATION", leadActionType: "offsite_conversion.fb_pixel_submit_application" },
+  { value: "SCHEDULE", leadActionType: "offsite_conversion.fb_pixel_schedule" },
+  { value: "CONTACT", leadActionType: "offsite_conversion.fb_pixel_contact" },
+];
+
+export function resolveLeadActionType(conversionEvent: string): string {
+  const found = LEAD_CONVERSION_EVENTS.find((e) => e.value === conversionEvent);
+  if (!found) {
+    throw new Error(
+      `resolveLeadActionType: unrecognized conversion event "${conversionEvent}" — add it to LEAD_CONVERSION_EVENTS first`,
+    );
+  }
+  return found.leadActionType;
+}
+
 export function resolveDestinationShape(destination: string): DestinationShape {
   const shape = DESTINATION_SHAPES[destination];
   if (!shape) {

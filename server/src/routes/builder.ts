@@ -95,6 +95,51 @@ builderRouter.get("/posts", requireAuth, async (req, res) => {
   }
 });
 
+// GET /pixels — Pixels/datasets visible on the connected ad account, for the
+// website-destination step's picker (AIC-89).
+builderRouter.get("/pixels", requireAuth, async (req, res) => {
+  try {
+    const ctx = await resolveBuilderContext(pool, (req as AuthedRequest).userId!);
+    if (!ctx) return notReady(res);
+    const writer = buildBuilderWriter();
+    if (!writer) return unavailable(res);
+    const pixels = await writer.listPixels(ctx.metaAdAccountId);
+    res.json({ pixels });
+  } catch (e) {
+    console.error("[builder] list pixels failed", e);
+    res.status(502).json({ error: "failed to load pixels" });
+  }
+});
+
+interface PixelCheckBody {
+  pixelId?: string;
+  conversionEvent?: string;
+}
+
+// POST /pixel-check — the build-time guardrail: has the selected Pixel seen
+// the chosen conversion event recently? `hasRecentEvents: null` means the
+// check itself was inconclusive (never a confident "dead pixel" from an
+// ambiguous read) — the UI treats null the same as true (no warning), since
+// warning on an uncertain signal would cry wolf.
+builderRouter.post("/pixel-check", requireAuth, async (req, res) => {
+  try {
+    const ctx = await resolveBuilderContext(pool, (req as AuthedRequest).userId!);
+    if (!ctx) return notReady(res);
+    const body = req.body as PixelCheckBody;
+    if (!body.pixelId || !body.conversionEvent) {
+      res.status(400).json({ error: "pixelId and conversionEvent are required" });
+      return;
+    }
+    const writer = buildBuilderWriter();
+    if (!writer) return unavailable(res);
+    const result = await writer.checkPixelEventRecency(body.pixelId, body.conversionEvent);
+    res.json(result);
+  } catch (e) {
+    console.error("[builder] pixel check failed", e);
+    res.status(502).json({ error: "failed to check pixel" });
+  }
+});
+
 interface CreativeBody {
   localCampaignId?: string;
   clientKey?: string;
@@ -102,6 +147,8 @@ interface CreativeBody {
   headline?: string;
   primaryText?: string;
   whatsappNumber?: string;
+  destination?: string; // AIC-89 — FIXED_DESTINATION or WEBSITE_DESTINATION; defaults to WhatsApp
+  destinationUrl?: string; // website only
   media?: CreativeMedia;
   postId?: string;
 }
@@ -142,10 +189,11 @@ builderRouter.post("/creative", requireAuth, async (req, res) => {
         headline: body.headline!,
         primaryText: body.primaryText!,
         whatsappNumber: body.whatsappNumber ?? "",
+        destinationUrl: body.destinationUrl,
         media: body.media!,
-        // P0-fixed: the builder only ever creates Click-to-WhatsApp campaigns
-        // (AIC-89 is what would make this a real choice).
-        destination: FIXED_DESTINATION,
+        // AIC-89 — a real choice now; defaults to WhatsApp for backward
+        // compatibility with a client that never sends the field.
+        destination: body.destination ?? FIXED_DESTINATION,
       };
     }
     const creativeId = await createCreativeIdempotent(pool, writer, body.localCampaignId!, body.clientKey, spec);
@@ -161,7 +209,11 @@ interface BuildBody {
   name?: string;
   dailyBudgetAgorot?: number;
   specialAdCategories?: string[];
+  destination?: string; // AIC-89 — FIXED_DESTINATION or WEBSITE_DESTINATION; defaults to WhatsApp
   whatsappDestination?: string;
+  destinationUrl?: string; // website only
+  pixelId?: string; // website only
+  conversionEvent?: string; // website only
   targeting?: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[] };
   ads?: Array<{ clientKey: string; name: string; creativeId: string }>;
 }
@@ -204,7 +256,11 @@ builderRouter.post("/build", requireAuth, async (req, res) => {
       dailyBudgetAgorot: body.dailyBudgetAgorot!,
       specialAdCategories: specialCategories,
       bidStrategy: FIXED_BID_STRATEGY,
+      destination: body.destination ?? FIXED_DESTINATION,
       whatsappDestination: body.whatsappDestination ?? "",
+      destinationUrl: body.destinationUrl,
+      pixelId: body.pixelId,
+      conversionEvent: body.conversionEvent,
       adSets: [
         {
           clientKey: "adset-1",

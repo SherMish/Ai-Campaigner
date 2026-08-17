@@ -6,6 +6,36 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — AIC-89: builder can create website/Pixel campaigns, not just WhatsApp
+Destination becomes a real builder step (WhatsApp remains the recommended
+default) — the create-path counterpart to AIC-102's additions fix. New
+builder step 1 collects a destination URL, a Pixel (picked from
+`GET /builder/pixels`, a new `listPixels` adapter method — no more free-text
+entry for the create path), and a conversion event (a curated
+`LEAD_CONVERSION_EVENTS` list — `LEAD`/`COMPLETE_REGISTRATION`/
+`SUBMIT_APPLICATION`/`SCHEDULE`/`CONTACT` — each mapped to its exact Meta
+Insights `action_type` via `resolveLeadActionType`, so
+`managed_campaigns.lead_event_types` is never built from an inline string
+transform). `createAdSet` now builds the full `pixel_id`/`custom_event_type`
+`promoted_object` for the website destination, branching the same way
+`createCreativeFromUpload`'s CTA already does (AIC-102). New build-time
+guardrail: `checkPixelEventRecency` (three-valued — `true`/`false`/`null`,
+never a confident "dead Pixel" from an ambiguous read) warns before creating
+a campaign against a Pixel that hasn't recently seen the chosen event.
+Switching destination mid-wizard clears the other branch's fields. Deliberately
+NOT extended: `POST /additions/ad-set` (adding a new ad set to an *existing*
+campaign) — still WhatsApp-only, a separate real gap if it's ever needed.
+Docs: [campaign-builder.md](features/campaign-builder.md#the-destination-choice-aic-89)
+(new section + corrected stale "always WhatsApp" sentences),
+[add-content.md](features/add-content.md) (AIC-89 cross-references updated
+now that it's shipped). 57 new/updated tests across
+`shared/recommended-defaults.test.ts`, `meta/campaign-adapter.test.ts`,
+`meta/destination.test.ts` (the AIC-102 destination-resolution logic moved
+here, generalized, and shared with the builder — no longer additions-only),
+`builder/campaign-create.integration.test.ts`,
+`routes/builder.integration.test.ts`. Live-verify (an actual paused ad
+created on Pisga's real campaign) still pending a real destination URL.
+
 ### 2026-08-17 — AIC-102: additions/creative flow supports website/Pixel campaigns
 Found live: Pisga's own dogfood campaign (`free_beta_signups_leads`, a real
 Pixel/website campaign) could not add an ad to its own campaign through its
