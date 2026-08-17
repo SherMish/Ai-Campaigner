@@ -10,6 +10,7 @@ import {
   markComplete,
   provisionConnection,
   PageNotReadableError,
+  IncompleteProvisioningError,
 } from "./customer-onboarding.js";
 import type { AccessVerdict } from "../meta/access-layers.js";
 
@@ -97,6 +98,9 @@ d("customer onboarding (DB)", () => {
   });
 
   describe("provisioning (AIC-68) — replaces hand-written SQL", () => {
+    // AIC-103: a complete WhatsApp shape by default — destinationType +
+    // whatsappDestination are both now genuinely required by the provisioning-
+    // time completeness guard, not just documented defaults.
     const base = (customerId: string) => ({
       customerId,
       systemUserId: "122103498795426897",
@@ -104,6 +108,8 @@ d("customer onboarding (DB)", () => {
       metaCampaignId: `camp_${customerId.slice(0, 8)}`,
       campaignName: "IT Campaign",
       agreedBudgetAgorot: 2000,
+      destinationType: "whatsapp" as const,
+      whatsappDestination: "972500000000",
     });
 
     it("creates the connection + ad account + campaign trio in one go", async () => {
@@ -132,8 +138,10 @@ d("customer onboarding (DB)", () => {
       const customerId = await seedCustomer("pixel");
       const r = await provisionConnection(pool, {
         ...base(customerId),
+        destinationType: "website",
         leadEventTypes: ["offsite_conversion.fb_pixel_complete_registration"],
         trackingPixelId: "984664453249037",
+        websiteUrl: "https://pisga.app/signup",
       }, null);
       const c = await pool.query<{ lead_event_types: string[]; tracking_pixel_id: string }>(
         `SELECT lead_event_types, tracking_pixel_id FROM managed_campaigns WHERE id = $1`, [r.campaignId]);
@@ -147,7 +155,9 @@ d("customer onboarding (DB)", () => {
       const customerId = await seedCustomer("websiteurl");
       const r = await provisionConnection(pool, {
         ...base(customerId),
+        destinationType: "website",
         leadEventTypes: ["offsite_conversion.fb_pixel_complete_registration"],
+        trackingPixelId: "984664453249037",
         websiteUrl: "https://pisga.app/signup",
       }, null);
       const c = await pool.query<{ website_url: string | null }>(
@@ -161,6 +171,44 @@ d("customer onboarding (DB)", () => {
       const c = await pool.query<{ website_url: string | null }>(
         `SELECT website_url FROM managed_campaigns WHERE id = $1`, [r.campaignId]);
       expect(c.rows[0].website_url).toBeNull();
+    });
+
+    // ── The completeness guard (AIC-103) ─────────────────────────────────
+    it("REFUSES a website campaign missing website_url — same table resolveAdditionAvailability checks at read time", async () => {
+      const customerId = await seedCustomer("incompletewebsite");
+      await expect(
+        provisionConnection(pool, {
+          ...base(customerId),
+          destinationType: "website",
+          leadEventTypes: ["offsite_conversion.fb_pixel_complete_registration"],
+          trackingPixelId: "984664453249037",
+          websiteUrl: null,
+        }, null),
+      ).rejects.toBeInstanceOf(IncompleteProvisioningError);
+    });
+
+    it("REFUSES a whatsapp campaign missing whatsappDestination — this was NEVER a field before AIC-103, so every prior provision silently left it ''", async () => {
+      const customerId = await seedCustomer("incompletewa");
+      await expect(
+        provisionConnection(pool, { ...base(customerId), whatsappDestination: null }, null),
+      ).rejects.toBeInstanceOf(IncompleteProvisioningError);
+    });
+
+    it("the completeness refusal writes NOTHING — no half-provisioned connection left behind", async () => {
+      const customerId = await seedCustomer("incompleteatomic");
+      await expect(
+        provisionConnection(pool, { ...base(customerId), whatsappDestination: "" }, null),
+      ).rejects.toThrow();
+      const conns = await pool.query(`SELECT id FROM meta_connections WHERE customer_id = $1`, [customerId]);
+      expect(conns.rows).toHaveLength(0);
+    });
+
+    it("saves whatsapp_destination once it's actually provided — previously never written at all", async () => {
+      const customerId = await seedCustomer("wadest");
+      const r = await provisionConnection(pool, { ...base(customerId), whatsappDestination: "972501234567" }, null);
+      const c = await pool.query<{ whatsapp_destination: string }>(
+        `SELECT whatsapp_destination FROM managed_campaigns WHERE id = $1`, [r.campaignId]);
+      expect(c.rows[0].whatsapp_destination).toBe("972501234567");
     });
 
     // ── The guard (AIC-69) ──────────────────────────────────────────────

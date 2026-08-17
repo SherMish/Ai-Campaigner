@@ -110,6 +110,21 @@ export function isMessagingAction(actionType: string): boolean {
   return actionType === MESSAGING_ACTION || actionType === `${MESSAGING_ACTION}_7d`;
 }
 
+// Is THIS CAMPAIGN's declared lead definition a WhatsApp one? One definition,
+// shared by additions/session.ts and the admin readiness classifiers
+// (services/customers.ts, services/users-admin.ts) — previously each derived
+// this inline and had started to drift. A real number AND a messaging lead
+// definition — either alone is not enough: a leftover number on a Pixel
+// campaign doesn't make WhatsApp writes correct, and a messaging lead type
+// with no number can't produce a valid CTA.
+export function deriveIsMessaging(leadEventTypes: string[] | null, whatsappDestination: string | null): boolean {
+  const types = leadEventTypes ?? [];
+  const number = (whatsappDestination ?? "").trim();
+  // pre-AIC-87 rows default to the WhatsApp pair, so an empty list only
+  // happens on a hand-made row — fall back to whether a number is on file.
+  return types.length === 0 ? number.length > 0 : types.some(isMessagingAction);
+}
+
 // What Insights action type will this ad set's conversions arrive as?
 // Returns null when the configuration doesn't determine one — an ad set that
 // isn't optimizing for a lead at all, or a custom conversion. Null means

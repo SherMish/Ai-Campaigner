@@ -1,6 +1,7 @@
 import type pg from "pg";
 import type { AccessVerdict, CheckedAsset } from "../meta/access-layers.js";
 import type { AssetProbeResult } from "../meta/access-probe.js";
+import { FIXED_DESTINATION, WEBSITE_DESTINATION, missingRequiredFields, type CampaignRequiredField } from "@aic/shared";
 
 // AIC-101 + AIC-68 — the onboarding wizard's state and its provisioning step.
 //
@@ -161,6 +162,20 @@ export interface ProvisionInput {
   // additions/session.ts's resolveCreativeDestination reads to build a
   // link-CTA creative. Unused (left null) for a messaging campaign.
   websiteUrl?: string | null;
+  // AIC-103: which destination this campaign uses — the wizard asks this
+  // explicitly ("where should someone land after clicking your ad?") rather
+  // than inferring it, since nothing to infer FROM exists yet at provisioning
+  // time. Drives which of the fields above are actually required (see the
+  // shared CAMPAIGN_TYPE_REQUIRED_FIELDS table) and what lead_event_types
+  // defaults to when left blank.
+  destinationType: "whatsapp" | "website";
+  // AIC-103: found live — this was NEVER a field on the provisioning form at
+  // all, so every WhatsApp campaign provisioned through this wizard got
+  // whatsapp_destination = '' (the column's own NOT NULL DEFAULT) regardless
+  // of what the operator entered elsewhere. Exactly GelNails' real shape
+  // (additions/session.ts's whatsappWriteBlock comment) — connected outside
+  // the builder, so the number was never captured.
+  whatsappDestination?: string | null;
 }
 
 export class PageNotReadableError extends Error {
@@ -170,6 +185,19 @@ export class PageNotReadableError extends Error {
         `Writing it would flip the connection to 'revoked' and silently stop the recommendation engine.`,
     );
     this.name = "PageNotReadableError";
+  }
+}
+
+// AIC-103: the provisioning-time enforcement point of the one declared
+// required-fields table (shared/recommended-defaults.ts) — mirrors
+// PageNotReadableError's "refuse before the write, not after" shape. Not an
+// optional text field an operator can tab past: this is what stops the next
+// free_beta_signups_leads (provisioned complete-looking, actually missing
+// website_url, discovered only via a customer's raw 409 months later).
+export class IncompleteProvisioningError extends Error {
+  constructor(public readonly destinationType: "whatsapp" | "website", public readonly missingFields: CampaignRequiredField[]) {
+    super(`refusing to provision a ${destinationType} campaign missing required field(s): ${missingFields.join(", ")}`);
+    this.name = "IncompleteProvisioningError";
   }
 }
 
@@ -204,6 +232,17 @@ export async function provisionConnection(
       throw new PageNotReadableError(input.pageId, pageVerdict?.diagnosis ?? "unverified");
     }
   }
+
+  // AIC-103: refuse an incomplete campaign BEFORE it's ever written, not
+  // discover it later off a customer's raw 409. Same table, same check
+  // resolveAdditionAvailability uses at read time — one definition.
+  const missing = missingRequiredFields(input.destinationType === "whatsapp" ? FIXED_DESTINATION : WEBSITE_DESTINATION, {
+    whatsappDestination: input.whatsappDestination ?? null,
+    websiteUrl: input.websiteUrl ?? null,
+    trackingPixelId: input.trackingPixelId ?? null,
+    leadEventTypes: input.leadEventTypes ?? null,
+  });
+  if (missing.length > 0) throw new IncompleteProvisioningError(input.destinationType, missing);
 
   const client = await pool.connect();
   try {
@@ -245,11 +284,11 @@ export async function provisionConnection(
     const camp = await client.query<{ id: string }>(
       `INSERT INTO managed_campaigns
          (customer_id, ad_account_id, meta_campaign_id, name, status, objective,
-          agreed_budget_agorot, budget_period, lead_event_types, tracking_pixel_id, website_url)
+          agreed_budget_agorot, budget_period, lead_event_types, tracking_pixel_id, website_url, whatsapp_destination)
        VALUES ($1,$2,$3,$4,'active',$5,$6,$7,
                COALESCE($8::text[], ARRAY['onsite_conversion.messaging_conversation_started_7d',
                                           'onsite_conversion.messaging_conversation_started']),
-               $9,$10)
+               $9,$10,COALESCE($11,''))
        RETURNING id`,
       [
         input.customerId,
@@ -262,6 +301,7 @@ export async function provisionConnection(
         input.leadEventTypes ?? null,
         input.trackingPixelId ?? null,
         input.websiteUrl ?? null,
+        input.whatsappDestination ?? null,
       ],
     );
 

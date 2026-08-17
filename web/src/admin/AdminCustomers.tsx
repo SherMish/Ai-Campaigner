@@ -40,7 +40,10 @@ interface CustomerRow {
   // is real, linked, and every connection layer (health/ad account/Page) is
   // present. Lets an operator catch a gap like a missing Page grant before
   // a customer with an active, spending campaign hits the wall themselves.
-  connectionReadiness: "no_campaign" | "not_launched" | "missing_page" | "connection_issue" | null;
+  connectionReadiness: "no_campaign" | "not_launched" | "missing_page" | "connection_issue" | "incomplete_config" | null;
+  // AIC-103: which type-required fields are missing — [] when complete. The
+  // "set it here" specificity a bare reason label can't carry on its own.
+  missingConfigFields: string[];
 }
 
 // Full record (AIC-44): the list row plus everything only the detail route
@@ -450,6 +453,16 @@ export function AdminCustomers() {
               <span className="pill warn" style={{ padding: "2px 9px", fontSize: "0.72rem" }}>
                 {t.connectionReadinessReason[selected.connectionReadiness]}
               </span>
+              {/* AIC-103: names exactly which field(s) — the actionable part
+                  the bare reason label can't carry. Deliberately NOT a link
+                  to the onboarding wizard: that form only INSERTs, so running
+                  it against an already-provisioned customer would create a
+                  duplicate connection rather than fix this one. Editing an
+                  existing campaign's fields has no admin surface yet — a
+                  real, flagged gap (see AIC-103), not an oversight here. */}
+              {selected.missingConfigFields.length > 0 && (
+                <>{" "}<span className="mono" style={{ fontSize: "0.75rem" }}>({selected.missingConfigFields.join(", ")})</span></>
+              )}
             </p>
           )}
           {!selected.isActive && <p className="muted" style={{ fontSize: "0.85rem" }}>{cc.deactivatedNote}</p>}

@@ -32,7 +32,7 @@ import { REQUIRED_SCOPES, type CheckedAsset } from "../meta/access-layers.js";
 import { OUR_BUSINESS_PORTFOLIO_ID } from "../config/meta-identity.js";
 import {
   getOrCreateOnboarding, setStep, recordCheck, markComplete,
-  provisionConnection, PageNotReadableError, CHECK_FOR_ASSET,
+  provisionConnection, PageNotReadableError, IncompleteProvisioningError, CHECK_FOR_ASSET,
 } from "../services/customer-onboarding.js";
 import { ConnectionService } from "../meta/connection-service.js";
 import { PgConnectionStore } from "../meta/connection-store.js";
@@ -615,6 +615,14 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
     res.status(400).json({ error: "agreedBudgetAgorot must be a positive integer (agorot)" });
     return;
   }
+  // AIC-103: not a free-text-with-a-default anymore — the wizard must ask
+  // "where does someone land after clicking your ad?" and get a real answer,
+  // since that answer decides which fields below are actually required.
+  const destinationType = b.destinationType === "website" ? "website" : b.destinationType === "whatsapp" ? "whatsapp" : null;
+  if (!destinationType) {
+    res.status(400).json({ error: "destinationType ('whatsapp' or 'website') is required" });
+    return;
+  }
 
   let pageVerdict = null as Awaited<ReturnType<AccessProbe["probeAsset"]>>["verdict"] | null;
   if (pageId) {
@@ -645,6 +653,8 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
         ? b.leadEventTypes.map(String) : null,
       trackingPixelId: b.trackingPixelId ? String(b.trackingPixelId) : null,
       websiteUrl: b.websiteUrl ? String(b.websiteUrl) : null,
+      destinationType,
+      whatsappDestination: b.whatsappDestination ? String(b.whatsappDestination) : null,
     }, pageVerdict);
 
     const actor = await actorFor(req as AuthedRequest);
@@ -666,6 +676,13 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
     if (e instanceof PageNotReadableError) {
       // 409, not 500: this is a refusal, and the operator can act on it.
       res.status(409).json({ error: e.message, diagnosis: e.diagnosis, pageVerdict });
+      return;
+    }
+    if (e instanceof IncompleteProvisioningError) {
+      // 400, not 500: a validation refusal, same shape as the earlier
+      // metaAdAccountId/budget checks — this is AIC-103's provisioning-time
+      // enforcement point, not a server error.
+      res.status(400).json({ error: e.message, missingFields: e.missingFields });
       return;
     }
     console.error("[admin] provisioning failed", e);

@@ -89,6 +89,7 @@ async function seedExistingCampaign(
   ],
   whatsappDestination = "972500000000",
   websiteUrl: string | null = null,
+  trackingPixelId: string | null = null,
 ) {
   const cust = await pool.query<{ id: string }>(
     `INSERT INTO customers (business_name, is_test, onboarding_status, category) VALUES ($1, true, 'ready', $2) RETURNING id`,
@@ -108,9 +109,9 @@ async function seedExistingCampaign(
     [conn.rows[0].id, `act_add_${conn.rows[0].id.slice(0, 8)}`],
   );
   const camp = await pool.query<{ id: string }>(
-    `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, meta_campaign_id, name, lead_event_types, whatsapp_destination, website_url)
-     VALUES ($1, $2, 'active', 'meta_camp_existing', 'IT Campaign', $3, $4, $5) RETURNING id`,
-    [customerId, acct.rows[0].id, leadEventTypes, whatsappDestination, websiteUrl],
+    `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, meta_campaign_id, name, lead_event_types, whatsapp_destination, website_url, tracking_pixel_id)
+     VALUES ($1, $2, 'active', 'meta_camp_existing', 'IT Campaign', $3, $4, $5, $6) RETURNING id`,
+    [customerId, acct.rows[0].id, leadEventTypes, whatsappDestination, websiteUrl, trackingPixelId],
   );
   return { customerId, campaignId: camp.rows[0].id, token: signAuthToken(user.rows[0].id) };
 }
@@ -409,6 +410,37 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
       const sent = new URLSearchParams(String(creativeCall![1]?.body));
       expect(sent.get("object_story_id")).toBe("page_it_1_post_1");
       expect(sent.get("object_story_spec")).toBeNull(); // no destination fields at all
+    });
+
+    // ── AIC-103: fail-at-entry, without regressing the existing-post path ──
+    it("GET /context surfaces missingConfigFields (both, not just website_url) WITHOUT 409ing — the screen still loads", async () => {
+      const { token } = await seedExistingCampaign("pixel-incomplete", "beautician", PIXEL_LEAD, "", null, null);
+      const res = await request(app).get("/api/app/additions/context").set("Authorization", `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      // lead_event_types is already set (PIXEL_LEAD) — only these two are missing.
+      expect(res.body.missingConfigFields).toEqual(["website_url", "tracking_pixel_id"]);
+    });
+
+    it("GET /context reports missingConfigFields: [] once website_url + tracking_pixel_id are both on file", async () => {
+      const { token } = await seedExistingCampaign("pixel-complete", "beautician", PIXEL_LEAD, "", "https://pisga.app/signup", "px_it_1");
+      const res = await request(app).get("/api/app/additions/context").set("Authorization", `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.missingConfigFields).toEqual([]);
+    });
+
+    it("REGRESSION: existing-post creative still works with NO tracking_pixel_id AND NO website_url — missingConfigFields never blocks it", async () => {
+      const { fetchMock } = mockMetaFetch();
+      vi.stubGlobal("fetch", fetchMock);
+      const { token } = await seedExistingCampaign("pixel-incomplete-post", "beautician", PIXEL_LEAD, "", null, null);
+      // Confirm the screen itself reports the campaign as incomplete...
+      const ctxRes = await request(app).get("/api/app/additions/context").set("Authorization", `Bearer ${token}`);
+      expect(ctxRes.body.missingConfigFields.length).toBeGreaterThan(0);
+      // ...and that an existing-post creative create is STILL unaffected by it.
+      const res = await request(app)
+        .post("/api/app/additions/creative")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ clientKey: "ck6", name: "Ad", postId: "post_1" });
+      expect(res.status).toBe(200);
     });
 
     it("refuses to add an ad set (never creates a CONVERSATIONS ad set in a Pixel campaign) — unchanged, still AIC-89's territory", async () => {

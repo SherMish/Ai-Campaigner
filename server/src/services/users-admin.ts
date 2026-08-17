@@ -1,7 +1,8 @@
 import type pg from "pg";
-import type { AccessHealth, CampaignStatus, SubscriptionStatus } from "@aic/shared";
+import type { AccessHealth, CampaignStatus, SubscriptionStatus, CampaignRequiredField } from "@aic/shared";
 import { logAdminAction, type Actor } from "./admin-audit.js";
-import { classifyConnectionReadiness, type ConnectionReadinessReason } from "./connection-readiness.js";
+import { classifyConnectionReadiness, missingConfigFields, type ConnectionReadinessReason } from "./connection-readiness.js";
+import { deriveIsMessaging } from "../meta/tracking-health.js";
 
 // The admin "Users" view — separate from the existing "Customers" (businesses)
 // view. A user is the login (email/password/name, app_users) that will
@@ -24,6 +25,11 @@ export interface UserListRow {
   accessHealth: AccessHealth | null;
   campaignStatus: CampaignStatus | null;
   connectionReadiness: ConnectionReadinessReason | null;
+  // AIC-103: see CustomerListRow's twin field (services/customers.ts) — same
+  // health check, same table, surfaced here too since a user with a business
+  // but no customer_id-linked row yet would otherwise be invisible on the
+  // Customers page (this view's whole reason to exist).
+  missingConfigFields: CampaignRequiredField[];
 }
 
 export async function listAppUsers(pool: pg.Pool): Promise<UserListRow[]> {
@@ -32,7 +38,8 @@ export async function listAppUsers(pool: pg.Pool): Promise<UserListRow[]> {
             c.id AS customer_id, c.business_name, c.is_test,
             s.status AS subscription_status,
             conn.access_health, conn.page_id,
-            mc.id AS campaign_id, mc.status AS campaign_status, mc.meta_campaign_id, aa.meta_ad_account_id
+            mc.id AS campaign_id, mc.status AS campaign_status, mc.meta_campaign_id, aa.meta_ad_account_id,
+            mc.whatsapp_destination, mc.website_url, mc.tracking_pixel_id, mc.lead_event_types
      FROM app_users u
      LEFT JOIN customers c        ON c.id = u.customer_id
      LEFT JOIN subscriptions s    ON s.customer_id = c.id
@@ -52,15 +59,23 @@ export async function listAppUsers(pool: pg.Pool): Promise<UserListRow[]> {
     subscriptionStatus: r.subscription_status ?? null,
     accessHealth: r.access_health ?? null,
     campaignStatus: r.campaign_status ?? null,
-    connectionReadiness: r.customer_id
-      ? classifyConnectionReadiness({
-          campaignId: r.campaign_id ?? null,
-          metaCampaignId: r.meta_campaign_id ?? null,
-          accessHealth: r.access_health ?? null,
-          metaAdAccountId: r.meta_ad_account_id ?? null,
-          pageId: r.page_id ?? null,
-        })
-      : null,
+    ...(r.customer_id
+      ? (() => {
+          const input = {
+            campaignId: r.campaign_id ?? null,
+            metaCampaignId: r.meta_campaign_id ?? null,
+            accessHealth: r.access_health ?? null,
+            metaAdAccountId: r.meta_ad_account_id ?? null,
+            pageId: r.page_id ?? null,
+            isMessaging: deriveIsMessaging(r.lead_event_types, r.whatsapp_destination),
+            whatsappDestination: r.whatsapp_destination ?? null,
+            websiteUrl: r.website_url ?? null,
+            trackingPixelId: r.tracking_pixel_id ?? null,
+            leadEventTypes: r.lead_event_types ?? null,
+          };
+          return { connectionReadiness: classifyConnectionReadiness(input), missingConfigFields: missingConfigFields(input) };
+        })()
+      : { connectionReadiness: null, missingConfigFields: [] }),
   }));
 }
 

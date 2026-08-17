@@ -109,6 +109,46 @@ export function resolveDestinationShape(destination: string): DestinationShape {
   return shape;
 }
 
+// AIC-103: what a campaign of a given destination MUST have on file before
+// content can be added to it. Found live: free_beta_signups_leads was
+// provisioned (by the AIC-87 connect script) before website_url existed, and
+// nothing ever checked a website campaign actually has one — the failure
+// mode wasn't wrong data, it was NO check at all. One declared table,
+// enforced at three points per the ticket: provisioning (AIC-68/AIC-101),
+// use (connection-readiness.ts, consumed by additions/builder/launch gate),
+// and an ongoing health check (services/campaign-completeness-monitor.ts)
+// that finds campaigns already broken this way — never re-derived per surface.
+export type CampaignRequiredField = "whatsapp_destination" | "website_url" | "tracking_pixel_id" | "lead_event_types";
+
+export const CAMPAIGN_TYPE_REQUIRED_FIELDS: Record<string, CampaignRequiredField[]> = {
+  [FIXED_DESTINATION]: ["whatsapp_destination"],
+  [WEBSITE_DESTINATION]: ["website_url", "tracking_pixel_id", "lead_event_types"],
+};
+
+export interface CampaignFieldValues {
+  whatsappDestination: string | null;
+  websiteUrl: string | null;
+  trackingPixelId: string | null;
+  leadEventTypes: string[] | null;
+}
+
+function isFieldMissing(field: CampaignRequiredField, v: CampaignFieldValues): boolean {
+  switch (field) {
+    case "whatsapp_destination": return !(v.whatsappDestination ?? "").trim();
+    case "website_url": return !(v.websiteUrl ?? "").trim();
+    case "tracking_pixel_id": return !(v.trackingPixelId ?? "").trim();
+    case "lead_event_types": return !v.leadEventTypes || v.leadEventTypes.length === 0;
+  }
+}
+
+// Pure — no DB/Meta access — so both the server (gating, provisioning,
+// health check) and the provisioning wizard's own frontend validation can
+// share the exact same completeness rule instead of two copies drifting.
+export function missingRequiredFields(destination: string, values: CampaignFieldValues): CampaignRequiredField[] {
+  const required = CAMPAIGN_TYPE_REQUIRED_FIELDS[destination] ?? [];
+  return required.filter((f) => isFieldMissing(f, values));
+}
+
 // ── Structure (AIC-38: the single-ad-set ideal is a RECOMMENDATION, never an
 // assumption the engine/review may rely on — a customer can and does run more) ──
 export const RECOMMENDED_STRUCTURE = {

@@ -81,6 +81,11 @@ export const strings = {
         not_launched: "קמפיין קיים, לא מקושר ל-Meta",
         missing_page: "חסרה גישה לעמוד הפייסבוק",
         connection_issue: "בעיית חיבור ל-Meta",
+        // AIC-103: the ops-console health check's own reason — a campaign
+        // that's otherwise fully connected but missing a type-required field
+        // (website_url, Pixel, whatsapp number). The specific field(s) render
+        // separately from missingConfigFields — this label just flags it.
+        incomplete_config: "חסרים פרטי הגדרה לקמפיין",
       } as Record<string, string>,
     },
 
@@ -445,11 +450,25 @@ export const strings = {
       fieldCampaignId: "מזהה קמפיין ב-Meta",
       fieldCampaignName: "שם הקמפיין",
       fieldBudget: "תקציב יומי (₪)",
-      fieldLeadEventTypes: "סוג פנייה (מתקדם — ברירת מחדל: וואטסאפ)",
-      fieldPixelId: "מזהה Pixel (רק לקמפיין Pixel)",
+      // AIC-103: asked explicitly — "where should someone land after clicking
+      // your ad?" — rather than left to infer, since which fields below are
+      // actually required depends on the answer.
+      fieldDestinationType: "לאן מגיעה פנייה שלוחצים על המודעה?",
+      destinationWhatsapp: "הודעת וואטסאפ (מומלץ)",
+      destinationWebsite: "אתר / דף נחיתה",
+      fieldWhatsappDestination: "מספר וואטסאפ ליצירת קשר",
+      fieldLeadEventTypes: "סוג האירוע שנספר כפנייה",
+      fieldPixelId: "מזהה Pixel",
       // AIC-102: the additions/creative flow's website-destination fix needs
       // a real landing-page URL on file for a Pixel campaign to add content.
-      fieldWebsiteUrl: "כתובת אתר היעד (לקמפיין Pixel/אתר)",
+      fieldWebsiteUrl: "כתובת אתר היעד",
+      // AIC-103: a URL without UTM parameters produces a working ad but no
+      // way to attribute a resulting lead back to this specific campaign —
+      // a silent gap that looks fine until someone asks "which channel
+      // brought this lead." (Note: this reminds the operator to ask for a
+      // tracked link; it does not describe an attribution mechanism that
+      // exists elsewhere in this codebase today.)
+      fieldWebsiteUrlUtmNote: "חשוב: הכתובת צריכה לכלול UTM (utm_source/utm_medium/utm_campaign) — בלעדיהם הפנייה תיווצר אבל לא נדע מאיפה היא הגיעה.",
       provisionSubmit: "יצירת הרשומות",
       provisionSuccess: "נוצר בהצלחה.",
       // AIC-69: the hard constraint the wizard enforces, not just documents.
@@ -464,6 +483,9 @@ export const strings = {
 
       errorTokenNotConfigured: "META_SYSTEM_USER_TOKEN לא מוגדר בשרת — זו בעיה אצלנו, לא אצל הלקוח.",
       errorGeneric: "הפעולה נכשלה. אפשר לנסות שוב.",
+      // AIC-103: distinct from errorGeneric — names exactly which fields are
+      // missing (appended by the caller) rather than a generic failure.
+      errorIncompleteConfig: "חסרים שדות חובה לסוג היעד שנבחר",
     },
 
     // Fleet-wide overview (AIC-43) — the operator's landing snapshot.
@@ -1319,6 +1341,17 @@ export const strings = {
       connectionIssueBody: "הקמפיין שלכם קיים ופעיל, אבל כרגע אי אפשר להוסיף לו תוכן בגלל בעיה בחיבור ל-Meta. בדקו את החיבור בהגדרות, או דברו איתנו ונטפל בזה.",
       goToSettings: "להגדרות",
       unavailable: "הוספת תוכן לא זמינה כרגע. נסו שוב בעוד כמה דקות.",
+      // AIC-103: shown as a banner on the READY screen (never a 409) when the
+      // campaign is missing a piece of config only WE hold (website_url,
+      // Pixel, conversion event) — found live when a customer filled out an
+      // entire ad only to be refused at submit. Deliberately does NOT tell
+      // them to do anything: unlike a missing Page, this isn't fixable on
+      // their end, so the honest copy is "we're on it," not an instruction
+      // they have no surface for. Existing-post additions are unaffected and
+      // stay available, so the copy says so rather than implying the whole
+      // screen is broken.
+      incompleteConfigTitle: "עוד משהו קטן להשלים אצלנו",
+      incompleteConfigBody: "יש לנו עוד כמה פרטים להשלים בקמפיין הזה לפני שאפשר להוסיף תוכן חדש (העלאת תמונה/וידאו). אנחנו כבר על זה — אין צורך לעשות כלום. אפשר בינתיים להוסיף מודעה מפוסט קיים בעמוד. דחוף? דברו איתנו.",
       modeAd: "הוספת מודעה",
       modeAdSet: "הוספת קבוצת מודעות",
 

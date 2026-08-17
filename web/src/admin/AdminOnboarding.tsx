@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { FIXED_DESTINATION, WEBSITE_DESTINATION, missingRequiredFields } from "@aic/shared";
 import { api, ApiError } from "../api";
 import { strings } from "../strings";
 import { diagnosisCopy, type AccessDiagnosis } from "./onboarding-copy";
@@ -82,6 +83,11 @@ export function AdminOnboarding() {
   const [form, setForm] = useState({
     metaAdAccountId: "", pageIdForm: "", instagramId: "",
     metaCampaignId: "", campaignName: "", budgetShekels: "",
+    // AIC-103: destinationType drives which fields below are actually
+    // required — asked explicitly (default "whatsapp", the P0 recommendation)
+    // rather than inferred, since nothing exists yet to infer it from.
+    destinationType: "whatsapp" as "whatsapp" | "website",
+    whatsappDestination: "",
     leadEventTypes: "", trackingPixelId: "", websiteUrl: "",
   });
   const [provisioning, setProvisioning] = useState(false);
@@ -138,6 +144,19 @@ export function AdminOnboarding() {
       setError(w.errorGeneric);
       return;
     }
+    // AIC-103: the SAME table/function resolveAdditionAvailability checks at
+    // read time — client-side so the operator sees this before submitting,
+    // not just after the server's own 400.
+    const missing = missingRequiredFields(form.destinationType === "whatsapp" ? FIXED_DESTINATION : WEBSITE_DESTINATION, {
+      whatsappDestination: form.whatsappDestination.trim() || null,
+      websiteUrl: form.websiteUrl.trim() || null,
+      trackingPixelId: form.trackingPixelId.trim() || null,
+      leadEventTypes: form.leadEventTypes.trim() ? form.leadEventTypes.split(",").map((s) => s.trim()) : null,
+    });
+    if (missing.length > 0) {
+      setError(`${w.errorIncompleteConfig} (${missing.join(", ")})`);
+      return;
+    }
     setProvisioning(true);
     setError(null);
     setProvisionBlocked(null);
@@ -152,6 +171,8 @@ export function AdminOnboarding() {
           metaCampaignId: form.metaCampaignId.trim(),
           campaignName: form.campaignName.trim(),
           agreedBudgetAgorot: budgetAgorot,
+          destinationType: form.destinationType,
+          whatsappDestination: form.whatsappDestination.trim() || null,
           leadEventTypes: form.leadEventTypes.trim() ? form.leadEventTypes.split(",").map((s) => s.trim()) : null,
           trackingPixelId: form.trackingPixelId.trim() || null,
           websiteUrl: form.websiteUrl.trim() || null,
@@ -165,6 +186,12 @@ export function AdminOnboarding() {
         if (e instanceof ApiError && e.status === 409) {
           const body = e.body as { diagnosis?: string } | undefined;
           if (body?.diagnosis) { setProvisionBlocked(body.diagnosis as AccessDiagnosis); return; }
+        }
+        // The server's own AIC-103 refusal (belt-and-suspenders — the client
+        // check above should already have caught this).
+        if (e instanceof ApiError && e.status === 400) {
+          const body = e.body as { missingFields?: string[] } | undefined;
+          if (body?.missingFields?.length) { setError(`${w.errorIncompleteConfig} (${body.missingFields.join(", ")})`); return; }
         }
         setError(e instanceof Error ? e.message : w.errorGeneric);
       })
@@ -291,6 +318,25 @@ export function AdminOnboarding() {
         <p className="muted" style={{ fontSize: "0.85rem" }}>{w.step4Sub}</p>
         <p className="muted" style={{ fontSize: "0.8rem", marginTop: 8 }}>ℹ️ {w.pageGateNote}</p>
 
+        {/* AIC-103: asked explicitly, in customer-facing language, so the
+            operator can put this question directly to the customer on the
+            call — drives which fields below are actually required. */}
+        <div style={{ marginTop: 12 }}>
+          <label style={{ display: "block", marginBottom: 6, fontSize: "0.9rem" }}>{w.fieldDestinationType}</label>
+          <div className="row gap12">
+            <label className="row gap12" style={{ alignItems: "center", cursor: "pointer" }}>
+              <input type="radio" name="destinationType" checked={form.destinationType === "whatsapp"}
+                onChange={() => setForm({ ...form, destinationType: "whatsapp" })} />
+              {w.destinationWhatsapp}
+            </label>
+            <label className="row gap12" style={{ alignItems: "center", cursor: "pointer" }}>
+              <input type="radio" name="destinationType" checked={form.destinationType === "website"}
+                onChange={() => setForm({ ...form, destinationType: "website" })} />
+              {w.destinationWebsite}
+            </label>
+          </div>
+        </div>
+
         <div style={{ marginTop: 12, display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
           <div className="field"><label>{w.fieldAdAccountId}</label>
             <input value={form.metaAdAccountId} onChange={(e) => setForm({ ...form, metaAdAccountId: e.target.value })} placeholder="act_…" /></div>
@@ -304,12 +350,22 @@ export function AdminOnboarding() {
             <input value={form.campaignName} onChange={(e) => setForm({ ...form, campaignName: e.target.value })} /></div>
           <div className="field"><label>{w.fieldBudget}</label>
             <input type="number" min="0" value={form.budgetShekels} onChange={(e) => setForm({ ...form, budgetShekels: e.target.value })} /></div>
-          <div className="field"><label>{w.fieldLeadEventTypes}</label>
-            <input value={form.leadEventTypes} onChange={(e) => setForm({ ...form, leadEventTypes: e.target.value })} /></div>
-          <div className="field"><label>{w.fieldPixelId}</label>
-            <input value={form.trackingPixelId} onChange={(e) => setForm({ ...form, trackingPixelId: e.target.value })} /></div>
-          <div className="field"><label>{w.fieldWebsiteUrl}</label>
-            <input value={form.websiteUrl} onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })} placeholder="https://…" /></div>
+          {form.destinationType === "whatsapp" ? (
+            <div className="field"><label>{w.fieldWhatsappDestination} *</label>
+              <input required value={form.whatsappDestination} onChange={(e) => setForm({ ...form, whatsappDestination: e.target.value })} placeholder="972…" /></div>
+          ) : (
+            <>
+              <div className="field"><label>{w.fieldLeadEventTypes} *</label>
+                <input required value={form.leadEventTypes} onChange={(e) => setForm({ ...form, leadEventTypes: e.target.value })} /></div>
+              <div className="field"><label>{w.fieldPixelId} *</label>
+                <input required value={form.trackingPixelId} onChange={(e) => setForm({ ...form, trackingPixelId: e.target.value })} /></div>
+              <div className="field">
+                <label>{w.fieldWebsiteUrl} *</label>
+                <input required value={form.websiteUrl} onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })} placeholder="https://…?utm_source=meta&utm_medium=cpc&utm_campaign=…" />
+                <p className="muted" style={{ fontSize: "0.75rem", marginTop: 4 }}>{w.fieldWebsiteUrlUtmNote}</p>
+              </div>
+            </>
+          )}
         </div>
 
         <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={provisioning} onClick={submitProvision}>

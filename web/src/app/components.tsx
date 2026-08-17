@@ -8,7 +8,7 @@ import { clearAuthToken, getMe } from "../api";
 let cachedName: string | null = null;
 
 const a = strings.he.app;
-const WA = "https://wa.me/972500000000"; // TODO: real WhatsApp number
+export const WA = "https://wa.me/972500000000"; // TODO: real WhatsApp number
 
 export function Brand({ className = "brand" }: { className?: string }) {
   return (
@@ -206,5 +206,3 @@ export function Stepper({ steps, currentIndex }: { steps: readonly string[]; cur
     </div>
   );
 }
-
-export { WA };

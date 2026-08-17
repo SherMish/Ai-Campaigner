@@ -60,8 +60,10 @@ d("admin users view (DB + HTTP)", () => {
       `INSERT INTO ad_accounts (connection_id, meta_ad_account_id) VALUES ($1,$2) RETURNING id`,
       [conn.rows[0].id, `act_ua_${conn.rows[0].id.slice(0, 8)}`],
     );
+    // A real whatsapp_destination — otherwise AIC-103's completeness check
+    // would flag this "fully ready" fixture as incomplete_config.
     await pool.query(
-      `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, meta_campaign_id) VALUES ($1,$2,'active','meta_camp_ua')`,
+      `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, meta_campaign_id, whatsapp_destination) VALUES ($1,$2,'active','meta_camp_ua','972500000000')`,
       [customerId, acct.rows[0].id],
     );
     const userId = await makeUser("__it_users_admin_linked@example.com", "Linked User", customerId);

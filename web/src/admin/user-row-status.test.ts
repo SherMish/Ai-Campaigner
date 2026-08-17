@@ -15,4 +15,12 @@ describe("offersOnboarding", () => {
       expect(offersOnboarding({ customerId: "c1", connectionReadiness: reason })).toBe(true);
     }
   });
+
+  // AIC-103: found while wiring the new reason in — offering the (insert-
+  // only) wizard here would create a SECOND connection/campaign trio for a
+  // customer who already has a working one, just missing one field. Same
+  // failure class as the null-case regression above, different trigger.
+  it("does NOT offer onboarding for incomplete_config — already provisioned, re-running would duplicate it", () => {
+    expect(offersOnboarding({ customerId: "c1", connectionReadiness: "incomplete_config" })).toBe(false);
+  });
 });

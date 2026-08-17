@@ -58,6 +58,57 @@ its own campaign through its own product — the primary account failing the
 primary workflow. Root cause: the guard refused ALL non-WhatsApp campaigns
 unconditionally, with no alternative shape for the type Pisga itself runs.
 
+**Found live again, 2026-08-17 (AIC-103):** even after the fix above, the
+customer got all the way to filling out a whole ad — image, headline, primary
+text — before hitting the 409. The refusal itself was correct (a link-CTA ad
+with no destination sends people nowhere); the bug was the TIMING: it fired
+at submit, not at screen load, and nothing had ever checked that this
+campaign's `website_url`/`tracking_pixel_id`/`lead_event_types` trio was
+complete in the first place — it was provisioned by the AIC-87 connect
+script before `website_url` even existed as a column.
+
+`AdditionContext.missingConfigFields` (`additions/session.ts`) is the fix:
+computed on every context resolution from the same shared table
+(`shared/recommended-defaults.ts`'s `CAMPAIGN_TYPE_REQUIRED_FIELDS` +
+`missingRequiredFields`) that `resolveDestinationShape` already uses for the
+Meta-field shapes. `GET /additions/context` returns it as part of a normal
+200 — **deliberately never a 409** — and `AddContent.tsx` renders it as an
+upfront banner the moment the screen loads, before the customer types
+anything. It does NOT gate `resolveAdditionContext` itself (the function
+every write route calls): an existing-post creative needs none of these
+fields at all (the section above), so folding this into the blanket
+readiness gate would have re-broken THAT fix for an unrelated reason. The
+upload path's own `resolveCreativeDestination` 409 (unchanged, described
+above) is what actually still refuses that one specific write if a customer
+gets there anyway — the banner is advance notice, not the enforcement point.
+
+The same table is enforced twice more, closing the loop end to end:
+- **At provisioning** — `customer-onboarding.ts`'s `provisionConnection`
+  refuses (with a new `IncompleteProvisioningError`, 400) to create an
+  incomplete campaign in the first place. The operator now answers an
+  explicit "where should someone land after clicking your ad?" question
+  (`destinationType`) in [ops-console.md](ops-console.md), which decides
+  which fields are actually required — `whatsapp_destination` was **never
+  even a field on this form before**, so every WhatsApp campaign provisioned
+  through the wizard silently got `''` regardless of what the operator
+  entered elsewhere.
+- **As an ongoing health check** — `services/customers.ts` /
+  `services/users-admin.ts` (the admin fleet views) reuse the exact same
+  `classifyConnectionReadiness`/`missingConfigFields` pair, now carrying an
+  `incomplete_config` reason alongside the four connection-health ones. This
+  is how an operator finds a `free_beta_signups_leads` BEFORE a customer's
+  raw 409, scanning the fleet instead of waiting for one at a time.
+
+**A real gap flagged, not fixed here:** there is still no admin surface to
+EDIT an already-provisioned campaign's fields — `provisionConnection` only
+INSERTs. `offersOnboarding` (`web/src/admin/user-row-status.ts`) deliberately
+does NOT offer the wizard for `incomplete_config` (unlike the other four
+reasons) because running it would create a SECOND connection/campaign trio,
+not fix the existing one — the same duplicate-write failure the function
+already guards against for a fully-ready customer. Until an edit surface
+exists, fixing an `incomplete_config` customer found by the health check is
+still a manual DB step.
+
 ### Adding an ad set — WhatsApp only, unchanged
 
 `POST /additions/ad-set` still gates on `whatsappWriteBlock` alone — a

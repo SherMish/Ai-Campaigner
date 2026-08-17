@@ -6,6 +6,39 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — AIC-103: campaign-type required fields — enforced at provisioning, at use, and as a health check
+Found live verifying AIC-102: `free_beta_signups_leads` failed at SUBMIT with
+a raw 409 after the customer filled out a whole ad — the refusal was
+correct, the timing wasn't, and nothing had ever checked the campaign's
+config was complete in the first place (provisioned by the AIC-87 script
+before `website_url` existed). One declared table
+(`shared/recommended-defaults.ts`'s `CAMPAIGN_TYPE_REQUIRED_FIELDS` +
+`missingRequiredFields`), enforced three times: (1) **at use** —
+`AdditionContext.missingConfigFields`, surfaced by `GET /additions/context`
+as part of a normal 200 (never a 409 — folding it into the blanket
+readiness gate would have re-broken AIC-102's existing-post fix, which
+needs none of this data), rendered as an upfront `AddContent.tsx` banner;
+(2) **at provisioning** — `provisionConnection` now asks an explicit
+`destinationType` question and refuses (400, `IncompleteProvisioningError`)
+an incomplete campaign before it's ever written; found in the process that
+`whatsapp_destination` had never been a field on this form at all, so every
+WhatsApp campaign provisioned through the wizard silently got `''`; (3) **as
+a health check** — `services/customers.ts`/`users-admin.ts`'s admin fleet
+views gain a fifth `connectionReadiness` reason, `incomplete_config`, plus a
+`missingConfigFields` detail. Found and fixed in the process: offering the
+(insert-only) onboarding wizard for `incomplete_config` would create a
+duplicate connection/campaign trio — `offersOnboarding` now excludes it,
+same as the fully-ready case. Also corrected AIC-68/AIC-101/AIC-89's Linear
+statuses (Backlog/Todo/Backlog) to reflect what was actually shipped earlier
+this session — AIC-68/101 to Done, AIC-89 to In Progress (its own live-verify
+acceptance criterion is what this ticket unblocks). Docs:
+[add-content.md](features/add-content.md),
+[ops-console.md](features/ops-console.md). Real gap flagged, not built:
+there is still no admin surface to edit an already-provisioned campaign's
+fields — the health check finds the problem, fixing it is still manual.
+free_beta_signups_leads' `website_url` still not set — blocked on the real
+destination URL.
+
 ### 2026-08-18 — fix: existing-post creative 502'd on a real page post (double-prefixed object_story_id)
 Found live while verifying AIC-102: the "existing post" path — designed to
 need zero destination data — failed with a raw 502 on a real attempt.

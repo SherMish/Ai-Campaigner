@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   impliedLeadActionType,
   summarizeTracking,
+  deriveIsMessaging,
   type AdSetTrackingConfig,
 } from "./tracking-health.js";
 
@@ -28,6 +29,27 @@ const WHATSAPP_DEFAULT = [
   "onsite_conversion.messaging_conversation_started",
 ];
 const PIXEL_REGISTRATION = ["offsite_conversion.fb_pixel_complete_registration"];
+
+// AIC-103: pulled out of additions/session.ts's toContext, previously
+// inlined there and re-derived (differently, riskier) inline in the admin
+// readiness classifiers — one definition now.
+describe("deriveIsMessaging", () => {
+  it("true for the WhatsApp default lead types, regardless of the number", () => {
+    expect(deriveIsMessaging(WHATSAPP_DEFAULT, "+972500000000")).toBe(true);
+    expect(deriveIsMessaging(WHATSAPP_DEFAULT, "")).toBe(true);
+  });
+
+  it("false for a Pixel lead type, regardless of a leftover number", () => {
+    expect(deriveIsMessaging(PIXEL_REGISTRATION, null)).toBe(false);
+    expect(deriveIsMessaging(PIXEL_REGISTRATION, "+972500000000")).toBe(false);
+  });
+
+  it("an empty lead-type list falls back to whether a number is on file (hand-made rows predate AIC-87)", () => {
+    expect(deriveIsMessaging([], "+972500000000")).toBe(true);
+    expect(deriveIsMessaging([], "")).toBe(false);
+    expect(deriveIsMessaging(null, null)).toBe(false);
+  });
+});
 
 describe("impliedLeadActionType — Meta config deterministically implies the action type", () => {
   it("OFFSITE_CONVERSIONS + COMPLETE_REGISTRATION → the pixel registration action", () => {

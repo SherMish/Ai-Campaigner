@@ -100,11 +100,12 @@ only; role-gated. Source: `server/src/services/customers.js`. Tests:
 **`connectionReadiness` — the same reason a customer would eventually hit,
 surfaced before they do (bug fix, 2026-08-15).** Both rows carry a
 `connectionReadiness` field — `no_campaign` / `not_launched` / `missing_page`
-/ `connection_issue`, or `null` once the campaign is real, linked, and every
-connection layer (health, ad account, Page) is present. This is the EXACT
-same classification the customer-facing add-content flow's 409 uses
+/ `connection_issue` / `incomplete_config`, or `null` once the campaign is
+real, linked, every connection layer (health, ad account, Page) is present,
+AND its type-required config is complete. This is the EXACT same
+classification the customer-facing add-content flow's 409 uses
 (`server/src/services/connection-readiness.ts`'s `classifyConnectionReadiness`
-— one pure function, two consumers, so the two surfaces can't drift onto
+— one pure function, several consumers, so the surfaces can't drift onto
 different definitions of "ready"). Found live: a customer's `page_id` had
 been silently NULL for weeks — real, active, spending campaign, but nothing
 in the admin list distinguished it from a fully healthy one, because
@@ -115,6 +116,21 @@ shows a `pill warn` badge with the reason next to the raw `accessHealth`
 in both the list row and the detail card, and a fourth filter tab
 ("בעיית חיבור") narrows the list to exactly these customers — an operator
 no longer has to wait for a customer to report it.
+
+**`incomplete_config` (AIC-103) is the fifth reason** — this is the
+ops-console health check that finds a campaign already broken by a missing
+type-required field (`website_url`/`tracking_pixel_id`/`lead_event_types`
+for a Pixel campaign, `whatsapp_destination` for a WhatsApp one — the one
+declared table in `shared/recommended-defaults.ts`'s
+`CAMPAIGN_TYPE_REQUIRED_FIELDS`, the same one the add-content flow reads —
+see [add-content.md](add-content.md#adding-an-ad-creative--supports-two-destinations-aic-102)).
+Both rows also carry `missingConfigFields` — exactly which field(s), the
+actionable detail a bare reason label can't hold — rendered next to the pill
+in the detail card. `free_beta_signups_leads` is the first known instance,
+provisioned by the AIC-87 connect script before `website_url` existed as a
+column; there may be others provisioned the same way. **No fix-it action is
+wired up here yet** — see `offersOnboarding` below for why the onboarding
+wizard specifically must NOT be it.
 
 ## Users view (separate from Customers, 2026-08-16)
 
@@ -155,12 +171,25 @@ real gap in the first version, caught live: with no guard, Pisga and
 free_beta test (both fully connected) still showed "start onboarding," and
 clicking it would have run `provisionConnection` a second time — INSERTing a
 duplicate connection/ad_account/campaign for a customer that already has a
-working one (provisioning always inserts, never upserts). The rule mirrors
-`connectionReadiness`: `null` (fully ready) withholds the CTA; a business
-with no `customerId` yet, or any readiness gap short of fully ready, still
-gets it, since those are exactly the cases the wizard exists to finish or
-fix. A fully-connected row's action links to `/admin/customers?focus=<id>`
-instead — the same jump-to-drilldown pattern the Overview search uses.
+working one (provisioning always inserts, never upserts). The rule mostly
+mirrors `connectionReadiness`: a business with no `customerId` yet, or a
+connection-health gap (`no_campaign`/`not_launched`/`missing_page`/
+`connection_issue`), still gets the CTA, since those are exactly the cases
+the wizard exists to finish or fix.
+
+**`incomplete_config` (AIC-103) is the one deliberate exception** — treated
+the same as `null` (withheld), NOT like the other four. It only ever fires
+once a real connection/ad-account/campaign trio already exists and is
+healthy; the one thing missing is a field on that EXISTING campaign row, not
+a connection gap the wizard's insert-only step 4 could legitimately re-run.
+Offering the wizard here would create a duplicate trio — the exact failure
+this function exists to prevent, just triggered by a different reason. There
+is deliberately no fix-it flow wired up for this case yet (see
+[add-content.md](add-content.md)'s note on the same gap) — editing an
+already-provisioned campaign's fields has no admin surface at all today. A
+fully-connected (or incomplete_config) row's action links to
+`/admin/customers?focus=<id>` instead — the same jump-to-drilldown pattern
+the Overview search uses.
 
 **Payment details and trial state are explicitly out of scope for now**
 (2026-08-16 product decision) — `subscriptions` still lives on `customers`,
@@ -462,6 +491,37 @@ when left blank, so a plain WhatsApp-lead campaign needs no extra input.
 the additions/creative flow reads to build a link-CTA ad
 ([add-content.md](add-content.md)); left blank for a WhatsApp campaign, which
 needs no destination URL.
+
+**`destinationType` (AIC-103) is now an explicit, required question on this
+form** — "where should someone land after clicking your ad?" — asked
+directly, in customer-facing language, so the operator can put it to the
+customer on the call rather than inferring it from which optional fields
+happen to be filled in. The answer decides which fields below it are
+actually required: `whatsappDestination` for `whatsapp`; `websiteUrl` +
+`trackingPixelId` + `leadEventTypes` for `website`. `provisionConnection`
+enforces this with the exact same shared table
+(`CAMPAIGN_TYPE_REQUIRED_FIELDS`) the add-content flow's read-time check and
+the health check above both use — refusing (400, `IncompleteProvisioningError`,
+`missingFields` on the body) rather than writing an incomplete campaign that
+a health check would later have to find. **Found live while wiring this in:**
+`whatsappDestination` had never been a field on this form at all —
+`managed_campaigns.whatsapp_destination` is `NOT NULL DEFAULT ''`, so every
+WhatsApp campaign ever provisioned through this wizard silently got `''`
+regardless of what the operator entered elsewhere, the exact real shape
+GelNails turned out to have (connected from outside the builder, number never
+captured — see `additions/session.ts`'s `whatsappWriteBlock` comment).
+
+**The website URL field carries a UTM reminder, not just a placeholder.** A
+`website_url` saved without UTM parameters produces a working ad but no way
+to attribute a resulting lead back to this campaign — a silent gap in the
+same spirit as the tracking-health guard (`meta/tracking-health.ts`), even
+though it's a different mechanism. The form doesn't validate UTM presence (a
+format check would be brittle and Meta parameter conventions vary); it
+states the reason next to the field so the operator asks for the tracked
+link, not the bare domain. **Caveat, flagged rather than silently asserted:**
+this codebase has no dedicated first-touch UTM attribution pipeline today —
+this note is a forward-looking practice reminder for whenever leads ARE
+attributed by channel, not a description of an existing mechanism.
 
 **Step 5 finalize runs the real `ConnectionService.verify()`** — the exact
 check the recommendation engine's own tick relies on — and only marks

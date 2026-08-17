@@ -18,7 +18,7 @@ interface UserRow {
   subscriptionStatus: string | null;
   accessHealth: string | null;
   campaignStatus: string | null;
-  connectionReadiness: "no_campaign" | "not_launched" | "missing_page" | "connection_issue" | null;
+  connectionReadiness: "no_campaign" | "not_launched" | "missing_page" | "connection_issue" | "incomplete_config" | null;
 }
 
 // Separate from AdminCustomers (explicit product decision, 2026-08-16): a

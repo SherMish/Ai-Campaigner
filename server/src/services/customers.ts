@@ -1,7 +1,32 @@
 import type pg from "pg";
-import type { AccessHealth, CampaignStatus, SubscriptionStatus } from "@aic/shared";
+import type { AccessHealth, CampaignStatus, SubscriptionStatus, CampaignRequiredField } from "@aic/shared";
 import { resolveThresholds, type RuleThresholds } from "../recommendations/rules.js";
-import { classifyConnectionReadiness, type ConnectionReadinessReason } from "./connection-readiness.js";
+import { classifyConnectionReadiness, missingConfigFields, type ConnectionReadinessReason } from "./connection-readiness.js";
+import { deriveIsMessaging } from "../meta/tracking-health.js";
+
+// AIC-103: shared by listCustomers and getCustomerDetail so the two queries'
+// campaign-completeness columns and the readiness/missing-fields pair they
+// produce can't drift into two different definitions of "incomplete".
+function readinessAndMissing(r: {
+  campaign_id: string | null; meta_campaign_id: string | null; access_health: string | null;
+  meta_ad_account_id: string | null; page_id: string | null;
+  whatsapp_destination: string | null; website_url: string | null;
+  tracking_pixel_id: string | null; lead_event_types: string[] | null;
+}): { connectionReadiness: ConnectionReadinessReason | null; missingConfigFields: CampaignRequiredField[] } {
+  const input = {
+    campaignId: r.campaign_id ?? null,
+    metaCampaignId: r.meta_campaign_id ?? null,
+    accessHealth: r.access_health ?? null,
+    metaAdAccountId: r.meta_ad_account_id ?? null,
+    pageId: r.page_id ?? null,
+    isMessaging: deriveIsMessaging(r.lead_event_types, r.whatsapp_destination),
+    whatsappDestination: r.whatsapp_destination ?? null,
+    websiteUrl: r.website_url ?? null,
+    trackingPixelId: r.tracking_pixel_id ?? null,
+    leadEventTypes: r.lead_event_types ?? null,
+  };
+  return { connectionReadiness: classifyConnectionReadiness(input), missingConfigFields: missingConfigFields(input) };
+}
 
 // One row of the operator's customer list — status at a glance.
 export interface CustomerListRow {
@@ -27,6 +52,13 @@ export interface CustomerListRow {
   // wall themselves (confirmed live: an active, spending campaign whose
   // Page access was silently missing for weeks).
   connectionReadiness: ConnectionReadinessReason | null;
+  // AIC-103: the ops-console health check — which type-required fields
+  // (shared's CampaignRequiredField) THIS campaign is missing, [] when
+  // complete. Present even when connectionReadiness is null for another
+  // reason (no campaign yet), always [] in that case. This is how an
+  // operator finds a free_beta_signups_leads BEFORE a customer's raw 409,
+  // not one at a time as each surfaces.
+  missingConfigFields: CampaignRequiredField[];
 }
 
 export async function listCustomers(pool: pg.Pool): Promise<CustomerListRow[]> {
@@ -36,6 +68,7 @@ export async function listCustomers(pool: pg.Pool): Promise<CustomerListRow[]> {
             conn.access_health, conn.page_id,
             mc.id AS campaign_id, mc.name AS campaign_name, mc.status AS campaign_status, mc.agreed_budget_agorot,
             mc.meta_campaign_id, aa.meta_ad_account_id,
+            mc.whatsapp_destination, mc.website_url, mc.tracking_pixel_id, mc.lead_event_types,
             COALESCE(r.open_recs, 0) AS open_recs
      FROM customers c
      LEFT JOIN subscriptions s      ON s.customer_id = c.id
@@ -64,13 +97,7 @@ export async function listCustomers(pool: pg.Pool): Promise<CustomerListRow[]> {
     campaignStatus: r.campaign_status ?? null,
     agreedBudgetAgorot: r.agreed_budget_agorot ?? null,
     openRecommendations: Number(r.open_recs),
-    connectionReadiness: classifyConnectionReadiness({
-      campaignId: r.campaign_id ?? null,
-      metaCampaignId: r.meta_campaign_id ?? null,
-      accessHealth: r.access_health ?? null,
-      metaAdAccountId: r.meta_ad_account_id ?? null,
-      pageId: r.page_id ?? null,
-    }),
+    ...readinessAndMissing(r),
   }));
 }
 
@@ -115,7 +142,8 @@ export async function getCustomerDetail(
             conn.access_health, conn.page_id,
             mc.id AS campaign_id, mc.name AS campaign_name, mc.status AS campaign_status, mc.agreed_budget_agorot,
             mc.no_rec_reason, mc.no_rec_detail, mc.threshold_overrides, mc.live_budget_agorot,
-            mc.meta_campaign_id, aa.meta_ad_account_id
+            mc.meta_campaign_id, aa.meta_ad_account_id,
+            mc.whatsapp_destination, mc.website_url, mc.tracking_pixel_id, mc.lead_event_types
      FROM customers c
      LEFT JOIN subscriptions s       ON s.customer_id = c.id
      LEFT JOIN meta_connections conn ON conn.customer_id = c.id
@@ -172,13 +200,7 @@ export async function getCustomerDetail(
     campaignStatus: c.campaign_status ?? null,
     agreedBudgetAgorot: c.agreed_budget_agorot ?? null,
     openRecommendations: openRecs,
-    connectionReadiness: classifyConnectionReadiness({
-      campaignId: c.campaign_id ?? null,
-      metaCampaignId: c.meta_campaign_id ?? null,
-      accessHealth: c.access_health ?? null,
-      metaAdAccountId: c.meta_ad_account_id ?? null,
-      pageId: c.page_id ?? null,
-    }),
+    ...readinessAndMissing(c),
     mainService: c.main_service,
     geoArea: c.geo_area,
     primaryCustomer: c.primary_customer,

@@ -8,7 +8,7 @@ import {
   uploadAdditionFile, getAdditionPosts, createAdditionCreative,
   type ExistingAdSet, type PendingAddition, type AdditionUnavailableReason,
 } from "../api";
-import { StatusPill, SupportCard } from "./components";
+import { StatusPill, SupportCard, WA } from "./components";
 import { AudienceFields, type Gender } from "./AudienceFields";
 import { BuilderCreatives, newAdDraft, type AdDraft } from "./BuilderCreatives";
 
@@ -26,6 +26,10 @@ export function AddContent() {
   const [portfolioId, setPortfolioId] = useState<string | null>(null);
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [mode, setMode] = useState<"ad" | "ad_set">("ad");
+  // AIC-103: [] means fully configured. Non-empty doesn't block the screen —
+  // only the upload path actually needs this data; existing-post additions
+  // stay available regardless (see AdditionContext.missingConfigFields).
+  const [missingConfigFields, setMissingConfigFields] = useState<string[]>([]);
 
   // add-ad mode
   const [adSets, setAdSets] = useState<ExistingAdSet[] | null>(null);
@@ -56,6 +60,7 @@ export function AddContent() {
         setCategory(cat);
         const d = resolveAudienceDefault(cat);
         setAudience({ ageMin: d.ageMin, ageMax: d.ageMax, gender: d.genders });
+        setMissingConfigFields(ctx.missingConfigFields);
         setPhase("ready");
       })
       .catch((e) => {
@@ -229,6 +234,14 @@ export function AddContent() {
         <div className="eyebrow">{s.eyebrow}</div>
         <h1 style={{ marginTop: 10 }}>{s.title}</h1>
       </div>
+
+      {missingConfigFields.length > 0 && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <b style={{ fontSize: "1.05rem", display: "block", marginBottom: 8 }}>{s.incompleteConfigTitle}</b>
+          <p className="muted" style={{ marginBottom: 12 }}>{s.incompleteConfigBody}</p>
+          <a className="btn btn-wa btn-sm" href={WA}>{strings.he.app.talkWa}</a>
+        </div>
+      )}
 
       <div className="grid-2">
         <div>

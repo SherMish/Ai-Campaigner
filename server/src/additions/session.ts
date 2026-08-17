@@ -5,9 +5,10 @@ import type { CreativeWriter } from "../builder/creative-types.js";
 import type { AdditionWriter } from "./types.js";
 import type { DeliveryReader } from "../meta/delivery-health.js";
 import type { AdMediaReader } from "../meta/ad-media.js";
-import { isMessagingAction } from "../meta/tracking-health.js";
+import { isMessagingAction, deriveIsMessaging } from "../meta/tracking-health.js";
 import { classifyConnectionReadiness, type ConnectionReadinessReason } from "../services/connection-readiness.js";
 import { resolveCreativeDestination, type CreativeDestination, type CreativeBlockReason } from "../meta/destination.js";
+import { FIXED_DESTINATION, WEBSITE_DESTINATION, missingRequiredFields, type CampaignRequiredField } from "@aic/shared";
 
 // Re-exported for existing consumers (routes/additions.ts, session.test.ts) —
 // the classification itself now lives in meta/destination.ts (AIC-89), shared
@@ -50,6 +51,17 @@ export interface AdditionContext {
   leadEventTypes: string[];
   campaignName: string;
   category: string; // for the add-ad-set audience step's business-type prefill, same as the builder
+  // AIC-103: which of THIS destination's required fields (shared/recommended-
+  // defaults.ts's CAMPAIGN_TYPE_REQUIRED_FIELDS) are missing — empty when the
+  // campaign is fully configured. Deliberately does NOT gate resolveAdditionContext
+  // itself (unlike the four connection-readiness reasons): an existing-post
+  // creative needs none of these fields at all (AIC-102), so blocking the
+  // whole context on a missing website_url would silently regress that fix —
+  // the customer couldn't even browse their own Page posts. Consumers that
+  // need destination data (the new-content upload path, ad-set creation)
+  // check this themselves; GET /context surfaces it so the customer learns
+  // about it on load rather than after filling out a form (the actual bug).
+  missingConfigFields: CampaignRequiredField[];
 }
 
 // Why this campaign can't accept the WhatsApp-shaped writes the additions flow
@@ -98,6 +110,7 @@ type AdditionContextRow = {
   meta_campaign_id: string | null;
   whatsapp_destination: string | null;
   website_url: string | null;
+  tracking_pixel_id: string | null;
   lead_event_types: string[] | null;
   access_health: string | null;
   meta_ad_account_id: string | null;
@@ -107,7 +120,7 @@ type AdditionContextRow = {
 async function fetchAdditionContextRow(pool: pg.Pool, userId: string): Promise<AdditionContextRow | undefined> {
   const { rows } = await pool.query<AdditionContextRow>(
     `SELECT u.customer_id, c.category, mc.id AS campaign_id, mc.name AS campaign_name,
-            mc.meta_campaign_id, mc.whatsapp_destination, mc.website_url, mc.lead_event_types,
+            mc.meta_campaign_id, mc.whatsapp_destination, mc.website_url, mc.tracking_pixel_id, mc.lead_event_types,
             conn.access_health, aa.meta_ad_account_id, conn.page_id
      FROM app_users u
      LEFT JOIN customers c ON c.id = u.customer_id
@@ -121,16 +134,26 @@ async function fetchAdditionContextRow(pool: pg.Pool, userId: string): Promise<A
   return rows[0];
 }
 
+// Deliberately still just the original four connection checks — see
+// AdditionContext.missingConfigFields above for why AIC-103's per-type
+// completeness check is NOT folded in here: doing so would gate every
+// additions route (including the existing-post path, which needs none of
+// this) on a piece of config only the upload path actually needs.
+function readinessRow(r: AdditionContextRow | undefined) {
+  return {
+    campaignId: r?.campaign_id ?? null,
+    metaCampaignId: r?.meta_campaign_id ?? null,
+    accessHealth: r?.access_health ?? null,
+    metaAdAccountId: r?.meta_ad_account_id ?? null,
+    pageId: r?.page_id ?? null,
+  };
+}
+
 function toContext(r: AdditionContextRow): AdditionContext {
   const leadEventTypes = r.lead_event_types ?? [];
   const number = (r.whatsapp_destination ?? "").trim();
   const url = (r.website_url ?? "").trim();
-  // A real number AND a messaging lead definition. Either alone is not enough:
-  // a leftover number on a Pixel campaign doesn't make WhatsApp writes correct,
-  // and a messaging lead type with no number can't produce a valid CTA.
-  const isMessaging = leadEventTypes.length === 0
-    ? number.length > 0 // pre-AIC-87 rows default to the WhatsApp pair, so an empty list only happens on a hand-made row
-    : leadEventTypes.some(isMessagingAction);
+  const isMessaging = deriveIsMessaging(leadEventTypes, r.whatsapp_destination);
   return {
     customerId: r.customer_id!,
     localCampaignId: r.campaign_id!,
@@ -143,18 +166,18 @@ function toContext(r: AdditionContextRow): AdditionContext {
     leadEventTypes,
     campaignName: r.campaign_name ?? "",
     category: r.category ?? "",
+    missingConfigFields: missingRequiredFields(isMessaging ? FIXED_DESTINATION : WEBSITE_DESTINATION, {
+      whatsappDestination: r.whatsapp_destination ?? null,
+      websiteUrl: r.website_url ?? null,
+      trackingPixelId: r.tracking_pixel_id ?? null,
+      leadEventTypes,
+    }),
   };
 }
 
 export async function resolveAdditionContext(pool: pg.Pool, userId: string): Promise<AdditionContext | null> {
   const r = await fetchAdditionContextRow(pool, userId);
-  const reason = classifyConnectionReadiness({
-    campaignId: r?.campaign_id ?? null,
-    metaCampaignId: r?.meta_campaign_id ?? null,
-    accessHealth: r?.access_health ?? null,
-    metaAdAccountId: r?.meta_ad_account_id ?? null,
-    pageId: r?.page_id ?? null,
-  });
+  const reason = classifyConnectionReadiness(readinessRow(r));
   return reason ? null : toContext(r!);
 }
 
@@ -179,13 +202,7 @@ export async function resolveAdditionAvailability(
   userId: string,
 ): Promise<{ ctx: AdditionContext } | { ctx: null; reason: AdditionUnavailableReason }> {
   const r = await fetchAdditionContextRow(pool, userId);
-  const reason = classifyConnectionReadiness({
-    campaignId: r?.campaign_id ?? null,
-    metaCampaignId: r?.meta_campaign_id ?? null,
-    accessHealth: r?.access_health ?? null,
-    metaAdAccountId: r?.meta_ad_account_id ?? null,
-    pageId: r?.page_id ?? null,
-  });
+  const reason = classifyConnectionReadiness(readinessRow(r));
   if (reason) return { ctx: null, reason };
   return { ctx: toContext(r!) };
 }

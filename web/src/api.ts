@@ -594,6 +594,14 @@ export interface AdditionContext {
   campaignName: string;
   category: string;
   whatsappDestination: string;
+  // AIC-103: which per-campaign-type required fields (shared's
+  // CampaignRequiredField) are missing — [] when the campaign is fully
+  // configured. Present even on a 200 (this never 409s the screen — an
+  // existing-post creative needs none of these fields, so blocking the
+  // whole screen on it would regress AIC-102). AddContent.tsx shows this as
+  // an upfront banner so the customer learns before typing into a form that
+  // will refuse at submit for the upload path specifically.
+  missingConfigFields: string[];
 }
 // Mirrors server/src/additions/session.ts's AdditionUnavailableReason — why
 // GET /context 409'd, read off ApiError.body. See campaign-audiences.ts's

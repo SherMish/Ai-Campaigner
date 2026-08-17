@@ -157,6 +157,10 @@ d("onboarding wizard routes (AIC-101)", () => {
       campaignName: "IT Wizard Campaign",
       agreedBudgetAgorot: 2000,
       systemUserId: "122103498795426897",
+      // AIC-103: a complete WhatsApp shape by default — destinationType is
+      // now a real required field, not an implicit assumption.
+      destinationType: "whatsapp",
+      whatsappDestination: "972500000000",
       ...extra,
     });
 
@@ -211,6 +215,53 @@ d("onboarding wizard routes (AIC-101)", () => {
       const res = await request(app).post(`/api/admin/customers/${id}/onboarding/provision`)
         .set("Authorization", ADMIN).send(body({ agreedBudgetAgorot: 0 }));
       expect(res.status).toBe(400);
+    });
+
+    // ── AIC-103: destinationType + the completeness guard ──────────────
+    it("400s when destinationType is missing entirely — not silently defaulted", async () => {
+      const id = await seedCustomer("provnodest");
+      vi.stubGlobal("fetch", fakeGraph({}));
+      const res = await request(app).post(`/api/admin/customers/${id}/onboarding/provision`)
+        .set("Authorization", ADMIN).send(body({ destinationType: undefined }));
+      expect(res.status).toBe(400);
+    });
+
+    it("400s a whatsapp provision missing whatsappDestination, naming the field", async () => {
+      const id = await seedCustomer("provnowanum");
+      vi.stubGlobal("fetch", fakeGraph({}));
+      const res = await request(app).post(`/api/admin/customers/${id}/onboarding/provision`)
+        .set("Authorization", ADMIN).send(body({ whatsappDestination: null }));
+      expect(res.status).toBe(400);
+      expect(res.body.missingFields).toContain("whatsapp_destination");
+    });
+
+    it("400s a website provision missing website_url + tracking_pixel_id, naming both", async () => {
+      const id = await seedCustomer("provnowebsite");
+      vi.stubGlobal("fetch", fakeGraph({}));
+      const res = await request(app).post(`/api/admin/customers/${id}/onboarding/provision`)
+        .set("Authorization", ADMIN).send(body({
+          destinationType: "website", whatsappDestination: null,
+          leadEventTypes: ["offsite_conversion.fb_pixel_lead"],
+        }));
+      expect(res.status).toBe(400);
+      expect(res.body.missingFields).toEqual(["website_url", "tracking_pixel_id"]);
+    });
+
+    it("creates a complete website campaign — whatsapp_destination stays '' (the column default), not required for this type", async () => {
+      const id = await seedCustomer("provwebsiteok");
+      vi.stubGlobal("fetch", fakeGraph({}));
+      const res = await request(app).post(`/api/admin/customers/${id}/onboarding/provision`)
+        .set("Authorization", ADMIN).send(body({
+          destinationType: "website", whatsappDestination: null,
+          leadEventTypes: ["offsite_conversion.fb_pixel_lead"],
+          trackingPixelId: "984664453249037",
+          websiteUrl: "https://pisga.app/signup?utm_source=meta&utm_medium=cpc&utm_campaign=test",
+        }));
+      expect(res.status).toBe(200);
+      const camp = await pool.query<{ whatsapp_destination: string; website_url: string }>(
+        `SELECT whatsapp_destination, website_url FROM managed_campaigns WHERE id = $1`, [res.body.result.campaignId]);
+      expect(camp.rows[0].whatsapp_destination).toBe("");
+      expect(camp.rows[0].website_url).toContain("utm_source=meta");
     });
 
     it("saves the page_id when the Page genuinely reads", async () => {

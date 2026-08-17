@@ -72,8 +72,11 @@ d("customers view (DB + HTTP)", () => {
       `INSERT INTO ad_accounts (connection_id, meta_ad_account_id) VALUES ($1,$2) RETURNING id`,
       [conn.rows[0].id, `act_readiness_${conn.rows[0].id.slice(0, 8)}`],
     );
+    // A real whatsapp_destination — otherwise AIC-103's completeness check
+    // would ALSO flag this row (as incomplete_config), muddying this test's
+    // one thing under test (the page_id gap specifically).
     await pool.query(
-      `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, meta_campaign_id) VALUES ($1,$2,'active','meta_camp_readiness')`,
+      `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, meta_campaign_id, whatsapp_destination) VALUES ($1,$2,'active','meta_camp_readiness','972500000000')`,
       [customerId, acct.rows[0].id],
     );
 
@@ -87,6 +90,41 @@ d("customers view (DB + HTTP)", () => {
     await pool.query(`UPDATE meta_connections SET page_id = 'page_readiness_1' WHERE customer_id = $1`, [customerId]);
     const listAfter = await listCustomers(pool);
     expect(listAfter.find((r) => r.id === customerId)?.connectionReadiness).toBeNull();
+
+    await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
+  });
+
+  // AIC-103: the ops-console health check — this is how an operator finds a
+  // free_beta_signups_leads BEFORE a customer's raw 409, not one at a time.
+  it("surfaces incomplete_config + which fields, for a campaign otherwise fully ready but missing website_url", async () => {
+    const cust = await pool.query<{ id: string }>(
+      `INSERT INTO customers (business_name, category, onboarding_status) VALUES ('__it_cust_incomplete', 'fitness', 'ready') RETURNING id`,
+    );
+    const customerId = cust.rows[0].id;
+    const conn = await pool.query<{ id: string }>(
+      `INSERT INTO meta_connections (customer_id, access_health, page_id) VALUES ($1,'ok','page_incomplete_1') RETURNING id`,
+      [customerId],
+    );
+    const acct = await pool.query<{ id: string }>(
+      `INSERT INTO ad_accounts (connection_id, meta_ad_account_id) VALUES ($1,$2) RETURNING id`,
+      [conn.rows[0].id, `act_incomplete_${conn.rows[0].id.slice(0, 8)}`],
+    );
+    // A real Pixel campaign (lead_event_types set), missing website_url +
+    // tracking_pixel_id — exactly free_beta_signups_leads' real shape.
+    await pool.query(
+      `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, meta_campaign_id, lead_event_types)
+       VALUES ($1,$2,'active','meta_camp_incomplete', ARRAY['offsite_conversion.fb_pixel_complete_registration'])`,
+      [customerId, acct.rows[0].id],
+    );
+
+    const list = await listCustomers(pool);
+    const row = list.find((r) => r.id === customerId)!;
+    expect(row.connectionReadiness).toBe("incomplete_config");
+    expect(row.missingConfigFields).toEqual(["website_url", "tracking_pixel_id"]);
+
+    const detail = await getCustomerDetail(pool, customerId);
+    expect(detail?.connectionReadiness).toBe("incomplete_config");
+    expect(detail?.missingConfigFields).toEqual(["website_url", "tracking_pixel_id"]);
 
     await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
   });

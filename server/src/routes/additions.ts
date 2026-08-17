@@ -98,11 +98,18 @@ additionsRouter.get("/context", requireAuth, async (req, res) => {
     // WhatsApp — the client prefills a number field from it, and an empty
     // prefill is correct there. `canAddContent` is the honest signal for
     // whether the write routes will accept anything at all.
+    //
+    // AIC-103: `missingConfigFields` is surfaced even though the screen still
+    // loads (deliberately NOT a 409 — see AdditionContext.missingConfigFields)
+    // so the customer learns about it on load, before typing a headline into
+    // a form that will refuse at submit. Never affects the existing-post
+    // path, which needs none of these fields.
     res.json({
       campaignName: ctx.campaignName,
       category: ctx.category,
       whatsappDestination: ctx.whatsappNumber ?? "",
       canAddContent: acceptsWhatsappWrites(ctx),
+      missingConfigFields: ctx.missingConfigFields,
     });
   } catch (e) {
     console.error("[additions] context failed", e);

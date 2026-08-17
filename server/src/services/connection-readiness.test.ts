@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyConnectionReadiness } from "./connection-readiness.js";
+import { classifyConnectionReadiness, missingConfigFields } from "./connection-readiness.js";
 
 const READY = {
   campaignId: "camp1",
@@ -43,5 +43,57 @@ describe("classifyConnectionReadiness", () => {
     expect(classifyConnectionReadiness({ campaignId: null, metaCampaignId: null, accessHealth: null, metaAdAccountId: null, pageId: null })).toBe(
       "no_campaign",
     );
+  });
+
+  // AIC-103: found live — free_beta_signups_leads passed every check above
+  // (real, launched, healthy connection, Page present) and still couldn't
+  // take a write, because website_url was never set. The customer got a raw
+  // 409 at submit time instead of being told at entry.
+  describe("incomplete_config (AIC-103)", () => {
+    it("is null (ready) for a WhatsApp campaign with its number on file", () => {
+      expect(classifyConnectionReadiness({ ...READY, isMessaging: true, whatsappDestination: "+972501234567" })).toBeNull();
+    });
+
+    it("incomplete_config for a WhatsApp campaign missing its number", () => {
+      expect(classifyConnectionReadiness({ ...READY, isMessaging: true, whatsappDestination: "" })).toBe("incomplete_config");
+    });
+
+    it("is null (ready) for a website campaign with url + pixel + lead events on file", () => {
+      expect(
+        classifyConnectionReadiness({
+          ...READY, isMessaging: false, websiteUrl: "https://example.com", trackingPixelId: "px_1",
+          leadEventTypes: ["offsite_conversion.fb_pixel_lead"],
+        }),
+      ).toBeNull();
+    });
+
+    it("incomplete_config for a website campaign missing website_url — the real live case", () => {
+      expect(
+        classifyConnectionReadiness({
+          ...READY, isMessaging: false, websiteUrl: null, trackingPixelId: "px_1",
+          leadEventTypes: ["offsite_conversion.fb_pixel_lead"],
+        }),
+      ).toBe("incomplete_config");
+    });
+
+    it("never fires when the caller doesn't pass isMessaging — omission means 'not checked', not 'complete'", () => {
+      expect(classifyConnectionReadiness(READY)).toBeNull();
+    });
+
+    it("missing_page still wins over incomplete_config — earlier checks take priority", () => {
+      expect(classifyConnectionReadiness({ ...READY, pageId: null, isMessaging: false, websiteUrl: null })).toBe("missing_page");
+    });
+  });
+
+  describe("missingConfigFields (AIC-103)", () => {
+    it("lists every missing field for a website campaign, not just the first", () => {
+      expect(missingConfigFields({ ...READY, isMessaging: false, websiteUrl: null, trackingPixelId: null, leadEventTypes: [] })).toEqual([
+        "website_url", "tracking_pixel_id", "lead_event_types",
+      ]);
+    });
+
+    it("empty when the caller didn't pass isMessaging", () => {
+      expect(missingConfigFields(READY)).toEqual([]);
+    });
   });
 });

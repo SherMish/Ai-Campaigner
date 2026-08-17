@@ -17,6 +17,7 @@ function ctx(overrides: Partial<AdditionContext>): AdditionContext {
     leadEventTypes: [],
     campaignName: "Test",
     category: "beautician",
+    missingConfigFields: [],
     ...overrides,
   };
 }
