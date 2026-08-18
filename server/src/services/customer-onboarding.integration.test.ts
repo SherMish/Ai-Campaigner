@@ -280,5 +280,61 @@ d("customer onboarding (DB)", () => {
       // "we found your campaign on Meta", not a false "we built it".
       expect(h.rows).toHaveLength(0);
     });
+
+    // AIC-105 Branch A, found live on a real onboarding call: "צור קמפיין
+    // חדש" provisions the connection alone (no campaign fields), then sends
+    // the operator into the builder — which can end with them back on this
+    // exact screen (e.g. clicking "back" before finishing). Clicking the
+    // button again re-runs the SAME connect-only provision for a customer
+    // who now already has a meta_connections row, which — before this fix —
+    // hit `meta_connections`'s raw UNIQUE(customer_id) constraint as an
+    // unhandled 500, not a designed outcome.
+    describe("Branch A — connecting an account with no campaign is idempotent", () => {
+      const connectOnly = (customerId: string, overrides: Record<string, unknown> = {}) => ({
+        customerId,
+        systemUserId: "122103498795426897",
+        metaAdAccountId: `act_it_${customerId.slice(0, 8)}`,
+        ...overrides,
+      });
+
+      it("a second connect-only call for the same customer + ad account reuses the same rows, not a crash", async () => {
+        const customerId = await seedCustomer("branchaidempotent");
+        const first = await provisionConnection(pool, connectOnly(customerId), null);
+        expect(first.campaignId).toBeNull();
+
+        const second = await provisionConnection(pool, connectOnly(customerId), null);
+        expect(second.connectionId).toBe(first.connectionId);
+        expect(second.adAccountRowId).toBe(first.adAccountRowId);
+
+        const conns = await pool.query(`SELECT id FROM meta_connections WHERE customer_id = $1`, [customerId]);
+        expect(conns.rows).toHaveLength(1);
+      });
+
+      it("connecting a SECOND, different ad account for an already-connected customer adds a row under the same connection", async () => {
+        const customerId = await seedCustomer("branchasecondacct");
+        const first = await provisionConnection(pool, connectOnly(customerId), null);
+        const second = await provisionConnection(
+          pool, connectOnly(customerId, { metaAdAccountId: `act_it_other_${customerId.slice(0, 8)}` }), null,
+        );
+
+        expect(second.connectionId).toBe(first.connectionId);
+        expect(second.adAccountRowId).not.toBe(first.adAccountRowId);
+        const accts = await pool.query(`SELECT id FROM ad_accounts WHERE connection_id = $1`, [first.connectionId]);
+        expect(accts.rows).toHaveLength(2);
+      });
+
+      it("a verified page id fills in on the existing connection if it didn't have one yet", async () => {
+        const customerId = await seedCustomer("branchapagefillin");
+        const first = await provisionConnection(pool, connectOnly(customerId), null);
+        expect(first.pageIdSaved).toBe(false);
+
+        const second = await provisionConnection(
+          pool, connectOnly(customerId, { pageId: "1216278568228263" }), OK,
+        );
+        expect(second.pageIdSaved).toBe(true);
+        const conn = await pool.query<{ page_id: string }>(`SELECT page_id FROM meta_connections WHERE id = $1`, [first.connectionId]);
+        expect(conn.rows[0].page_id).toBe("1216278568228263");
+      });
+    });
   });
 });

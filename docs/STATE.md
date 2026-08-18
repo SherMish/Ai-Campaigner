@@ -6,6 +6,30 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — AIC-105 Branch A bugfix: re-clicking "צור קמפיין חדש" crashed instead of resuming
+User hit this live minutes after the Branch A ship, on a real customer:
+`duplicate key value violates unique constraint "meta_connections_customer_id_key"`.
+
+Root cause: `meta_connections` is `UNIQUE(customer_id)` by design (P0 — one
+connection per customer), but `provisionConnection`'s connect-only path
+(Branch A) did a bare `INSERT`. The button is genuinely re-clickable — an
+operator can land in the builder, go back, and land on step 4 again with the
+same empty picker — so a customer who'd already been connected-only hit the
+raw constraint violation as an unhandled 500 instead of a no-op resume.
+
+Fixed with `ON CONFLICT (customer_id) DO UPDATE` (not `DO NOTHING`, so
+`RETURNING id` still fires and a page id verified on a later click still
+backfills a connection that didn't have one yet) and the matching
+`ON CONFLICT (connection_id, meta_ad_account_id) DO UPDATE` on the
+`ad_accounts` insert (migration 037 already made that pair the real unique
+key; the write side hadn't caught up). Test-first: reproduced the exact
+constraint violation via `provisionConnection` called twice for the same
+customer, confirmed it failed for the right reason, then fixed. 3 new tests
+in `customer-onboarding.integration.test.ts` (idempotent resume, a second
+different ad account adds a row under the same connection, a page id
+backfills once verified); all 66 relevant integration tests + 472 unit
+tests green.
+
 ### 2026-08-18 — AIC-105 Branch A: "צור קמפיין חדש" — a customer with no campaigns gets the real builder, not a dead end
 User reopened the wizard live and hit the exact spot the previous entry
 flagged as the real remaining gap: step 4's campaign picker, empty, saying

@@ -285,10 +285,22 @@ export async function provisionConnection(
   try {
     await client.query("BEGIN");
 
+    // AIC-105 Branch A, found live: `meta_connections` is UNIQUE(customer_id)
+    // by design (P0 — one connection per customer), but a connect-only
+    // provision (no campaign yet) is genuinely re-runnable — the operator
+    // can leave the builder and come back to "צור קמפיין חדש" before ever
+    // finishing it. A plain INSERT made a retry a raw constraint-violation
+    // 500 instead of a no-op. ON CONFLICT DO UPDATE, not DO NOTHING: an
+    // existing connection with no page_id yet (this exact path's own most
+    // common shape) should still pick up a newly-verified one rather than
+    // staying permanently null just because the row already existed.
     const conn = await client.query<{ id: string }>(
       `INSERT INTO meta_connections
          (customer_id, system_user_id, business_portfolio_id, page_id, instagram_id, access_health, last_verified_at)
        VALUES ($1,$2,COALESCE($3,''),$4,$5,'ok', now())
+       ON CONFLICT (customer_id) DO UPDATE SET
+         page_id = COALESCE(meta_connections.page_id, EXCLUDED.page_id),
+         instagram_id = COALESCE(meta_connections.instagram_id, EXCLUDED.instagram_id)
        RETURNING id`,
       [
         input.customerId,
@@ -300,13 +312,21 @@ export async function provisionConnection(
     );
     const connectionId = conn.rows[0].id;
 
+    // Same idempotency for the ad account: connecting the SAME account twice
+    // under an existing connection is a no-op, not a crash. Migration 037
+    // already makes (connection_id, meta_ad_account_id) the unique pair —
+    // this is the write side finally matching that.
+    //
     // COALESCE, not a bare parameter: `name`/`currency` are NOT NULL with
     // column defaults, and passing an explicit NULL OVERRIDES a default
     // rather than falling back to it — so an optional field left unset would
     // violate the constraint instead of taking ''/'ILS'.
     const acct = await client.query<{ id: string }>(
       `INSERT INTO ad_accounts (connection_id, meta_ad_account_id, name, currency)
-       VALUES ($1,$2,COALESCE($3,''),COALESCE($4,'ILS')) RETURNING id`,
+       VALUES ($1,$2,COALESCE($3,''),COALESCE($4,'ILS'))
+       ON CONFLICT (connection_id, meta_ad_account_id) DO UPDATE SET
+         name = ad_accounts.name
+       RETURNING id`,
       [connectionId, input.metaAdAccountId, input.adAccountName ?? null, input.currency ?? null],
     );
     const adAccountRowId = acct.rows[0].id;

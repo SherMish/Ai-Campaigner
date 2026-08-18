@@ -650,7 +650,16 @@ none of it applies yet — and a single button replaces it. Clicking it:
    `metaCampaignId` and `campaignName` travel together or not at all — one
    without the other throws, never a half-written campaign row. The page-id
    hard constraint (AIC-69) is unchanged: a typed-but-unverified page id
-   still refuses the whole request.
+   still refuses the whole request. **Re-clicking it is a resume, not a
+   crash** — found live minutes after shipping, on a real customer: the
+   button is genuinely re-clickable (the operator can go into the builder,
+   navigate back, and land on this same empty picker again), and a bare
+   `INSERT` hit `meta_connections`'s own `UNIQUE(customer_id)` constraint as
+   a raw 500 on the second click. Both inserts are now `ON CONFLICT DO
+   UPDATE` (connection: backfills `page_id`/`instagram_id` only if they were
+   still null; ad account: keyed on the `(connection_id, meta_ad_account_id)`
+   pair migration 037 already made unique) — a second click for the same
+   customer/account reuses the same rows instead of erroring.
 2. Navigates to `/admin/onboarding/:id/builder` — the exact same 8-step
    guided builder a self-serve customer uses for their own first campaign
    (`app/Builder.tsx`), reused wholesale rather than rebuilt. Every builder
