@@ -6,6 +6,38 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — AIC-105: page-ID save-gate made load-bearing on the client + budget split
+User wrote a fuller spec into AIC-105 for step 4 after confirming Branch A
+(no-campaign-yet) is the real remaining gap. Two pieces shipped now, both
+scoped to the already-built existing-campaign path:
+
+**Page-ID gate.** The ⚠️ AIC-69 banner explained the rule but didn't enforce
+it client-side — a typed page id could reach the save request even if
+`בדיקת עמוד` was never run or failed (the server already refused it, but only
+after a round trip). `submitProvision` now blocks, and the submit button
+disables, whenever `form.pageIdForm` is non-empty and doesn't match a
+passing, SAME-id check in `state.checks.page` — catches both "never
+checked" and "checked a different id after retyping."
+
+**Budget split.** Picking an existing campaign no longer prefills the agreed-
+budget field from Meta's live `daily_budget` — that was the exact circularity
+AIC-106 flagged, just relocated into the picker. The live figure is now
+shown read-only, separately, next to the field it used to silently fill;
+`fieldBudget`'s label was reworded to make clear it's the AGREED ceiling,
+never derived from what Meta happens to be spending right now. Live-verified:
+picking `free_beta_signups_leads` shows "כרגע רץ ב-Meta: ₪20 ליום" while the
+agreed field stays genuinely empty.
+
+Also: three Hebrew phrases corrected in the shared connect-steps script
+(`strings.he.app.connect.steps`, reused verbatim by this wizard) to match
+Meta's actual Hebrew UI wording — "חשבונות פרסום"→"חשבונות של מודעות",
+"הקצאת שותפים"→"הקצאת שותף" (Meta's own button is singular), "תחת עמודים
+(Pages)"→"תחת דפים".
+
+Not yet built (Branch A, the actual remaining gap): a "צור קמפיין חדש" path
+for a customer with no existing campaign, reusing the customer builder under
+an operator-acting-as-customer mode — tracked as the next piece of AIC-105.
+
 ### 2026-08-18 — AIC-101 follow-up: step 2's card has nowhere to click "verify" — now it does
 User-reported: even after the previous fix made the ad-account layer-2 check
 real, step 2's own card in `AdminOnboarding.tsx` had no check button at all —

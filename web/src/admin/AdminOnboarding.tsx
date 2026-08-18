@@ -226,9 +226,13 @@ export function AdminOnboarding() {
       const next = { ...f, metaCampaignId };
       if (!camp) return next;
       // Prefill from Meta's own values — never overwrite something the
-      // operator already typed.
+      // operator already typed. Budget is deliberately NOT prefilled here:
+      // camp.dailyBudgetAgorot is what Meta is CURRENTLY spending, shown
+      // read-only below; budgetShekels is the AGREED ceiling
+      // (agreed_budget_agorot) and must come from the operator, typed fresh
+      // — auto-filling one from the other is exactly the circularity AIC-106
+      // flagged (a "ceiling" defined by the number it's meant to constrain).
       if (!f.campaignName) next.campaignName = camp.name;
-      if (!f.budgetShekels && camp.dailyBudgetAgorot != null) next.budgetShekels = String(camp.dailyBudgetAgorot / 100);
       if (camp.destination.supported) {
         next.destinationType = camp.destination.destinationType;
         if (camp.destination.destinationType === "website") {
@@ -288,11 +292,28 @@ export function AdminOnboarding() {
       .finally(() => setCheckingToken(false));
   }
 
+  // AIC-69's rule, made load-bearing on the client too, not just documented
+  // in the ⚠️ banner: a page_id the backend can't read flips the whole
+  // connection to `revoked`, so a typed-but-unverified id must never even
+  // reach the request. Checks the SAME id currently typed, not just "some
+  // page check passed at some point" — the operator may have typed a
+  // DIFFERENT id after the last passing check.
+  function pageIdUnverified(): boolean {
+    const typed = form.pageIdForm.trim();
+    if (!typed) return false;
+    const check = state?.checks.page;
+    return !check || !check.ok || check.assetId !== typed;
+  }
+
   function submitProvision() {
     if (!id) return;
     const budgetAgorot = Math.round(Number(form.budgetShekels) * 100);
     if (!form.metaAdAccountId || !form.metaCampaignId || !form.campaignName || !(budgetAgorot > 0)) {
       setError(w.errorGeneric);
+      return;
+    }
+    if (pageIdUnverified()) {
+      setError(w.errorPageNotVerified);
       return;
     }
     // AIC-103: the SAME table/function resolveAdditionAvailability checks at
@@ -573,8 +594,18 @@ export function AdminOnboarding() {
           </div>
           <div className="field"><label>{w.fieldCampaignName}</label>
             <input value={form.campaignName} onChange={(e) => setForm({ ...form, campaignName: e.target.value })} /></div>
-          <div className="field"><label>{w.fieldBudget}</label>
-            <input type="number" min="0" value={form.budgetShekels} onChange={(e) => setForm({ ...form, budgetShekels: e.target.value })} /></div>
+          <div className="field">
+            <label>{w.fieldBudget}</label>
+            <input type="number" min="0" value={form.budgetShekels} onChange={(e) => setForm({ ...form, budgetShekels: e.target.value })} />
+            {/* AIC-106: shown, never sourced-from — the live Meta figure and
+                the agreed ceiling are deliberately two separate numbers. */}
+            {(() => {
+              const live = campaigns?.find((c) => c.id === form.metaCampaignId)?.dailyBudgetAgorot;
+              return live != null
+                ? <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.fieldLiveBudgetNote.replace("{amount}", String(live / 100))}</p>
+                : null;
+            })()}
+          </div>
           {form.destinationType === "whatsapp" ? (
             <div className="field"><label>{w.fieldWhatsappDestination} *</label>
               <input required value={form.whatsappDestination} onChange={(e) => setForm({ ...form, whatsappDestination: e.target.value })} placeholder="972…" /></div>
@@ -593,9 +624,10 @@ export function AdminOnboarding() {
           )}
         </div>
 
-        <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={provisioning} onClick={submitProvision}>
+        <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={provisioning || pageIdUnverified()} onClick={submitProvision}>
           {w.provisionSubmit}
         </button>
+        {pageIdUnverified() && <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>{w.errorPageNotVerified}</p>}
 
         {provisionBlocked && (
           <div style={{ marginTop: 10 }}>

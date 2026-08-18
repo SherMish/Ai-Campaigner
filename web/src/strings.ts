@@ -465,7 +465,15 @@ export const strings = {
       fieldPageId: "מזהה עמוד (לא חובה)",
       fieldInstagramId: "מזהה אינסטגרם (לא חובה)",
       fieldCampaignName: "שם הקמפיין",
-      fieldBudget: "תקציב יומי (₪)",
+      // AIC-106: this is the AGREED ceiling (agreed_budget_agorot), typed by
+      // the operator — deliberately never auto-filled from Meta's live
+      // number below. Auto-filling one from the other is exactly the
+      // circularity that made agreed_budget_agorot no real ceiling at all.
+      fieldBudget: "תקציב יומי שסוכם עם הלקוח (₪)",
+      // {amount} — replaced with the live ₪/day figure. Shown only when an
+      // existing campaign is picked; read-only, informational, never the
+      // source of the field above.
+      fieldLiveBudgetNote: "כרגע רץ ב-Meta: ₪{amount} ליום (מידע בלבד — לא נשמר כתקציב המוסכם).",
       // AIC-103: asked explicitly — "where should someone land after clicking
       // your ad?" — rather than left to infer, since which fields below are
       // actually required depends on the answer.
@@ -529,6 +537,11 @@ export const strings = {
       // AIC-103: distinct from errorGeneric — names exactly which fields are
       // missing (appended by the caller) rather than a generic failure.
       errorIncompleteConfig: "חסרים שדות חובה לסוג היעד שנבחר",
+      // AIC-69's rule, made load-bearing on the client, not just the ⚠️
+      // banner: a page_id the backend hasn't just verified must never reach
+      // the save request — the server already refuses it, but this stops
+      // the round trip before it starts.
+      errorPageNotVerified: "מזהה העמוד שהוקלד לא אומת. מריצים \"בדיקת עמוד\" עם המזהה הזה בדיוק לפני השמירה.",
     },
 
     // Fleet-wide overview (AIC-43) — the operator's landing snapshot.
@@ -677,9 +690,9 @@ export const strings = {
         // match what Meta actually shows.
         steps: [
           "פותחים את הגדרות העסק ב־Meta (Business Settings)",
-          "עוברים לחשבונות (Accounts) ← חשבונות פרסום (Ad Accounts), בוחרים את חשבון הפרסום שלכם ולוחצים על הקצאת שותפים (Assign Partner)",
+          "עוברים לחשבונות (Accounts) ← חשבונות של מודעות (Ad Accounts), בוחרים את חשבון הפרסום שלכם ולוחצים על הקצאת שותף (Assign Partner)",
           "בוחרים שותף עסקי (Business Partner), מזינים את המזהה העסקי שלנו (Business ID) — מופיע למטה — ומסמנים הרשאת פרסום (Advertise)",
-          "אם נדרש, חוזרים על אותו תהליך עבור עמוד הפייסבוק (Page) / אינסטגרם (Instagram) תחת עמודים (Pages)",
+          "אם נדרש, חוזרים על אותו תהליך עבור עמוד הפייסבוק (Page) / אינסטגרם (Instagram) תחת דפים",
           "חוזרים לכאן ואנחנו בודקים שהכול מחובר",
         ],
         openMeta: "פתיחת Meta Business Settings ↗",
@@ -704,7 +717,7 @@ export const strings = {
         // Assign Partner), not through a global "Partners → Add" flow.
         fixSteps: [
           "בהגדרות העסק ב־Meta (Business Settings) עוברים לחשבונות (Accounts) ← עמודים (Pages).",
-          "בוחרים את עמוד הפייסבוק שלכם ולוחצים על הקצאת שותפים (Assign Partner).",
+          "בוחרים את עמוד הפייסבוק שלכם ולוחצים על הקצאת שותף (Assign Partner).",
           "בוחרים שותף עסקי (Business Partner) ומזינים את המזהה העסקי שלנו (Business ID) — מופיע למטה.",
           "מסמנים הרשאת פרסום (Advertise) ולוחצים על מתן הרשאה (Give Access).",
         ],

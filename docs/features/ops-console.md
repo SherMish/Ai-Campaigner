@@ -599,13 +599,30 @@ goal implies nothing (a secondary REACH/LINK_CLICKS ad set alongside a real
 lead ad set) is filtered out rather than disqualifying the campaign — the
 same tolerance `summarizeTracking` already applies for the identical reason.
 
-**Picking a supported campaign prefills the rest of the form** — name, daily
-budget (Meta's own `daily_budget`, already in agorot — no unit conversion
-needed beyond agorot→shekels for the input), destination type, and for a
-website campaign the pixel id + lead event type — all still editable, never
-overwriting a value the operator already typed. A "היעד זוהה אוטומטית
-מהגדרות הקמפיין ב-Meta" note confirms the destination came from Meta, not a
-guess.
+**Picking a supported campaign prefills the rest of the form** — name,
+destination type, and for a website campaign the pixel id + lead event type
+— all still editable, never overwriting a value the operator already typed.
+A "היעד זוהה אוטומטית מהגדרות הקמפיין ב-Meta" note confirms the destination
+came from Meta, not a guess.
+
+**Budget is deliberately NOT one of the prefilled fields (AIC-106).** Meta's
+own `daily_budget` for the picked campaign is shown separately, read-only,
+next to `fieldBudget` — which is the AGREED ceiling (`agreed_budget_agorot`),
+typed by the operator, never derived from what Meta happens to be spending.
+Auto-filling one from the other would be the exact circularity AIC-106
+flagged in `campaign-create.ts`'s create path (a "ceiling" defined by the
+same number it's meant to constrain), just relocated into this picker instead
+of fixed. Live-verified against `free_beta_signups_leads`: picking it shows
+"כרגע רץ ב-Meta: ₪20 ליום" while the agreed field stays genuinely empty.
+
+**A page id typed but never verified now refuses to submit, client-side —
+not just the ⚠️ AIC-69 banner explaining the rule.** `submitProvision` (and
+the submit button's `disabled`) both check that `form.pageIdForm` either is
+empty or exactly matches a passing `state.checks.page` entry — the SAME id,
+not just "some page check passed at some point" (the operator may have
+retyped a different id after the last passing check). The server's own
+`PageNotReadableError` refusal is unchanged and remains the real guarantee;
+this only stops the round trip before it starts.
 
 **The step-1 ad-account field's `act_` prefix is now a fixed, non-typed
 chip**, not part of the placeholder text — the operator types only the
