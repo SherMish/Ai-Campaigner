@@ -441,10 +441,26 @@ d("onboarding wizard routes (AIC-101)", () => {
     // picked ad account via `{ad_account}/promote_pages` — Meta's own answer
     // to "which Pages can this account advertise for".
     const OTHER_ACCT = "act_1573023157816786";
+    const OTHER_PAGE = "1214357698438710";
+    const BIZ_A = "467328257419676";
+    const BIZ_B = "1518507149596335";
+
+    // Mirrors the real live shape (verified 2026-08-18). The important part
+    // is OTHER_ACCT: it has never run an ad, so `promote_pages` is EMPTY for
+    // it even though its Page is assigned to the System User — the exact
+    // state a brand-new account is in when Branch A goes to build its first
+    // campaign.
     function fakePagesGraph() {
       return vi.fn(async (url: string) => {
         const u = String(url);
-        // The real live shape (verified 2026-08-18): the two accounts differ.
+        if (u.includes(`${ACCT}?fields=business`)) return json({ id: ACCT, business: { id: BIZ_A } });
+        if (u.includes(`${OTHER_ACCT}?fields=business`)) return json({ id: OTHER_ACCT, business: { id: BIZ_B } });
+        if (u.includes("me/accounts")) {
+          return json({ data: [
+            { id: PAGE, name: "פסגה", business: { id: BIZ_A } },
+            { id: OTHER_PAGE, name: "Ads Agent", business: { id: BIZ_B } },
+          ] });
+        }
         if (u.includes(`${ACCT}/promote_pages`)) return json({ data: [{ id: PAGE, name: "פסגה" }] });
         if (u.includes(`${OTHER_ACCT}/promote_pages`)) return json({ data: [] });
         throw new Error(`unexpected fetch ${u}`);
@@ -462,11 +478,14 @@ d("onboarding wizard routes (AIC-101)", () => {
       expect(res.body.pages).toEqual([{ id: PAGE, name: "פסגה" }]);
     });
 
-    // The bug this scoping exists to prevent, found live: an unscoped
-    // `me/accounts` list offered THIS Page while an ad account that cannot
-    // promote it was selected — exactly the "don't let me pick someone
-    // else's asset" failure the ad-account picker exists to avoid.
-    it("returns nothing for an ad account that cannot promote any Page — never another account's Page", async () => {
+    // Both bugs this list has already had, locked in as one case:
+    //  - it must NOT leak the other business's Page (the unscoped
+    //    `me/accounts` bug), and
+    //  - it MUST still find this account's own Page even though the account
+    //    has never run an ad, so `promote_pages` is empty (the
+    //    promote_pages-only bug, which broke exactly the create-first-campaign
+    //    flow it was meant to serve).
+    it("finds a brand-new account's own Page — never the other business's — even with promote_pages empty", async () => {
       const id = await seedCustomer("disc-pages-scoped");
       vi.stubGlobal("fetch", fakePagesGraph());
       const res = await request(app)
@@ -474,7 +493,7 @@ d("onboarding wizard routes (AIC-101)", () => {
         .query({ metaAdAccountId: OTHER_ACCT })
         .set("Authorization", ADMIN);
       expect(res.status).toBe(200);
-      expect(res.body.pages).toEqual([]);
+      expect(res.body.pages).toEqual([{ id: OTHER_PAGE, name: "Ads Agent" }]);
     });
 
     it("400s when metaAdAccountId is missing — a Page list is meaningless unscoped", async () => {

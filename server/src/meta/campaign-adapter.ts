@@ -320,12 +320,42 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // 2026-08-18: act_2181076988590009 → the Pisga Page;
   // act_1573023157816786 → [].
   async listPages(adAccountId: string): Promise<PageOption[]> {
-    const body = await this.get(`${adAccountId}/promote_pages?fields=id,name&limit=200`);
-    type Raw = { id: string; name?: string };
-    return ((body.data as Raw[]) ?? []).map((p) => ({
-      id: String(p.id),
-      name: p.name ? String(p.name) : String(p.id),
-    }));
+    type RawPage = { id: string; name?: string; business?: { id?: string } };
+    const opt = (p: RawPage) => ({ id: String(p.id), name: p.name ? String(p.name) : String(p.id) });
+
+    // Pages the System User can actually manage (layer 2 passed), narrowed to
+    // the business that owns THIS ad account — an account can only advertise
+    // for Pages its own business holds.
+    //
+    // Two wrong turns got us here, both caught live:
+    //  1. `me/accounts` alone — every Page across ALL customers, so the
+    //     picker offered one customer's Page while another's account was
+    //     selected.
+    //  2. `{account}/promote_pages` alone — correctly scoped, but it only
+    //     lists Pages the account has ALREADY advertised through, so it is
+    //     empty for every brand-new account. That is exactly the Branch A
+    //     "create the first campaign" case, i.e. broken where it matters most
+    //     (act_1573023157816786: 0 ads → [] even after its Page was assigned).
+    // The union below keeps promote_pages' answer for established accounts
+    // (it also covers a Page shared in from outside the owning business,
+    // which the business filter alone would miss) and adds the same-business
+    // Pages a new account needs.
+    const acct = await this.get(`${adAccountId}?fields=business`);
+    const businessId = (acct.business as { id?: string } | undefined)?.id ?? null;
+
+    const [manageable, promotable] = await Promise.all([
+      this.get(`me/accounts?fields=id,name,business&limit=200`)
+        .then((b) => ((b.data as RawPage[]) ?? [])).catch(() => [] as RawPage[]),
+      this.get(`${adAccountId}/promote_pages?fields=id,name&limit=200`)
+        .then((b) => ((b.data as RawPage[]) ?? [])).catch(() => [] as RawPage[]),
+    ]);
+
+    const sameBusiness = businessId
+      ? manageable.filter((p) => p.business?.id && String(p.business.id) === businessId)
+      : [];
+    const byId = new Map<string, PageOption>();
+    for (const p of [...sameBusiness, ...promotable]) byId.set(String(p.id), opt(p));
+    return [...byId.values()];
   }
 
   // Every campaign under one ad account, destination DETECTED per campaign

@@ -6,6 +6,37 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — Page picker bugfix #2: promote_pages is empty for a brand-new account — the exact case it served
+The scoping fix below traded one bug for another, caught by the user within
+minutes. `{ad_account}/promote_pages` only lists Pages the account has
+ALREADY advertised through, so it returns `[]` for any account with no ads —
+which is every account in the Branch A "create the first campaign" flow. The
+user diagnosed it from the symptom ("it's empty because it doesn't have a
+campaign yet") before the code did.
+
+Sequence worth keeping, because both wrong turns were live-verified rather
+than reasoned about:
+1. `me/accounts` alone → unscoped, offered another customer's Page.
+2. `promote_pages` alone → scoped, but blind to any account without ads.
+3. Now: **union of** `me/accounts` filtered to the ad account's own
+   `business.id`, **plus** `promote_pages`. The business filter is what makes
+   a new account resolve (an account advertises only for Pages its business
+   holds); `promote_pages` stays in the union because it also covers a Page
+   shared in from outside that business, which the filter alone misses.
+
+Verified live against both real accounts, in the browser and via Graph:
+`act_1573023157816786` (business `1518507149596335`, zero ads) → `Ads Agent`;
+`act_2181076988590009` (business `467328257419676`) → the Pisga Page. Neither
+leaks into the other.
+
+Also confirmed along the way, and worth recording as the canonical example of
+the three-layer model: `Ads Agent` had been shared to our portfolio (layer 1,
+the customer's step) but never assigned to our System User (layer 2, OUR step
+in our own Business Settings). It was invisible to every read until the user
+assigned it — which is precisely the distinction step 2 of the wizard exists
+to surface, and why the empty-state copy names steps 1–2 rather than blaming
+the customer.
+
 ### 2026-08-18 — Page picker bugfix: it offered another customer's Page
 Caught by the user minutes after the picker shipped: with
 `act_1573023157816786` selected, the dropdown still suggested

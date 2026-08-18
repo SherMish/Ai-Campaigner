@@ -625,16 +625,32 @@ retyped a different id after the last passing check). The server's own
 this only stops the round trip before it starts.
 
 **The Page is a picker too, in both step 1 and step 4 — scoped to the
-selected ad account.** `listPages(adAccountId)` reads
-`{ad_account}/promote_pages`: Meta's own answer to "which Pages can this
-account actually advertise for". The scoping is the entire point. The first
-cut used `me/accounts` (every Page the System User can manage, across ALL
-customers) and was caught live within minutes: with
-`act_1573023157816786` selected, the picker still offered the Pisga Page,
-which that account cannot promote — exactly the "don't let me pick someone
-else's asset" failure the ad-account picker exists to prevent. Verified
-against the real accounts: `act_2181076988590009` → the Pisga Page,
-`act_1573023157816786` → `[]`.
+selected ad account.** `listPages(adAccountId)` returns the union of two
+reads: Pages the System User can manage (`me/accounts`) **filtered to the
+business that owns this ad account**, plus `{ad_account}/promote_pages`.
+
+Both halves are there because each alone shipped a real bug, caught live
+within minutes of each other:
+
+| Attempt | Bug |
+| --- | --- |
+| `me/accounts` alone | Unscoped — every Page across ALL customers, so the picker offered one customer's Page while another's account was selected. The exact "don't let me pick someone else's asset" failure the ad-account picker exists to prevent. |
+| `{account}/promote_pages` alone | Correctly scoped, but it only lists Pages the account has **already advertised through** — so it is empty for every brand-new account, i.e. broken precisely in the Branch A create-the-first-campaign flow it was meant to serve. |
+
+The business filter is what makes a new account work (an account can only
+advertise for Pages its own business holds); `promote_pages` is kept in the
+union because it also catches a Page shared in from *outside* the owning
+business, which the filter alone would miss. Verified live against both real
+accounts: `act_1573023157816786` (business `1518507149596335`, zero ads) →
+`Ads Agent`; `act_2181076988590009` (business `467328257419676`) → the Pisga
+Page. No cross-leak in either direction.
+
+**An empty list here is a layer-2 diagnosis, not a dead end.** The live case
+that produced the second bug was a Page shared to our portfolio (layer 1
+done) that had never been assigned to our System User (layer 2, *our* step
+in *our* Business Settings) — invisible to every real read until assigned.
+That is the distinction step 2 of this wizard exists to make, and the
+empty-state copy points at steps 1–2 for exactly that reason.
 
 Consequences of the scoping, all deliberate: the route requires
 `metaAdAccountId` (a Page list is meaningless unscoped, so it 400s rather
