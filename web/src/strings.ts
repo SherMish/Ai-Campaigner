@@ -517,6 +517,12 @@ export const strings = {
       // campaign, operator acting on their behalf.
       startNewCampaignCta: "צור קמפיין חדש",
       startNewCampaignBusy: "מחברים את החשבון…",
+      // Found live: מזהה עמוד is labeled "לא חובה" (optional) because
+      // that's true for CONNECTING an existing campaign — but building a
+      // first one from scratch always needs a Page, so skipping it here
+      // used to lead to a confusing "not ready" screen one click later
+      // instead of a clear reason on this one.
+      errorPageRequiredForNewCampaign: "לבניית קמפיין ראשון צריך קודם למלא ולאמת מזהה עמוד (למעלה, שלב 1 או 2).",
       // Shown once a supported campaign is picked — the destination below
       // was DETECTED from Meta's own ad-set configuration, not guessed.
       pickCampaignDetectedNote: "היעד זוהה אוטומטית מהגדרות הקמפיין ב-Meta.",

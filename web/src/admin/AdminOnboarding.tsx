@@ -312,6 +312,19 @@ export function AdminOnboarding() {
     return !check || !check.ok || check.assetId !== typed;
   }
 
+  // AIC-105 Branch A, found live: an empty page id is a legal (if unusual)
+  // shape for CONNECTING an existing campaign — pageIdUnverified() above
+  // deliberately doesn't block on empty. But a first campaign genuinely
+  // cannot be built without a Page (every ad, WhatsApp or website, runs
+  // through one), so "מזהה עמוד (לא חובה)" being labeled optional was
+  // misleading for THIS button specifically: an operator who skipped it hit
+  // a generic, unhelpful "not ready" screen only after already leaving this
+  // page. Blocking here, before the request ever leaves the browser, names
+  // the real reason at the one place the operator can still act on it.
+  function newCampaignPageMissing(): boolean {
+    return !form.pageIdForm.trim();
+  }
+
   function submitProvision() {
     if (!id) return;
     const budgetAgorot = Math.round(Number(form.budgetShekels) * 100);
@@ -384,6 +397,10 @@ export function AdminOnboarding() {
   // same wizard a self-serve customer would use.
   function startNewCampaign() {
     if (!id || !form.metaAdAccountId) return;
+    if (newCampaignPageMissing()) {
+      setStartNewCampaignError(w.errorPageRequiredForNewCampaign);
+      return;
+    }
     if (pageIdUnverified()) {
       setStartNewCampaignError(w.errorPageNotVerified);
       return;
@@ -642,11 +659,12 @@ export function AdminOnboarding() {
                 <p className="muted" style={{ fontSize: "0.78rem" }}>{w.pickCampaignEmpty}</p>
                 <button
                   type="button" className="btn btn-primary btn-sm" style={{ marginTop: 6 }}
-                  disabled={startingNewCampaign || pageIdUnverified()} onClick={startNewCampaign}
+                  disabled={startingNewCampaign || newCampaignPageMissing() || pageIdUnverified()} onClick={startNewCampaign}
                 >
                   {startingNewCampaign ? w.startNewCampaignBusy : w.startNewCampaignCta}
                 </button>
-                {pageIdUnverified() && <p className="muted" style={{ fontSize: "0.72rem", marginTop: 6 }}>{w.errorPageNotVerified}</p>}
+                {newCampaignPageMissing() && <p className="muted" style={{ fontSize: "0.72rem", marginTop: 6 }}>{w.errorPageRequiredForNewCampaign}</p>}
+                {!newCampaignPageMissing() && pageIdUnverified() && <p className="muted" style={{ fontSize: "0.72rem", marginTop: 6 }}>{w.errorPageNotVerified}</p>}
                 {startNewCampaignError && <p style={{ color: "#c0362c", fontSize: "0.78rem", marginTop: 6 }}>{startNewCampaignError}</p>}
               </div>
             )}

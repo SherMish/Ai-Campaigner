@@ -6,6 +6,30 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — AIC-105 Branch A bugfix #2: the button worked, then the builder said "not ready" with no reason why
+User-reported, same live test session as the idempotency fix above: the
+click succeeded this time, but the very next screen (the builder) showed the
+generic "עוד לא מוכנים להתחיל" — no page, no ad account, or already-has-a-
+campaign are all folded into that one message.
+
+Root cause: `מזהה עמוד (לא חובה)` is genuinely optional for CONNECTING an
+existing campaign, but building a FIRST one always needs a Page — the
+operator had picked the real ad account (`act_1573023157816786`, the one
+shared by `אבשלום אבורוס`) without ever verifying a page for it, so the
+connect-only provision correctly succeeded with `page_id = NULL`, and the
+builder then correctly refused — just with no way to tell, from where the
+operator actually was, that a missing Page was the reason.
+
+`startNewCampaign()` and the button's `disabled` now both check
+`newCampaignPageMissing()` (empty `pageIdForm`) before `pageIdUnverified()`
+runs — blocks with a specific, actionable message
+(`errorPageRequiredForNewCampaign`, "לבניית קמפיין ראשון צריך קודם למלא ולאמת
+מזהה עמוד") before any request leaves the browser, instead of letting the
+operator discover it a screen later. Live-verified against the same real ad
+account: button disabled + message shown with no page id typed; verifying
+the page (step 1's "בדיקת עמוד") re-enables it; the full happy path through
+to the builder's step 1 still works unchanged.
+
 ### 2026-08-18 — AIC-105 Branch A bugfix: re-clicking "צור קמפיין חדש" crashed instead of resuming
 User hit this live minutes after the Branch A ship, on a real customer:
 `duplicate key value violates unique constraint "meta_connections_customer_id_key"`.

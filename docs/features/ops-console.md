@@ -673,6 +673,19 @@ none of it applies yet — and a single button replaces it. Clicking it:
    connection, ad account + Page present, no campaign yet) via one
    `contextFromRow` helper — so an operator can never reach a state the
    self-serve path itself would refuse.
+
+**The button itself now requires a verified Page, even though the field is
+labeled "לא חובה" (optional).** Found live: that label is honest for
+CONNECTING an existing campaign (some already-connected customers genuinely
+have no page_id recorded), but building a FIRST campaign always needs one —
+every ad, WhatsApp or website, runs through a Page. An operator who clicked
+"צור קמפיין חדש" without one got a working connect-only provision followed by
+a confusing, generic "not ready" screen in the builder one click later —
+technically correct, but the actual reason was invisible at the one place
+the operator could still act on it. `newCampaignPageMissing()` now disables
+the button and names the reason inline (`errorPageRequiredForNewCampaign`)
+before any request leaves the browser; the existing `pageIdUnverified()`
+check still covers "typed but not verified" underneath it.
 3. The builder's own `POST .../build` is what actually creates the campaign
    on Meta (PAUSED, same as self-serve) and writes the real `managed_campaigns`
    row — logged to the admin audit trail (`customer.builder.build`) since this
