@@ -37,6 +37,7 @@ import {
 import { ConnectionService } from "../meta/connection-service.js";
 import { PgConnectionStore } from "../meta/connection-store.js";
 import { GraphMetaClient } from "../meta/client.js";
+import { buildCampaignDiscoveryReader } from "../meta/campaign-discovery.js";
 
 // Internal admin surfaces. Reads only from our DB (insight_snapshots) — never a
 // live Meta call at render time (AIC-7).
@@ -687,6 +688,65 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
     }
     console.error("[admin] provisioning failed", e);
     res.status(500).json({ error: (e as Error).message });
+  }
+});
+
+// AIC-105 Branch B — "pick, don't type". Every ad account the System User
+// can currently manage (both AIC-101 access layers already passed), for
+// step 4's picker. Annotates an account already provisioned to a DIFFERENT
+// customer — informational only, never a block: AIC-87's migration 038
+// deliberately allows one Meta ad account to back more than one customer
+// (e.g. two of our own test rows share one), so this must not read as "you
+// can't pick this", only "heads up, it's shared".
+adminRouter.get("/customers/:id/onboarding/ad-accounts", async (req, res) => {
+  const reader = buildCampaignDiscoveryReader();
+  if (!reader) {
+    res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
+    return;
+  }
+  try {
+    const accounts = await reader.listAdAccounts();
+    const { rows } = await pool.query<{ meta_ad_account_id: string; customer_id: string; business_name: string }>(
+      `SELECT aa.meta_ad_account_id, c.id AS customer_id, c.business_name
+         FROM ad_accounts aa
+         JOIN meta_connections mc ON mc.id = aa.connection_id
+         JOIN customers c ON c.id = mc.customer_id
+        WHERE aa.meta_ad_account_id = ANY($1::text[]) AND c.id != $2`,
+      [accounts.map((a) => a.id), req.params.id],
+    );
+    const usedBy = new Map(rows.map((r) => [r.meta_ad_account_id, { id: r.customer_id, name: r.business_name }]));
+    res.json({
+      accounts: accounts.map((a) => ({ ...a, usedByCustomer: usedBy.get(a.id) ?? null })),
+    });
+  } catch (e) {
+    console.error("[admin] list ad accounts failed", e);
+    res.status(502).json({ error: "failed to load ad accounts" });
+  }
+});
+
+// Every campaign under one ad account, destination DETECTED per campaign
+// (tracking-health.ts's detectDestination) rather than asked. An unsupported
+// campaign (no ad sets yet, an objective that implies no lead, mixed ad
+// sets) is still RETURNED, not filtered out — AIC-98's "never render a blank
+// where a reason exists" applies to pickers too; the client disables it with
+// its reason rather than making the list look shorter than it is.
+adminRouter.get("/customers/:id/onboarding/campaigns", async (req, res) => {
+  const metaAdAccountId = String(req.query.metaAdAccountId ?? "").trim();
+  if (!metaAdAccountId) {
+    res.status(400).json({ error: "metaAdAccountId is required" });
+    return;
+  }
+  const reader = buildCampaignDiscoveryReader();
+  if (!reader) {
+    res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
+    return;
+  }
+  try {
+    const campaigns = await reader.listCampaigns(metaAdAccountId);
+    res.json({ campaigns });
+  } catch (e) {
+    console.error("[admin] list campaigns failed", e);
+    res.status(502).json({ error: "failed to load campaigns" });
   }
 });
 

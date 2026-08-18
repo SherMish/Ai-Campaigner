@@ -16,7 +16,8 @@ import { intentStatus, type ControlWriter, type ManualObjectStatus, type ObjectI
 import { shekelToAgorot, resolveDestinationShape } from "@aic/shared";
 import { extractLeads } from "./insights.js";
 import { normalizeAdMedia, type AdMedia, type AdMediaReader, type RawAdMedia } from "./ad-media.js";
-import type { AdSetTrackingConfig, TrackingReader } from "./tracking-health.js";
+import { detectDestination, type AdSetTrackingConfig, type TrackingReader } from "./tracking-health.js";
+import type { AdAccountOption, DiscoveredCampaign, CampaignDiscoveryReader } from "./campaign-discovery.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
 // Marketing API. Budgets are read/written in the account currency's MINOR unit,
@@ -27,7 +28,7 @@ import type { AdSetTrackingConfig, TrackingReader } from "./tracking-health.js";
 // one, so setDailyBudget targets the right object.
 const BASE = "https://graph.facebook.com";
 
-export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter, AdditionWriter, ControlWriter, AdMediaReader, TrackingReader {
+export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter, AdditionWriter, ControlWriter, AdMediaReader, TrackingReader, CampaignDiscoveryReader {
   private budgetObj = new Map<string, string>(); // campaignId → budget object id
 
   constructor(
@@ -293,6 +294,56 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       pixelId: r.promoted_object?.pixel_id ?? null,
       customEventType: r.promoted_object?.custom_event_type ?? null,
     }));
+  }
+
+  // AIC-105 Branch B — every ad account the System User can currently manage
+  // (both AIC-101 access layers already passed), for the operator to pick
+  // from instead of retyping the "act_…" number from Meta's own screen.
+  async listAdAccounts(): Promise<AdAccountOption[]> {
+    const body = await this.get(`me/adaccounts?fields=id,name,currency,account_status&limit=200`);
+    type Raw = { id: string; name?: string; currency?: string; account_status?: number };
+    return ((body.data as Raw[]) ?? []).map((a) => ({
+      id: String(a.id),
+      name: a.name ? String(a.name) : String(a.id),
+      currency: a.currency ? String(a.currency) : "ILS",
+      accountStatus: typeof a.account_status === "number" ? a.account_status : null,
+    }));
+  }
+
+  // Every campaign under one ad account, destination DETECTED per campaign
+  // (detectDestination, over the same getAdSetTracking read AIC-88 already
+  // trusts) rather than asked — so adopting a campaign can never disagree
+  // with what the ongoing tracking-health check will judge once it's
+  // connected. One extra read per campaign (its ad sets); fine for an
+  // operator-triggered, low-frequency admin action, not a hot path.
+  async listCampaigns(adAccountId: string): Promise<DiscoveredCampaign[]> {
+    const body = await this.get(
+      `${adAccountId}/campaigns?fields=id,name,status,effective_status,objective,daily_budget&limit=200`,
+    );
+    type Raw = {
+      id: string;
+      name?: string;
+      status?: string;
+      effective_status?: string;
+      objective?: string;
+      daily_budget?: string;
+    };
+    const rows = (body.data as Raw[]) ?? [];
+    const out: DiscoveredCampaign[] = [];
+    for (const r of rows) {
+      const metaCampaignId = String(r.id);
+      const tracking = await this.getAdSetTracking(metaCampaignId);
+      out.push({
+        id: metaCampaignId,
+        name: r.name ? String(r.name) : metaCampaignId,
+        status: r.status ?? "UNKNOWN",
+        effectiveStatus: r.effective_status ?? r.status ?? "UNKNOWN",
+        objective: r.objective ?? null,
+        dailyBudgetAgorot: r.daily_budget != null ? Number(r.daily_budget) : null,
+        destination: detectDestination(tracking),
+      });
+    }
+    return out;
   }
 
   // The host a pixel actually fires on — the confirming half of the launch

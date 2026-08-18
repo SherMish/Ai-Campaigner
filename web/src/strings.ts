@@ -420,6 +420,10 @@ export const strings = {
       step5Title: "שלב 5 — אימות סופי",
       step5Sub: "אותה בדיקה שהמנוע עצמו מריץ.",
 
+      // AIC-105: the "act_…" prefix is now a fixed, non-typed chip in front
+      // of the input (see AdminOnboarding.tsx) — the label no longer needs to
+      // remind the operator to type it themselves.
+      fieldAdAccountIdStep1: "מזהה חשבון פרסום",
       checkAdAccount: "בדיקת חשבון פרסום",
       checkPage: "בדיקת עמוד",
       checking: "בודקים…",
@@ -453,10 +457,8 @@ export const strings = {
 
       // Step 4 — provisioning (AIC-68).
       provisionTitle: "פרטי החיבור",
-      fieldAdAccountId: "מזהה חשבון פרסום (act_…)",
       fieldPageId: "מזהה עמוד (לא חובה)",
       fieldInstagramId: "מזהה אינסטגרם (לא חובה)",
-      fieldCampaignId: "מזהה קמפיין ב-Meta",
       fieldCampaignName: "שם הקמפיין",
       fieldBudget: "תקציב יומי (₪)",
       // AIC-103: asked explicitly — "where should someone land after clicking
@@ -478,6 +480,33 @@ export const strings = {
       // tracked link; it does not describe an attribution mechanism that
       // exists elsewhere in this codebase today.)
       fieldWebsiteUrlUtmNote: "חשוב: הכתובת צריכה לכלול UTM (utm_source/utm_medium/utm_campaign) — בלעדיהם הפנייה תיווצר אבל לא נדע מאיפה היא הגיעה.",
+
+      // AIC-105 Branch B — "pick, don't type". Replaces free-text ad-account
+      // and campaign id fields in step 4 with live-fetched pickers.
+      pickAdAccountLabel: "חשבון פרסום",
+      pickAdAccountPlaceholder: "בחרו חשבון פרסום…",
+      pickAdAccountLoading: "טוענים חשבונות פרסום…",
+      pickAdAccountEmpty: "לא נמצאו חשבונות פרסום שהמערכת יכולה לנהל כרגע. בודקים ששלבים 1–3 הושלמו.",
+      pickAdAccountError: "לא הצלחנו לטעון את רשימת חשבונות הפרסום.",
+      // {name} — the OTHER customer's business name; informational only
+      // (AIC-87's migration 038 deliberately allows one Meta ad account to
+      // back more than one customer), never a reason not to pick it.
+      pickAdAccountUsedBy: "בשימוש גם עבור {name}",
+      pickCampaignLabel: "קמפיין",
+      pickCampaignPlaceholder: "בחרו קמפיין…",
+      pickCampaignLoading: "טוענים קמפיינים…",
+      pickCampaignEmpty: "לא נמצאו קמפיינים בחשבון הפרסום הזה. לבנייה של קמפיין ראשון פנו להנדסה — האשף עדיין לא תומך בכך.",
+      pickCampaignError: "לא הצלחנו לטעון את רשימת הקמפיינים.",
+      pickRetry: "ניסיון נוסף",
+      // Shown once a supported campaign is picked — the destination below
+      // was DETECTED from Meta's own ad-set configuration, not guessed.
+      pickCampaignDetectedNote: "היעד זוהה אוטומטית מהגדרות הקמפיין ב-Meta.",
+      // AIC-98: every disabled-picker reason gets its own copy, never a bare
+      // "not supported" — same discipline as the diagnosis copy above.
+      campaignUnsupportedNoAdSets: "אין עדיין מודעות בקמפיין הזה, כך שאין ממה לזהות יעד",
+      campaignUnsupportedUnrecognizedObjective: "המטרה של הקמפיין הזה לא נתמכת עדיין (לא לידים)",
+      campaignUnsupportedMixedAdSets: "קבוצות המודעות בקמפיין הזה מוגדרות ליעדים שונים — לא נתמך עדיין",
+
       provisionSubmit: "יצירת הרשומות",
       provisionSuccess: "נוצר בהצלחה.",
       // AIC-69: the hard constraint the wizard enforces, not just documents.

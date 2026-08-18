@@ -278,6 +278,139 @@ d("onboarding wizard routes (AIC-101)", () => {
     });
   });
 
+  // AIC-105 Branch B — "pick, don't type": step 4's ad-account and campaign
+  // pickers, backed by GraphCampaignAdapter.listAdAccounts/listCampaigns.
+  describe("discovery (AIC-105) — ad-account and campaign pickers", () => {
+    const WHATSAPP_CAMP = "camp_whatsapp_1";
+    const PIXEL_CAMP = "camp_pixel_1";
+    const TRAFFIC_CAMP = "camp_traffic_1";
+    const EMPTY_CAMP = "camp_empty_1";
+
+    // A dedicated fake, local to this block: the shared fakeGraph above has
+    // no notion of ad-account/campaign/ad-set LISTING at all, and extending
+    // it would risk perturbing every other test that already passes against
+    // its exact behaviour. `listedAccountId` is per-call, NOT the shared
+    // `ACCT` constant: `ad_accounts` rows persist for the rest of the file
+    // (only `afterAll` cleans up), so every test that cares about
+    // `usedByCustomer` needs an id nothing else in the file — including
+    // earlier tests in THIS block — has ever written a row against.
+    function fakeDiscoveryGraph(listedAccountId: string) {
+      return vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u.includes("me/adaccounts")) {
+          return json({ data: [{ id: listedAccountId, name: "GelNails", currency: "ILS", account_status: 1 }] });
+        }
+        if (u.includes(`${ACCT}/campaigns`)) {
+          return json({
+            data: [
+              { id: WHATSAPP_CAMP, name: "WhatsApp campaign", status: "ACTIVE", effective_status: "ACTIVE", objective: "OUTCOME_LEADS", daily_budget: "2000" },
+              { id: PIXEL_CAMP, name: "Website campaign", status: "ACTIVE", effective_status: "ACTIVE", objective: "OUTCOME_LEADS", daily_budget: "3000" },
+              { id: TRAFFIC_CAMP, name: "Old traffic campaign", status: "PAUSED", effective_status: "PAUSED", objective: "OUTCOME_TRAFFIC", daily_budget: null },
+              { id: EMPTY_CAMP, name: "Brand new, no ad sets yet", status: "ACTIVE", effective_status: "ACTIVE", objective: "OUTCOME_LEADS", daily_budget: null },
+            ],
+          });
+        }
+        if (u.includes(`${WHATSAPP_CAMP}/adsets`)) {
+          return json({ data: [{ id: "as_wa", optimization_goal: "CONVERSATIONS", destination_type: "WHATSAPP" }] });
+        }
+        if (u.includes(`${PIXEL_CAMP}/adsets`)) {
+          return json({ data: [{ id: "as_px", optimization_goal: "OFFSITE_CONVERSIONS", promoted_object: { pixel_id: "984664453249037", custom_event_type: "COMPLETE_REGISTRATION" } }] });
+        }
+        if (u.includes(`${TRAFFIC_CAMP}/adsets`)) {
+          return json({ data: [{ id: "as_tr", optimization_goal: "LINK_CLICKS" }] });
+        }
+        if (u.includes(`${EMPTY_CAMP}/adsets`)) {
+          return json({ data: [] });
+        }
+        return json({ error: { message: `unexpected discovery call: ${u}` } }, false);
+      }) as unknown as typeof fetch;
+    }
+
+    it("lists ad accounts the System User can currently manage", async () => {
+      const id = await seedCustomer("disc-accts");
+      const acctId = "act_disc_list_only";
+      vi.stubGlobal("fetch", fakeDiscoveryGraph(acctId));
+      const res = await request(app).get(`/api/admin/customers/${id}/onboarding/ad-accounts`).set("Authorization", ADMIN);
+      expect(res.status).toBe(200);
+      expect(res.body.accounts).toEqual([
+        { id: acctId, name: "GelNails", currency: "ILS", accountStatus: 1, usedByCustomer: null },
+      ]);
+    });
+
+    it("flags an ad account already provisioned to a DIFFERENT customer — informational, not a block", async () => {
+      const acctId = "act_disc_shared_other";
+      const mine = await seedCustomer("disc-owner");
+      const other = await seedCustomer("disc-other");
+      const conn = await pool.query<{ id: string }>(`INSERT INTO meta_connections (customer_id) VALUES ($1) RETURNING id`, [other]);
+      await pool.query(`INSERT INTO ad_accounts (connection_id, meta_ad_account_id) VALUES ($1, $2)`, [conn.rows[0].id, acctId]);
+
+      vi.stubGlobal("fetch", fakeDiscoveryGraph(acctId));
+      const res = await request(app).get(`/api/admin/customers/${mine}/onboarding/ad-accounts`).set("Authorization", ADMIN);
+      expect(res.status).toBe(200);
+      expect(res.body.accounts[0].usedByCustomer).toMatchObject({ id: other, name: "__it_wiz_disc-other" });
+    });
+
+    it("does NOT flag an ad account for the SAME customer it already belongs to", async () => {
+      const acctId = "act_disc_shared_self";
+      const id = await seedCustomer("disc-self");
+      const conn = await pool.query<{ id: string }>(`INSERT INTO meta_connections (customer_id) VALUES ($1) RETURNING id`, [id]);
+      await pool.query(`INSERT INTO ad_accounts (connection_id, meta_ad_account_id) VALUES ($1, $2)`, [conn.rows[0].id, acctId]);
+
+      vi.stubGlobal("fetch", fakeDiscoveryGraph(acctId));
+      const res = await request(app).get(`/api/admin/customers/${id}/onboarding/ad-accounts`).set("Authorization", ADMIN);
+      expect(res.body.accounts[0].usedByCustomer).toBeNull();
+    });
+
+    it("503s honestly when no META_SYSTEM_USER_TOKEN is configured", async () => {
+      const id = await seedCustomer("disc-notoken");
+      const saved = process.env.META_SYSTEM_USER_TOKEN;
+      delete process.env.META_SYSTEM_USER_TOKEN;
+      try {
+        const res = await request(app).get(`/api/admin/customers/${id}/onboarding/ad-accounts`).set("Authorization", ADMIN);
+        expect(res.status).toBe(503);
+      } finally {
+        process.env.META_SYSTEM_USER_TOKEN = saved;
+      }
+    });
+
+    it("lists campaigns with destination DETECTED, never asked", async () => {
+      const id = await seedCustomer("disc-camps");
+      vi.stubGlobal("fetch", fakeDiscoveryGraph(ACCT));
+      const res = await request(app)
+        .get(`/api/admin/customers/${id}/onboarding/campaigns`)
+        .query({ metaAdAccountId: ACCT })
+        .set("Authorization", ADMIN);
+
+      expect(res.status).toBe(200);
+      const campaigns = res.body.campaigns as Array<{ id: string; destination: unknown }>;
+      expect(campaigns.find((c) => c.id === WHATSAPP_CAMP)?.destination).toEqual({ supported: true, destinationType: "whatsapp" });
+      expect(campaigns.find((c) => c.id === PIXEL_CAMP)?.destination).toEqual({
+        supported: true, destinationType: "website",
+        trackingPixelId: "984664453249037", leadEventTypes: ["offsite_conversion.fb_pixel_complete_registration"],
+      });
+    });
+
+    it("a Traffic-objective campaign is still LISTED, disabled with a reason — never hidden (AIC-98)", async () => {
+      const id = await seedCustomer("disc-traffic");
+      vi.stubGlobal("fetch", fakeDiscoveryGraph(ACCT));
+      const res = await request(app)
+        .get(`/api/admin/customers/${id}/onboarding/campaigns`)
+        .query({ metaAdAccountId: ACCT })
+        .set("Authorization", ADMIN);
+
+      const traffic = res.body.campaigns.find((c: { id: string }) => c.id === TRAFFIC_CAMP);
+      expect(traffic.destination).toEqual({ supported: false, reason: "unrecognized_objective" });
+      const empty = res.body.campaigns.find((c: { id: string }) => c.id === EMPTY_CAMP);
+      expect(empty.destination).toEqual({ supported: false, reason: "no_ad_sets" });
+    });
+
+    it("400s when metaAdAccountId is missing from the query", async () => {
+      const id = await seedCustomer("disc-noacct");
+      const res = await request(app).get(`/api/admin/customers/${id}/onboarding/campaigns`).set("Authorization", ADMIN);
+      expect(res.status).toBe(400);
+    });
+  });
+
   it("finalize refuses before anything is provisioned", async () => {
     const id = await seedCustomer("finalempty");
     const res = await request(app).post(`/api/admin/customers/${id}/onboarding/finalize`)

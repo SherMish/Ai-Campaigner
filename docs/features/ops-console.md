@@ -535,6 +535,77 @@ this codebase has no dedicated first-touch UTM attribution pipeline today —
 this note is a forward-looking practice reminder for whenever leads ARE
 attributed by channel, not a description of an existing mechanism.
 
+**Step 4's ad-account and campaign fields are pickers, not free text (AIC-105
+Branch B).** Before this, the operator hand-copied an `act_…` id and a Meta
+campaign id from Ads Manager into two text boxes — exactly the kind of
+transcription this wizard exists to eliminate elsewhere. `GET
+.../onboarding/ad-accounts` (`GraphCampaignAdapter.listAdAccounts`, mirroring
+AIC-89's `listPixels`) lists every ad account the System User can *currently
+manage* — i.e. both AIC-101 access layers already passed, the same bar step 4
+needs anyway — and the picker replaces the field entirely; there is no manual
+fallback, deliberately, since a fallback text box would reintroduce the exact
+transcription error this exists to remove.
+
+**An ad account already provisioned to a different customer is annotated, not
+blocked.** AIC-87's migration 038 deliberately allows one Meta ad account to
+back more than one customer (Pisga's own two rows are the real example), so
+the ad-accounts route looks up every `ad_accounts` row on the listed ids
+(excluding the current customer) and appends `usedByCustomer: {id, name}` —
+rendered in the option text as "בשימוש גם עבור X". Informational only; the
+operator can still pick it.
+
+**The campaign picker detects the destination — it never asks.** `GET
+.../onboarding/campaigns?metaAdAccountId=…` (`listCampaigns`) reads every
+campaign under the picked ad account and, for each, calls the SAME
+`getAdSetTracking` read AIC-88's tracking-health check trusts, then runs it
+through `detectDestination` (`server/src/meta/tracking-health.ts`) — a pure
+function over the ad sets' own `optimization_goal`/`promoted_object`, not a
+question put to the operator. One source of truth: an adopted campaign's
+destination can never disagree with what the ongoing AIC-88 check will judge
+once it's connected. Live-verified against the real `act_2181076988590009`
+account (2026-08-18): `GelNails | Leads | WhatsApp` detected `whatsapp`;
+`free_beta_signups_leads` detected `website` with the real pixel id
+(`984664453249037`) and lead event
+(`offsite_conversion.fb_pixel_complete_registration`); three Traffic/engagement
+campaigns on the same account correctly detected as unsupported.
+
+**An unsupported campaign is shown disabled, with its reason, never hidden**
+— the AIC-98 house rule applied to a picker: an empty-looking list reads as
+"you have no campaigns", which is false and sends the operator down the wrong
+path. Three reasons, each distinct copy: `no_ad_sets` (nothing built there
+yet), `unrecognized_objective` (e.g. Traffic — no ad set implies a lead),
+`mixed_ad_sets` (ad sets imply genuinely different actions). An ad set whose
+goal implies nothing (a secondary REACH/LINK_CLICKS ad set alongside a real
+lead ad set) is filtered out rather than disqualifying the campaign — the
+same tolerance `summarizeTracking` already applies for the identical reason.
+
+**Picking a supported campaign prefills the rest of the form** — name, daily
+budget (Meta's own `daily_budget`, already in agorot — no unit conversion
+needed beyond agorot→shekels for the input), destination type, and for a
+website campaign the pixel id + lead event type — all still editable, never
+overwriting a value the operator already typed. A "היעד זוהה אוטומטית
+מהגדרות הקמפיין ב-Meta" note confirms the destination came from Meta, not a
+guess.
+
+**The step-1 ad-account field's `act_` prefix is now a fixed, non-typed
+chip**, not part of the placeholder text — the operator types only the
+digits; a pasted value that already includes `act_` (a very likely paste
+source: Meta's own URL bar) is stripped defensively. This field still can't
+be a picker: at step 1, the System User may not have layer-2 access yet
+(that's step 2), so there is nothing yet for `listAdAccounts` to return.
+
+**A page verified in step 1 carries into step 4 automatically** — once the
+Page check passes, `form.pageIdForm` is set to the same id, once, without
+overwriting anything the operator already put in the provisioning form
+themselves. One less place to retype the same id twice in one call.
+
+Not in this pass: **Branch A** (no existing campaign — build the first one
+during the call, reusing the customer builder under an operator-acting-as-
+customer mode) is a separate, larger piece touching AIC-66's 3-actor auth
+model, and the wizard's 4-category operator-error-handling taxonomy is applied
+here to the two new routes only, not retrofitted across steps 1–3. Both are
+tracked on [AIC-105](https://linear.app/pisga-app/issue/AIC-105).
+
 **Step 5 finalize runs the real `ConnectionService.verify()`** — the exact
 check the recommendation engine's own tick relies on — and only marks
 `customer_onboarding.completed_at` on a genuine `ok`, never on an assumption
@@ -542,22 +613,32 @@ that provisioning succeeding implies the connection is healthy.
 
 Routes (all under `requireAdmin`, `server/src/routes/admin.ts`):
 `GET .../onboarding`, `POST .../onboarding/step`, `POST .../onboarding/check`,
-`POST .../onboarding/token-check`, `POST .../onboarding/provision`,
+`POST .../onboarding/token-check`, `GET .../onboarding/ad-accounts`,
+`GET .../onboarding/campaigns`, `POST .../onboarding/provision`,
 `POST .../onboarding/finalize`. Source: `server/src/meta/access-layers.ts`,
-`server/src/meta/access-probe.ts`, `server/src/services/customer-onboarding.ts`.
+`server/src/meta/access-probe.ts`, `server/src/services/customer-onboarding.ts`,
+`server/src/meta/campaign-discovery.ts`, `server/src/meta/tracking-health.ts`
+(`detectDestination`).
 Tests: `access-layers.test.ts` (10, every diagnosis + the layer-1-before-
 layer-3 ordering + ground-truth-overrides-edges), `access-probe.test.ts` (8,
 mocked Graph responses for every layer/detail/id-format/network-failure case),
-`customer-onboarding.integration.test.ts` (13, resumability, per-check merge,
+`customer-onboarding.integration.test.ts` (19, resumability, per-check merge,
 the three page_id-gate refusal cases, atomic no-partial-write on refusal,
 lead-type defaulting, the connected-campaign-has-no-`create_campaign`-row
-regression), `onboarding.integration.test.ts` (15, full HTTP round trip
+regression), `onboarding.integration.test.ts` (26, full HTTP round trip
 including the specific scenario this doc calls out above — a Page that passed
-an earlier check is re-verified, and fails, at provision time). Live-verified
-against real Meta and the real DB (2026-08-16): a known-good real Page and ad
-account both return `ok`; a bogus Page id returns a clean `not_shared`; the
-full onboarding-open → customer-basics → check → token-check round trip
-returns real data end to end for `test@test.com`'s connection.
+an earlier check is re-verified, and fails, at provision time — plus the
+discovery routes: real-shaped detection per destination, the cross-customer
+annotation firing only for a DIFFERENT customer, and the disabled-with-reason
+cases), `tracking-health.test.ts`'s `detectDestination` block (7: whatsapp,
+website, no_ad_sets, unrecognized_objective, mixed_ad_sets, and the
+ignore-a-non-lead-ad-set tolerance). Live-verified against real Meta and the
+real DB: a known-good real Page and ad account both return `ok`; a bogus Page
+id returns a clean `not_shared`; the full onboarding-open → customer-basics →
+check → token-check round trip returns real data end to end for
+`test@test.com`'s connection (2026-08-16); the discovery pickers against the
+real `act_2181076988590009` account, matching known ground truth for both
+campaigns and correctly disabling the three non-lead ones (2026-08-18).
 
 ## Needs-attention queue (AIC-17)
 

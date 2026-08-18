@@ -38,6 +38,37 @@ interface OnboardingState {
 }
 interface CustomerBasics { id: string; businessName: string }
 
+// AIC-105 — mirrors server/src/meta/campaign-discovery.ts.
+interface AdAccountOption {
+  id: string;
+  name: string;
+  currency: string;
+  accountStatus: number | null;
+  usedByCustomer: { id: string; name: string } | null;
+}
+type DetectedDestination =
+  | { supported: true; destinationType: "whatsapp" }
+  | { supported: true; destinationType: "website"; trackingPixelId: string; leadEventTypes: [string] }
+  | { supported: false; reason: "no_ad_sets" | "unrecognized_objective" | "mixed_ad_sets" };
+type UnsupportedReason = Extract<DetectedDestination, { supported: false }>["reason"];
+interface DiscoveredCampaign {
+  id: string;
+  name: string;
+  status: string;
+  effectiveStatus: string;
+  objective: string | null;
+  dailyBudgetAgorot: number | null;
+  destination: DetectedDestination;
+}
+
+// A raw "act_…" id split into its fixed prefix + the digits the operator
+// actually types — defensive against pasting the full id including the
+// prefix (a very likely paste source: Meta's own URL bar).
+const ACT_PREFIX = "act_";
+function stripActPrefix(v: string): string {
+  return v.trim().startsWith(ACT_PREFIX) ? v.trim().slice(ACT_PREFIX.length) : v.trim();
+}
+
 function fmtWhen(iso: string | undefined): string {
   if (!iso) return w.neverChecked;
   return `${w.lastChecked} ${new Date(iso).toLocaleString("he-IL")}`;
@@ -90,6 +121,14 @@ export function AdminOnboarding() {
     whatsappDestination: "",
     leadEventTypes: "", trackingPixelId: "", websiteUrl: "",
   });
+  // AIC-105 Branch B — step 4's ad-account/campaign pickers.
+  const [adAccounts, setAdAccounts] = useState<AdAccountOption[] | null>(null);
+  const [loadingAdAccounts, setLoadingAdAccounts] = useState(false);
+  const [adAccountsError, setAdAccountsError] = useState<string | null>(null);
+  const [campaigns, setCampaigns] = useState<DiscoveredCampaign[] | null>(null);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+  const [campaignsError, setCampaignsError] = useState<string | null>(null);
+
   const [provisioning, setProvisioning] = useState(false);
   const [provisionResult, setProvisionResult] = useState<string | null>(null);
   const [provisionBlocked, setProvisionBlocked] = useState<AccessDiagnosis | null>(null);
@@ -103,6 +142,8 @@ export function AdminOnboarding() {
     api<{ state: OnboardingState; businessPortfolioId: string }>(`/admin/customers/${id}/onboarding`)
       .then((r) => { setState(r.state); setPortfolioId(r.businessPortfolioId); })
       .catch(() => setError(w.errorGeneric));
+    loadAdAccounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   function goToStep(n: number) {
@@ -110,6 +151,68 @@ export function AdminOnboarding() {
     api<{ state: OnboardingState }>(`/admin/customers/${id}/onboarding/step`, {
       method: "POST", body: JSON.stringify({ step: n }),
     }).then((r) => setState(r.state)).catch(() => {});
+  }
+
+  // AIC-105 Branch B — step 4's pickers. Loaded eagerly (every wizard section
+  // renders at once, per this component's own convention) rather than only
+  // once the operator scrolls to step 4, so the list is already there by the
+  // time they get there.
+  function loadAdAccounts() {
+    if (!id) return;
+    setLoadingAdAccounts(true);
+    setAdAccountsError(null);
+    api<{ accounts: AdAccountOption[] }>(`/admin/customers/${id}/onboarding/ad-accounts`)
+      .then((r) => setAdAccounts(r.accounts))
+      .catch((e) => setAdAccountsError(e instanceof Error ? e.message : w.pickAdAccountError))
+      .finally(() => setLoadingAdAccounts(false));
+  }
+
+  function loadCampaigns(metaAdAccountId: string) {
+    if (!id || !metaAdAccountId) return;
+    setLoadingCampaigns(true);
+    setCampaignsError(null);
+    api<{ campaigns: DiscoveredCampaign[] }>(
+      `/admin/customers/${id}/onboarding/campaigns?metaAdAccountId=${encodeURIComponent(metaAdAccountId)}`,
+    )
+      .then((r) => setCampaigns(r.campaigns))
+      .catch((e) => setCampaignsError(e instanceof Error ? e.message : w.pickCampaignError))
+      .finally(() => setLoadingCampaigns(false));
+  }
+
+  function pickAdAccount(metaAdAccountId: string) {
+    // Changing the ad account invalidates any campaign already picked under
+    // the PREVIOUS one — clearing it rather than leaving a stale, mismatched
+    // campaign id silently attached to a different account.
+    setForm((f) => ({ ...f, metaAdAccountId, metaCampaignId: "" }));
+    setCampaigns(null);
+    setCampaignsError(null);
+    if (metaAdAccountId) loadCampaigns(metaAdAccountId);
+  }
+
+  function pickCampaign(metaCampaignId: string) {
+    const camp = campaigns?.find((c) => c.id === metaCampaignId);
+    setForm((f) => {
+      const next = { ...f, metaCampaignId };
+      if (!camp) return next;
+      // Prefill from Meta's own values — never overwrite something the
+      // operator already typed.
+      if (!f.campaignName) next.campaignName = camp.name;
+      if (!f.budgetShekels && camp.dailyBudgetAgorot != null) next.budgetShekels = String(camp.dailyBudgetAgorot / 100);
+      if (camp.destination.supported) {
+        next.destinationType = camp.destination.destinationType;
+        if (camp.destination.destinationType === "website") {
+          next.trackingPixelId = camp.destination.trackingPixelId;
+          next.leadEventTypes = camp.destination.leadEventTypes.join(",");
+        }
+      }
+      return next;
+    });
+  }
+
+  function campaignUnsupportedReason(reason: UnsupportedReason): string {
+    if (reason === "no_ad_sets") return w.campaignUnsupportedNoAdSets;
+    if (reason === "mixed_ad_sets") return w.campaignUnsupportedMixedAdSets;
+    return w.campaignUnsupportedUnrecognizedObjective;
   }
 
   function runCheck(asset: "ad_account" | "page", assetId: string) {
@@ -120,7 +223,15 @@ export function AdminOnboarding() {
       `/admin/customers/${id}/onboarding/check`,
       { method: "POST", body: JSON.stringify({ asset, assetId: assetId.trim() }) },
     )
-      .then((r) => setState(r.state))
+      .then((r) => {
+        setState(r.state);
+        // A page verified in step 1 never needs re-typing in step 4 — carry
+        // it over once, without overwriting anything the operator already
+        // put in the provisioning form themselves.
+        if (asset === "page" && r.result.verdict.ok) {
+          setForm((f) => (f.pageIdForm ? f : { ...f, pageIdForm: assetId.trim() }));
+        }
+      })
       .catch((e) => setError(e instanceof Error ? e.message : w.errorGeneric))
       .finally(() => setCheckingAsset(null));
   }
@@ -268,10 +379,18 @@ export function AdminOnboarding() {
 
         <div className="row gap16" style={{ marginTop: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
           <div className="field" style={{ minWidth: 220 }}>
-            <label>{w.fieldAdAccountId}</label>
-            <input value={acctId} onChange={(e) => setAcctId(e.target.value)} placeholder="act_…" />
+            <label>{w.fieldAdAccountIdStep1}</label>
+            <div className="field-prefix-group">
+              <span className="prefix">{ACT_PREFIX}</span>
+              <input
+                value={acctId}
+                onChange={(e) => setAcctId(stripActPrefix(e.target.value))}
+                inputMode="numeric"
+                placeholder="2181076988590009"
+              />
+            </div>
           </div>
-          <button className="btn btn-outline btn-sm" disabled={checkingAsset !== null || !acctId.trim()} onClick={() => runCheck("ad_account", acctId)}>
+          <button className="btn btn-outline btn-sm" disabled={checkingAsset !== null || !acctId.trim()} onClick={() => runCheck("ad_account", `${ACT_PREFIX}${acctId}`)}>
             {checkingAsset === "ad_account" ? w.checking : w.checkAdAccount}
           </button>
         </div>
@@ -338,14 +457,66 @@ export function AdminOnboarding() {
         </div>
 
         <div style={{ marginTop: 12, display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-          <div className="field"><label>{w.fieldAdAccountId}</label>
-            <input value={form.metaAdAccountId} onChange={(e) => setForm({ ...form, metaAdAccountId: e.target.value })} placeholder="act_…" /></div>
+          {/* AIC-105 Branch B — pick, don't type. */}
+          <div className="field">
+            <label>{w.pickAdAccountLabel}</label>
+            <select
+              value={form.metaAdAccountId}
+              onChange={(e) => pickAdAccount(e.target.value)}
+              disabled={loadingAdAccounts}
+            >
+              <option value="">{w.pickAdAccountPlaceholder}</option>
+              {(adAccounts ?? []).map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name} ({a.id}){a.usedByCustomer ? ` — ${w.pickAdAccountUsedBy.replace("{name}", a.usedByCustomer.name)}` : ""}
+                </option>
+              ))}
+            </select>
+            {loadingAdAccounts && <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickAdAccountLoading}</p>}
+            {adAccountsError && (
+              <p style={{ color: "#c0362c", fontSize: "0.78rem", marginTop: 4 }}>
+                {adAccountsError}{" "}
+                <button type="button" className="btn btn-outline btn-sm" onClick={loadAdAccounts}>{w.pickRetry}</button>
+              </p>
+            )}
+            {!loadingAdAccounts && !adAccountsError && adAccounts?.length === 0 && (
+              <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickAdAccountEmpty}</p>
+            )}
+          </div>
           <div className="field"><label>{w.fieldPageId}</label>
             <input value={form.pageIdForm} onChange={(e) => setForm({ ...form, pageIdForm: e.target.value })} /></div>
           <div className="field"><label>{w.fieldInstagramId}</label>
             <input value={form.instagramId} onChange={(e) => setForm({ ...form, instagramId: e.target.value })} /></div>
-          <div className="field"><label>{w.fieldCampaignId}</label>
-            <input value={form.metaCampaignId} onChange={(e) => setForm({ ...form, metaCampaignId: e.target.value })} /></div>
+          <div className="field">
+            <label>{w.pickCampaignLabel}</label>
+            <select
+              value={form.metaCampaignId}
+              onChange={(e) => pickCampaign(e.target.value)}
+              disabled={!form.metaAdAccountId || loadingCampaigns}
+            >
+              <option value="">{w.pickCampaignPlaceholder}</option>
+              {(campaigns ?? []).map((c) => (
+                <option key={c.id} value={c.id} disabled={!c.destination.supported}>
+                  {c.name} — {c.destination.supported
+                    ? (c.destination.destinationType === "whatsapp" ? w.destinationWhatsapp : w.destinationWebsite)
+                    : campaignUnsupportedReason(c.destination.reason)}
+                </option>
+              ))}
+            </select>
+            {loadingCampaigns && <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickCampaignLoading}</p>}
+            {campaignsError && (
+              <p style={{ color: "#c0362c", fontSize: "0.78rem", marginTop: 4 }}>
+                {campaignsError}{" "}
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => loadCampaigns(form.metaAdAccountId)}>{w.pickRetry}</button>
+              </p>
+            )}
+            {!loadingCampaigns && !campaignsError && form.metaAdAccountId && campaigns?.length === 0 && (
+              <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickCampaignEmpty}</p>
+            )}
+            {form.metaCampaignId && campaigns?.find((c) => c.id === form.metaCampaignId)?.destination.supported && (
+              <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickCampaignDetectedNote}</p>
+            )}
+          </div>
           <div className="field"><label>{w.fieldCampaignName}</label>
             <input value={form.campaignName} onChange={(e) => setForm({ ...form, campaignName: e.target.value })} /></div>
           <div className="field"><label>{w.fieldBudget}</label>

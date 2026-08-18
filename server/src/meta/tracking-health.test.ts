@@ -3,6 +3,7 @@ import {
   impliedLeadActionType,
   summarizeTracking,
   deriveIsMessaging,
+  detectDestination,
   type AdSetTrackingConfig,
 } from "./tracking-health.js";
 
@@ -160,5 +161,47 @@ describe("summarizeTracking", () => {
     expect(m.optimizationGoal).toBe("OFFSITE_CONVERSIONS");
     expect(m.customEventType).toBe("COMPLETE_REGISTRATION");
     expect(m.impliedLeadActionType).toBe("offsite_conversion.fb_pixel_complete_registration");
+  });
+});
+
+// AIC-105 Branch B — adopting an existing campaign detects its destination
+// from the SAME config summarizeTracking already trusts, rather than asking
+// the operator to guess (and rather than re-deriving a second, driftable copy
+// of impliedLeadActionType's mapping).
+describe("detectDestination", () => {
+  it("a WhatsApp (Click-to-WhatsApp) campaign is detected, no pixel involved", () => {
+    expect(detectDestination([WHATSAPP_ADSET])).toEqual({ supported: true, destinationType: "whatsapp" });
+  });
+
+  it("a Pixel campaign is detected with its pixel id and implied lead event", () => {
+    expect(detectDestination([PIXEL_ADSET])).toEqual({
+      supported: true,
+      destinationType: "website",
+      trackingPixelId: "984664453249037",
+      leadEventTypes: ["offsite_conversion.fb_pixel_complete_registration"],
+    });
+  });
+
+  it("an empty ad-set list is 'no_ad_sets', not 'unrecognized_objective' — a real, distinct reason to show", () => {
+    expect(detectDestination([])).toEqual({ supported: false, reason: "no_ad_sets" });
+  });
+
+  it("ad sets that exist but imply nothing (e.g. a Traffic objective) are 'unrecognized_objective'", () => {
+    const traffic: AdSetTrackingConfig = { ...PIXEL_ADSET, optimizationGoal: "LINK_CLICKS", customEventType: null };
+    expect(detectDestination([traffic])).toEqual({ supported: false, reason: "unrecognized_objective" });
+  });
+
+  it("a secondary ad set that implies nothing is ignored, not disqualifying — same filtering as summarizeTracking", () => {
+    const noise: AdSetTrackingConfig = { ...PIXEL_ADSET, adSetId: "noise", optimizationGoal: "REACH", customEventType: null, pixelId: null };
+    expect(detectDestination([WHATSAPP_ADSET, noise])).toEqual({ supported: true, destinationType: "whatsapp" });
+  });
+
+  it("ad sets implying genuinely different actions are 'mixed_ad_sets'", () => {
+    expect(detectDestination([WHATSAPP_ADSET, PIXEL_ADSET])).toEqual({ supported: false, reason: "mixed_ad_sets" });
+  });
+
+  it("a custom (unrecognized) pixel event maps to nothing — still 'unrecognized_objective', never a guess", () => {
+    const custom: AdSetTrackingConfig = { ...PIXEL_ADSET, customEventType: "CUSTOM" };
+    expect(detectDestination([custom])).toEqual({ supported: false, reason: "unrecognized_objective" });
   });
 });

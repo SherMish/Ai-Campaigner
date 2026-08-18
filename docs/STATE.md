@@ -6,6 +6,45 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — AIC-105 Branch B: pick an existing campaign instead of typing its id
+User-reported UX problem: the onboarding wizard's step 4 required typing a
+raw Meta ad-account id and campaign id by hand, plus manually guessing the
+destination type — every character a chance to attach the wrong customer's
+campaign or mistype a digit. Replaced both free-text fields with live-fetched
+pickers: `GraphCampaignAdapter.listAdAccounts`/`listCampaigns`
+(`server/src/meta/campaign-discovery.ts`, new `GET
+.../onboarding/ad-accounts` + `GET .../onboarding/campaigns` admin routes)
+list what the System User can actually manage right now, and each campaign's
+destination is DETECTED — `detectDestination`
+(`server/src/meta/tracking-health.ts`) runs the same `getAdSetTracking` read
+AIC-88's tracking-health check trusts through the ad sets' own
+`optimization_goal`/`promoted_object`, never a question put to the operator.
+An unsupported campaign (no ad sets yet, a non-lead objective, mixed ad sets)
+is listed disabled with its specific reason, never hidden (AIC-98). Picking a
+supported campaign prefills name/budget/destination/pixel/lead-event, still
+editable. An ad account already used by a different customer is annotated,
+not blocked — AIC-87's migration 038 deliberately allows sharing one Meta ad
+account across customers.
+
+Also fixed, same pass: the step-1 ad-account field's "act_" prefix is now a
+fixed chip instead of something the operator has to type themselves
+(defensive strip if pasted with the prefix already on it), and a Page
+verified in step 1 now carries over into step 4 instead of being re-typed.
+
+Live-verified against the real `act_2181076988590009` account: `GelNails |
+Leads | WhatsApp` detected `whatsapp`; `free_beta_signups_leads` detected
+`website` with the correct real pixel id and lead event, auto-filling the
+real ₪20 budget; three Traffic/engagement campaigns on the same account
+correctly disabled with reasons.
+
+Explicitly NOT built this pass, tracked as the rest of
+[AIC-105](https://linear.app/pisga-app/issue/AIC-105): Branch A (build a
+first campaign during the call, via an operator-acting-as-customer mode —
+touches AIC-66's 3-actor auth model, a separate and larger piece), and the
+ticket's full 4-category operator-error-handling taxonomy across all 5 steps
+(applied here only to the two new routes). Docs:
+[ops-console.md](features/ops-console.md#meta-connection-onboarding-wizard-aic-101--aic-68).
+
 ### 2026-08-18 — AIC-106 (additions half): creating new content goes live immediately, no approval click
 Product decision: approval gates belong only in the recommendation engine
 (pausing/changing something already running) — creating something new

@@ -130,6 +130,19 @@ button { font-family: inherit; }
 .field textarea { min-height: 84px; resize: vertical; }
 .field-row { display: flex; gap: 14px; }
 .field-row .field { flex: 1; }
+
+/* AIC-105: a fixed, non-editable prefix chip (e.g. Meta's "act_" ad-account
+   prefix) in front of an input — the operator types only the number, never
+   transcribes the constant part. `direction: ltr` regardless of page
+   direction: the prefix is a Latin literal that must always read before the
+   digits, including inside this admin panel's RTL layout. */
+.field-prefix-group { display: flex; align-items: stretch; direction: ltr; }
+.field-prefix-group .prefix {
+  display: flex; align-items: center; padding: 0 10px; white-space: nowrap;
+  border: 1.5px solid var(--line); border-right: none; border-radius: 14px 0 0 14px;
+  background: var(--cream-2); color: var(--muted); font-family: var(--mono); font-size: 0.9rem;
+}
+.field-prefix-group input { border-radius: 0 14px 14px 0 !important; direction: ltr; }
 .check { display: flex; align-items: flex-start; gap: 10px; font-size: 0.9rem; color: var(--muted); }
 .check input { margin-top: 3px; accent-color: var(--orange); }
 

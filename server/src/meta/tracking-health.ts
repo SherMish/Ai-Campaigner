@@ -207,3 +207,39 @@ export function summarizeTracking(
     },
   };
 }
+
+// AIC-105 Branch B — "detect, don't ask" for a campaign the operator is
+// ADOPTING rather than building: derive the destination type (and, for a
+// Pixel campaign, the pixel + lead event) from the ad sets' own Meta
+// configuration, the exact mechanism `summarizeTracking` already trusts for
+// AIC-88. Reusing it means an adopted campaign's destination can never
+// silently disagree with what the ongoing tracking-health check would judge
+// once it's connected — one source of truth, not two.
+export type DetectedDestination =
+  | { supported: true; destinationType: "whatsapp" }
+  | { supported: true; destinationType: "website"; trackingPixelId: string; leadEventTypes: [string] }
+  | { supported: false; reason: "no_ad_sets" | "unrecognized_objective" | "mixed_ad_sets" };
+
+export function detectDestination(configs: AdSetTrackingConfig[]): DetectedDestination {
+  if (configs.length === 0) return { supported: false, reason: "no_ad_sets" };
+
+  // Same filtering discipline as summarizeTracking: an ad set whose goal
+  // implies nothing (LINK_CLICKS, REACH, a secondary test ad set, …) is
+  // ignored rather than treated as disqualifying — judge the campaign by the
+  // ad sets that DO imply a lead, not by every ad set it happens to contain.
+  const judged = configs
+    .map((c) => ({ cfg: c, implied: impliedLeadActionType(c) }))
+    .filter((x): x is { cfg: AdSetTrackingConfig; implied: string } => x.implied !== null);
+
+  if (judged.length === 0) return { supported: false, reason: "unrecognized_objective" };
+
+  const distinct = new Set(judged.map((x) => x.implied));
+  if (distinct.size > 1) return { supported: false, reason: "mixed_ad_sets" };
+
+  const action = judged[0].implied;
+  if (isMessagingAction(action)) return { supported: true, destinationType: "whatsapp" };
+
+  const pixelId = judged.find((x) => x.cfg.pixelId)?.cfg.pixelId ?? null;
+  if (!pixelId) return { supported: false, reason: "unrecognized_objective" };
+  return { supported: true, destinationType: "website", trackingPixelId: pixelId, leadEventTypes: [action] };
+}
