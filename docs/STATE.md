@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — AIC-105 follow-up #2: the ad-account pre-select needed a live account list, not a stale one
+User-reported: right after the prior fix shipped, the step-4 picker still
+didn't auto-select — only after a full page reload. Root cause: `adAccounts`
+was fetched once, at mount, before the operator had run the step-1 check; the
+newly-verified account (sometimes only just visible to the System User) had
+no way to appear in an already-fetched list. `runCheck`'s success handler
+now re-fetches `loadAdAccounts()` immediately after a passing `ad_account`
+check, so the pre-select effect has a fresh list to match against without
+needing a reload. Live-verified: ran the check via the actual UI on a reset
+test customer, confirmed the step-4 selection appeared with no reload.
+
 ### 2026-08-18 — AIC-105 follow-up: a passing check now remembers WHAT it checked
 Found live on a real customer's onboarding (אבשלום אבורוס): the wizard's
 step-1 ad-account check persisted `ok: true` forever but never the id it was

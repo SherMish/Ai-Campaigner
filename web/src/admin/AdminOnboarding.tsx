@@ -262,6 +262,15 @@ export function AdminOnboarding() {
         if (asset === "page" && r.result.verdict.ok) {
           setForm((f) => (f.pageIdForm ? f : { ...f, pageIdForm: assetId.trim() }));
         }
+        // An ad account that just passed here may not be in the step-4
+        // picker's list yet — that list was fetched once, at mount, and this
+        // account might only just now be visible to the System User (e.g.
+        // step 2 was completed after the page loaded). Re-fetch it so the
+        // pre-select effect has a fresh list to match against, instead of
+        // requiring the operator to reload the whole page to see it appear.
+        if (asset === "ad_account" && r.result.verdict.ok) {
+          loadAdAccounts();
+        }
       })
       .catch((e) => setError(e instanceof Error ? e.message : w.errorGeneric))
       .finally(() => setCheckingAsset(null));
