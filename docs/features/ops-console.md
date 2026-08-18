@@ -128,9 +128,10 @@ Both rows also carry `missingConfigFields` — exactly which field(s), the
 actionable detail a bare reason label can't hold — rendered next to the pill
 in the detail card. `free_beta_signups_leads` is the first known instance,
 provisioned by the AIC-87 connect script before `website_url` existed as a
-column; there may be others provisioned the same way. **No fix-it action is
-wired up here yet** — see `offersOnboarding` below for why the onboarding
-wizard specifically must NOT be it.
+column; there may be others provisioned the same way. **The fix-it action is
+the customer-edit form's campaign-destination-config block** (see the CRUD
+section below) — deliberately NOT the onboarding wizard, which only INSERTs
+(see `offersOnboarding` below for why).
 
 ## Users view (separate from Customers, 2026-08-16)
 
@@ -221,6 +222,17 @@ side the operator actually needs for manual onboarding and support:
   Same shape for `thresholdOverrides` (AIC-77a) → `managed_campaigns.threshold_overrides`,
   read by `resolveThresholds` (see [../RULES.md](../RULES.md#configurable-thresholds-aic-77a))
   — validated against the known threshold keys before any write, all-or-nothing.
+  **Campaign destination config (AIC-103)** — `whatsappDestination`,
+  `websiteUrl`, `trackingPixelId`, `leadEventTypes` — follows the same
+  propagate-by-writing-the-column-the-reader-already-reads pattern, into
+  `managed_campaigns`. This is the **fix-it surface for a campaign the
+  `incomplete_config` health check flagged** (see the Customers view above);
+  without it, a health-check finding had no admin action to resolve it and
+  needed hand-SQL. Each field is independent — sending only `websiteUrl`
+  leaves the other three untouched — and an empty string genuinely CLEARS a
+  field, distinct from omitting it (which leaves it unchanged). Every changed
+  field is named individually in the `admin_audit_log` detail, so "who set
+  this campaign's website_url, and to what" is answerable later.
 - **Deactivate / reactivate** (`customers.is_active`, `deactivated_at` —
   migration 016) — the default, reversible path for a churned/paused account.
   Deactivating ties into AIC-14's emergency controls: if a managed campaign

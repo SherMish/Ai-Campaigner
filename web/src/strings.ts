@@ -150,6 +150,15 @@ export const strings = {
       fieldContactEmail: "אימייל",
       fieldIsTest: "חשבון פנימי/בדיקה (לא נספר בנתוני חיוב)",
       fieldAgreedBudget: "תקציב מוסכם (₪ ליום)",
+      // AIC-103: the fix-it surface for a campaign the health check found
+      // incomplete — same fields the onboarding wizard's step 4 collects,
+      // editable here for a campaign that's already provisioned.
+      configTitle: "הגדרות יעד הקמפיין",
+      configHint: "משלימים כאן שדה שחסר לקמפיין הזה (למשל אחרי אזהרת \"חסרים פרטי הגדרה לקמפיין\") — לא צריך אשף חדש.",
+      fieldWhatsappDestination: "מספר וואטסאפ ליצירת קשר",
+      fieldWebsiteUrl: "כתובת אתר היעד",
+      fieldPixelId: "מזהה Pixel",
+      fieldLeadEventTypes: "סוג האירוע שנספר כפנייה",
       create: "יצירה",
       edit: "עריכה",
       save: "שמירה",

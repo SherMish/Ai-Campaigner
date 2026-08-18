@@ -6,6 +6,24 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — AIC-103 follow-up: the fix-it surface the health check needed
+Found immediately on using the shipped health check: the ops console
+correctly reported "חסרים פרטי הגדרה לקמפיין (website_url)" but there was
+nowhere to actually SET it — the gap the same-day entry below flagged as
+"real gap, not built". Closed it: the customer-edit form
+(`services/customer-admin.ts` + `AdminCustomers.tsx`) gains a campaign-
+destination-config block for all four fields the required-fields table names
+(`whatsapp_destination`/`website_url`/`tracking_pixel_id`/`lead_event_types`),
+using the same propagate-by-column pattern the budget and threshold-override
+edits already use. Each field independent; empty string clears (distinct from
+omitting, which leaves unchanged); every changed field named individually in
+the audit log. Deliberately NOT the onboarding wizard — it only INSERTs, so
+running it on an already-provisioned customer would duplicate the
+connection/campaign trio (`offersOnboarding` still excludes
+`incomplete_config` for exactly that reason). Docs:
+[ops-console.md](features/ops-console.md#customer-crud--admin-audit-log-aic-44),
+[add-content.md](features/add-content.md).
+
 ### 2026-08-18 — AIC-103: campaign-type required fields — enforced at provisioning, at use, and as a health check
 Found live verifying AIC-102: `free_beta_signups_leads` failed at SUBMIT with
 a raw 409 after the customer filled out a whole ad — the refusal was

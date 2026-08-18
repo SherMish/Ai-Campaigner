@@ -224,6 +224,11 @@ export interface CustomerWriteFields {
   // being overridden. Mirrors server/src/recommendations/rules.ts's
   // RULE_THRESHOLDS keys; the server validates and rejects unknown ones.
   thresholdOverrides?: Record<string, number>;
+  // AIC-103's fix-it surface — see CustomerDetail's twin read-side fields.
+  websiteUrl?: string;
+  trackingPixelId?: string;
+  whatsappDestination?: string;
+  leadEventTypes?: string[];
 }
 export interface AuditEntry {
   id: string;

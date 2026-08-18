@@ -99,15 +99,23 @@ The same table is enforced twice more, closing the loop end to end:
   is how an operator finds a `free_beta_signups_leads` BEFORE a customer's
   raw 409, scanning the fleet instead of waiting for one at a time.
 
-**A real gap flagged, not fixed here:** there is still no admin surface to
-EDIT an already-provisioned campaign's fields — `provisionConnection` only
-INSERTs. `offersOnboarding` (`web/src/admin/user-row-status.ts`) deliberately
-does NOT offer the wizard for `incomplete_config` (unlike the other four
-reasons) because running it would create a SECOND connection/campaign trio,
-not fix the existing one — the same duplicate-write failure the function
-already guards against for a fully-ready customer. Until an edit surface
-exists, fixing an `incomplete_config` customer found by the health check is
-still a manual DB step.
+**Fixing what the health check finds:** the ops console's customer-edit form
+([ops-console.md](ops-console.md#customer-crud--admin-audit-log-aic-44))
+carries a "campaign destination config" block — `whatsapp_destination`,
+`website_url`, `tracking_pixel_id`, `lead_event_types` — so an operator can
+close a `missingConfigFields` gap directly on an already-provisioned
+campaign. Each field is independent (editing one doesn't require re-sending
+the others), an empty string genuinely clears a field, and every change is
+audited by name in `admin_audit_log`.
+
+**Deliberately NOT the onboarding wizard.** `offersOnboarding`
+(`web/src/admin/user-row-status.ts`) does not offer the wizard for
+`incomplete_config` (unlike the other four readiness reasons) because
+`provisionConnection` only INSERTs — running it against an already-provisioned
+customer would create a SECOND connection/campaign trio rather than fix the
+existing one, the same duplicate-write failure that function already guards
+against for a fully-ready customer. The edit form is the fix-it path; the
+wizard stays the first-time-provisioning path.
 
 ### Adding an ad set — WhatsApp only, unchanged
 

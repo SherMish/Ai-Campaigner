@@ -32,6 +32,14 @@ export interface CustomerWriteFields {
    * resolve on every generation tick via resolveThresholds(). Validated against
    * RULE_THRESHOLDS's known keys before any write (see updateCustomer). */
   thresholdOverrides?: Record<string, number>;
+  /** AIC-103's campaign-type required fields — the fix-it surface for a
+   * campaign the health check found incomplete (missingConfigFields). Written
+   * straight to managed_campaigns, same propagate-by-column pattern as budget/
+   * thresholds above. Undefined = leave unchanged; '' clears a string field. */
+  websiteUrl?: string;
+  trackingPixelId?: string;
+  whatsappDestination?: string;
+  leadEventTypes?: string[];
 }
 
 // Rejects an unknown key or a non-finite value before any write happens — an
@@ -163,6 +171,27 @@ export async function updateCustomer(
     thresholdsPropagated = (r.rowCount ?? 0) > 0;
   }
 
+  // AIC-103's fix-it surface: an operator closing a missingConfigFields gap
+  // the health check found. Each field is independent — editing just
+  // websiteUrl doesn't require also re-sending the other three.
+  const configPropagated = { websiteUrl: false, trackingPixelId: false, whatsappDestination: false, leadEventTypes: false };
+  if (fields.websiteUrl != null) {
+    const r = await pool.query(`UPDATE managed_campaigns SET website_url = $2 WHERE customer_id = $1`, [customerId, fields.websiteUrl]);
+    configPropagated.websiteUrl = (r.rowCount ?? 0) > 0;
+  }
+  if (fields.trackingPixelId != null) {
+    const r = await pool.query(`UPDATE managed_campaigns SET tracking_pixel_id = $2 WHERE customer_id = $1`, [customerId, fields.trackingPixelId]);
+    configPropagated.trackingPixelId = (r.rowCount ?? 0) > 0;
+  }
+  if (fields.whatsappDestination != null) {
+    const r = await pool.query(`UPDATE managed_campaigns SET whatsapp_destination = $2 WHERE customer_id = $1`, [customerId, fields.whatsappDestination]);
+    configPropagated.whatsappDestination = (r.rowCount ?? 0) > 0;
+  }
+  if (fields.leadEventTypes != null) {
+    const r = await pool.query(`UPDATE managed_campaigns SET lead_event_types = $2 WHERE customer_id = $1`, [customerId, fields.leadEventTypes]);
+    configPropagated.leadEventTypes = (r.rowCount ?? 0) > 0;
+  }
+
   const after = await pool.query(`SELECT * FROM customers WHERE id = $1`, [customerId]);
   const a = after.rows[0];
 
@@ -180,6 +209,13 @@ export async function updateCustomer(
         : ` · threshold override change requested but no managed campaign exists yet`
       : "";
 
+  const configChanges: string[] = [];
+  if (fields.websiteUrl != null) configChanges.push(configPropagated.websiteUrl ? `website_url → ${fields.websiteUrl || "(cleared)"}` : "website_url change requested but no managed campaign exists yet");
+  if (fields.trackingPixelId != null) configChanges.push(configPropagated.trackingPixelId ? `tracking_pixel_id → ${fields.trackingPixelId || "(cleared)"}` : "tracking_pixel_id change requested but no managed campaign exists yet");
+  if (fields.whatsappDestination != null) configChanges.push(configPropagated.whatsappDestination ? `whatsapp_destination → ${fields.whatsappDestination || "(cleared)"}` : "whatsapp_destination change requested but no managed campaign exists yet");
+  if (fields.leadEventTypes != null) configChanges.push(configPropagated.leadEventTypes ? `lead_event_types → ${JSON.stringify(fields.leadEventTypes)}` : "lead_event_types change requested but no managed campaign exists yet");
+  const configNote = configChanges.length > 0 ? ` · ${configChanges.join(" · ")}` : "";
+
   await logAdminAction(pool, {
     actorUserId: actor.userId,
     actorLabel: actor.label,
@@ -189,7 +225,7 @@ export async function updateCustomer(
     entityLabel: a.business_name,
     beforeState: b,
     afterState: a,
-    detail: `Edited "${a.business_name}"${budgetNote}${thresholdNote}`,
+    detail: `Edited "${a.business_name}"${budgetNote}${thresholdNote}${configNote}`,
   });
   return { ok: true };
 }

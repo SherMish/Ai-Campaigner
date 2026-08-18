@@ -101,6 +101,42 @@ d("customer CRUD (DB + HTTP)", () => {
     expect(edit?.detail).toContain("MIN_CAMPAIGN_LEADS");
   });
 
+  // AIC-103's fix-it surface — closes the gap a health-check finding
+  // (missingConfigFields) would otherwise have no admin UI to act on.
+  it("edits website_url/trackingPixelId/leadEventTypes/whatsappDestination independently and audits each", async () => {
+    const { id } = await createCustomer(pool, ACTOR, { businessName: "__it_crud_config" });
+    const campaignId = await seedCampaign(id, 5000);
+
+    const r = await updateCustomer(pool, ACTOR, id, {
+      websiteUrl: "https://pisga.app/signup?utm_source=meta",
+      trackingPixelId: "984664453249037",
+      leadEventTypes: ["offsite_conversion.fb_pixel_complete_registration"],
+    });
+    expect(r.ok).toBe(true);
+
+    const { rows } = await pool.query(
+      `SELECT website_url, tracking_pixel_id, lead_event_types, whatsapp_destination FROM managed_campaigns WHERE id = $1`, [campaignId],
+    );
+    expect(rows[0].website_url).toBe("https://pisga.app/signup?utm_source=meta");
+    expect(rows[0].tracking_pixel_id).toBe("984664453249037");
+    expect(rows[0].lead_event_types).toEqual(["offsite_conversion.fb_pixel_complete_registration"]);
+    expect(rows[0].whatsapp_destination).toBe(""); // untouched — not sent in this call
+
+    const entries = await listAuditLog(pool, { entityId: id });
+    const edit = entries.find((e) => e.action === "customer.edit" && e.detail?.includes("website_url"));
+    expect(edit?.detail).toContain("pisga.app/signup");
+  });
+
+  it("clears a config field with an empty string, distinct from leaving it unchanged", async () => {
+    const { id } = await createCustomer(pool, ACTOR, { businessName: "__it_crud_config_clear" });
+    const campaignId = await seedCampaign(id, 5000);
+    await updateCustomer(pool, ACTOR, id, { websiteUrl: "https://old.example.com" });
+
+    await updateCustomer(pool, ACTOR, id, { websiteUrl: "" });
+    const { rows } = await pool.query(`SELECT website_url FROM managed_campaigns WHERE id = $1`, [campaignId]);
+    expect(rows[0].website_url).toBe("");
+  });
+
   it("rejects an unknown threshold key — nothing is written, not even other fields in the same call", async () => {
     const { id } = await createCustomer(pool, ACTOR, { businessName: "__it_crud_bad_threshold_key", category: "original" });
     const campaignId = await seedCampaign(id, 5000);

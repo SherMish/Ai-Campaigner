@@ -65,6 +65,13 @@ interface CustomerDetail extends CustomerRow {
   // resolveThresholds() already ran server-side, this is display-ready.
   thresholdOverrides: Record<string, number>;
   effectiveThresholds: Record<string, number>;
+  // AIC-103's fix-it surface — the campaign's CURRENT values for the fields
+  // missingConfigFields names, so the edit form can pre-fill rather than
+  // always starting blank. null when there's no managed campaign yet.
+  websiteUrl: string | null;
+  trackingPixelId: string | null;
+  whatsappDestination: string | null;
+  leadEventTypes: string[] | null;
 }
 
 interface OpsItem {
@@ -178,6 +185,12 @@ export function AdminCustomers() {
   const [budgetShekels, setBudgetShekels] = useState("");
   // One string per threshold key, controlled inputs — blank = no override.
   const [thresholdForm, setThresholdForm] = useState<Record<string, string>>({});
+  // AIC-103's fix-it fields — plain strings; leadEventTypes is comma-joined
+  // for editing, same convention as the onboarding wizard's field.
+  const [websiteUrlForm, setWebsiteUrlForm] = useState("");
+  const [trackingPixelIdForm, setTrackingPixelIdForm] = useState("");
+  const [whatsappDestinationForm, setWhatsappDestinationForm] = useState("");
+  const [leadEventTypesForm, setLeadEventTypesForm] = useState("");
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -280,6 +293,10 @@ export function AdminCustomers() {
     const seeded: Record<string, string> = {};
     for (const key of Object.keys(detail.thresholdOverrides)) seeded[key] = String(detail.thresholdOverrides[key]);
     setThresholdForm(seeded);
+    setWebsiteUrlForm(detail.websiteUrl ?? "");
+    setTrackingPixelIdForm(detail.trackingPixelId ?? "");
+    setWhatsappDestinationForm(detail.whatsappDestination ?? "");
+    setLeadEventTypesForm((detail.leadEventTypes ?? []).join(", "));
     setEditing(true);
     setSaveError(null);
   }
@@ -303,6 +320,14 @@ export function AdminCustomers() {
       if (!Number.isNaN(n)) thresholdOverrides[key] = n;
     }
     fields.thresholdOverrides = thresholdOverrides;
+    // AIC-103's fix-it fields — only sent when there's a campaign to apply
+    // them to (mirrors the budget field's own guard above).
+    if (detail?.campaignId) {
+      fields.websiteUrl = websiteUrlForm.trim();
+      fields.trackingPixelId = trackingPixelIdForm.trim();
+      fields.whatsappDestination = whatsappDestinationForm.trim();
+      fields.leadEventTypes = leadEventTypesForm.trim() ? leadEventTypesForm.split(",").map((s) => s.trim()).filter(Boolean) : [];
+    }
     try {
       await updateCustomer(selected.id, fields);
       setEditing(false);
@@ -488,6 +513,31 @@ export function AdminCustomers() {
                   <input type="number" min="0" step="1" value={budgetShekels} onChange={(e) => setBudgetShekels(e.target.value)} />
                 </div>
               ) : <p className="muted" style={{ fontSize: "0.85rem" }}>{a.noCampaigns}</p>}
+
+              {detail.campaignId && (
+                <div style={{ marginTop: 16 }}>
+                  <p className="muted" style={{ fontSize: "0.85rem", marginBottom: 2 }}><strong>{cc.configTitle}</strong></p>
+                  <p className="muted" style={{ fontSize: "0.78rem", marginBottom: 8 }}>{cc.configHint}</p>
+                  <div className="grid-2">
+                    <div className="field" style={{ maxWidth: 260 }}>
+                      <label style={{ fontSize: "0.82rem" }}>{cc.fieldWhatsappDestination}</label>
+                      <input value={whatsappDestinationForm} onChange={(e) => setWhatsappDestinationForm(e.target.value)} placeholder="972…" />
+                    </div>
+                    <div className="field" style={{ maxWidth: 260 }}>
+                      <label style={{ fontSize: "0.82rem" }}>{cc.fieldWebsiteUrl}</label>
+                      <input value={websiteUrlForm} onChange={(e) => setWebsiteUrlForm(e.target.value)} placeholder="https://…" />
+                    </div>
+                    <div className="field" style={{ maxWidth: 260 }}>
+                      <label style={{ fontSize: "0.82rem" }}>{cc.fieldPixelId}</label>
+                      <input value={trackingPixelIdForm} onChange={(e) => setTrackingPixelIdForm(e.target.value)} />
+                    </div>
+                    <div className="field" style={{ maxWidth: 260 }}>
+                      <label style={{ fontSize: "0.82rem" }}>{cc.fieldLeadEventTypes}</label>
+                      <input value={leadEventTypesForm} onChange={(e) => setLeadEventTypesForm(e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {detail.campaignId && (
                 <div style={{ marginTop: 16 }}>

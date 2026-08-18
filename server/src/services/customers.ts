@@ -130,6 +130,14 @@ export interface CustomerDetail extends CustomerListRow {
   // inherited vs overridden without re-deriving the resolution chain itself.
   thresholdOverrides: Record<string, number>;
   effectiveThresholds: RuleThresholds;
+  // AIC-103's fix-it surface: the campaign's CURRENT values for the fields
+  // missingConfigFields might name — "" when unset (managed_campaigns' own
+  // defaults), so the edit form can pre-fill an existing value rather than
+  // always starting blank. null when there's no managed campaign at all yet.
+  websiteUrl: string | null;
+  trackingPixelId: string | null;
+  whatsappDestination: string | null;
+  leadEventTypes: string[] | null;
 }
 
 // Full per-customer view assembled from the real tables (AIC-16).
@@ -219,5 +227,9 @@ export async function getCustomerDetail(
     // evaluates against, falling back to the agreed ceiling before the
     // engine's first tick.
     effectiveThresholds: resolveThresholds(c.threshold_overrides, c.live_budget_agorot ?? c.agreed_budget_agorot ?? 0),
+    websiteUrl: c.campaign_id ? (c.website_url ?? "") : null,
+    trackingPixelId: c.campaign_id ? (c.tracking_pixel_id ?? "") : null,
+    whatsappDestination: c.campaign_id ? (c.whatsapp_destination ?? "") : null,
+    leadEventTypes: c.campaign_id ? (c.lead_event_types ?? []) : null,
   };
 }
