@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { FIXED_DESTINATION, WEBSITE_DESTINATION, missingRequiredFields } from "@aic/shared";
 import { api, ApiError } from "../api";
 import { strings } from "../strings";
@@ -100,6 +100,7 @@ function CheckResult({ check }: { check: StoredCheck | undefined }) {
 
 export function AdminOnboarding() {
   const { id } = useParams<{ id: string }>();
+  const nav = useNavigate();
   const [customer, setCustomer] = useState<CustomerBasics | null>(null);
   const [state, setState] = useState<OnboardingState | null>(null);
   const [portfolioId, setPortfolioId] = useState<string | null>(null);
@@ -133,6 +134,12 @@ export function AdminOnboarding() {
   const [provisioning, setProvisioning] = useState(false);
   const [provisionResult, setProvisionResult] = useState<string | null>(null);
   const [provisionBlocked, setProvisionBlocked] = useState<AccessDiagnosis | null>(null);
+
+  // AIC-105 Branch A — the ad account has zero campaigns. Connects the
+  // account alone (no campaign fields), then hands off to the guided builder
+  // to create the customer's first one.
+  const [startingNewCampaign, setStartingNewCampaign] = useState(false);
+  const [startNewCampaignError, setStartNewCampaignError] = useState<string | null>(null);
 
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeHealth, setFinalizeHealth] = useState<string | null>(null);
@@ -370,6 +377,42 @@ export function AdminOnboarding() {
       .finally(() => setProvisioning(false));
   }
 
+  // AIC-105 Branch A: the picked ad account has zero campaigns. Provisions
+  // the connection + ad account alone (no campaign fields at all — the
+  // extended provision endpoint treats that as "connect only"), then hands
+  // off to the guided builder to create the customer's FIRST campaign, the
+  // same wizard a self-serve customer would use.
+  function startNewCampaign() {
+    if (!id || !form.metaAdAccountId) return;
+    if (pageIdUnverified()) {
+      setStartNewCampaignError(w.errorPageNotVerified);
+      return;
+    }
+    setStartingNewCampaign(true);
+    setStartNewCampaignError(null);
+    setProvisionBlocked(null);
+    api<{ result: { connectionId: string } }>(
+      `/admin/customers/${id}/onboarding/provision`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          metaAdAccountId: form.metaAdAccountId.trim(),
+          pageId: form.pageIdForm.trim() || null,
+          instagramId: form.instagramId.trim() || null,
+        }),
+      },
+    )
+      .then(() => nav(`/admin/onboarding/${id}/builder`))
+      .catch((e) => {
+        if (e instanceof ApiError && e.status === 409) {
+          const body = e.body as { diagnosis?: string } | undefined;
+          if (body?.diagnosis) { setProvisionBlocked(body.diagnosis as AccessDiagnosis); return; }
+        }
+        setStartNewCampaignError(e instanceof Error ? e.message : w.errorGeneric);
+      })
+      .finally(() => setStartingNewCampaign(false));
+  }
+
   function finalize() {
     if (!id) return;
     setFinalizing(true);
@@ -385,6 +428,10 @@ export function AdminOnboarding() {
   if (!id) return null;
 
   const step = state?.currentStep ?? 1;
+  // AIC-105 Branch A: a picked ad account with a confirmed-empty campaign
+  // list — the precondition for "צור קמפיין חדש" instead of the picker.
+  const noCampaignsForSelectedAccount =
+    !loadingCampaigns && !campaignsError && !!form.metaAdAccountId && campaigns?.length === 0;
 
   return (
     <div>
@@ -514,22 +561,27 @@ export function AdminOnboarding() {
 
         {/* AIC-103: asked explicitly, in customer-facing language, so the
             operator can put this question directly to the customer on the
-            call — drives which fields below are actually required. */}
-        <div style={{ marginTop: 12 }}>
-          <label style={{ display: "block", marginBottom: 6, fontSize: "0.9rem" }}>{w.fieldDestinationType}</label>
-          <div className="row gap12">
-            <label className="row gap12" style={{ alignItems: "center", cursor: "pointer" }}>
-              <input type="radio" name="destinationType" checked={form.destinationType === "whatsapp"}
-                onChange={() => setForm({ ...form, destinationType: "whatsapp" })} />
-              {w.destinationWhatsapp}
-            </label>
-            <label className="row gap12" style={{ alignItems: "center", cursor: "pointer" }}>
-              <input type="radio" name="destinationType" checked={form.destinationType === "website"}
-                onChange={() => setForm({ ...form, destinationType: "website" })} />
-              {w.destinationWebsite}
-            </label>
+            call — drives which fields below are actually required. Only
+            meaningful once there's an actual campaign to attach it to
+            (Branch A's "no campaigns yet" path asks this inside the builder
+            instead — asking twice would be redundant). */}
+        {!noCampaignsForSelectedAccount && (
+          <div style={{ marginTop: 12 }}>
+            <label style={{ display: "block", marginBottom: 6, fontSize: "0.9rem" }}>{w.fieldDestinationType}</label>
+            <div className="row gap12">
+              <label className="row gap12" style={{ alignItems: "center", cursor: "pointer" }}>
+                <input type="radio" name="destinationType" checked={form.destinationType === "whatsapp"}
+                  onChange={() => setForm({ ...form, destinationType: "whatsapp" })} />
+                {w.destinationWhatsapp}
+              </label>
+              <label className="row gap12" style={{ alignItems: "center", cursor: "pointer" }}>
+                <input type="radio" name="destinationType" checked={form.destinationType === "website"}
+                  onChange={() => setForm({ ...form, destinationType: "website" })} />
+                {w.destinationWebsite}
+              </label>
+            </div>
           </div>
-        </div>
+        )}
 
         <div style={{ marginTop: 12, display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
           {/* AIC-105 Branch B — pick, don't type. */}
@@ -585,49 +637,68 @@ export function AdminOnboarding() {
                 <button type="button" className="btn btn-outline btn-sm" onClick={() => loadCampaigns(form.metaAdAccountId)}>{w.pickRetry}</button>
               </p>
             )}
-            {!loadingCampaigns && !campaignsError && form.metaAdAccountId && campaigns?.length === 0 && (
-              <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickCampaignEmpty}</p>
+            {noCampaignsForSelectedAccount && (
+              <div style={{ marginTop: 6 }}>
+                <p className="muted" style={{ fontSize: "0.78rem" }}>{w.pickCampaignEmpty}</p>
+                <button
+                  type="button" className="btn btn-primary btn-sm" style={{ marginTop: 6 }}
+                  disabled={startingNewCampaign || pageIdUnverified()} onClick={startNewCampaign}
+                >
+                  {startingNewCampaign ? w.startNewCampaignBusy : w.startNewCampaignCta}
+                </button>
+                {pageIdUnverified() && <p className="muted" style={{ fontSize: "0.72rem", marginTop: 6 }}>{w.errorPageNotVerified}</p>}
+                {startNewCampaignError && <p style={{ color: "#c0362c", fontSize: "0.78rem", marginTop: 6 }}>{startNewCampaignError}</p>}
+              </div>
             )}
             {form.metaCampaignId && campaigns?.find((c) => c.id === form.metaCampaignId)?.destination.supported && (
               <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickCampaignDetectedNote}</p>
             )}
           </div>
-          <div className="field"><label>{w.fieldCampaignName}</label>
-            <input value={form.campaignName} onChange={(e) => setForm({ ...form, campaignName: e.target.value })} /></div>
-          <div className="field">
-            <label>{w.fieldBudget}</label>
-            <input type="number" min="0" value={form.budgetShekels} onChange={(e) => setForm({ ...form, budgetShekels: e.target.value })} />
-            {/* AIC-106: shown, never sourced-from — the live Meta figure and
-                the agreed ceiling are deliberately two separate numbers. */}
-            {(() => {
-              const live = campaigns?.find((c) => c.id === form.metaCampaignId)?.dailyBudgetAgorot;
-              return live != null
-                ? <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.fieldLiveBudgetNote.replace("{amount}", String(live / 100))}</p>
-                : null;
-            })()}
-          </div>
-          {form.destinationType === "whatsapp" ? (
-            <div className="field"><label>{w.fieldWhatsappDestination} *</label>
-              <input required value={form.whatsappDestination} onChange={(e) => setForm({ ...form, whatsappDestination: e.target.value })} placeholder="972…" /></div>
-          ) : (
+          {!noCampaignsForSelectedAccount && (
             <>
-              <div className="field"><label>{w.fieldLeadEventTypes} *</label>
-                <input required value={form.leadEventTypes} onChange={(e) => setForm({ ...form, leadEventTypes: e.target.value })} /></div>
-              <div className="field"><label>{w.fieldPixelId} *</label>
-                <input required value={form.trackingPixelId} onChange={(e) => setForm({ ...form, trackingPixelId: e.target.value })} /></div>
+              <div className="field"><label>{w.fieldCampaignName}</label>
+                <input value={form.campaignName} onChange={(e) => setForm({ ...form, campaignName: e.target.value })} /></div>
               <div className="field">
-                <label>{w.fieldWebsiteUrl} *</label>
-                <input required value={form.websiteUrl} onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })} placeholder="https://…?utm_source=meta&utm_medium=cpc&utm_campaign=…" />
-                <p className="muted" style={{ fontSize: "0.75rem", marginTop: 4 }}>{w.fieldWebsiteUrlUtmNote}</p>
+                <label>{w.fieldBudget}</label>
+                <input type="number" min="0" value={form.budgetShekels} onChange={(e) => setForm({ ...form, budgetShekels: e.target.value })} />
+                {/* AIC-106: shown, never sourced-from — the live Meta figure
+                    and the agreed ceiling are deliberately two separate
+                    numbers. */}
+                {(() => {
+                  const live = campaigns?.find((c) => c.id === form.metaCampaignId)?.dailyBudgetAgorot;
+                  return live != null
+                    ? <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.fieldLiveBudgetNote.replace("{amount}", String(live / 100))}</p>
+                    : null;
+                })()}
               </div>
+              {form.destinationType === "whatsapp" ? (
+                <div className="field"><label>{w.fieldWhatsappDestination} *</label>
+                  <input required value={form.whatsappDestination} onChange={(e) => setForm({ ...form, whatsappDestination: e.target.value })} placeholder="972…" /></div>
+              ) : (
+                <>
+                  <div className="field"><label>{w.fieldLeadEventTypes} *</label>
+                    <input required value={form.leadEventTypes} onChange={(e) => setForm({ ...form, leadEventTypes: e.target.value })} /></div>
+                  <div className="field"><label>{w.fieldPixelId} *</label>
+                    <input required value={form.trackingPixelId} onChange={(e) => setForm({ ...form, trackingPixelId: e.target.value })} /></div>
+                  <div className="field">
+                    <label>{w.fieldWebsiteUrl} *</label>
+                    <input required value={form.websiteUrl} onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })} placeholder="https://…?utm_source=meta&utm_medium=cpc&utm_campaign=…" />
+                    <p className="muted" style={{ fontSize: "0.75rem", marginTop: 4 }}>{w.fieldWebsiteUrlUtmNote}</p>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
 
-        <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={provisioning || pageIdUnverified()} onClick={submitProvision}>
-          {w.provisionSubmit}
-        </button>
-        {pageIdUnverified() && <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>{w.errorPageNotVerified}</p>}
+        {!noCampaignsForSelectedAccount && (
+          <>
+            <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={provisioning || pageIdUnverified()} onClick={submitProvision}>
+              {w.provisionSubmit}
+            </button>
+            {pageIdUnverified() && <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>{w.errorPageNotVerified}</p>}
+          </>
+        )}
 
         {provisionBlocked && (
           <div style={{ marginTop: 10 }}>

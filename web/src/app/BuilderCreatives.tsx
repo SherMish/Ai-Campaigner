@@ -65,6 +65,12 @@ interface Props {
   whatsappNumber?: string;
   destination?: string;
   destinationUrl?: string;
+  // AIC-105 Branch A: present when Builder.tsx is reused in admin mode (an
+  // operator building on a customer's behalf) — threaded into the default
+  // getPosts/uploadFile/createCreativeFn below so they hit the admin-mounted
+  // routes instead of the customer's own. Has no effect on a caller that
+  // supplies its own functions (AddContent.tsx never passes this).
+  customerId?: string;
   // AIC-63: injectable so AddContent.tsx can point creative creation at
   // /app/additions/* instead of /app/builder/* — same component and UI,
   // different backend routes. Defaults to the builder's own endpoints.
@@ -74,10 +80,10 @@ interface Props {
 }
 
 export function BuilderCreatives({
-  ads, onChange, localCampaignId, whatsappNumber, destination, destinationUrl,
-  getPosts = getPromotablePosts,
-  uploadFile = uploadCreativeFile,
-  createCreativeFn = (body) => createCreative({ ...body, localCampaignId } as CreateCreativeBody),
+  ads, onChange, localCampaignId, whatsappNumber, destination, destinationUrl, customerId,
+  getPosts = () => getPromotablePosts(customerId),
+  uploadFile = (file) => uploadCreativeFile(file, customerId),
+  createCreativeFn = (body) => createCreative({ ...body, localCampaignId } as CreateCreativeBody, customerId),
 }: Props) {
   const [posts, setPosts] = useState<PromotablePost[] | null>(null);
   const [postsLoading, setPostsLoading] = useState(false);

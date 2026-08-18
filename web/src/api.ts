@@ -469,11 +469,23 @@ export const getAuditLog = (filter: { actorUserId?: string; entityType?: string;
   return api<{ entries: FullAuditEntry[] }>(`/admin/audit${q ? `?${q}` : ""}`);
 };
 // ── Guided campaign builder (AIC-52) ────────────────────────────────────────
-export const getBuilderContext = () => api<{ category: string }>("/app/builder/context");
-export const startBuilder = () => api<{ localCampaignId: string }>("/app/builder/start", { method: "POST" });
+// AIC-105 Branch A: every function below takes an optional customerId — when
+// present, it's an operator building a customer's FIRST campaign on their
+// behalf (an admin-mounted route, admin-token-gated) instead of the
+// customer's own self-serve session. Same shapes, same UI (Builder.tsx and
+// BuilderCreatives.tsx just thread this through) — only WHICH backend route
+// answers changes. `api()` already picks the admin token for any /admin/*
+// path, so nothing else about auth needs to change here.
+function builderBasePath(customerId?: string): string {
+  return customerId ? `/admin/customers/${customerId}/builder` : "/app/builder";
+}
+
+export const getBuilderContext = (customerId?: string) => api<{ category: string }>(`${builderBasePath(customerId)}/context`);
+export const startBuilder = (customerId?: string) =>
+  api<{ localCampaignId: string }>(`${builderBasePath(customerId)}/start`, { method: "POST" });
 
 export interface PromotablePost { id: string; message: string | null; pictureUrl: string | null; createdAt: string; }
-export const getPromotablePosts = () => api<{ posts: PromotablePost[] }>("/app/builder/posts");
+export const getPromotablePosts = (customerId?: string) => api<{ posts: PromotablePost[] }>(`${builderBasePath(customerId)}/posts`);
 
 export type UploadedMedia =
   | { kind: "image"; imageHash: string }
@@ -481,11 +493,11 @@ export type UploadedMedia =
 
 // Bypasses the generic api() helper: it always sets Content-Type: application/json,
 // which would break the multipart boundary a FormData upload needs.
-export async function uploadCreativeFile(file: File): Promise<UploadedMedia> {
+export async function uploadCreativeFile(file: File, customerId?: string): Promise<UploadedMedia> {
   const form = new FormData();
   form.append("file", file);
-  const token = getAuthToken();
-  const res = await fetch("/api/app/builder/upload", {
+  const token = customerId ? (getAdminToken() || getAuthToken()) : getAuthToken();
+  const res = await fetch(`/api${builderBasePath(customerId)}/upload`, {
     method: "POST",
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     body: form,
@@ -522,9 +534,9 @@ export type CreateCreativeBody =
 
 // Bypasses api() too: a 400 here carries {errors: code[]}, not {error: string} —
 // needs its own parsing so CreativeValidationError keeps the codes, not a flattened message.
-export async function createCreative(body: CreateCreativeBody): Promise<{ creativeId: string }> {
-  const token = getAuthToken();
-  const res = await fetch("/api/app/builder/creative", {
+export async function createCreative(body: CreateCreativeBody, customerId?: string): Promise<{ creativeId: string }> {
+  const token = customerId ? (getAdminToken() || getAuthToken()) : getAuthToken();
+  const res = await fetch(`/api${builderBasePath(customerId)}/creative`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify(body),
@@ -554,14 +566,14 @@ export interface BuildCampaignResult {
   metaCampaignId: string;
   adSets: Array<{ clientKey: string; metaAdSetId: string; ads: Array<{ clientKey: string; metaAdId: string }> }>;
 }
-export const buildCampaign = (body: BuildCampaignBody) =>
-  api<BuildCampaignResult>("/app/builder/build", { method: "POST", body: JSON.stringify(body) });
+export const buildCampaign = (body: BuildCampaignBody, customerId?: string) =>
+  api<BuildCampaignResult>(`${builderBasePath(customerId)}/build`, { method: "POST", body: JSON.stringify(body) });
 
 // AIC-89 — the website-destination step's Pixel picker + recency guard.
 export interface PixelOption { id: string; name: string; }
-export const getBuilderPixels = () => api<{ pixels: PixelOption[] }>("/app/builder/pixels");
-export const checkBuilderPixel = (pixelId: string, conversionEvent: string) =>
-  api<{ hasRecentEvents: boolean | null }>("/app/builder/pixel-check", {
+export const getBuilderPixels = (customerId?: string) => api<{ pixels: PixelOption[] }>(`${builderBasePath(customerId)}/pixels`);
+export const checkBuilderPixel = (pixelId: string, conversionEvent: string, customerId?: string) =>
+  api<{ hasRecentEvents: boolean | null }>(`${builderBasePath(customerId)}/pixel-check`, {
     method: "POST",
     body: JSON.stringify({ pixelId, conversionEvent }),
   });

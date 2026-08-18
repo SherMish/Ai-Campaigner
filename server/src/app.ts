@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import cors from "cors";
 import express from "express";
 import { adminRouter } from "./routes/admin.js";
+import { adminBuilderRouter } from "./routes/admin-builder.js";
 import { appRouter } from "./routes/app.js";
 import { authRouter } from "./routes/auth.js";
 import { builderRouter } from "./routes/builder.js";
@@ -71,6 +72,12 @@ export function createApp() {
   api.use("/app/additions", additionsRouter);
   api.use("/app/controls", controlsRouter);
   api.use("/admin", adminRouter);
+  // AIC-105 Branch A — mirrors builderRouter, keyed on an admin-supplied
+  // customerId instead of the caller's own JWT. Mounted alongside adminRouter
+  // (both own /admin, on disjoint route paths) rather than folded into it, so
+  // this file can mirror routes/builder.ts's shape 1:1 without further
+  // bloating an already-large adminRouter.
+  api.use("/admin", adminBuilderRouter);
   app.use("/api", api);
 
   // Single-origin static hosting. `web build` writes the landing page to

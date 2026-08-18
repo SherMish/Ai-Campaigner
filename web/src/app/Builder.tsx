@@ -33,8 +33,22 @@ interface WizardState {
   gender: Gender;
 }
 
-export function Builder() {
+interface Props {
+  // AIC-105 Branch A: present when an operator is building a customer's
+  // FIRST campaign on their behalf (mounted at /admin/customers/:id/builder)
+  // instead of the customer's own self-serve session. Threaded straight into
+  // every api.ts call below — same UI, same 8 steps, only which backend
+  // route answers changes (see api.ts's builderBasePath).
+  customerId?: string;
+  // Admin mode has nowhere sensible to "go home" to — the operator exits
+  // back to the onboarding wizard they launched this from, not the SPA's
+  // customer shell. Defaults to the customer's own /app.
+  onExit?: () => void;
+}
+
+export function Builder({ customerId, onExit }: Props = {}) {
   const nav = useNavigate();
+  const exit = onExit ?? (() => nav("/app"));
   const [phase, setPhase] = useState<"loading" | "not_ready" | "ready" | "error">("loading");
   const [category, setCategory] = useState<BusinessCategory>("other");
   const [localCampaignId, setLocalCampaignId] = useState<string | null>(null);
@@ -53,7 +67,7 @@ export function Builder() {
   const [pixelChecking, setPixelChecking] = useState(false);
 
   useEffect(() => {
-    getBuilderContext()
+    getBuilderContext(customerId)
       .then((ctx) => {
         // Normalize the operator-typed category to a known value so the
         // selector shows a real, correctable option (never a blank/mystery).
@@ -70,10 +84,11 @@ export function Builder() {
           specialCategory: RECOMMENDED_SPECIAL_AD_CATEGORY,
           ageMin: aud.ageMin, ageMax: aud.ageMax, gender: aud.genders,
         });
-        return startBuilder();
+        return startBuilder(customerId);
       })
       .then((r) => { setLocalCampaignId(r.localCampaignId); setPhase("ready"); })
       .catch((e) => setPhase(e instanceof ApiError && e.status === 409 ? "not_ready" : "error"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (phase === "loading") {
@@ -85,7 +100,7 @@ export function Builder() {
         <div className="card">
           <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 8 }}>{b.notReadyTitle}</b>
           <p className="muted" style={{ marginBottom: 16 }}>{b.notReadyBody}</p>
-          <button className="btn btn-primary btn-sm" onClick={() => nav("/app")}>{b.backToAccount}</button>
+          <button className="btn btn-primary btn-sm" onClick={exit}>{b.backToAccount}</button>
         </div>
       </div>
     );
@@ -113,7 +128,7 @@ export function Builder() {
     setPixelRecent(null);
     if (dest === WEBSITE_DESTINATION && pixels === null && !pixelsLoading) {
       setPixelsLoading(true);
-      getBuilderPixels().then((r) => setPixels(r.pixels)).catch(() => setPixels([])).finally(() => setPixelsLoading(false));
+      getBuilderPixels(customerId).then((r) => setPixels(r.pixels)).catch(() => setPixels([])).finally(() => setPixelsLoading(false));
     }
   }
 
@@ -122,7 +137,7 @@ export function Builder() {
   function runPixelCheck(pixelId: string, conversionEvent: string) {
     if (!pixelId || !conversionEvent) { setPixelRecent(null); return; }
     setPixelChecking(true);
-    checkBuilderPixel(pixelId, conversionEvent)
+    checkBuilderPixel(pixelId, conversionEvent, customerId)
       .then((r) => setPixelRecent(r.hasRecentEvents))
       .catch(() => setPixelRecent(null))
       .finally(() => setPixelChecking(false));
@@ -161,7 +176,7 @@ export function Builder() {
         conversionEvent: isWebsite ? wizard.conversionEvent : undefined,
         targeting: { ageMin: wizard.ageMin, ageMax: wizard.ageMax, genders: wizard.gender },
         ads: createdAds.map((a) => ({ clientKey: a.clientKey, name: a.name, creativeId: a.creativeId! })),
-      });
+      }, customerId);
       setBuildResult(result);
     } catch (e) {
       setBuildError(e instanceof ApiError ? e.message : rv.errorGeneric);
@@ -177,7 +192,7 @@ export function Builder() {
           <StatusPill variant="ok">✓</StatusPill>
           <b style={{ fontSize: "1.3rem", display: "block", margin: "14px 0 10px" }}>{rv.successTitle}</b>
           <p className="muted" style={{ marginBottom: 20 }}>{rv.successBody}</p>
-          <button className="btn btn-primary" onClick={() => nav("/app")}>{rv.goHome}</button>
+          <button className="btn btn-primary" onClick={exit}>{rv.goHome}</button>
         </div>
       </div>
     );
@@ -335,7 +350,7 @@ export function Builder() {
             <div>
               <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 12 }}>{b.creatives.title}</b>
               <BuilderCreatives
-                ads={ads} onChange={setAds} localCampaignId={localCampaignId}
+                ads={ads} onChange={setAds} localCampaignId={localCampaignId} customerId={customerId}
                 whatsappNumber={isWebsite ? undefined : wizard.whatsappNumber}
                 destination={isWebsite ? wizard.destination : undefined}
                 destinationUrl={isWebsite ? wizard.destinationUrl : undefined}
@@ -375,7 +390,7 @@ export function Builder() {
             </div>
           )}
         </div>
-        <SupportCard />
+        {!customerId && <SupportCard />}
       </div>
     </div>
   );

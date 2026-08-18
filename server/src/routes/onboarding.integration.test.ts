@@ -276,6 +276,33 @@ d("onboarding wizard routes (AIC-101)", () => {
         `SELECT page_id FROM meta_connections WHERE id = $1`, [res.body.result.connectionId]);
       expect(conn.rows[0].page_id).toBe(PAGE);
     });
+
+    // AIC-105 Branch A: a customer with zero campaigns on their ad account —
+    // the step-4 picker's "no campaigns found" case. The operator connects
+    // the account alone here; the builder wizard creates the actual campaign
+    // (and its managed_campaigns row) afterward.
+    it("AIC-105 Branch A: provisions the connection alone when no campaign is given yet", async () => {
+      const id = await seedCustomer("provnocamp");
+      vi.stubGlobal("fetch", fakeGraph({}));
+      const res = await request(app).post(`/api/admin/customers/${id}/onboarding/provision`)
+        .set("Authorization", ADMIN).send({ metaAdAccountId: ACCT, systemUserId: "122103498795426897" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.result.connectionId).toBeTruthy();
+      expect(res.body.result.campaignId).toBeNull();
+      const camps = await pool.query(`SELECT id FROM managed_campaigns WHERE customer_id = $1`, [id]);
+      expect(camps.rows).toHaveLength(0);
+      const acct = await pool.query(`SELECT id FROM ad_accounts WHERE connection_id = $1`, [res.body.result.connectionId]);
+      expect(acct.rows).toHaveLength(1);
+    });
+
+    it("400s a campaign missing campaignName, even with metaCampaignId present — never half a campaign row", async () => {
+      const id = await seedCustomer("provhalfcamp");
+      vi.stubGlobal("fetch", fakeGraph({}));
+      const res = await request(app).post(`/api/admin/customers/${id}/onboarding/provision`)
+        .set("Authorization", ADMIN).send(body({ campaignName: undefined }));
+      expect(res.status).toBe(400);
+    });
   });
 
   // AIC-105 Branch B — "pick, don't type": step 4's ad-account and campaign

@@ -159,10 +159,19 @@ export interface ProvisionInput {
   // written at all.
   pageId?: string | null;
   instagramId?: string | null;
-  metaCampaignId: string;
-  campaignName: string;
+  // AIC-105 Branch A: every field below is optional AS A UNIT, keyed off
+  // metaCampaignId. Omitted entirely means "connect the account only — this
+  // customer has no Meta campaign yet" (the wizard's picker returned zero
+  // results). That's not a degraded case: it's the exact precondition
+  // resolveBuilderContextForCustomer checks — a healthy connection with no
+  // campaign row, ready for the operator to launch the builder and create the
+  // customer's FIRST campaign, which writes managed_campaigns itself via
+  // startBuilderCampaign/buildCampaignOnMeta. Provide metaCampaignId without
+  // campaignName (or vice versa) and this throws — never half a campaign row.
+  metaCampaignId?: string;
+  campaignName?: string;
   objective?: string;
-  agreedBudgetAgorot: number;
+  agreedBudgetAgorot?: number;
   budgetPeriod?: "daily" | "monthly";
   leadEventTypes?: string[] | null;
   trackingPixelId?: string | null;
@@ -176,7 +185,7 @@ export interface ProvisionInput {
   // time. Drives which of the fields above are actually required (see the
   // shared CAMPAIGN_TYPE_REQUIRED_FIELDS table) and what lead_event_types
   // defaults to when left blank.
-  destinationType: "whatsapp" | "website";
+  destinationType?: "whatsapp" | "website";
   // AIC-103: found live — this was NEVER a field on the provisioning form at
   // all, so every WhatsApp campaign provisioned through this wizard got
   // whatsapp_destination = '' (the column's own NOT NULL DEFAULT) regardless
@@ -212,7 +221,10 @@ export class IncompleteProvisioningError extends Error {
 export interface ProvisionResult {
   connectionId: string;
   adAccountRowId: string;
-  campaignId: string;
+  // AIC-105 Branch A: null exactly when the connection was provisioned
+  // without a campaign — never a placeholder id, so a caller can't mistake
+  // "no campaign yet" for "campaign zero".
+  campaignId: string | null;
   pageIdSaved: boolean;
 }
 
@@ -241,16 +253,33 @@ export async function provisionConnection(
     }
   }
 
+  // AIC-105 Branch A: metaCampaignId/campaignName travel together or not at
+  // all. A caller with one and not the other is a bug in the route layer,
+  // not a legal "half campaign" — fail loudly rather than writing a
+  // managed_campaigns row with a null meta_campaign_id.
+  const hasCampaign = !!input.metaCampaignId;
+  if (hasCampaign !== !!input.campaignName) {
+    throw new Error("metaCampaignId and campaignName must be provided together, or both omitted");
+  }
+  if (hasCampaign && !Number.isInteger(input.agreedBudgetAgorot)) {
+    throw new Error("agreedBudgetAgorot must be a positive integer when metaCampaignId is provided");
+  }
+
   // AIC-103: refuse an incomplete campaign BEFORE it's ever written, not
   // discover it later off a customer's raw 409. Same table, same check
-  // resolveAdditionAvailability uses at read time — one definition.
-  const missing = missingRequiredFields(input.destinationType === "whatsapp" ? FIXED_DESTINATION : WEBSITE_DESTINATION, {
-    whatsappDestination: input.whatsappDestination ?? null,
-    websiteUrl: input.websiteUrl ?? null,
-    trackingPixelId: input.trackingPixelId ?? null,
-    leadEventTypes: input.leadEventTypes ?? null,
-  });
-  if (missing.length > 0) throw new IncompleteProvisioningError(input.destinationType, missing);
+  // resolveAdditionAvailability uses at read time — one definition. Only
+  // applies when a campaign is actually being provisioned; connecting the
+  // account alone (Branch A) has no destination to validate yet.
+  if (hasCampaign) {
+    const destinationType = input.destinationType ?? "whatsapp";
+    const missing = missingRequiredFields(destinationType === "whatsapp" ? FIXED_DESTINATION : WEBSITE_DESTINATION, {
+      whatsappDestination: input.whatsappDestination ?? null,
+      websiteUrl: input.websiteUrl ?? null,
+      trackingPixelId: input.trackingPixelId ?? null,
+      leadEventTypes: input.leadEventTypes ?? null,
+    });
+    if (missing.length > 0) throw new IncompleteProvisioningError(destinationType, missing);
+  }
 
   const client = await pool.connect();
   try {
@@ -289,35 +318,43 @@ export async function provisionConnection(
     // such row, so it correctly reports wasBuiltHere: false and gets the
     // honest "we found your campaign on Meta" hero rather than a claim that
     // we built and reviewed it.
-    const camp = await client.query<{ id: string }>(
-      `INSERT INTO managed_campaigns
-         (customer_id, ad_account_id, meta_campaign_id, name, status, objective,
-          agreed_budget_agorot, budget_period, lead_event_types, tracking_pixel_id, website_url, whatsapp_destination)
-       VALUES ($1,$2,$3,$4,'active',$5,$6,$7,
-               COALESCE($8::text[], ARRAY['onsite_conversion.messaging_conversation_started_7d',
-                                          'onsite_conversion.messaging_conversation_started']),
-               $9,$10,COALESCE($11,''))
-       RETURNING id`,
-      [
-        input.customerId,
-        adAccountRowId,
-        input.metaCampaignId,
-        input.campaignName,
-        input.objective ?? "leads",
-        input.agreedBudgetAgorot,
-        input.budgetPeriod ?? "daily",
-        input.leadEventTypes ?? null,
-        input.trackingPixelId ?? null,
-        input.websiteUrl ?? null,
-        input.whatsappDestination ?? null,
-      ],
-    );
+    //
+    // AIC-105 Branch A: skipped entirely when there's no campaign yet — the
+    // builder wizard writes this row itself (startBuilderCampaign), once the
+    // operator actually creates one on Meta.
+    let campaignId: string | null = null;
+    if (hasCampaign) {
+      const camp = await client.query<{ id: string }>(
+        `INSERT INTO managed_campaigns
+           (customer_id, ad_account_id, meta_campaign_id, name, status, objective,
+            agreed_budget_agorot, budget_period, lead_event_types, tracking_pixel_id, website_url, whatsapp_destination)
+         VALUES ($1,$2,$3,$4,'active',$5,$6,$7,
+                 COALESCE($8::text[], ARRAY['onsite_conversion.messaging_conversation_started_7d',
+                                            'onsite_conversion.messaging_conversation_started']),
+                 $9,$10,COALESCE($11,''))
+         RETURNING id`,
+        [
+          input.customerId,
+          adAccountRowId,
+          input.metaCampaignId,
+          input.campaignName,
+          input.objective ?? "leads",
+          input.agreedBudgetAgorot,
+          input.budgetPeriod ?? "daily",
+          input.leadEventTypes ?? null,
+          input.trackingPixelId ?? null,
+          input.websiteUrl ?? null,
+          input.whatsappDestination ?? null,
+        ],
+      );
+      campaignId = camp.rows[0].id;
+    }
 
     await client.query("COMMIT");
     return {
       connectionId,
       adAccountRowId,
-      campaignId: camp.rows[0].id,
+      campaignId,
       pageIdSaved: !!input.pageId,
     };
   } catch (e) {

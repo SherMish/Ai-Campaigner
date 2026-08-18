@@ -508,9 +508,15 @@ export const strings = {
       pickCampaignLabel: "קמפיין",
       pickCampaignPlaceholder: "בחרו קמפיין…",
       pickCampaignLoading: "טוענים קמפיינים…",
-      pickCampaignEmpty: "לא נמצאו קמפיינים בחשבון הפרסום הזה. לבנייה של קמפיין ראשון פנו להנדסה — האשף עדיין לא תומך בכך.",
+      pickCampaignEmpty: "לא נמצאו קמפיינים בחשבון הפרסום הזה.",
       pickCampaignError: "לא הצלחנו לטעון את רשימת הקמפיינים.",
       pickRetry: "ניסיון נוסף",
+      // AIC-105 Branch A: the customer's ad account has zero campaigns —
+      // connects the account alone, then hands off to the guided builder
+      // (the same wizard a self-serve customer uses) to create their first
+      // campaign, operator acting on their behalf.
+      startNewCampaignCta: "צור קמפיין חדש",
+      startNewCampaignBusy: "מחברים את החשבון…",
       // Shown once a supported campaign is picked — the destination below
       // was DETECTED from Meta's own ad-set configuration, not guessed.
       pickCampaignDetectedNote: "היעד זוהה אוטומטית מהגדרות הקמפיין ב-Meta.",

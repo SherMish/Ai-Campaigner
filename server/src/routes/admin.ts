@@ -608,22 +608,36 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
   const b = req.body ?? {};
   const pageId = b.pageId ? String(b.pageId).trim() : null;
 
-  if (!b.metaAdAccountId || !b.metaCampaignId || !b.campaignName) {
-    res.status(400).json({ error: "metaAdAccountId, metaCampaignId and campaignName are required" });
+  if (!b.metaAdAccountId) {
+    res.status(400).json({ error: "metaAdAccountId is required" });
     return;
   }
-  const budget = Number(b.agreedBudgetAgorot);
-  if (!Number.isInteger(budget) || budget <= 0) {
-    res.status(400).json({ error: "agreedBudgetAgorot must be a positive integer (agorot)" });
+  // AIC-105 Branch A: a campaign is optional — omitted entirely means
+  // "connect the account only", the precondition for launching the builder
+  // to create the customer's first campaign. metaCampaignId is the
+  // discriminator; campaignName/budget/destinationType are only validated
+  // when it's present.
+  const hasCampaign = !!b.metaCampaignId;
+  if (hasCampaign && !b.campaignName) {
+    res.status(400).json({ error: "campaignName is required when metaCampaignId is provided" });
     return;
   }
-  // AIC-103: not a free-text-with-a-default anymore — the wizard must ask
-  // "where does someone land after clicking your ad?" and get a real answer,
-  // since that answer decides which fields below are actually required.
-  const destinationType = b.destinationType === "website" ? "website" : b.destinationType === "whatsapp" ? "whatsapp" : null;
-  if (!destinationType) {
-    res.status(400).json({ error: "destinationType ('whatsapp' or 'website') is required" });
-    return;
+  let budget: number | undefined;
+  let destinationType: "whatsapp" | "website" | undefined;
+  if (hasCampaign) {
+    budget = Number(b.agreedBudgetAgorot);
+    if (!Number.isInteger(budget) || budget <= 0) {
+      res.status(400).json({ error: "agreedBudgetAgorot must be a positive integer (agorot)" });
+      return;
+    }
+    // AIC-103: not a free-text-with-a-default anymore — the wizard must ask
+    // "where does someone land after clicking your ad?" and get a real
+    // answer, since that answer decides which fields below are required.
+    destinationType = b.destinationType === "website" ? "website" : b.destinationType === "whatsapp" ? "whatsapp" : undefined;
+    if (!destinationType) {
+      res.status(400).json({ error: "destinationType ('whatsapp' or 'website') is required" });
+      return;
+    }
   }
 
   let pageVerdict = null as Awaited<ReturnType<AccessProbe["probeAsset"]>>["verdict"] | null;
@@ -646,8 +660,8 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
       currency: b.currency ? String(b.currency) : null,
       pageId,
       instagramId: b.instagramId ? String(b.instagramId) : null,
-      metaCampaignId: String(b.metaCampaignId),
-      campaignName: String(b.campaignName),
+      metaCampaignId: hasCampaign ? String(b.metaCampaignId) : undefined,
+      campaignName: hasCampaign ? String(b.campaignName) : undefined,
       objective: b.objective ? String(b.objective) : undefined,
       agreedBudgetAgorot: budget,
       budgetPeriod: b.budgetPeriod === "monthly" ? "monthly" : "daily",
@@ -666,7 +680,7 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
       action: "customer.onboarding.provision",
       entityType: "customer",
       entityId: req.params.id,
-      entityLabel: `${b.metaAdAccountId} / ${b.metaCampaignId}`,
+      entityLabel: hasCampaign ? `${b.metaAdAccountId} / ${b.metaCampaignId}` : `${b.metaAdAccountId} (no campaign yet)`,
       // Records whether a page_id was saved AND the verdict that allowed it —
       // so "was the Page genuinely verified when this was provisioned" is
       // answerable later without re-deriving it.

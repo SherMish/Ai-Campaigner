@@ -636,12 +636,47 @@ Page check passes, `form.pageIdForm` is set to the same id, once, without
 overwriting anything the operator already put in the provisioning form
 themselves. One less place to retype the same id twice in one call.
 
-Not in this pass: **Branch A** (no existing campaign — build the first one
-during the call, reusing the customer builder under an operator-acting-as-
-customer mode) is a separate, larger piece touching AIC-66's 3-actor auth
-model, and the wizard's 4-category operator-error-handling taxonomy is applied
-here to the two new routes only, not retrofitted across steps 1–3. Both are
-tracked on [AIC-105](https://linear.app/pisga-app/issue/AIC-105).
+**Branch A — a customer with zero campaigns gets "צור קמפיין חדש", not a dead
+end.** When the campaign picker's `campaigns` array comes back empty for the
+picked ad account, the whole campaign-specific part of the form
+(destination type, campaign name, budget, WhatsApp/website fields) hides —
+none of it applies yet — and a single button replaces it. Clicking it:
+
+1. Calls the SAME `POST .../onboarding/provision` endpoint, but with every
+   campaign field omitted. `provisionConnection` (`customer-onboarding.ts`)
+   treats `metaCampaignId` as the discriminator: absent means "connect the
+   account only" — it writes `meta_connections` + `ad_accounts` and skips the
+   `managed_campaigns` insert entirely (`campaignId: null` in the result).
+   `metaCampaignId` and `campaignName` travel together or not at all — one
+   without the other throws, never a half-written campaign row. The page-id
+   hard constraint (AIC-69) is unchanged: a typed-but-unverified page id
+   still refuses the whole request.
+2. Navigates to `/admin/onboarding/:id/builder` — the exact same 8-step
+   guided builder a self-serve customer uses for their own first campaign
+   (`app/Builder.tsx`), reused wholesale rather than rebuilt. Every builder
+   API call in `web/src/api.ts` takes an optional `customerId`; when present
+   it hits `/admin/customers/:id/builder/*` (new `admin-builder.ts` router,
+   mirroring `routes/builder.ts`'s 8 routes 1:1, `requireAdmin`-gated) instead
+   of the customer's own `/app/builder/*` — same request/response shapes,
+   only which backend route answers changes. `resolveBuilderContextForCustomer`
+   (`builder/session.ts`) is the customerId-keyed sibling of the existing
+   userId-keyed resolver, sharing the same readiness check (healthy
+   connection, ad account + Page present, no campaign yet) via one
+   `contextFromRow` helper — so an operator can never reach a state the
+   self-serve path itself would refuse.
+3. The builder's own `POST .../build` is what actually creates the campaign
+   on Meta (PAUSED, same as self-serve) and writes the real `managed_campaigns`
+   row — logged to the admin audit trail (`customer.builder.build`) since this
+   is the one write in the whole builder surface where "which operator did
+   this, for which customer" has to stay answerable, unlike the customer's own
+   builder where the caller IS the customer.
+
+Not built: an "operator acting as customer" identity concept — every admin
+write here threads `Actor` (who, for the audit log) and `customerId` (what)
+as two separate params, same as every other admin route, never merged into a
+combined identity. The wizard's 4-category operator-error-handling taxonomy
+still applies only to steps 1–3's own routes, not retrofitted onto the
+builder mirror. Tracked on [AIC-105](https://linear.app/pisga-app/issue/AIC-105).
 
 **Step 5 finalize runs the real `ConnectionService.verify()`** — the exact
 check the recommendation engine's own tick relies on — and only marks

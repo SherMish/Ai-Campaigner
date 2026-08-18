@@ -6,6 +6,60 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — AIC-105 Branch A: "צור קמפיין חדש" — a customer with no campaigns gets the real builder, not a dead end
+User reopened the wizard live and hit the exact spot the previous entry
+flagged as the real remaining gap: step 4's campaign picker, empty, saying
+"the wizard doesn't support this yet." Built Branch A.
+
+**Backend.** `resolveBuilderContextForCustomer(pool, customerId)`
+(`server/src/builder/session.ts`) — the customerId-keyed sibling of the
+existing userId-keyed `resolveBuilderContext`, sharing the readiness check
+(healthy connection, ad account + Page, no campaign yet) via one
+`contextFromRow` helper so the two can't silently drift. `provisionConnection`
+(`customer-onboarding.ts`) now treats every campaign field as optional AS A
+UNIT, keyed on `metaCampaignId`'s presence: omitted means "connect the
+account only" (skips the `managed_campaigns` insert, `campaignId: null` in
+the result); provided without `campaignName` throws, never a half-written
+campaign row. New `server/src/routes/admin-builder.ts` mirrors
+`routes/builder.ts`'s 8 routes 1:1 (`/admin/customers/:id/builder/*`,
+`requireAdmin`), resolving context via the new customerId-keyed resolver
+instead of a JWT; `POST .../build` — the write that actually creates the
+Meta campaign — is logged to the admin audit trail
+(`customer.builder.build`), the one route in the mirror where "which
+operator, for which customer" has to stay answerable.
+
+**Frontend.** No second wizard was built. `Builder.tsx` and
+`BuilderCreatives.tsx` both gained an optional `customerId` prop; every
+builder call in `api.ts` gained a matching optional `customerId` that
+switches its base path between `/app/builder` and
+`/admin/customers/:id/builder` (`api()` already picks the right auth token
+for any `/admin/*` path, so nothing else about auth changes). New
+`AdminBuilder.tsx` wrapper mounts the same `<Builder>` at
+`/admin/onboarding/:id/builder`, supplying `customerId` and an `onExit` that
+returns to the onboarding wizard instead of `/app`. In `AdminOnboarding.tsx`,
+when the campaign picker's list comes back empty for the picked ad account,
+the campaign-specific fields (destination type, name, budget,
+WhatsApp/website) hide and a single "צור קמפיין חדש" button replaces them —
+click provisions the connection alone, then navigates into the builder.
+
+**Verified live** against a real ad account with zero Meta campaigns
+(`act_1573023157816786`, via the Pisga test customer): confirmed the button
+appears exactly when the picker is empty; confirmed the connection-only
+provision write (page-id-absent case correctly left the builder at "not
+ready" — the same Page precondition the self-serve builder already
+enforces; page-id-present case correctly proceeded to a real "step 1" render,
+`SupportCard` correctly suppressed in admin mode); confirmed the local shell
+row it created carries `meta_campaign_id = NULL` — no real Meta write
+happened during verification. Backend: 5 new integration tests
+(`admin-builder.integration.test.ts` + 2 added to
+`onboarding.integration.test.ts` for the connection-only provision path); all
+472 unit tests + every builder/onboarding/admin-builder integration test
+green. Two pre-existing integration failures elsewhere
+(`operator-accounts`'s "last full admin" demote guard,
+`write-outbox`'s drain-once test) reproduce identically on unmodified `master`
+against the shared dev DB — confirmed via `git stash` before writing this —
+unrelated to this change.
+
 ### 2026-08-18 — AIC-105: page-ID save-gate made load-bearing on the client + budget split
 User wrote a fuller spec into AIC-105 for step 4 after confirming Branch A
 (no-campaign-yet) is the real remaining gap. Two pieces shipped now, both

@@ -15,20 +15,37 @@ export interface BuilderContext {
   pageId: string;
 }
 
+interface ReadinessRow {
+  category: string | null;
+  already_has_campaign: boolean;
+  access_health: string | null;
+  ad_account_uuid: string | null;
+  meta_ad_account_id: string | null;
+  page_id: string | null;
+}
+
+// Shared by both resolvers below: a connection with no campaign yet, healthy
+// access, and both an ad account + Page is what "ready to build" MEANS —
+// whether the caller got here via their own JWT or an operator acting on
+// their behalf (AIC-105 Branch A).
+function contextFromRow(customerId: string, r: ReadinessRow | undefined): BuilderContext | null {
+  if (!r || r.already_has_campaign) return null;
+  if (r.access_health !== "ok" || !r.ad_account_uuid || !r.meta_ad_account_id || !r.page_id) return null;
+  return {
+    customerId,
+    category: r.category ?? "",
+    adAccountUuid: r.ad_account_uuid,
+    metaAdAccountId: r.meta_ad_account_id,
+    pageId: r.page_id,
+  };
+}
+
 // Returns null (never throws) when the customer isn't ready to build — no
 // connection, an unhealthy one, missing ad account/Page, or a campaign
 // already exists — so every route can respond with an honest 409 instead of
 // crashing partway through a build or silently creating on a broken account.
 export async function resolveBuilderContext(pool: pg.Pool, userId: string): Promise<BuilderContext | null> {
-  const { rows } = await pool.query<{
-    customer_id: string | null;
-    category: string | null;
-    already_has_campaign: boolean;
-    access_health: string | null;
-    ad_account_uuid: string | null;
-    meta_ad_account_id: string | null;
-    page_id: string | null;
-  }>(
+  const { rows } = await pool.query<{ customer_id: string | null } & ReadinessRow>(
     `SELECT u.customer_id, c.category,
             EXISTS(SELECT 1 FROM managed_campaigns mc WHERE mc.customer_id = u.customer_id AND mc.meta_campaign_id IS NOT NULL) AS already_has_campaign,
             conn.access_health, aa.id AS ad_account_uuid, aa.meta_ad_account_id, conn.page_id
@@ -42,15 +59,30 @@ export async function resolveBuilderContext(pool: pg.Pool, userId: string): Prom
     [userId],
   );
   const r = rows[0];
-  if (!r || !r.customer_id || r.already_has_campaign) return null;
-  if (r.access_health !== "ok" || !r.ad_account_uuid || !r.meta_ad_account_id || !r.page_id) return null;
-  return {
-    customerId: r.customer_id,
-    category: r.category ?? "",
-    adAccountUuid: r.ad_account_uuid,
-    metaAdAccountId: r.meta_ad_account_id,
-    pageId: r.page_id,
-  };
+  if (!r?.customer_id) return null;
+  return contextFromRow(r.customer_id, r);
+}
+
+// AIC-105 Branch A: the same readiness check, keyed on customerId directly
+// instead of a JWT-bound userId — what the admin builder routes use when an
+// operator builds a customer's FIRST campaign on their behalf (a customer
+// with no self-serve login yet, or one on the phone with an operator during
+// onboarding). Never trusts a client-supplied customerId as authorization —
+// every caller sits behind requireAdmin; this only resolves READINESS.
+export async function resolveBuilderContextForCustomer(pool: pg.Pool, customerId: string): Promise<BuilderContext | null> {
+  const { rows } = await pool.query<ReadinessRow>(
+    `SELECT c.category,
+            EXISTS(SELECT 1 FROM managed_campaigns mc WHERE mc.customer_id = c.id AND mc.meta_campaign_id IS NOT NULL) AS already_has_campaign,
+            conn.access_health, aa.id AS ad_account_uuid, aa.meta_ad_account_id, conn.page_id
+     FROM customers c
+     LEFT JOIN meta_connections conn ON conn.customer_id = c.id
+     LEFT JOIN ad_accounts aa ON aa.connection_id = conn.id
+     WHERE c.id = $1
+     ORDER BY aa.created_at ASC
+     LIMIT 1`,
+    [customerId],
+  );
+  return contextFromRow(customerId, rows[0]);
 }
 
 // A local shell row (managed_campaigns) belongs to the caller and only the

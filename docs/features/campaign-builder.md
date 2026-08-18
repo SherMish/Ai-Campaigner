@@ -484,6 +484,25 @@ the pre-existing "we're setting up your account" → `/onboarding` copy,
 unchanged. No permanent sidebar nav entry — reached only via the Home CTA,
 matching the existing `/onboarding` pattern.
 
+**Reused wholesale for an operator building on a customer's behalf (AIC-105
+Branch A)** — the ops console's onboarding wizard (see
+[ops-console.md](ops-console.md)'s step-4 section) launches this exact
+component for a customer with zero existing campaigns. `Builder.tsx` and
+`BuilderCreatives.tsx` both take an optional `customerId` prop; every `api.ts`
+call it makes (`getBuilderContext`, `startBuilder`, `buildCampaign`,
+`getBuilderPixels`, `checkBuilderPixel`, `getPromotablePosts`,
+`uploadCreativeFile`, `createCreative`) takes a matching optional `customerId`
+and, when present, targets `/admin/customers/:id/builder/*`
+(`server/src/routes/admin-builder.ts`, `requireAdmin`-gated) instead of this
+section's `/app/builder/*` — same shapes, same 8 steps, only which backend
+route answers changes. `resolveBuilderContextForCustomer`
+(`server/src/builder/session.ts`) is the customerId-keyed sibling of
+`resolveBuilderContext` above, sharing the identical readiness check via one
+`contextFromRow` helper, so "ready to build" can never mean something
+different for an operator than it does for the customer. No second wizard
+exists or was considered — reuse, not a parallel implementation, was the
+whole point.
+
 **Verification**: `server/src/routes/builder.integration.test.ts` (7 tests —
 full happy path with a mocked `fetch` exercising the real
 `GraphCampaignAdapter` through the real HTTP routes end to end, ownership
