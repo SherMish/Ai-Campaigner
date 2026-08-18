@@ -475,11 +475,25 @@ Settings UI, which is the entire premise of the ticket, so a distinctness
 test (`onboarding-copy.test.ts`) guards against ever collapsing them back
 into one message. `server/src/meta/access-probe.ts` (`AccessProbe`) does the
 actual Graph reads (`client_pages`/`client_ad_accounts` for layer 1,
-`me/accounts` for layer 2 — Pages only, ad accounts have no equivalent edge —
 `debug_token` for layer 3, plus a direct object read as ground truth),
 normalizing ad-account ids with/without the `act_` prefix since Meta returns
 them inconsistently across edges. A network failure is treated as unknown,
-never rendered as a confident denial. `POST .../onboarding/check` (asset +
+never rendered as a confident denial.
+
+**Layer 2 is checked differently per asset kind, and both are real checks —
+found live, this wasn't true for ad accounts until it was fixed.** Pages: the
+self-scoped `GET me/accounts` (asking "which Pages am I on"). Ad accounts:
+Meta exposes no equivalent self-scoped edge, so the SAME fact is checked from
+the object's own side — `GET {ad_account}/assigned_users?business={portfolio}`
+returns everyone the account is shared with, and the check is "does our
+System User id appear in it." Before this, `assignedToSystemUser` was
+hardcoded `null` for every ad-account check — layer 2 was permanently
+unobservable for that asset kind, so an ad account stuck at "not yet assigned"
+could only ever surface as the generic `unreadable_unknown_cause`, never the
+specific, actionable `not_assigned` a Page in the same state gets. Live-
+verified against the real `act_2181076988590009` account (2026-08-18): the
+call returns our System User id with its granted tasks
+(`DRAFT`/`ANALYZE`/`ADVERTISE`/`MANAGE`). `POST .../onboarding/check` (asset +
 Page, step 1) and `POST .../onboarding/token-check` (step 3) persist results
 into `customer_onboarding.checks` (JSONB, merged per-key so checking one
 asset never clobbers another's stored result) — including the checked

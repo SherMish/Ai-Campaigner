@@ -61,7 +61,7 @@ correct while the backend still has zero access:
 | # | Layer | Who does it | Verify with |
 | --- | --- | --- | --- |
 | 1 | Asset **shared to our Business Portfolio** | the **customer**, in *their* Business Settings | `GET /{business}/client_pages` (or `client_ad_accounts`) |
-| 2 | Asset **assigned to the System User** inside our portfolio | **us** | `GET /me/accounts` (Pages) |
+| 2 | Asset **assigned to the System User** inside our portfolio | **us** | `GET /me/accounts` (Pages); `GET /{ad_account}/assigned_users?business={business}` (ad accounts — Meta has no self-scoped "which ad accounts am I on" edge, so this is checked from the object's own side instead) |
 | 3 | Token carries the right **scopes** | **us**, *at token-generation time* | `GET /debug_token` |
 
 **Layer 3 is the trap.** A System User token's scopes are **frozen when the token
@@ -237,6 +237,10 @@ curl -s "https://graph.facebook.com/$VER/2491237118040524/client_ad_accounts?fie
 curl -s "https://graph.facebook.com/$VER/me/accounts?fields=id,name,tasks" \
   -H "Authorization: Bearer $TOKEN"
 
+# Layer 2 (ad account) — is our System User in THIS account's own assigned_users list?
+curl -s "https://graph.facebook.com/$VER/act_<AD_ACCOUNT_ID>/assigned_users?fields=id,name,tasks&business=2491237118040524" \
+  -H "Authorization: Bearer $TOKEN"
+
 # The exact call the connection health check makes (must return the Page, not error 100)
 curl -s "https://graph.facebook.com/$VER/<PAGE_ID>?fields=id,name" \
   -H "Authorization: Bearer $TOKEN"
@@ -252,8 +256,9 @@ curl -s "https://graph.facebook.com/$VER/act_<AD_ACCOUNT_ID>?fields=name,account
 | --- | --- | --- |
 | `client_pages` empty | 1 | customer hasn't shared the Page — redo step 1 |
 | `client_pages` has it, `/me/accounts` empty, Page read → error 100 | 2 **or** 3 | assign the Page to the System User (step 2); if already assigned, the token lacks Page scopes → regenerate (step 3) |
+| `client_ad_accounts` has it, `assigned_users` doesn't include our System User id, account read → error 100 | 2 **or** 3 | assign the ad account to the System User (step 2); if already assigned, the token lacks `ads_*` scopes → regenerate (step 3) |
 | `debug_token` scopes lack `pages_*` | 3 | regenerate the token; asset assignment alone will never fix this |
-| Page read succeeds | ✅ | safe to set `meta_connections.page_id` |
+| Page/ad-account read succeeds | ✅ | safe to set `meta_connections.page_id` / provision the ad account |
 
 **Order matters:** confirm the Page read succeeds *before* writing `page_id` into
 `meta_connections`. A `page_id` the backend can't read flips the whole connection to

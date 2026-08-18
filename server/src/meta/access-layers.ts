@@ -40,9 +40,11 @@ export type CheckedAsset = "ad_account" | "page";
 export interface AccessObservations {
   // Layer 1: does the asset appear under our portfolio's client_* edge?
   sharedToPortfolio: boolean | null;
-  // Layer 2: does the System User actually see it (/me/accounts for Pages)?
-  // Ad accounts have no /me/accounts equivalent, so this stays null for them
-  // and the direct read below carries the whole weight.
+  // Layer 2: is the asset actually assigned to our System User? Pages: is it
+  // in /me/accounts (self-scoped — "which Pages am I on"). Ad accounts: does
+  // the account's OWN assigned_users list include our System User id (Meta
+  // has no self-scoped equivalent for ad accounts, so this is checked from
+  // the object's side instead — see access-probe.ts).
   assignedToSystemUser: boolean | null;
   // Layer 3: does the token carry the scopes this asset kind needs?
   tokenHasScopes: boolean | null;

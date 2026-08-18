@@ -19,6 +19,10 @@ const BASE = "https://graph.facebook.com";
 export interface AccessProbeDeps {
   token: string;
   businessPortfolioId: string;
+  // AIC-105 follow-up — needed to check the ad-account layer-2 signal (see
+  // adAccountAssignedUserIds below): we're looking FOR this specific id
+  // inside an account's own assigned_users list.
+  systemUserId: string;
   ver?: string;
   // Injectable purely so tests can drive every failure mode without a network.
   fetchImpl?: typeof fetch;
@@ -82,11 +86,30 @@ export class AccessProbe {
     return Array.isArray(data) ? data.map((d) => String(d.id ?? "")) : null;
   }
 
-  // Layer 2 — can the System User actually see the Page? Ad accounts have no
-  // `/me/accounts` equivalent, so this returns null for them and the direct
-  // read carries the weight (reflected in the classifier's ordering).
+  // Layer 2 (Page) — can the System User actually see it? `/me/accounts`
+  // lists every Page the calling identity is associated with.
   private async systemUserPageIds(): Promise<string[] | null> {
     const { ok, body } = await this.get(`me/accounts?fields=id,name,tasks&limit=200`);
+    if (!ok) return null;
+    const data = body.data as Array<{ id?: string }> | undefined;
+    return Array.isArray(data) ? data.map((d) => String(d.id ?? "")) : null;
+  }
+
+  // Layer 2 (ad account) — AIC-105 follow-up. Meta has no self-scoped
+  // "which ad accounts am I assigned to" edge the way Pages have
+  // `/me/accounts`, so this checks the same fact from the other direction:
+  // does THIS SPECIFIC account's own (business-scoped) assigned_users list
+  // include our System User? Live-verified against the real
+  // act_2181076988590009 account (2026-08-18) — returns our System User id
+  // with its granted tasks (DRAFT/ANALYZE/ADVERTISE/MANAGE).
+  //
+  // A failed call (missing permission, transient error) returns null —
+  // unknown, same discipline as every other layer here — never a confident
+  // "not assigned" from an ambiguous read.
+  private async adAccountAssignedUserIds(id: string): Promise<string[] | null> {
+    const { ok, body } = await this.get(
+      `${id}/assigned_users?fields=id&business=${this.deps.businessPortfolioId}`,
+    );
     if (!ok) return null;
     const data = body.data as Array<{ id?: string }> | undefined;
     return Array.isArray(data) ? data.map((d) => String(d.id ?? "")) : null;
@@ -106,10 +129,11 @@ export class AccessProbe {
 
   // One asset, all three layers + the ground-truth read, folded into a verdict.
   async probeAsset(asset: CheckedAsset, id: string): Promise<AssetProbeResult> {
-    const [scopes, shared, suPages, read] = await Promise.all([
+    const [scopes, shared, suPages, suAdAccountUsers, read] = await Promise.all([
       this.tokenScopes(),
       this.sharedIds(asset),
       asset === "page" ? this.systemUserPageIds() : Promise.resolve(null),
+      asset === "ad_account" ? this.adAccountAssignedUserIds(id) : Promise.resolve(null),
       this.directRead(asset, id),
     ]);
 
@@ -122,7 +146,9 @@ export class AccessProbe {
 
     const observations: AccessObservations = {
       sharedToPortfolio: matches(shared),
-      assignedToSystemUser: asset === "page" ? matches(suPages) : null,
+      assignedToSystemUser: asset === "page"
+        ? matches(suPages)
+        : (suAdAccountUsers === null ? null : suAdAccountUsers.includes(this.deps.systemUserId)),
       tokenHasScopes: scopes === null ? null : hasRequiredScopes(asset, scopes),
       directReadOk: read.ok,
     };

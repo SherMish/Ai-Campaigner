@@ -29,7 +29,7 @@ import { listRecommendationsForAdmin, flagRecommendation, unflagRecommendation, 
 import { RECOMMENDATION_STATE, RECOMMENDATION_TYPE, type RecommendationState, type RecommendationType } from "@aic/shared";
 import { AccessProbe } from "../meta/access-probe.js";
 import { REQUIRED_SCOPES, type CheckedAsset } from "../meta/access-layers.js";
-import { OUR_BUSINESS_PORTFOLIO_ID } from "../config/meta-identity.js";
+import { OUR_BUSINESS_PORTFOLIO_ID, OUR_SYSTEM_USER_ID } from "../config/meta-identity.js";
 import {
   getOrCreateOnboarding, setStep, recordCheck, markComplete,
   provisionConnection, PageNotReadableError, IncompleteProvisioningError, CHECK_FOR_ASSET,
@@ -512,7 +512,7 @@ adminRouter.get("/audit", async (req, res) => {
 function probeOrNull(): AccessProbe | null {
   const token = process.env.META_SYSTEM_USER_TOKEN;
   if (!token) return null;
-  return new AccessProbe({ token, businessPortfolioId: OUR_BUSINESS_PORTFOLIO_ID });
+  return new AccessProbe({ token, businessPortfolioId: OUR_BUSINESS_PORTFOLIO_ID, systemUserId: OUR_SYSTEM_USER_ID });
 }
 
 // Current wizard state — resumable: calls get interrupted (the customer has to

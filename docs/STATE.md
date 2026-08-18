@@ -6,6 +6,29 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — AIC-105 follow-up #3: ad accounts get a real layer-2 check, not a permanent null
+User asked "do we check step 2 (assign to System User) somewhere?" while
+reviewing the wizard. Answer, from the actual code: yes for Pages (`GET
+me/accounts`), but for ad accounts `assignedToSystemUser` was hardcoded
+`null` — Meta has no self-scoped "which ad accounts am I on" edge, and no
+alternative had been built, so a not-yet-assigned ad account could only ever
+surface as the generic `unreadable_unknown_cause`, never the specific,
+actionable `not_assigned` a Page in the same state gets.
+
+Researched and found a real fix: `GET {ad_account}/assigned_users?business=
+{portfolio}` — an object-scoped edge, checked from the other direction (does
+THIS account's own assignment list include our System User) — live-verified
+against the real `act_2181076988590009` account before writing any code,
+confirmed it returns our System User id with its granted tasks. `AccessProbe`
+now takes a `systemUserId` dependency and calls this edge for ad-account
+checks; `classifyAccess` itself needed no changes (already asset-agnostic —
+it just never received a real value for this asset kind before). Test-first:
+rewrote the probe test that previously asserted "always null" into cases for
+assigned/not-assigned/call-failure, confirmed they failed against the old
+code, then implemented. Live-verified end-to-end through the real running
+server: the check now returns `assignedToSystemUser: true` for real, not an
+inferred null.
+
 ### 2026-08-18 — AIC-105 follow-up #2: the ad-account pre-select needed a live account list, not a stale one
 User-reported: right after the prior fix shipped, the step-4 picker still
 didn't auto-select — only after a full page reload. Root cause: `adAccounts`

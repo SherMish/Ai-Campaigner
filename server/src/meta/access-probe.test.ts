@@ -15,12 +15,18 @@ const ADS_ONLY = ["ads_read", "ads_management", "business_management"];
 const json = (body: unknown, ok = true) =>
   ({ ok, status: ok ? 200 : 400, json: async () => body }) as unknown as Response;
 
+const SYSTEM_USER = "122103498795426897";
+
 // Routes a fake Graph by URL shape. Each option models one layer's answer.
 function fakeGraph(opts: {
   scopes?: string[] | null;
   clientPages?: string[] | null;
   clientAdAccounts?: string[] | null;
   mePages?: string[] | null;
+  // AIC-105 follow-up — the ad-account layer-2 signal: assigned_users on the
+  // SPECIFIC account, business-scoped. null = the call itself failed
+  // (unknown); an array not containing SYSTEM_USER = genuinely not assigned.
+  adAccountAssignedUsers?: string[] | null;
   readOk?: boolean;
   readError?: string;
 }) {
@@ -38,6 +44,11 @@ function fakeGraph(opts: {
     if (u.includes("me/accounts")) {
       return opts.mePages === null ? json({}, false) : json({ data: (opts.mePages ?? [PAGE]).map((id) => ({ id })) });
     }
+    if (u.includes("assigned_users")) {
+      return opts.adAccountAssignedUsers === null
+        ? json({}, false)
+        : json({ data: (opts.adAccountAssignedUsers ?? [SYSTEM_USER]).map((id) => ({ id })) });
+    }
     // the direct read
     return opts.readOk === false
       ? json({ error: { message: opts.readError ?? "(#100) Requires pages_read_engagement" } }, false)
@@ -46,7 +57,7 @@ function fakeGraph(opts: {
 }
 
 const probe = (fetchImpl: typeof fetch) =>
-  new AccessProbe({ token: "tok", businessPortfolioId: PORTFOLIO, ver: "v21.0", fetchImpl });
+  new AccessProbe({ token: "tok", businessPortfolioId: PORTFOLIO, systemUserId: SYSTEM_USER, ver: "v21.0", fetchImpl });
 
 describe("AccessProbe (AIC-101)", () => {
   it("everything granted → ok", async () => {
@@ -86,8 +97,25 @@ describe("AccessProbe (AIC-101)", () => {
     expect(prefixed.observations.sharedToPortfolio).toBe(true);
   });
 
-  it("ad accounts have no /me/accounts layer — left unknown, not reported as failed", async () => {
+  // AIC-105 follow-up: ad accounts DO have a real layer-2 signal — Meta just
+  // doesn't expose it as a self-scoped "which accounts am I on" edge the way
+  // Pages' /me/accounts does. Checked from the object's own side instead:
+  // GET {ad_account}/assigned_users?business={portfolio} (live-verified
+  // 2026-08-18 against the real act_2181076988590009 account).
+  it("ad account genuinely assigned to our System User → ok", async () => {
     const r = await probe(fakeGraph({})).probeAsset("ad_account", ACCT);
+    expect(r.observations.assignedToSystemUser).toBe(true);
+  });
+
+  it("ad account shared but NOT yet assigned to our System User → layer 2", async () => {
+    const r = await probe(fakeGraph({ adAccountAssignedUsers: [], readOk: false })).probeAsset("ad_account", ACCT);
+    expect(r.observations.assignedToSystemUser).toBe(false);
+    expect(r.verdict.layer).toBe(2);
+    expect(r.verdict.diagnosis).toBe("not_assigned");
+  });
+
+  it("the assigned_users call itself failing is unknown, never a confident denial", async () => {
+    const r = await probe(fakeGraph({ adAccountAssignedUsers: null, readOk: false })).probeAsset("ad_account", ACCT);
     expect(r.observations.assignedToSystemUser).toBeNull();
   });
 
