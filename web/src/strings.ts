@@ -1375,19 +1375,29 @@ export const strings = {
       adSetNameLabel: "שם פנימי לקבוצת המודעות",
       adSetNamePlaceholder: "למשל: נשים 35-55",
 
-      submitAdCta: "הוספת המודעה (מושהית)",
-      submitAdSetCta: "הוספת קבוצת המודעות (מושהית)",
+      // AIC-106: creating content activates it immediately — no more "add it
+      // paused, then separately approve it" two-step. The CTA says what
+      // actually happens now.
+      submitAdCta: "הוספת המודעה",
+      submitAdSetCta: "הוספת קבוצת המודעות",
       submitting: "מוסיף…",
-      submitSuccessTitle: "נוסף במצב מושהה",
-      submitSuccessBody: "מחכה לאישור שלכם למטה כדי להתחיל לרוץ.",
+      submitSuccessTitle: "נוסף ופעיל",
+      submitSuccessBody: "המודעה רצה עכשיו.",
+      // Shown only in the rare case the create succeeded but going live
+      // didn't (a Meta-side hiccup) — the item below still needs one retry.
+      submitSuccessTitleRetry: "נוסף, אבל עדיין לא רץ",
+      submitSuccessBodyRetry: "המודעה נוצרה בהצלחה, אבל היה קושי להפעיל אותה. אפשר לנסות שוב למטה.",
       submitAnother: "הוספת עוד",
       submitError: "משהו השתבש בהוספה. אפשר לנסות שוב — מה שכבר נוצר לא ייווצר פעמיים.",
 
-      pendingTitle: "ממתין לאישור שלכם",
-      pendingEmpty: "אין כרגע תוכן שממתין לאישור.",
-      pendingKindAd: "מודעה חדשה",
-      pendingKindAdSet: "קבוצת מודעות חדשה",
-      approveCta: "אישור והפעלה",
+      // AIC-106: this section is now the exception, not the norm — content
+      // is live the moment it's created. It only ever shows something when
+      // activation itself failed and needs a retry.
+      pendingTitle: "דורש טיפול",
+      pendingEmpty: "הכול פעיל — אין כרגע שום דבר שממתין.",
+      pendingKindAd: "מודעה",
+      pendingKindAdSet: "קבוצת מודעות",
+      approveCta: "ניסיון נוסף להפעלה",
       approving: "מפעיל…",
       approveError: "ההפעלה נכשלה. אפשר לנסות שוב.",
     },

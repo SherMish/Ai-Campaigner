@@ -8,6 +8,7 @@
 
 import type { AdSetMeta } from "../meta/audience-label.js";
 import type { MetaCampaignStatus } from "../launch/types.js";
+import { FakeBuilderWriter, type BuilderWriter } from "../builder/types.js";
 
 export interface AdditionWriter {
   // Live, not cached — a customer picking where to add an ad needs the
@@ -56,4 +57,24 @@ export class FakeAdditionWriter implements AdditionWriter {
     this.activateAdCalls.push(adId);
     this.statuses.set(adId, "ACTIVE");
   }
+}
+
+// AIC-106: add-content now creates AND activates in one call, so its fake has
+// to be both halves. Extends the builder fake (create side) and delegates the
+// activation side to a real FakeAdditionWriter instance, so both sets of
+// assertions (`adCalls`/`adSetCalls` and `activateAdCalls`/`failNextActivateAd`)
+// keep working exactly as they did when the two were used separately.
+export class FakeAddContentWriter extends FakeBuilderWriter implements BuilderWriter, AdditionWriter {
+  public readonly additions = new FakeAdditionWriter();
+
+  get activateAdCalls(): string[] { return this.additions.activateAdCalls; }
+  get activateAdSetCalls(): string[] { return this.additions.activateAdSetCalls; }
+  set failNextActivateAd(n: number) { this.additions.failNextActivateAd = n; }
+  set failNextActivateAdSet(n: number) { this.additions.failNextActivateAdSet = n; }
+
+  getAdSetMeta(metaCampaignId: string): Promise<AdSetMeta[]> { return this.additions.getAdSetMeta(metaCampaignId); }
+  getAdSetStatus(adSetId: string): Promise<MetaCampaignStatus> { return this.additions.getAdSetStatus(adSetId); }
+  getAdStatus(adId: string): Promise<MetaCampaignStatus> { return this.additions.getAdStatus(adId); }
+  activateAdSet(adSetId: string): Promise<void> { return this.additions.activateAdSet(adSetId); }
+  activateAd(adId: string): Promise<void> { return this.additions.activateAd(adId); }
 }

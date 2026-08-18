@@ -212,7 +212,12 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
     expect(res.body).toMatchObject({ campaignName: "IT Campaign", category: "restaurant" });
   });
 
-  it("full add-ad flow: list ad sets → create creative → add ad → pending → approve", async () => {
+  // AIC-106: creating an ad activates it in the SAME request — the pending
+  // list is now the exception (activation-failure recovery), not a required
+  // stop on the way to live. Manually calling /approve afterward is still
+  // exercised here, but only to prove it's a safe idempotent no-op, not a
+  // required second step.
+  it("full add-ad flow: list ad sets → create creative → add ad → live immediately (AIC-106)", async () => {
     const { token, campaignId } = await seedExistingCampaign("add-ad");
     const { fetchMock } = mockMetaFetch([{ id: "as_existing_1", name: "Women 18-45", status: "ACTIVE" }]);
     vi.stubGlobal("fetch", fetchMock);
@@ -233,17 +238,18 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
       .send({ metaAdSetId: "as_existing_1", name: "New Ad", creativeId: creative.body.creativeId, additionKey: "attempt-1" });
     expect(add.status).toBe(200);
     expect(add.body.metaAdSetId).toBe("as_existing_1");
+    expect(add.body.activation).toEqual({ outcome: "approved" }); // live already — no separate click needed
 
+    // Nothing pending: this campaign wasn't a health-check subject and the
+    // create above activated cleanly.
     const pending = await request(app).get("/api/app/additions/pending").set("Authorization", `Bearer ${token}`);
-    expect(pending.body.pending).toHaveLength(1);
-    expect(pending.body.pending[0]).toMatchObject({ kind: "ad", name: "New Ad" });
+    expect(pending.body.pending).toHaveLength(0);
 
+    // A manual /approve after the fact is still safe — idempotent, not a
+    // required step.
     const approve = await request(app).post(`/api/app/additions/${add.body.additionId}/approve`).set("Authorization", `Bearer ${token}`);
     expect(approve.status).toBe(200);
-    expect(approve.body).toEqual({ outcome: "approved" });
-
-    const pendingAfter = await request(app).get("/api/app/additions/pending").set("Authorization", `Bearer ${token}`);
-    expect(pendingAfter.body.pending).toHaveLength(0);
+    expect(approve.body).toEqual({ outcome: "already_approved" });
 
     const camp = await pool.query(`SELECT meta_campaign_id FROM managed_campaigns WHERE id = $1`, [campaignId]);
     expect(camp.rows[0].meta_campaign_id).toBe("meta_camp_existing"); // never touched — no new campaign
@@ -261,7 +267,7 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
     expect(res.status).toBe(404);
   });
 
-  it("full add-ad-set flow: audience + 2 ads → pending → approve activates ad set and both ads", async () => {
+  it("full add-ad-set flow: audience + 2 ads → live immediately, both levels activated (AIC-106)", async () => {
     const { token } = await seedExistingCampaign("add-adset");
     const { fetchMock } = mockMetaFetch();
     vi.stubGlobal("fetch", fetchMock);
@@ -283,9 +289,11 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
       });
     expect(addSet.status).toBe(200);
     expect(addSet.body.metaAdIds).toHaveLength(2);
+    expect(addSet.body.activation).toEqual({ outcome: "approved" }); // ad set AND both ads, live already
 
+    // A manual /approve after the fact is still safe — idempotent, not required.
     const approve = await request(app).post(`/api/app/additions/${addSet.body.additionId}/approve`).set("Authorization", `Bearer ${token}`);
-    expect(approve.body).toEqual({ outcome: "approved" });
+    expect(approve.body).toEqual({ outcome: "already_approved" });
   });
 
   // AIC-65 reached the engine tick but NOT these customer-facing routes — found

@@ -675,6 +675,12 @@ export interface AddResult {
   additionId: string;
   metaAdSetId: string;
   metaAdIds: string[];
+  // AIC-106: creating content activates it immediately — this is the
+  // outcome of THAT activation, not a signal that anything is still
+  // waiting. "approved"/"already_approved" = live now. Anything else means
+  // it exists on Meta but is still paused — surfaced honestly rather than
+  // treated the same as success.
+  activation: { outcome: "approved" | "already_approved" | "not_found" | "failed"; reason?: string };
 }
 export const addAd = (body: AddAdBody) => api<AddResult>("/app/additions/ad", { method: "POST", body: JSON.stringify(body) });
 

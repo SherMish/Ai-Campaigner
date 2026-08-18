@@ -6,6 +6,38 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — AIC-106 (additions half): creating new content goes live immediately, no approval click
+Product decision: approval gates belong only in the recommendation engine
+(pausing/changing something already running) — creating something new
+(campaign, ad, ad set) doesn't need one. Shipped the budget-neutral half
+first: `addAdToExistingCampaign`/`addAdSetToExistingCampaign`
+(`server/src/additions/add-content.ts`) now call `approveAddition`
+internally right after create succeeds, in the same request — a customer
+adding an ad no longer sees or clicks a separate approve step.
+`pending_additions`/`approveAddition` stay, now as the retry path for the
+one failure mode (create succeeded, the follow-up activate call didn't) —
+still idempotent, still safe to retry. Confirmed via code investigation
+(not assumption) that additions carry no spend risk: budget is
+campaign-level CBO, and neither `AddAdInput` nor `AddAdSetInput` has a
+budget field, so new content can only deliver within the campaign's
+existing daily budget, never raise it.
+
+**Held, not shipped, in the same investigation:** the customer launch gate
+(AIC-53) and the admin first-campaign review (AIC-18) are two genuinely
+different mechanisms — confirmed by tracing auth middleware and callers,
+not by name. The admin review stays (an internal quality check, unrelated
+to spend-consent). The launch gate is the other, harder half of AIC-106 and
+is deliberately NOT touched yet: unlike additions, campaign creation
+currently writes `agreed_budget_agorot` (the value that should be the
+spend ceiling) FROM the same customer-typed `dailyBudgetAgorot` it should
+constrain — fully circular, so removing the gate today would leave a
+mistyped budget with no ceiling at all. AIC-106's remaining scope: make the
+create path validate against `agreed_budget_agorot` instead of writing it,
+plus a backfill for campaigns (including Pisga's own) already set
+circularly — only then does removing the launch gate ship safely. Docs:
+[add-content.md](features/add-content.md),
+[campaign-builder.md](features/campaign-builder.md#the-launch-gate-aic-53).
+
 ### 2026-08-18 — AIC-103 follow-up: the fix-it surface the health check needed
 Found immediately on using the shipped health check: the ops console
 correctly reported "חסרים פרטי הגדרה לקמפיין (website_url)" but there was

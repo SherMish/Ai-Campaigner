@@ -47,6 +47,12 @@ export function AddContent() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [justAdded, setJustAdded] = useState(false);
+  // AIC-106: creating content activates it immediately — true in the
+  // overwhelmingly common case. False only means the create itself
+  // succeeded but activation didn't (a rare Meta-side hiccup); the pending
+  // section below still shows it with a retry button, same recovery path
+  // as before, just no longer the normal one.
+  const [justAddedLive, setJustAddedLive] = useState(true);
 
   const [pending, setPending] = useState<PendingAddition[]>([]);
   const [approvingId, setApprovingId] = useState<string | null>(null);
@@ -105,9 +111,12 @@ export function AddContent() {
     setSubmitting(true);
     setSubmitError(null);
     try {
+      let allLive = true;
       for (const draft of created) {
-        await addAd({ metaAdSetId: selectedAdSetId, name: draft.name, creativeId: draft.creativeId!, additionKey: `${additionKey}-${draft.clientKey}` });
+        const result = await addAd({ metaAdSetId: selectedAdSetId, name: draft.name, creativeId: draft.creativeId!, additionKey: `${additionKey}-${draft.clientKey}` });
+        if (result.activation.outcome !== "approved" && result.activation.outcome !== "already_approved") allLive = false;
       }
+      setJustAddedLive(allLive);
       setJustAdded(true);
       refreshPending();
     } catch (e) {
@@ -123,12 +132,13 @@ export function AddContent() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await addAdSet({
+      const result = await addAdSet({
         name: setName,
         targeting: { ageMin: audience.ageMin, ageMax: audience.ageMax, genders: audience.gender },
         ads: created.map((d) => ({ clientKey: d.clientKey, name: d.name, creativeId: d.creativeId! })),
         additionKey,
       });
+      setJustAddedLive(result.activation.outcome === "approved" || result.activation.outcome === "already_approved");
       setJustAdded(true);
       refreshPending();
     } catch (e) {
@@ -252,9 +262,13 @@ export function AddContent() {
 
           {justAdded ? (
             <div className="card">
-              <StatusPill variant="ok">✓</StatusPill>
-              <b style={{ fontSize: "1.2rem", display: "block", margin: "14px 0 10px" }}>{s.submitSuccessTitle}</b>
-              <p className="muted" style={{ marginBottom: 20 }}>{s.submitSuccessBody}</p>
+              <StatusPill variant={justAddedLive ? "ok" : "warn"}>{justAddedLive ? "✓" : "!"}</StatusPill>
+              <b style={{ fontSize: "1.2rem", display: "block", margin: "14px 0 10px" }}>
+                {justAddedLive ? s.submitSuccessTitle : s.submitSuccessTitleRetry}
+              </b>
+              <p className="muted" style={{ marginBottom: 20 }}>
+                {justAddedLive ? s.submitSuccessBody : s.submitSuccessBodyRetry}
+              </p>
               <button className="btn btn-primary btn-sm" onClick={addAnother}>{s.submitAnother}</button>
             </div>
           ) : mode === "ad" ? (

@@ -1,13 +1,18 @@
 // DB integration for adding content to an EXISTING campaign (AIC-63).
 // Requires DATABASE_URL; self-skips otherwise. No real Meta call —
-// FakeBuilderWriter/FakeAdditionWriter stand in; the real adapter shape is
-// verified by campaign-adapter.test.ts.
+// FakeAddContentWriter stands in; the real adapter shape is verified by
+// campaign-adapter.test.ts.
+//
+// AIC-106: adding content no longer waits for an approval click — every
+// create is followed immediately by activation in the same call. The
+// activation MECHANISM (approveAddition) is unchanged and still separately
+// tested below for its idempotency/ownership/failure behaviour, because
+// that's what makes retrying a half-failed create safe.
 import { describe, it, expect, afterAll } from "vitest";
 import { pool } from "../db/pool.js";
 import { addAdToExistingCampaign, addAdSetToExistingCampaign } from "./add-content.js";
 import { approveAddition } from "./approve.js";
-import { FakeBuilderWriter } from "../builder/types.js";
-import { FakeAdditionWriter } from "./types.js";
+import { FakeAddContentWriter, FakeAdditionWriter } from "./types.js";
 
 const HAS_DB = !!process.env.DATABASE_URL;
 const d = HAS_DB ? describe : describe.skip;
@@ -32,9 +37,9 @@ d("add content to an existing campaign (DB)", () => {
     await pool.end();
   });
 
-  it("adds an ad to an EXISTING ad set: creates PAUSED, logs, records a pending approval", async () => {
+  it("adds an ad to an EXISTING ad set: creates PAUSED, then activates it immediately (AIC-106)", async () => {
     const { campaignId } = await makeExistingCampaign("ad-happy");
-    const writer = new FakeBuilderWriter();
+    const writer = new FakeAddContentWriter();
 
     const result = await addAdToExistingCampaign(pool, writer, {
       localCampaignId: campaignId,
@@ -50,17 +55,24 @@ d("add content to an existing campaign (DB)", () => {
     expect(writer.adCalls).toHaveLength(1);
     expect(writer.adSetCalls).toHaveLength(0); // no new ad set — reused the existing one
 
-    const pending = await pool.query(`SELECT kind, meta_ad_set_id, meta_ad_ids, approved_at FROM pending_additions WHERE id = $1`, [result.additionId]);
-    expect(pending.rows[0]).toMatchObject({ kind: "ad", meta_ad_set_id: "as_existing_1" });
-    expect(pending.rows[0].approved_at).toBeNull();
+    // AIC-106: live immediately, no second step.
+    expect(result.activation).toEqual({ outcome: "approved" });
+    expect(writer.activateAdCalls).toEqual(result.metaAdIds);
+    // The ad's PARENT ad set is deliberately NOT activated — it may be paused
+    // on purpose, and adding an ad to it must not silently restart it.
+    expect(writer.activateAdSetCalls).toHaveLength(0);
 
-    const history = await pool.query(`SELECT action_type FROM action_history WHERE campaign_id = $1`, [campaignId]);
-    expect(history.rows.map((r) => r.action_type)).toEqual(["create_ad"]);
+    const pending = await pool.query(`SELECT kind, meta_ad_set_id, approved_at FROM pending_additions WHERE id = $1`, [result.additionId]);
+    expect(pending.rows[0]).toMatchObject({ kind: "ad", meta_ad_set_id: "as_existing_1" });
+    expect(pending.rows[0].approved_at).toBeTruthy(); // approved in the same call
+
+    const history = await pool.query(`SELECT action_type FROM action_history WHERE campaign_id = $1 ORDER BY occurred_at`, [campaignId]);
+    expect(history.rows.map((r) => r.action_type)).toEqual(["create_ad", "activate_ad"]);
   });
 
-  it("adding an ad is idempotent per additionKey: a resubmit never creates a second ad or a second pending row", async () => {
+  it("adding an ad is idempotent per additionKey: a resubmit never creates a second ad, a second row, or re-activates", async () => {
     const { campaignId } = await makeExistingCampaign("ad-idem");
-    const writer = new FakeBuilderWriter();
+    const writer = new FakeAddContentWriter();
     const input = { localCampaignId: campaignId, metaAdAccountId: "act_123", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "same-key" };
 
     const first = await addAdToExistingCampaign(pool, writer, input);
@@ -71,11 +83,15 @@ d("add content to an existing campaign (DB)", () => {
     expect(writer.adCalls).toHaveLength(1);
     const pending = await pool.query(`SELECT id FROM pending_additions WHERE campaign_id = $1`, [campaignId]);
     expect(pending.rows).toHaveLength(1);
+    // The re-run sees an already-approved row and no-ops rather than
+    // re-activating — the same guard that made the manual approve idempotent.
+    expect(second.activation).toEqual({ outcome: "already_approved" });
+    expect(writer.activateAdCalls).toHaveLength(1);
   });
 
-  it("adds an ad set + its ads under the existing campaign — never creates a new campaign", async () => {
+  it("adds an ad set + its ads under the existing campaign — never creates a new campaign, activates both levels", async () => {
     const { campaignId } = await makeExistingCampaign("adset-happy");
-    const writer = new FakeBuilderWriter();
+    const writer = new FakeAddContentWriter();
 
     const result = await addAdSetToExistingCampaign(pool, writer, {
       localCampaignId: campaignId,
@@ -97,13 +113,20 @@ d("add content to an existing campaign (DB)", () => {
     expect(writer.adSetCalls[0].metaCampaignId).toBe("meta_camp_existing");
     expect(writer.adCalls).toHaveLength(2);
 
+    // A live ad set whose ads stayed paused would spend nothing — both levels.
+    expect(result.activation).toEqual({ outcome: "approved" });
+    expect(writer.activateAdSetCalls).toEqual([result.metaAdSetId]);
+    expect(writer.activateAdCalls).toEqual(result.metaAdIds);
+
     const history = await pool.query(`SELECT action_type FROM action_history WHERE campaign_id = $1 ORDER BY occurred_at`, [campaignId]);
-    expect(history.rows.map((r) => r.action_type)).toEqual(["create_ad_set", "create_ad", "create_ad"]);
+    expect(history.rows.map((r) => r.action_type)).toEqual([
+      "create_ad_set", "create_ad", "create_ad", "activate_ad_set", "activate_ad", "activate_ad",
+    ]);
   });
 
   it("a mid-build failure on add-ad-set resumes cleanly: retry only creates what's missing", async () => {
     const { campaignId } = await makeExistingCampaign("adset-resume");
-    const writer = new FakeBuilderWriter();
+    const writer = new FakeAddContentWriter();
     writer.failNextCreateAd = 1;
     const input = {
       localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_existing", pageId: "page_1",
@@ -115,86 +138,67 @@ d("add content to an existing campaign (DB)", () => {
     await expect(addAdSetToExistingCampaign(pool, writer, input)).rejects.toThrow("simulated Meta create-ad failure");
     expect(writer.adSetCalls).toHaveLength(1);
     expect(writer.adCalls).toHaveLength(0);
-    // No pending row yet — only inserted once everything succeeds.
+    // No row yet — only inserted once every create succeeds, so a half-built
+    // addition is never activated.
     expect((await pool.query(`SELECT id FROM pending_additions WHERE campaign_id = $1`, [campaignId])).rows).toHaveLength(0);
+    expect(writer.activateAdSetCalls).toHaveLength(0);
 
     const retry = await addAdSetToExistingCampaign(pool, writer, input);
     expect(retry.metaAdIds).toHaveLength(1);
     expect(writer.adSetCalls).toHaveLength(1); // not recreated
     expect(writer.adCalls).toHaveLength(1);
+    expect(retry.activation).toEqual({ outcome: "approved" });
   });
 
-  it("approving an ad-set addition activates the ad set AND its ads, verifies, logs, marks approved", async () => {
-    const { campaignId } = await makeExistingCampaign("approve-adset");
-    const builderWriter = new FakeBuilderWriter();
-    const added = await addAdSetToExistingCampaign(pool, builderWriter, {
-      localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_existing", pageId: "page_1",
-      name: "Set", targeting: { ageMin: 20, ageMax: 40, genders: [], countries: ["IL"] },
-      ads: [{ clientKey: "ad-1", name: "Ad A", creativeId: "crea_a" }],
-      additionKey: "approve-1",
-    });
+  // AIC-106: creates still succeed when the ACTIVATION half fails — the
+  // objects exist (paused) and the caller is told so, rather than the whole
+  // add being reported as a failure or silently claimed as live.
+  it("a create whose activation fails is reported honestly, and retrying activates it", async () => {
+    const { campaignId } = await makeExistingCampaign("activate-fail");
+    const writer = new FakeAddContentWriter();
+    writer.failNextActivateAd = 1;
 
-    const additionWriter = new FakeAdditionWriter();
-    const result = await approveAddition(pool, additionWriter, added.additionId, campaignId);
-
-    expect(result).toEqual({ outcome: "approved" });
-    expect(additionWriter.activateAdSetCalls).toEqual([added.metaAdSetId]);
-    expect(additionWriter.activateAdCalls).toEqual(added.metaAdIds);
-
-    const pending = await pool.query(`SELECT approved_at FROM pending_additions WHERE id = $1`, [added.additionId]);
-    expect(pending.rows[0].approved_at).toBeTruthy();
-
-    const history = await pool.query(`SELECT action_type FROM action_history WHERE campaign_id = $1 AND action_type LIKE 'activate%' ORDER BY occurred_at`, [campaignId]);
-    expect(history.rows.map((r) => r.action_type)).toEqual(["activate_ad_set", "activate_ad"]);
-  });
-
-  it("approving is idempotent: a second approval is a no-op, never double-activates or double-logs", async () => {
-    const { campaignId } = await makeExistingCampaign("approve-idem");
-    const builderWriter = new FakeBuilderWriter();
-    const added = await addAdToExistingCampaign(pool, builderWriter, {
+    const result = await addAdToExistingCampaign(pool, writer, {
       localCampaignId: campaignId, metaAdAccountId: "act_123", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "a-1",
     });
-    const additionWriter = new FakeAdditionWriter();
 
-    const first = await approveAddition(pool, additionWriter, added.additionId, campaignId);
-    const second = await approveAddition(pool, additionWriter, added.additionId, campaignId);
+    expect(result.metaAdIds).toHaveLength(1); // the ad DID get created
+    expect(result.activation.outcome).toBe("failed");
+    const pending = await pool.query(`SELECT approved_at FROM pending_additions WHERE id = $1`, [result.additionId]);
+    expect(pending.rows[0].approved_at).toBeNull();
 
-    expect(first.outcome).toBe("approved");
+    const retry = await approveAddition(pool, writer, result.additionId, campaignId);
+    expect(retry.outcome).toBe("approved");
+  });
+
+  // ── The activation mechanism itself (unchanged by AIC-106) ───────────────
+  it("approving is idempotent: a second approval is a no-op, never double-activates or double-logs", async () => {
+    const { campaignId } = await makeExistingCampaign("approve-idem");
+    const writer = new FakeAddContentWriter();
+    const added = await addAdToExistingCampaign(pool, writer, {
+      localCampaignId: campaignId, metaAdAccountId: "act_123", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "a-1",
+    });
+
+    // Already activated by the create itself; a further call must no-op.
+    const second = await approveAddition(pool, writer, added.additionId, campaignId);
+
+    expect(added.activation.outcome).toBe("approved");
     expect(second).toEqual({ outcome: "already_approved" });
-    expect(additionWriter.activateAdCalls).toHaveLength(1);
+    expect(writer.activateAdCalls).toHaveLength(1);
   });
 
   it("ownership: approving with the wrong campaignId is refused as not_found", async () => {
     const a = await makeExistingCampaign("owner-a");
     const b = await makeExistingCampaign("owner-b");
-    const builderWriter = new FakeBuilderWriter();
-    const added = await addAdToExistingCampaign(pool, builderWriter, {
+    const writer = new FakeAddContentWriter();
+    const added = await addAdToExistingCampaign(pool, writer, {
       localCampaignId: a.campaignId, metaAdAccountId: "act_123", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "a-1",
     });
-    const additionWriter = new FakeAdditionWriter();
+    const otherWriter = new FakeAdditionWriter();
 
-    const stolen = await approveAddition(pool, additionWriter, added.additionId, b.campaignId);
+    const stolen = await approveAddition(pool, otherWriter, added.additionId, b.campaignId);
 
     expect(stolen.outcome).toBe("not_found");
-    expect(additionWriter.activateAdCalls).toHaveLength(0);
-  });
-
-  it("a failed activation is reported honestly and never marked approved", async () => {
-    const { campaignId } = await makeExistingCampaign("approve-fail");
-    const builderWriter = new FakeBuilderWriter();
-    const added = await addAdToExistingCampaign(pool, builderWriter, {
-      localCampaignId: campaignId, metaAdAccountId: "act_123", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "a-1",
-    });
-    const additionWriter = new FakeAdditionWriter();
-    additionWriter.failNextActivateAd = 1;
-
-    const result = await approveAddition(pool, additionWriter, added.additionId, campaignId);
-
-    expect(result.outcome).toBe("failed");
-    const pending = await pool.query(`SELECT approved_at FROM pending_additions WHERE id = $1`, [added.additionId]);
-    expect(pending.rows[0].approved_at).toBeNull();
-
-    const retry = await approveAddition(pool, additionWriter, added.additionId, campaignId);
-    expect(retry.outcome).toBe("approved");
+    expect(otherWriter.activateAdCalls).toHaveLength(0);
   });
 });

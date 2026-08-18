@@ -641,6 +641,23 @@ actual PAUSED→ACTIVE flip against a real Meta campaign is the consequential
 live write — it's part of AIC-50's still-pending dogfood, deliberately gated
 behind explicit human go-ahead rather than run autonomously.
 
+**Open question, not yet decided or built (AIC-106).** The product decision
+behind [add-content.md](add-content.md)'s AIC-106 change — approval gates
+belong only in the recommendation engine, not on *creating* something new —
+would, if extended here, remove this gate entirely (not "auto-approve",
+gone). It's deliberately **not** applied to this gate yet: unlike additions
+(budget-neutral — see add-content.md), a builder-created campaign's own
+`agreed_budget_agorot` is currently set circularly, FROM the same
+`dailyBudgetAgorot` the customer just typed
+(`builder/campaign-create.ts`'s create SQL), so it enforces no real ceiling —
+removing the one manual checkpoint before spend starts would leave a typo'd
+budget with nothing standing between it and real money. AIC-106 holds this
+half until that's fixed: the create path needs to stop *writing*
+`agreed_budget_agorot` from customer input and start *validating* against a
+value set independently at provisioning, plus a backfill for campaigns
+(including Pisga's own) whose value was already set circularly. Until then,
+this section describes the gate as it still stands.
+
 ### Add to an existing campaign (AIC-63)
 
 The gap the first five tickets left: the builder is hard-scoped to a

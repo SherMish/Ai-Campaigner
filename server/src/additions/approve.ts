@@ -1,7 +1,7 @@
 import type pg from "pg";
 import type { AdditionWriter } from "./types.js";
 
-// Approving an addition (AIC-63) — the same validate → write → read-back-
+// Activating an addition (AIC-63) — the same validate → write → read-back-
 // verify → log discipline as the launch gate (AIC-53's activateCampaign),
 // generalized below campaign level: activating a campaign doesn't activate
 // the ad sets/ads under it, and this is the ONLY path that can.
@@ -10,6 +10,13 @@ import type { AdditionWriter } from "./types.js";
 // setting an already-ACTIVE object to ACTIVE is a harmless no-op) — checking
 // current status before writing means a retry after a partial failure never
 // re-activates or double-logs an object that already landed.
+//
+// AIC-106: this is no longer a separate customer-approval STEP — it now runs
+// immediately after every create (`add-content.ts`), so new content goes live
+// without a second click. The function itself is unchanged and still the one
+// activation path; what changed is only who triggers it and when. It remains
+// separately callable and idempotent, which is what makes retrying a
+// create whose activation half failed safe.
 
 export type ApproveOutcome = "approved" | "already_approved" | "not_found" | "failed";
 

@@ -12,6 +12,7 @@ destination decisions), `server/src/additions/add-content.ts` (orchestration),
 with the builder), `web/src/app/AddContent.tsx` (customer UI).
 
 **Lock-in tests:** `server/src/additions/session.test.ts`,
+`server/src/additions/add-content.integration.test.ts`,
 `server/src/routes/additions.integration.test.ts`,
 `server/src/meta/campaign-adapter.test.ts`.
 
@@ -136,9 +137,44 @@ accidentally inherit a shape it isn't ready to build.
 
 Idempotent through `WriteOutbox` (same mechanism as the builder) keyed by a
 per-item `clientKey`/`additionKey` — a resubmitted request never creates a
-second Meta object. Every ad/ad set is created **PAUSED**; going live is a
-separate approval (`approveAddition`, `pending_additions` table) — never
-automatic.
+second Meta object. Every ad/ad set is created **PAUSED**, then activated
+**immediately, in the same request** (AIC-106): `addAdToExistingCampaign`/
+`addAdSetToExistingCampaign` call `approveAddition` internally right after the
+create succeeds, so a customer adding an ad never sees or clicks a separate
+"approve" step. The response's `activation` field
+(`{outcome: "approved" | "already_approved" | "not_found" | "failed"}`) tells
+the caller whether that activation actually happened — `AddContent.tsx`
+branches on it: `"approved"`/`"already_approved"` shows "live now" copy,
+anything else (the Meta activation call itself failed, even though the
+create succeeded) shows honest "created, but not running yet" copy with a
+retry action, rather than claiming success it can't back up.
+
+**Why no approval step at all, not just a faster one.** Per the product
+decision behind AIC-106: approval gates exist only where the *recommendation
+engine* changes something already running (pausing a creative, moving a
+budget) — creating something new carries no such risk. Concretely here: the
+budget these ads/ad-sets deliver within is the campaign's own existing daily
+budget (Advantage+ CBO, set once at the campaign level — see
+`shared/src/builder/types.ts`'s `dailyBudgetAgorot` comment); neither
+`AddAdInput` nor `AddAdSetInput` has a budget field, so adding content here
+cannot raise what the campaign spends. A second click that only ever meant
+"yes, activate what I just built" was pure friction, not a safety check.
+
+**`pending_additions` and `approveAddition` still exist** — not as the
+primary gate anymore, but as the retry path for the one failure mode above
+(create succeeded, the follow-up activate call didn't): the row records what
+was built and its `approved_at`, and calling `approveAddition` again is safe
+to retry any number of times (idempotent — a second call against an
+already-approved row is a no-op, reported as `already_approved`, never a
+double-activate).
+
+**This is scoped to additions only.** The admin first-campaign review
+(AIC-18, `campaign-review.ts`) and the customer launch gate for a
+newly-built campaign (AIC-53, `customer-launch.ts`) are separate mechanisms,
+untouched by this change — see [campaign-builder.md](campaign-builder.md) for
+the launch gate, which is intentionally still held pending a budget-ceiling
+fix before it can be considered for removal (tracked as the other half of
+AIC-106).
 
 **Ad-set targeting** (age/gender/country) reuses `AudienceFields`, the same
 component and defaults the builder uses (`resolveAudienceDefault`) — one
