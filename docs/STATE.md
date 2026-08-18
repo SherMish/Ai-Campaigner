@@ -6,6 +6,28 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — AIC-105 follow-up: a passing check now remembers WHAT it checked
+Found live on a real customer's onboarding (אבשלום אבורוס): the wizard's
+step-1 ad-account check persisted `ok: true` forever but never the id it was
+true OF, so reopening the wizard showed a green "תקין" pill next to an empty
+field — `detail` was `null` on a passing check, so the id wasn't recoverable
+from anywhere. `StoredCheck` (`server/src/services/customer-onboarding.ts`)
+gains `assetId`; `recordCheck` takes it as a new parameter and all three
+call sites in `routes/admin.ts` pass it through (`null` for the token/
+connection checks, which have no single asset). Test-first: added a case to
+`customer-onboarding.integration.test.ts`, confirmed it failed against the
+pre-fix signature (the new arg landed in the old `at` parameter), then fixed.
+
+Frontend: step 1's `acctId`/`pageId` fields now prefill from the persisted
+`assetId` on load (never overwriting live typing), and — per an explicit
+user request to minimize admin error — step 4's ad-account picker
+auto-selects the SAME account already verified in step 1, once it's
+confirmed present in the freshly-fetched list. An unverified id is never
+forced into the picker; if it's not (yet) in the list, the field is simply
+left for the operator to pick, same as before. Live-verified: ran a fresh
+check via the actual UI, reloaded, confirmed both the step-1 field and the
+step-4 selection populated from the persisted value.
+
 ### 2026-08-18 — AIC-105 Branch B: pick an existing campaign instead of typing its id
 User-reported UX problem: the onboarding wizard's step 4 required typing a
 raw Meta ad-account id and campaign id by hand, plus manually guessing the

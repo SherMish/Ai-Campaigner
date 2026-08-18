@@ -86,6 +86,29 @@ d("customer onboarding (DB)", () => {
       expect(s.checks.page).toMatchObject({ ok: false, layer: 3, diagnosis: "token_missing_scopes" });
     });
 
+    // AIC-105 follow-up, found live on a real customer (אבשלום אבורוס,
+    // 2026-08-18): the stored check carried `ok: true` forever, but never
+    // WHAT was checked — reopening the wizard showed a green "תקין" pill next
+    // to an empty ad-account field. `detail` was `null` on a passing check,
+    // so there was nowhere the id could have been recovered from.
+    it("a passing check remembers WHAT was checked, not just that it passed", async () => {
+      const customerId = await seedCustomer("assetid");
+      await getOrCreateOnboarding(pool, customerId);
+      const s = await recordCheck(pool, customerId, "ad_account", OK, null, "act_2181076988590009");
+      expect(s.checks.ad_account?.assetId).toBe("act_2181076988590009");
+
+      // Survives a reopen exactly like the verdict itself does.
+      const reopened = await getOrCreateOnboarding(pool, customerId);
+      expect(reopened.checks.ad_account?.assetId).toBe("act_2181076988590009");
+    });
+
+    it("a check with no single asset (token, connection) stores assetId as null, not a crash", async () => {
+      const customerId = await seedCustomer("assetidnull");
+      await getOrCreateOnboarding(pool, customerId);
+      const s = await recordCheck(pool, customerId, "token", OK, null, null);
+      expect(s.checks.token?.assetId).toBeNull();
+    });
+
     it("completedAt is only set explicitly — never inferred", async () => {
       const customerId = await seedCustomer("complete");
       await getOrCreateOnboarding(pool, customerId);

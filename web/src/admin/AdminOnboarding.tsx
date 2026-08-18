@@ -27,6 +27,7 @@ interface StoredCheck {
   diagnosis: string;
   detail: string | null;
   at: string;
+  assetId: string | null;
 }
 interface OnboardingState {
   customerId: string;
@@ -145,6 +146,36 @@ export function AdminOnboarding() {
     loadAdAccounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // AIC-105 follow-up, found live on a real customer: a passing check
+  // persisted `ok: true` forever but never WHAT was checked, so reopening the
+  // wizard showed a green "תקין" pill next to an empty field. `recordCheck`
+  // now stores the checked id too — prefill from it here, guarded on the
+  // field still being empty so this never overwrites live typing.
+  useEffect(() => {
+    if (!state) return;
+    const checkedAcct = state.checks.ad_account?.assetId;
+    if (checkedAcct) setAcctId((v) => v || stripActPrefix(checkedAcct));
+    const checkedPage = state.checks.page?.assetId;
+    if (checkedPage) {
+      setPageId((v) => v || checkedPage);
+      setForm((f) => (f.pageIdForm ? f : { ...f, pageIdForm: checkedPage }));
+    }
+  }, [state]);
+
+  // Minimize admin error (user request, 2026-08-18): once the picker's list
+  // has loaded, pre-select the SAME ad account already verified in step 1 —
+  // the operator should never have to re-pick from a list that can contain
+  // another customer's account. Only pre-selects an id genuinely present in
+  // the fetched list; an unverified id is never forced into the picker.
+  useEffect(() => {
+    if (form.metaAdAccountId || !adAccounts || !state) return;
+    const checkedAcct = state.checks.ad_account?.assetId;
+    if (checkedAcct && adAccounts.some((a) => a.id === checkedAcct)) {
+      pickAdAccount(checkedAcct);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adAccounts, state]);
 
   function goToStep(n: number) {
     if (!id) return;
@@ -546,7 +577,7 @@ export function AdminOnboarding() {
         {provisionBlocked && (
           <div style={{ marginTop: 10 }}>
             <p style={{ color: "#c0362c", fontSize: "0.85rem" }}>{w.pageGateBlocked}</p>
-            <CheckResult check={{ ok: false, layer: null, diagnosis: provisionBlocked, detail: null, at: new Date().toISOString() }} />
+            <CheckResult check={{ ok: false, layer: null, diagnosis: provisionBlocked, detail: null, assetId: null, at: new Date().toISOString() }} />
           </div>
         )}
         {provisionResult && <p className="muted" style={{ marginTop: 10, fontSize: "0.85rem" }}>{provisionResult}</p>}

@@ -482,7 +482,13 @@ them inconsistently across edges. A network failure is treated as unknown,
 never rendered as a confident denial. `POST .../onboarding/check` (asset +
 Page, step 1) and `POST .../onboarding/token-check` (step 3) persist results
 into `customer_onboarding.checks` (JSONB, merged per-key so checking one
-asset never clobbers another's stored result).
+asset never clobbers another's stored result) — including the checked
+`assetId` itself, not just the verdict (found live: a passing check
+persisted "ok" forever but never WHAT was ok, so reopening the wizard showed
+a green pill next to an empty field). Step 1's fields, and step 4's
+ad-account picker, prefill from this on load — the picker only auto-selects
+an id it can confirm is genuinely in the freshly-fetched list, never an
+unverified value.
 
 **Step 4 provisioning (AIC-68) is where AIC-69's ordering rule is enforced in
 code, not just documented.** `server/src/services/customer-onboarding.ts`

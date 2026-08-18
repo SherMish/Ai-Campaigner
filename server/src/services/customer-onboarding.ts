@@ -24,6 +24,12 @@ export interface StoredCheck {
   diagnosis: string;
   detail: string | null;
   at: string; // ISO
+  // AIC-105 follow-up: what was actually checked (the "act_…"/Page id typed
+  // into the field). Found live — a passing check persisted `ok: true`
+  // forever, but never the id it was true OF, so reopening the wizard showed
+  // a green "תקין" pill next to an empty input. null for checks with no
+  // single asset id (token, connection).
+  assetId: string | null;
 }
 
 // What recordCheck accepts. Deliberately structural rather than the full
@@ -104,6 +110,7 @@ export async function recordCheck(
   key: OnboardingCheckKey,
   verdict: RecordableVerdict,
   detail: string | null,
+  assetId: string | null = null,
   at: Date = new Date(),
 ): Promise<OnboardingState> {
   const stored: StoredCheck = {
@@ -111,6 +118,7 @@ export async function recordCheck(
     layer: verdict.layer,
     diagnosis: verdict.diagnosis,
     detail,
+    assetId,
     at: at.toISOString(),
   };
   const { rows } = await pool.query<Row>(

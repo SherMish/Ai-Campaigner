@@ -560,7 +560,7 @@ adminRouter.post("/customers/:id/onboarding/check", async (req, res) => {
     await getOrCreateOnboarding(pool, req.params.id);
     const result = await probe.probeAsset(asset, assetId);
     const state = await recordCheck(
-      pool, req.params.id, CHECK_FOR_ASSET[asset], result.verdict, result.detail,
+      pool, req.params.id, CHECK_FOR_ASSET[asset], result.verdict, result.detail, assetId,
     );
     res.json({ result, state });
   } catch (e) {
@@ -593,6 +593,7 @@ adminRouter.post("/customers/:id/onboarding/token-check", async (req, res) => {
       ? { ok: true, layer: null, diagnosis: "ok" }
       : { ok: false, layer: 3, diagnosis: scopes === null ? "unknown" : "token_missing_scopes" },
     scopes === null ? "could not read the token's scopes" : `missing: ${missing!.join(", ") || "none"}`,
+    null, // no single asset id — this checks the token itself
   );
   res.json({ scopes, missing, ok, state });
 });
@@ -778,6 +779,7 @@ adminRouter.post("/customers/:id/onboarding/finalize", async (req, res) => {
       ? { ok: true, layer: null, diagnosis: "ok" }
       : { ok: false, layer: null, diagnosis: `health_${health}` },
     null,
+    null, // no single asset id — this checks the whole connection
   );
   // Only a genuinely verified connection completes the wizard — "onboarded"
   // is never inferred from rows someone created.
