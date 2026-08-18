@@ -6,6 +6,43 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — Page picker: "pick, don't type" for the Page too, and an honest answer to "is it חובה or not"
+User asked why they should be typing a Page id at all when we can already
+read which Pages were shared with us — the same objection AIC-105 Branch B
+answered for ad accounts. Built the Page-side sibling.
+
+`listPages()` on `GraphCampaignAdapter` reads `me/accounts?fields=id,name` —
+the SELF-scoped "what can this System User actually manage" edge already
+proven live in this codebase (`pageAccessToken`, and access-probe's layer-2
+check both use it), deliberately NOT the layer-1-only `client_pages` share
+list access-probe uses to DIAGNOSE a broken connection. A Page appearing in
+this list has therefore already passed both access layers, exactly like the
+ad-account picker's guarantee. New `GET .../onboarding/pages` route; both
+step 1's and step 4's free-text Page fields are now `<select>`s. The
+per-asset "בדיקת עמוד" check still runs on the picked id — picking proves
+layers 1+2, not layer 3 (token scopes) or the direct read.
+
+Also fixed the copy contradiction the user caught in the same breath: the
+field was labeled "מזהה עמוד (לא חובה)" while Branch A had just started
+REQUIRING it. Both are true, for different paths, so the label now says so
+outright — "לחיבור קמפיין קיים — לא חובה. לבניית קמפיין חדש — חובה, כי כל
+מודעה רצה דרך עמוד." Live-verified against the real shared Page
+(`פסגה הכנה חכמה לפסיכומטרי`, 1216278568228263): it loads into both pickers
+and the check passes on the picked value.
+
+**Instagram deliberately NOT given the same treatment — it needs a decision
+first, not a picker.** Found while answering "what about instagram?":
+`meta_connections.instagram_id` is live-verified on every
+`ConnectionService.verify()` (`client.ts`'s `verifyAssetAccess("instagram")`)
+and folded into `worstHealth`, so an unreadable value degrades the WHOLE
+connection — the exact AIC-69 failure class that silently stops the
+recommendation engine. But unlike `page_id` it has **no save-gate**, and
+`instagram_actor_id` appears nowhere in creative creation, so the field
+currently carries that risk while doing nothing. A read-only probe of the
+real Page also shows no linked Instagram account at all. Open question for
+the owner: gate it like `page_id`, or drop the input until Instagram
+placement is actually implemented.
+
 ### 2026-08-18 — AIC-105 Branch A bugfix #2: the button worked, then the builder said "not ready" with no reason why
 User-reported, same live test session as the idempotency fix above: the
 click succeeded this time, but the very next screen (the builder) showed the

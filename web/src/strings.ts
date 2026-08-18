@@ -462,7 +462,6 @@ export const strings = {
 
       // Step 4 — provisioning (AIC-68).
       provisionTitle: "פרטי החיבור",
-      fieldPageId: "מזהה עמוד (לא חובה)",
       fieldInstagramId: "מזהה אינסטגרם (לא חובה)",
       fieldCampaignName: "שם הקמפיין",
       // AIC-106: this is the AGREED ceiling (agreed_budget_agorot), typed by
@@ -508,6 +507,19 @@ export const strings = {
       pickCampaignLabel: "קמפיין",
       pickCampaignPlaceholder: "בחרו קמפיין…",
       pickCampaignLoading: "טוענים קמפיינים…",
+      // The Page picker (user request) — the Page-side sibling of the
+      // ad-account picker, backed by the same "what can the System User
+      // actually manage" read. Replaces a free-text id field in both step 1
+      // and step 4.
+      pickPageLabel: "עמוד פייסבוק",
+      pickPagePlaceholder: "בחרו עמוד…",
+      pickPageLoading: "טוענים עמודים…",
+      pickPageEmpty: "לא נמצאו עמודים שהמערכת יכולה לנהל כרגע. משלימים את שלבים 1–2 עבור העמוד.",
+      pickPageError: "לא הצלחנו לטעון את רשימת העמודים.",
+      // The honest answer to "so is it required or not" — it depends on
+      // which of the two paths this call is on, and saying only "לא חובה"
+      // (its old label) was misleading for the build-a-new-campaign path.
+      pageRequirementNote: "לחיבור קמפיין קיים — לא חובה. לבניית קמפיין חדש — חובה, כי כל מודעה רצה דרך עמוד.",
       pickCampaignEmpty: "לא נמצאו קמפיינים בחשבון הפרסום הזה.",
       pickCampaignError: "לא הצלחנו לטעון את רשימת הקמפיינים.",
       pickRetry: "ניסיון נוסף",

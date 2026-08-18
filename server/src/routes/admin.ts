@@ -739,6 +739,25 @@ adminRouter.get("/customers/:id/onboarding/ad-accounts", async (req, res) => {
   }
 });
 
+// The Page-side sibling of the ad-accounts picker: every Page the System
+// User can currently manage. Deliberately NOT annotated with "already used
+// by customer X" the way ad accounts are — `meta_connections.page_id` has no
+// uniqueness constraint and one Page legitimately backs several customers'
+// campaigns, so there is no conflict to warn about.
+adminRouter.get("/customers/:id/onboarding/pages", async (_req, res) => {
+  const reader = buildCampaignDiscoveryReader();
+  if (!reader) {
+    res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
+    return;
+  }
+  try {
+    res.json({ pages: await reader.listPages() });
+  } catch (e) {
+    console.error("[admin] list pages failed", e);
+    res.status(502).json({ error: "failed to load pages" });
+  }
+});
+
 // Every campaign under one ad account, destination DETECTED per campaign
 // (tracking-health.ts's detectDestination) rather than asked. An unsupported
 // campaign (no ad sets yet, an objective that implies no lead, mixed ad

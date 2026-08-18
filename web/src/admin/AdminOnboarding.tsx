@@ -52,6 +52,10 @@ type DetectedDestination =
   | { supported: true; destinationType: "website"; trackingPixelId: string; leadEventTypes: [string] }
   | { supported: false; reason: "no_ad_sets" | "unrecognized_objective" | "mixed_ad_sets" };
 type UnsupportedReason = Extract<DetectedDestination, { supported: false }>["reason"];
+interface PageOption {
+  id: string;
+  name: string;
+}
 interface DiscoveredCampaign {
   id: string;
   name: string;
@@ -130,6 +134,12 @@ export function AdminOnboarding() {
   const [campaigns, setCampaigns] = useState<DiscoveredCampaign[] | null>(null);
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
   const [campaignsError, setCampaignsError] = useState<string | null>(null);
+  // The Page-side sibling of the ad-account picker (user request): pick from
+  // what the System User can actually manage, instead of transcribing a raw
+  // Page id out of Meta's own screen.
+  const [pages, setPages] = useState<PageOption[] | null>(null);
+  const [loadingPages, setLoadingPages] = useState(false);
+  const [pagesError, setPagesError] = useState<string | null>(null);
 
   const [provisioning, setProvisioning] = useState(false);
   const [provisionResult, setProvisionResult] = useState<string | null>(null);
@@ -151,6 +161,7 @@ export function AdminOnboarding() {
       .then((r) => { setState(r.state); setPortfolioId(r.businessPortfolioId); })
       .catch(() => setError(w.errorGeneric));
     loadAdAccounts();
+    loadPages();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -203,6 +214,16 @@ export function AdminOnboarding() {
       .then((r) => setAdAccounts(r.accounts))
       .catch((e) => setAdAccountsError(e instanceof Error ? e.message : w.pickAdAccountError))
       .finally(() => setLoadingAdAccounts(false));
+  }
+
+  function loadPages() {
+    if (!id) return;
+    setLoadingPages(true);
+    setPagesError(null);
+    api<{ pages: PageOption[] }>(`/admin/customers/${id}/onboarding/pages`)
+      .then((r) => setPages(r.pages))
+      .catch((e) => setPagesError(e instanceof Error ? e.message : w.pickPageError))
+      .finally(() => setLoadingPages(false));
   }
 
   function loadCampaigns(metaAdAccountId: string) {
@@ -522,14 +543,33 @@ export function AdminOnboarding() {
         <CheckResult check={state?.checks.ad_account} />
 
         <div className="row gap16" style={{ marginTop: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <div className="field" style={{ minWidth: 220 }}>
-            <label>{w.fieldPageId}</label>
-            <input value={pageId} onChange={(e) => setPageId(e.target.value)} />
+          <div className="field" style={{ minWidth: 260 }}>
+            <label>{w.pickPageLabel}</label>
+            {/* Same "pick, don't type" move as the step-4 ad-account picker
+                (user request): `me/accounts` lists every Page the System
+                User can actually manage, so the operator can never mistype
+                an id — and a Page that isn't there yet is itself the signal
+                that step 1 or 2 hasn't been done for it. */}
+            <select value={pageId} onChange={(e) => setPageId(e.target.value)} disabled={loadingPages}>
+              <option value="">{w.pickPagePlaceholder}</option>
+              {(pages ?? []).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.id})</option>)}
+            </select>
+            {loadingPages && <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickPageLoading}</p>}
+            {pagesError && (
+              <p style={{ color: "#c0362c", fontSize: "0.78rem", marginTop: 4 }}>
+                {pagesError}{" "}
+                <button type="button" className="btn btn-outline btn-sm" onClick={loadPages}>{w.pickRetry}</button>
+              </p>
+            )}
+            {!loadingPages && !pagesError && pages?.length === 0 && (
+              <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickPageEmpty}</p>
+            )}
           </div>
           <button className="btn btn-outline btn-sm" disabled={checkingAsset !== null || !pageId.trim()} onClick={() => runCheck("page", pageId)}>
             {checkingAsset === "page" ? w.checking : w.checkPage}
           </button>
         </div>
+        <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>{w.pageRequirementNote}</p>
         <CheckResult check={state?.checks.page} />
       </div>
 
@@ -627,8 +667,17 @@ export function AdminOnboarding() {
               <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickAdAccountEmpty}</p>
             )}
           </div>
-          <div className="field"><label>{w.fieldPageId}</label>
-            <input value={form.pageIdForm} onChange={(e) => setForm({ ...form, pageIdForm: e.target.value })} /></div>
+          <div className="field">
+            <label>{w.pickPageLabel}</label>
+            <select
+              value={form.pageIdForm}
+              onChange={(e) => setForm({ ...form, pageIdForm: e.target.value })}
+              disabled={loadingPages}
+            >
+              <option value="">{w.pickPagePlaceholder}</option>
+              {(pages ?? []).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.id})</option>)}
+            </select>
+          </div>
           <div className="field"><label>{w.fieldInstagramId}</label>
             <input value={form.instagramId} onChange={(e) => setForm({ ...form, instagramId: e.target.value })} /></div>
           <div className="field">

@@ -436,6 +436,32 @@ d("onboarding wizard routes (AIC-101)", () => {
       const res = await request(app).get(`/api/admin/customers/${id}/onboarding/campaigns`).set("Authorization", ADMIN);
       expect(res.status).toBe(400);
     });
+
+    // The Page-side sibling: same "pick, don't type" move, via `me/accounts`
+    // (the self-scoped "what can I manage" edge), not `client_pages` (the
+    // layer-1-only share list access-probe.ts uses to diagnose failures).
+    it("lists Pages the System User can currently manage", async () => {
+      const id = await seedCustomer("disc-pages");
+      vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+        if (String(url).includes("me/accounts")) {
+          return json({ data: [{ id: PAGE, name: "פסגה" }, { id: "999888777", name: "Second Page" }] });
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      }) as unknown as typeof fetch);
+
+      const res = await request(app).get(`/api/admin/customers/${id}/onboarding/pages`).set("Authorization", ADMIN);
+      expect(res.status).toBe(200);
+      expect(res.body.pages).toEqual([{ id: PAGE, name: "פסגה" }, { id: "999888777", name: "Second Page" }]);
+    });
+
+    it("503s honestly for the Pages picker when no META_SYSTEM_USER_TOKEN is configured", async () => {
+      const id = await seedCustomer("disc-pages-notoken");
+      const saved = process.env.META_SYSTEM_USER_TOKEN;
+      delete process.env.META_SYSTEM_USER_TOKEN;
+      const res = await request(app).get(`/api/admin/customers/${id}/onboarding/pages`).set("Authorization", ADMIN);
+      process.env.META_SYSTEM_USER_TOKEN = saved;
+      expect(res.status).toBe(503);
+    });
   });
 
   it("finalize refuses before anything is provisioned", async () => {

@@ -17,7 +17,7 @@ import { shekelToAgorot, resolveDestinationShape } from "@aic/shared";
 import { extractLeads } from "./insights.js";
 import { normalizeAdMedia, type AdMedia, type AdMediaReader, type RawAdMedia } from "./ad-media.js";
 import { detectDestination, type AdSetTrackingConfig, type TrackingReader } from "./tracking-health.js";
-import type { AdAccountOption, DiscoveredCampaign, CampaignDiscoveryReader } from "./campaign-discovery.js";
+import type { AdAccountOption, PageOption, DiscoveredCampaign, CampaignDiscoveryReader } from "./campaign-discovery.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
 // Marketing API. Budgets are read/written in the account currency's MINOR unit,
@@ -307,6 +307,20 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       name: a.name ? String(a.name) : String(a.id),
       currency: a.currency ? String(a.currency) : "ILS",
       accountStatus: typeof a.account_status === "number" ? a.account_status : null,
+    }));
+  }
+
+  // Every Page the System User can currently manage — the Page-side sibling
+  // of listAdAccounts, so the operator picks instead of transcribing a raw
+  // Page id. `me/accounts` is the same edge pageAccessToken and
+  // access-probe.ts's layer-2 check already use, so a Page appearing here is
+  // by definition one both access layers have passed for.
+  async listPages(): Promise<PageOption[]> {
+    const body = await this.get(`me/accounts?fields=id,name&limit=200`);
+    type Raw = { id: string; name?: string };
+    return ((body.data as Raw[]) ?? []).map((p) => ({
+      id: String(p.id),
+      name: p.name ? String(p.name) : String(p.id),
     }));
   }
 

@@ -16,6 +16,11 @@ export interface AdAccountOption {
   accountStatus: number | null;
 }
 
+export interface PageOption {
+  id: string;
+  name: string;
+}
+
 export interface DiscoveredCampaign {
   id: string; // Meta campaign id
   name: string;
@@ -34,6 +39,14 @@ export interface CampaignDiscoveryReader {
   // diagnose a NOT-yet-working connection); this is "can we actually manage
   // it right now", which is exactly what step 4 needs before provisioning.
   listAdAccounts(): Promise<AdAccountOption[]>;
+  // Every Page the System User can currently act on, same "pick, don't type"
+  // move as listAdAccounts and for the same reason: the operator was
+  // hand-copying a raw Page id out of Meta's own screen. Uses `me/accounts`
+  // — the self-scoped "what can I manage" edge, NOT the layer-1-only
+  // `client_pages` share list access-probe.ts uses to DIAGNOSE a broken
+  // connection. Picking from this list therefore already implies layers 1+2
+  // passed, exactly like the ad-account picker.
+  listPages(): Promise<PageOption[]>;
   // Every campaign under one ad account, each with its destination DETECTED
   // (see tracking-health.ts's detectDestination) rather than asked — the
   // ticket's "detect, don't ask" rule for adopting vs. building.

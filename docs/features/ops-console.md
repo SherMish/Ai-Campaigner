@@ -624,6 +624,32 @@ retyped a different id after the last passing check). The server's own
 `PageNotReadableError` refusal is unchanged and remains the real guarantee;
 this only stops the round trip before it starts.
 
+**The Page is a picker too, in both step 1 and step 4.** Same "pick, don't
+type" move as the ad-account field, backed by `listPages()` →
+`me/accounts?fields=id,name`. That edge is the SELF-scoped "what can this
+System User manage" list (already proven live here by `pageAccessToken` and
+access-probe's layer-2 check) — deliberately not the layer-1-only
+`client_pages` share list, which exists to diagnose a BROKEN connection
+rather than enumerate a working one. A Page in this list has already passed
+both access layers; the per-asset "בדיקת עמוד" check still runs on the
+picked id, since picking proves layers 1+2 but not layer 3 (token scopes) or
+the direct read.
+
+**And its label states the real rule, not a half-truth.** It read "מזהה עמוד
+(לא חובה)" — true when ADOPTING an existing campaign, false once Branch A
+started requiring a Page to BUILD one, which is exactly the contradiction an
+operator hit live. The label now carries both cases explicitly rather than
+picking whichever is true more often.
+
+**Instagram is deliberately still a free-text field, pending a decision.**
+`meta_connections.instagram_id` is verified on every
+`ConnectionService.verify()` and folds into `worstHealth` — so a bad value
+degrades the whole connection, the same failure class as AIC-69's page_id
+bug — yet it has no save-gate, and `instagram_actor_id` appears nowhere in
+creative creation, so it currently carries that risk while doing nothing for
+delivery. Giving it a picker would polish a field that arguably shouldn't be
+here; the real choice is gate-it-like-page_id vs. remove-it-until-used.
+
 **The step-1 ad-account field's `act_` prefix is now a fixed, non-typed
 chip**, not part of the placeholder text — the operator types only the
 digits; a pasted value that already includes `act_` (a very likely paste
