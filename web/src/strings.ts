@@ -413,6 +413,11 @@ export const strings = {
         "בוחרים את חשבון הפרסום ואת העמוד, נותנים הרשאות, שומרים.",
       ],
       step2Warning: "זה שלב נפרד משלב 1. עמוד ששותף אבל לא הוקצה למשתמש המערכת בלתי נראה מבחינתנו.",
+      // AIC-101 follow-up: found live — the operator had nowhere to check
+      // whether step 2 actually worked without scrolling back up to step 1's
+      // button. Same check, same result, surfaced again right where the
+      // operator's attention already is after doing the assignment.
+      step2VerifyIntro: "בודקים שוב, אחרי ההקצאה — אותה בדיקה כמו בשלב 1.",
       step3Title: "שלב 3 — בדיקת הרשאות הטוקן",
       step3Sub: "אם הבדיקות למעלה נכשלות למרות ששלבים 1–2 בוצעו, זה כמעט תמיד כאן.",
       step4Title: "שלב 4 — הקמת הרשומות",

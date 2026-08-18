@@ -448,13 +448,27 @@ export function AdminOnboarding() {
         <CheckResult check={state?.checks.page} />
       </div>
 
-      {/* Step 2 — we assign to the System User. No separate check button: the
-          probe above already verifies layer 2 as part of the same call. */}
+      {/* Step 2 — we assign to the System User. Same check as step 1's
+          buttons (one call verifies all three layers, including this one for
+          both asset kinds) — surfaced here too so the operator can confirm
+          the assignment worked without scrolling back up. */}
       <div className="card" style={{ marginTop: 12 }}>
         <b>{w.step2Title}</b>
         <p className="muted" style={{ fontSize: "0.85rem" }}>{w.step2Sub}</p>
         {w.step2Script.map((line, i) => <p key={i} style={{ marginTop: i === 0 ? 10 : 6 }}>{line}</p>)}
         <p className="muted" style={{ fontSize: "0.8rem", marginTop: 10 }}>⚠️ {w.step2Warning}</p>
+
+        <p className="muted" style={{ fontSize: "0.85rem", marginTop: 16 }}>{w.step2VerifyIntro}</p>
+        <div className="row gap16" style={{ marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <button className="btn btn-outline btn-sm" disabled={checkingAsset !== null || !acctId.trim()} onClick={() => runCheck("ad_account", `${ACT_PREFIX}${acctId}`)}>
+            {checkingAsset === "ad_account" ? w.checking : w.checkAdAccount}
+          </button>
+          <button className="btn btn-outline btn-sm" disabled={checkingAsset !== null || !pageId.trim()} onClick={() => runCheck("page", pageId)}>
+            {checkingAsset === "page" ? w.checking : w.checkPage}
+          </button>
+        </div>
+        <CheckResult check={state?.checks.ad_account} />
+        <CheckResult check={state?.checks.page} />
       </div>
 
       {/* Step 3 — token scope check. The one failure assignment can never fix. */}

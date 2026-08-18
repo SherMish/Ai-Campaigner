@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — AIC-101 follow-up: step 2's card has nowhere to click "verify" — now it does
+User-reported: even after the previous fix made the ad-account layer-2 check
+real, step 2's own card in `AdminOnboarding.tsx` had no check button at all —
+the only way to see if the assignment worked was to scroll back up to step
+1's button. Added a "בודקים שוב, אחרי ההקצאה" section directly in step 2's
+card with its own ad-account/Page check buttons — reusing the exact same
+`runCheck` calls and `CheckResult` display step 1 already has (same shared
+`state.checks`, so a check run from either card updates both). Live-verified:
+clicked the button from step 2's card, confirmed the same real "תקין" result
+appeared in both cards.
+
 ### 2026-08-18 — AIC-105 follow-up #3: ad accounts get a real layer-2 check, not a permanent null
 User asked "do we check step 2 (assign to System User) somewhere?" while
 reviewing the wizard. Answer, from the actual code: yes for Pages (`GET
