@@ -739,19 +739,26 @@ adminRouter.get("/customers/:id/onboarding/ad-accounts", async (req, res) => {
   }
 });
 
-// The Page-side sibling of the ad-accounts picker: every Page the System
-// User can currently manage. Deliberately NOT annotated with "already used
-// by customer X" the way ad accounts are — `meta_connections.page_id` has no
-// uniqueness constraint and one Page legitimately backs several customers'
-// campaigns, so there is no conflict to warn about.
-adminRouter.get("/customers/:id/onboarding/pages", async (_req, res) => {
+// The Page-side sibling of the ad-accounts picker, SCOPED to one ad account
+// (`metaAdAccountId` required, same shape as the campaigns route below).
+// The scoping is the point: an unscoped list offered one customer's Page
+// while another customer's account was selected — found live. Deliberately
+// NOT annotated with "already used by customer X" the way ad accounts are:
+// `meta_connections.page_id` has no uniqueness constraint and one Page
+// legitimately backs several customers, so there is no conflict to warn about.
+adminRouter.get("/customers/:id/onboarding/pages", async (req, res) => {
+  const metaAdAccountId = String(req.query.metaAdAccountId ?? "").trim();
+  if (!metaAdAccountId) {
+    res.status(400).json({ error: "metaAdAccountId is required" });
+    return;
+  }
   const reader = buildCampaignDiscoveryReader();
   if (!reader) {
     res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
     return;
   }
   try {
-    res.json({ pages: await reader.listPages() });
+    res.json({ pages: await reader.listPages(metaAdAccountId) });
   } catch (e) {
     console.error("[admin] list pages failed", e);
     res.status(502).json({ error: "failed to load pages" });

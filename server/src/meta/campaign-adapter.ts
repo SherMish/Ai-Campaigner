@@ -310,13 +310,17 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     }));
   }
 
-  // Every Page the System User can currently manage — the Page-side sibling
-  // of listAdAccounts, so the operator picks instead of transcribing a raw
-  // Page id. `me/accounts` is the same edge pageAccessToken and
-  // access-probe.ts's layer-2 check already use, so a Page appearing here is
-  // by definition one both access layers have passed for.
-  async listPages(): Promise<PageOption[]> {
-    const body = await this.get(`me/accounts?fields=id,name&limit=200`);
+  // Pages this ONE ad account can promote — the Page-side sibling of
+  // listAdAccounts, scoped to the picked account.
+  //
+  // NOT `me/accounts`: that lists every Page the System User can manage
+  // across all customers, so the picker offered another customer's Page
+  // while this customer's ad account was selected (found live). Meta answers
+  // the actually-useful question on `promote_pages` — verified live
+  // 2026-08-18: act_2181076988590009 → the Pisga Page;
+  // act_1573023157816786 → [].
+  async listPages(adAccountId: string): Promise<PageOption[]> {
+    const body = await this.get(`${adAccountId}/promote_pages?fields=id,name&limit=200`);
     type Raw = { id: string; name?: string };
     return ((body.data as Raw[]) ?? []).map((p) => ({
       id: String(p.id),

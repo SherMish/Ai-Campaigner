@@ -39,14 +39,17 @@ export interface CampaignDiscoveryReader {
   // diagnose a NOT-yet-working connection); this is "can we actually manage
   // it right now", which is exactly what step 4 needs before provisioning.
   listAdAccounts(): Promise<AdAccountOption[]>;
-  // Every Page the System User can currently act on, same "pick, don't type"
-  // move as listAdAccounts and for the same reason: the operator was
-  // hand-copying a raw Page id out of Meta's own screen. Uses `me/accounts`
-  // — the self-scoped "what can I manage" edge, NOT the layer-1-only
-  // `client_pages` share list access-probe.ts uses to DIAGNOSE a broken
-  // connection. Picking from this list therefore already implies layers 1+2
-  // passed, exactly like the ad-account picker.
-  listPages(): Promise<PageOption[]>;
+  // Every Page promotable BY ONE AD ACCOUNT — same "pick, don't type" move as
+  // listAdAccounts, but scoped, which is the whole point. Found live: the
+  // first cut used `me/accounts` (every Page the System User can manage,
+  // across ALL customers), so the picker cheerfully offered one customer's
+  // Page while a different customer's ad account was selected — the exact
+  // "don't let me pick someone else's asset" failure the ad-account picker
+  // exists to prevent. `{ad_account}/promote_pages` is Meta's own answer to
+  // "which Pages can this account actually advertise for", verified live:
+  // act_2181076988590009 returns the Pisga Page, act_1573023157816786
+  // returns [] — the two accounts genuinely differ.
+  listPages(adAccountId: string): Promise<PageOption[]>;
   // Every campaign under one ad account, each with its destination DETECTED
   // (see tracking-health.ts's detectDestination) rather than asked — the
   // ticket's "detect, don't ask" rule for adopting vs. building.

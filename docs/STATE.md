@@ -6,6 +6,32 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-18 — Page picker bugfix: it offered another customer's Page
+Caught by the user minutes after the picker shipped: with
+`act_1573023157816786` selected, the dropdown still suggested
+`פסגה הכנה חכמה לפסיכומטרי` — a Page that account cannot promote.
+
+Root cause: `me/accounts` lists every Page the SYSTEM USER can manage,
+across all customers — it has no notion of which ad account is in play. So
+the picker reintroduced the exact "I don't want to accidentally choose
+someone else's account" risk the ad-account picker was built to remove,
+which is worse than the free-text field it replaced (typing at least
+required knowing the id).
+
+Fixed by scoping to `{ad_account}/promote_pages` — Meta's own "which Pages
+can this account advertise for" edge. Confirmed against the two real
+accounts before writing any code: `act_2181076988590009` → the Pisga Page,
+`act_1573023157816786` → `[]`. The route now requires `metaAdAccountId`
+(400s without it — an unscoped Page list is meaningless), the list refetches
+when the account changes, and a Page selected under a previous account is
+cleared if the new one can't promote it. Empty now states the specific
+truth: "this ad account has no promotable Pages", not "no Pages found".
+
+Live-verified both directions in the browser: the reported account shows an
+empty picker with that message; switching to `act_2181076988590009` brings
+the real Page back. 3 new route tests, including the cross-customer case
+this bug was.
+
 ### 2026-08-18 — Page picker: "pick, don't type" for the Page too, and an honest answer to "is it חובה or not"
 User asked why they should be typing a Page id at all when we can already
 read which Pages were shared with us — the same objection AIC-105 Branch B

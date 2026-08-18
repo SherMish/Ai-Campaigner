@@ -624,16 +624,27 @@ retyped a different id after the last passing check). The server's own
 `PageNotReadableError` refusal is unchanged and remains the real guarantee;
 this only stops the round trip before it starts.
 
-**The Page is a picker too, in both step 1 and step 4.** Same "pick, don't
-type" move as the ad-account field, backed by `listPages()` →
-`me/accounts?fields=id,name`. That edge is the SELF-scoped "what can this
-System User manage" list (already proven live here by `pageAccessToken` and
-access-probe's layer-2 check) — deliberately not the layer-1-only
-`client_pages` share list, which exists to diagnose a BROKEN connection
-rather than enumerate a working one. A Page in this list has already passed
-both access layers; the per-asset "בדיקת עמוד" check still runs on the
-picked id, since picking proves layers 1+2 but not layer 3 (token scopes) or
-the direct read.
+**The Page is a picker too, in both step 1 and step 4 — scoped to the
+selected ad account.** `listPages(adAccountId)` reads
+`{ad_account}/promote_pages`: Meta's own answer to "which Pages can this
+account actually advertise for". The scoping is the entire point. The first
+cut used `me/accounts` (every Page the System User can manage, across ALL
+customers) and was caught live within minutes: with
+`act_1573023157816786` selected, the picker still offered the Pisga Page,
+which that account cannot promote — exactly the "don't let me pick someone
+else's asset" failure the ad-account picker exists to prevent. Verified
+against the real accounts: `act_2181076988590009` → the Pisga Page,
+`act_1573023157816786` → `[]`.
+
+Consequences of the scoping, all deliberate: the route requires
+`metaAdAccountId` (a Page list is meaningless unscoped, so it 400s rather
+than guessing); the list refetches whenever the account changes; a Page
+already selected under a previous account is CLEARED if the new one can't
+promote it (leaving it would recreate the mix-up); and an empty result says
+"this ad account has no promotable Pages" rather than the false "we found no
+Pages". The per-asset "בדיקת עמוד" check still runs on the picked id —
+appearing in this list proves the account/Page pairing, not layer 3 (token
+scopes) or the direct read.
 
 **And its label states the real rule, not a half-truth.** It read "מזהה עמוד
 (לא חובה)" — true when ADOPTING an existing campaign, false once Branch A

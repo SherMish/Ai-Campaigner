@@ -161,7 +161,6 @@ export function AdminOnboarding() {
       .then((r) => { setState(r.state); setPortfolioId(r.businessPortfolioId); })
       .catch(() => setError(w.errorGeneric));
     loadAdAccounts();
-    loadPages();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -195,6 +194,24 @@ export function AdminOnboarding() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adAccounts, state]);
 
+  // Which ad account the Page list is scoped to. Step 4's picked account
+  // wins once set; before that, step 1's typed id is what the operator is
+  // working against. Refetches whenever it changes, and drops a selected
+  // Page that the new account can't promote — leaving a stale one selected
+  // is precisely the cross-customer mix-up this scoping exists to stop.
+  const pageScopeAccount = form.metaAdAccountId || (acctId.trim() ? `${ACT_PREFIX}${acctId.trim()}` : "");
+  useEffect(() => {
+    loadPages(pageScopeAccount);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageScopeAccount]);
+  useEffect(() => {
+    if (!pages) return;
+    const ok = (v: string) => !v || pages.some((p) => p.id === v);
+    if (!ok(pageId)) setPageId("");
+    setForm((f) => (ok(f.pageIdForm) ? f : { ...f, pageIdForm: "" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pages]);
+
   function goToStep(n: number) {
     if (!id) return;
     api<{ state: OnboardingState }>(`/admin/customers/${id}/onboarding/step`, {
@@ -216,11 +233,15 @@ export function AdminOnboarding() {
       .finally(() => setLoadingAdAccounts(false));
   }
 
-  function loadPages() {
-    if (!id) return;
+  // Scoped to ONE ad account, deliberately: an unscoped list offered another
+  // customer's Page while this customer's account was selected (found live).
+  function loadPages(metaAdAccountId: string) {
+    if (!id || !metaAdAccountId) { setPages(null); return; }
     setLoadingPages(true);
     setPagesError(null);
-    api<{ pages: PageOption[] }>(`/admin/customers/${id}/onboarding/pages`)
+    api<{ pages: PageOption[] }>(
+      `/admin/customers/${id}/onboarding/pages?metaAdAccountId=${encodeURIComponent(metaAdAccountId)}`,
+    )
       .then((r) => setPages(r.pages))
       .catch((e) => setPagesError(e instanceof Error ? e.message : w.pickPageError))
       .finally(() => setLoadingPages(false));
@@ -558,10 +579,13 @@ export function AdminOnboarding() {
             {pagesError && (
               <p style={{ color: "#c0362c", fontSize: "0.78rem", marginTop: 4 }}>
                 {pagesError}{" "}
-                <button type="button" className="btn btn-outline btn-sm" onClick={loadPages}>{w.pickRetry}</button>
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => loadPages(pageScopeAccount)}>{w.pickRetry}</button>
               </p>
             )}
-            {!loadingPages && !pagesError && pages?.length === 0 && (
+            {!pageScopeAccount && (
+              <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickPageNeedsAccount}</p>
+            )}
+            {!loadingPages && !pagesError && pageScopeAccount && pages?.length === 0 && (
               <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickPageEmpty}</p>
             )}
           </div>
@@ -672,11 +696,14 @@ export function AdminOnboarding() {
             <select
               value={form.pageIdForm}
               onChange={(e) => setForm({ ...form, pageIdForm: e.target.value })}
-              disabled={loadingPages}
+              disabled={loadingPages || !form.metaAdAccountId}
             >
               <option value="">{w.pickPagePlaceholder}</option>
               {(pages ?? []).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.id})</option>)}
             </select>
+            {!loadingPages && !pagesError && form.metaAdAccountId && pages?.length === 0 && (
+              <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickPageEmpty}</p>
+            )}
           </div>
           <div className="field"><label>{w.fieldInstagramId}</label>
             <input value={form.instagramId} onChange={(e) => setForm({ ...form, instagramId: e.target.value })} /></div>

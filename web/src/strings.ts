@@ -514,7 +514,10 @@ export const strings = {
       pickPageLabel: "עמוד פייסבוק",
       pickPagePlaceholder: "בחרו עמוד…",
       pickPageLoading: "טוענים עמודים…",
-      pickPageEmpty: "לא נמצאו עמודים שהמערכת יכולה לנהל כרגע. משלימים את שלבים 1–2 עבור העמוד.",
+      // Scoped per ad account, so "empty" is a precise statement about THIS
+      // account — not "we found no Pages anywhere".
+      pickPageEmpty: "לחשבון הפרסום הזה אין עמודים שאפשר לפרסם דרכם. משלימים את שלבים 1–2 עבור העמוד, או בוחרים חשבון פרסום אחר.",
+      pickPageNeedsAccount: "בוחרים קודם חשבון פרסום — רשימת העמודים תלויה בו.",
       pickPageError: "לא הצלחנו לטעון את רשימת העמודים.",
       // The honest answer to "so is it required or not" — it depends on
       // which of the two paths this call is on, and saying only "לא חובה"

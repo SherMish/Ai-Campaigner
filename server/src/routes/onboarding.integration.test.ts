@@ -437,28 +437,60 @@ d("onboarding wizard routes (AIC-101)", () => {
       expect(res.status).toBe(400);
     });
 
-    // The Page-side sibling: same "pick, don't type" move, via `me/accounts`
-    // (the self-scoped "what can I manage" edge), not `client_pages` (the
-    // layer-1-only share list access-probe.ts uses to diagnose failures).
-    it("lists Pages the System User can currently manage", async () => {
-      const id = await seedCustomer("disc-pages");
-      vi.stubGlobal("fetch", vi.fn(async (url: string) => {
-        if (String(url).includes("me/accounts")) {
-          return json({ data: [{ id: PAGE, name: "פסגה" }, { id: "999888777", name: "Second Page" }] });
-        }
-        throw new Error(`unexpected fetch ${url}`);
-      }) as unknown as typeof fetch);
+    // The Page-side sibling: same "pick, don't type" move, but SCOPED to the
+    // picked ad account via `{ad_account}/promote_pages` — Meta's own answer
+    // to "which Pages can this account advertise for".
+    const OTHER_ACCT = "act_1573023157816786";
+    function fakePagesGraph() {
+      return vi.fn(async (url: string) => {
+        const u = String(url);
+        // The real live shape (verified 2026-08-18): the two accounts differ.
+        if (u.includes(`${ACCT}/promote_pages`)) return json({ data: [{ id: PAGE, name: "פסגה" }] });
+        if (u.includes(`${OTHER_ACCT}/promote_pages`)) return json({ data: [] });
+        throw new Error(`unexpected fetch ${u}`);
+      }) as unknown as typeof fetch;
+    }
 
-      const res = await request(app).get(`/api/admin/customers/${id}/onboarding/pages`).set("Authorization", ADMIN);
+    it("lists only the Pages the PICKED ad account can promote", async () => {
+      const id = await seedCustomer("disc-pages");
+      vi.stubGlobal("fetch", fakePagesGraph());
+      const res = await request(app)
+        .get(`/api/admin/customers/${id}/onboarding/pages`)
+        .query({ metaAdAccountId: ACCT })
+        .set("Authorization", ADMIN);
       expect(res.status).toBe(200);
-      expect(res.body.pages).toEqual([{ id: PAGE, name: "פסגה" }, { id: "999888777", name: "Second Page" }]);
+      expect(res.body.pages).toEqual([{ id: PAGE, name: "פסגה" }]);
+    });
+
+    // The bug this scoping exists to prevent, found live: an unscoped
+    // `me/accounts` list offered THIS Page while an ad account that cannot
+    // promote it was selected — exactly the "don't let me pick someone
+    // else's asset" failure the ad-account picker exists to avoid.
+    it("returns nothing for an ad account that cannot promote any Page — never another account's Page", async () => {
+      const id = await seedCustomer("disc-pages-scoped");
+      vi.stubGlobal("fetch", fakePagesGraph());
+      const res = await request(app)
+        .get(`/api/admin/customers/${id}/onboarding/pages`)
+        .query({ metaAdAccountId: OTHER_ACCT })
+        .set("Authorization", ADMIN);
+      expect(res.status).toBe(200);
+      expect(res.body.pages).toEqual([]);
+    });
+
+    it("400s when metaAdAccountId is missing — a Page list is meaningless unscoped", async () => {
+      const id = await seedCustomer("disc-pages-noacct");
+      const res = await request(app).get(`/api/admin/customers/${id}/onboarding/pages`).set("Authorization", ADMIN);
+      expect(res.status).toBe(400);
     });
 
     it("503s honestly for the Pages picker when no META_SYSTEM_USER_TOKEN is configured", async () => {
       const id = await seedCustomer("disc-pages-notoken");
       const saved = process.env.META_SYSTEM_USER_TOKEN;
       delete process.env.META_SYSTEM_USER_TOKEN;
-      const res = await request(app).get(`/api/admin/customers/${id}/onboarding/pages`).set("Authorization", ADMIN);
+      const res = await request(app)
+        .get(`/api/admin/customers/${id}/onboarding/pages`)
+        .query({ metaAdAccountId: ACCT })
+        .set("Authorization", ADMIN);
       process.env.META_SYSTEM_USER_TOKEN = saved;
       expect(res.status).toBe(503);
     });
