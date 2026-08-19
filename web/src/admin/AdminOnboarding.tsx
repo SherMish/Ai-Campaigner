@@ -70,6 +70,14 @@ interface DiscoveredCampaign {
 // A raw "act_…" id split into its fixed prefix + the digits the operator
 // actually types — defensive against pasting the full id including the
 // prefix (a very likely paste source: Meta's own URL bar).
+// AIC-108 follow-up (confirmed live 2026-08-19): our Meta App has no
+// Instagram use case, so `instagram_basic` is not even offered when minting a
+// System User token — every Instagram check therefore fails at layer 3
+// (token_missing_scopes) and the save gate refuses it. Flip this to true once
+// the App gains the use case AND the token is re-minted with the scope; the
+// verification + gate underneath are already built and unchanged.
+const INSTAGRAM_SUPPORTED = false;
+
 const ACT_PREFIX = "act_";
 function stripActPrefix(v: string): string {
   return v.trim().startsWith(ACT_PREFIX) ? v.trim().slice(ACT_PREFIX.length) : v.trim();
@@ -741,16 +749,19 @@ export function AdminOnboarding() {
                 style={{ flex: 1, minWidth: 160 }}
                 value={form.instagramId}
                 onChange={(e) => setForm({ ...form, instagramId: e.target.value })}
+                disabled={!INSTAGRAM_SUPPORTED}
               />
               <button
                 type="button" className="btn btn-outline btn-sm"
-                disabled={checkingAsset !== null || !form.instagramId.trim()}
+                disabled={!INSTAGRAM_SUPPORTED || checkingAsset !== null || !form.instagramId.trim()}
                 onClick={() => runCheck("instagram", form.instagramId)}
               >
                 {checkingAsset === "instagram" ? w.checking : w.checkInstagram}
               </button>
             </div>
-            <p className="muted" style={{ fontSize: "0.75rem", marginTop: 4 }}>{w.instagramGateNote}</p>
+            <p className="muted" style={{ fontSize: "0.75rem", marginTop: 4 }}>
+              {INSTAGRAM_SUPPORTED ? w.instagramGateNote : `ℹ️ ${w.instagramUnavailable}`}
+            </p>
             {form.instagramId.trim() && <CheckResult check={state?.checks.instagram} />}
           </div>
           <div className="field">

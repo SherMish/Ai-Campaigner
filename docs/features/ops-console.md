@@ -668,7 +668,26 @@ started requiring a Page to BUILD one, which is exactly the contradiction an
 operator hit live. The label now carries both cases explicitly rather than
 picking whichever is true more often.
 
-**Instagram is gated exactly like the Page (AIC-108).** It had to be:
+**Instagram is currently DISABLED in the form, and the reason is an App
+setting, not a token one.** Confirmed live 2026-08-19: the permission list
+shown when minting a System User token does not contain `instagram_basic` at
+all — Meta's own dialog explains why ("an app admin may need to customize or
+add a use case to this app"). Our Meta App has no Instagram use case, so no
+token minted from it can carry the scope, so we cannot read (let alone list)
+an IG account. Every Instagram check therefore resolves to layer 3
+`token_missing_scopes` and the gate below refuses the save — meaning the
+field was impossible to complete. A field nobody can fill is a trap on a live
+call, so it renders disabled with that reason (AIC-98).
+
+Nothing is lost by this: `instagram_id` has no live consumer, and zero
+connections have one set. To re-enable, add the Instagram use case to the
+Meta App, re-mint the System User token with `instagram_basic` (plus
+`instagram_manage_ads` if IG placements are ever wanted), rotate
+`META_SYSTEM_USER_TOKEN`, and flip `INSTAGRAM_SUPPORTED` in
+`AdminOnboarding.tsx` — the verification and gate below are already built and
+need no change.
+
+**The gate itself is exactly the Page's (AIC-108).** It had to be:
 `ConnectionService.verify()` folds the Instagram read into the *same*
 worst-health-wins aggregation as the Page, and `classifyGraphError` maps both
 realistic failures to `revoked` — confirmed live 2026-08-19, a typo'd id

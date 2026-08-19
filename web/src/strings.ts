@@ -546,6 +546,15 @@ export const strings = {
       // Page, so an unverified one silently stops the engine. Optional to
       // fill; mandatory to verify once filled.
       checkInstagram: "בדיקת אינסטגרם",
+      // AIC-108 follow-up, confirmed live 2026-08-19: the Meta App has no
+      // Instagram use case configured, so `instagram_basic` is not offered
+      // when minting a System User token — the permission list simply does
+      // not contain it. Without that scope we cannot read (let alone list)
+      // an IG account, so ANY id typed here fails at layer 3 and is refused
+      // by the gate below. A field nobody can complete is a trap on a live
+      // call, so it is disabled with the real reason (AIC-98) rather than
+      // left enabled to fail at the end.
+      instagramUnavailable: "לא זמין כרגע: לאפליקציית Meta שלנו אין עדיין use case של אינסטגרם, ולכן ההרשאה instagram_basic לא ניתנת לטוקן — בלעדיה אי אפשר לאמת מזהה אינסטגרם. נדרש שינוי בהגדרות האפליקציה והנפקת טוקן מחדש. אף לקוח לא מושפע: השדה לא בשימוש בשום מקום היום.",
       instagramGateNote: "אפשר להשאיר ריק. אם ממלאים — חייבים לאמת: מזהה שלא נקרא בהצלחה יהפוך את כל החיבור ל־revoked ויעצור את מנוע ההמלצות בשקט, בדיוק כמו מזהה עמוד.",
       errorInstagramNotVerified: "מזהה האינסטגרם שהוקלד לא אומת. מריצים \"בדיקת אינסטגרם\" עם המזהה הזה בדיוק, או משאירים ריק.",
       errorPageRequiredForNewCampaign: "לבניית קמפיין ראשון צריך קודם למלא ולאמת מזהה עמוד (למעלה, שלב 1 או 2).",

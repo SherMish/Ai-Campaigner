@@ -6,6 +6,36 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — Instagram: the field was impossible to complete, and the cause is an App setting
+Follow-up to AIC-108, from the user asking why Instagram has no picker like
+the Page now does. Traced it to the root rather than adding a picker:
+
+- The System User token carries **no Instagram scopes** —
+  `catalog_management, threads_business_basic, pages_show_list,
+  ads_management, ads_read, business_management, pages_read_engagement,
+  pages_manage_ads, public_profile`.
+- And it cannot: the permission list shown when minting a token does **not
+  offer** `instagram_basic` at all. Meta's own dialog says why — "an app
+  admin may need to customize or add a use case to this app". So the blocker
+  is the **Meta App's configuration**, one level above the token.
+- Consequence, verified through the real classification path: any Instagram
+  id typed in the wizard resolves to `{ ok: false, layer: 3, diagnosis:
+  'token_missing_scopes' }` and AIC-108's gate refuses the save. The field
+  was impossible to complete.
+- Also confirmed: **zero** connections have `instagram_id` set, and it has no
+  live consumer, so nothing is affected either way.
+
+The field now renders disabled with that reason instead of letting an
+operator type into a dead end mid-call (AIC-98). The verification and gate
+underneath are unchanged — re-enabling is a one-line flip of
+`INSTAGRAM_SUPPORTED` once the App has the use case and the token is
+re-minted.
+
+Honest caveat carried forward: `REQUIRED_SCOPES.instagram` lists
+`instagram_basic` by reasoning, not verification — we have no real IG account
+to test against. If the read turns out to need fewer scopes, that entry is
+too strict. Harmless while nothing uses the field.
+
 ### 2026-08-19 — AIC-107 slices 5+6: Measurement Trust says "not applicable", and an existing engagement campaign can be adopted
 **Tracking health.** An engagement campaign is counted on-platform by Meta —
 there is no Pixel that could silently break — so AIC-88's Measurement Trust
