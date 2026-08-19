@@ -11,6 +11,12 @@ export interface CreateCampaignParams {
   dailyBudgetAgorot: number; // CBO — P0 never sets an ad-set-level budget
   specialAdCategories: string[]; // [] for none; else e.g. ["HOUSING"]
   bidStrategy: string;
+  // AIC-107: the campaign objective follows the destination
+  // (resolveDestinationShape), so an engagement campaign is created as
+  // OUTCOME_ENGAGEMENT rather than silently as a Leads campaign. Required,
+  // not optional-with-a-default: a default here is what let the old inline
+  // "OUTCOME_LEADS" literal survive unnoticed.
+  destination: string;
 }
 
 export interface CreateAdSetTargeting {

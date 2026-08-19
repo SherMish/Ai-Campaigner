@@ -488,9 +488,13 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // as the real verification of this specific shape, not this code review.
 
   async createCampaign(params: CreateCampaignParams): Promise<string> {
+    // AIC-107: sourced from the destination shape, never an inline literal —
+    // the inline "OUTCOME_LEADS" here is what would have created an
+    // engagement campaign as a Leads campaign on Meta.
+    const { objective } = resolveDestinationShape(params.destination);
     return this.postCreate(params.adAccountId, "campaigns", {
       name: params.name,
-      objective: "OUTCOME_LEADS",
+      objective,
       status: "PAUSED",
       buying_type: "AUCTION",
       special_ad_categories: params.specialAdCategories,

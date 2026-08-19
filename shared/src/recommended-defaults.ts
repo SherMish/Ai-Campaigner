@@ -44,6 +44,14 @@ export const FIXED_PLACEMENTS = "advantage_plus";
 // `destination` sourced from `FIXED_DESTINATION`; a second destination
 // (AIC-89) is added by extending this map, not by hunting down literals.
 export interface DestinationShape {
+  // AIC-107: the Meta CAMPAIGN objective. Added here because it is the same
+  // kind of fact as optimizationGoal — determined by the destination, one
+  // place. Until now `FIXED_OBJECTIVE` had zero consumers while
+  // createCampaign re-hardcoded "OUTCOME_LEADS" inline: the exact
+  // constant-with-no-consumers shape AIC-89 already had to fix for
+  // FIXED_DESTINATION/FIXED_CTA, and the reason an engagement campaign would
+  // otherwise have been created as a Leads campaign on Meta.
+  objective: string;
   optimizationGoal: string;
   destinationType: string;
   // AIC-107: null for engagement — an engagement ad promotes an existing
@@ -69,11 +77,12 @@ export const WEBSITE_CTA = "LEARN_MORE"; // Meta call_to_action.type for a websi
 // OUTCOME_ENGAGEMENT with POST_ENGAGEMENT optimization; the ad's CTA is the
 // post's own, so no ctaType is imposed here.
 export const ENGAGEMENT_DESTINATION = "engagement";
+export const ENGAGEMENT_OBJECTIVE = "OUTCOME_ENGAGEMENT"; // Meta campaign objective
 
 const DESTINATION_SHAPES: Record<string, DestinationShape> = {
-  [FIXED_DESTINATION]: { optimizationGoal: "CONVERSATIONS", destinationType: "WHATSAPP", ctaType: FIXED_CTA },
-  [WEBSITE_DESTINATION]: { optimizationGoal: "OFFSITE_CONVERSIONS", destinationType: "WEBSITE", ctaType: WEBSITE_CTA },
-  [ENGAGEMENT_DESTINATION]: { optimizationGoal: "POST_ENGAGEMENT", destinationType: "ON_POST", ctaType: null },
+  [FIXED_DESTINATION]: { objective: FIXED_OBJECTIVE, optimizationGoal: "CONVERSATIONS", destinationType: "WHATSAPP", ctaType: FIXED_CTA },
+  [WEBSITE_DESTINATION]: { objective: FIXED_OBJECTIVE, optimizationGoal: "OFFSITE_CONVERSIONS", destinationType: "WEBSITE", ctaType: WEBSITE_CTA },
+  [ENGAGEMENT_DESTINATION]: { objective: ENGAGEMENT_OBJECTIVE, optimizationGoal: "POST_ENGAGEMENT", destinationType: "ON_POST", ctaType: null },
 };
 
 // The Insights action types that COUNT as an engagement result, in the same

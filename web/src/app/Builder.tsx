@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   RECOMMENDED_BUDGET_AGOROT_PER_DAY, RECOMMENDED_SPECIAL_AD_CATEGORY,
   SPECIAL_AD_CATEGORY, resolveAudienceDefault, normalizeBusinessCategory,
-  FIXED_DESTINATION, WEBSITE_DESTINATION, LEAD_CONVERSION_EVENTS,
+  FIXED_DESTINATION, WEBSITE_DESTINATION, ENGAGEMENT_DESTINATION, LEAD_CONVERSION_EVENTS,
   type SpecialAdCategory, type BusinessCategory,
 } from "@aic/shared";
 import { strings } from "../strings";
@@ -143,11 +143,27 @@ export function Builder({ customerId, onExit }: Props = {}) {
       .finally(() => setPixelChecking(false));
   }
 
+  // AIC-107: the objective step sets the destination directly — engagement
+  // has no separate "where do leads arrive" question, because there are no
+  // leads. Switching away clears the other branch's fields for the same
+  // reason chooseDestination does.
+  function chooseObjective(dest: string) {
+    patch(dest === ENGAGEMENT_DESTINATION
+      ? { destination: dest, whatsappNumber: "", destinationUrl: "", pixelId: "", conversionEvent: "" }
+      : { destination: FIXED_DESTINATION });
+    setPixelRecent(null);
+  }
+
   const createdAds = ads.filter((a) => a.creativeId);
   const isWebsite = wizard.destination === WEBSITE_DESTINATION;
-  const destinationValid = isWebsite
-    ? /^https?:\/\/.+/.test(wizard.destinationUrl) && !!wizard.pixelId && !!wizard.conversionEvent
-    : /^\d{6,15}$/.test(wizard.whatsappNumber);
+  const isEngagement = wizard.destination === ENGAGEMENT_DESTINATION;
+  // AIC-107: engagement has no destination to validate — the interaction is
+  // on the Page post itself, so this step has nothing to gate on.
+  const destinationValid = isEngagement
+    ? true
+    : isWebsite
+      ? /^https?:\/\/.+/.test(wizard.destinationUrl) && !!wizard.pixelId && !!wizard.conversionEvent
+      : /^\d{6,15}$/.test(wizard.whatsappNumber);
   const canNext = [
     true, // goal
     destinationValid,
@@ -215,12 +231,49 @@ export function Builder({ customerId, onExit }: Props = {}) {
             <div>
               <b style={{ fontSize: "1.2rem" }}>{g.title}</b>
               <p className="muted" style={{ margin: "12px 0" }}>{g.body}</p>
-              <div className="field"><label>{g.objectiveLabel}</label><input type="text" value={g.objectiveValue} disabled /></div>
+              <label style={{ display: "block", marginBottom: 8, fontSize: "0.9rem" }}>{g.objectiveLabel}</label>
+              <div className="stack gap12">
+                <label className="row gap12" style={{ alignItems: "flex-start", cursor: "pointer" }}>
+                  <input
+                    type="radio" name="objective" checked={!isEngagement}
+                    onChange={() => chooseObjective(FIXED_DESTINATION)}
+                    style={{ marginTop: 4 }}
+                  />
+                  <span>
+                    {g.objectiveLeads}
+                    <span className="muted" style={{ display: "block", fontSize: "0.85rem" }}>{g.objectiveLeadsHint}</span>
+                  </span>
+                  <Recommended />
+                </label>
+                <label className="row gap12" style={{ alignItems: "flex-start", cursor: "pointer" }}>
+                  <input
+                    type="radio" name="objective" checked={isEngagement}
+                    onChange={() => chooseObjective(ENGAGEMENT_DESTINATION)}
+                    style={{ marginTop: 4 }}
+                  />
+                  <span>
+                    {g.objectiveEngagement}
+                    <span className="muted" style={{ display: "block", fontSize: "0.85rem" }}>{g.objectiveEngagementHint}</span>
+                  </span>
+                </label>
+              </div>
+              {isEngagement && (
+                <p className="muted" style={{ fontSize: "0.85rem", marginTop: 12 }}>ℹ️ {g.objectiveEngagementLimits}</p>
+              )}
               <p className="muted" style={{ fontSize: "0.85rem", marginTop: 12 }}>{g.fixedNote}</p>
             </div>
           )}
 
-          {step === 1 && (
+          {step === 1 && isEngagement && (
+            <div>
+              <b style={{ fontSize: "1.2rem" }}>{ds.title}</b>
+              {/* AIC-98: not a blank step — say why there is nothing to
+                  choose, rather than rendering an empty panel. */}
+              <p className="muted" style={{ margin: "12px 0" }}>{ds.engagementNoDestination}</p>
+            </div>
+          )}
+
+          {step === 1 && !isEngagement && (
             <div>
               <b style={{ fontSize: "1.2rem" }}>{ds.title}</b>
               <p className="muted" style={{ margin: "12px 0" }}>{ds.body}</p>
@@ -350,7 +403,7 @@ export function Builder({ customerId, onExit }: Props = {}) {
             <div>
               <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 12 }}>{b.creatives.title}</b>
               <BuilderCreatives
-                ads={ads} onChange={setAds} localCampaignId={localCampaignId} customerId={customerId}
+                ads={ads} onChange={setAds} localCampaignId={localCampaignId} customerId={customerId} postsOnly={isEngagement}
                 whatsappNumber={isWebsite ? undefined : wizard.whatsappNumber}
                 destination={isWebsite ? wizard.destination : undefined}
                 destinationUrl={isWebsite ? wizard.destinationUrl : undefined}

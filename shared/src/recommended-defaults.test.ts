@@ -90,6 +90,7 @@ describe("special ad category", () => {
 describe("resolveDestinationShape", () => {
   it("whatsapp resolves to the exact Meta fields FIXED_CTA/createAdSet need, sourced from the constants", () => {
     expect(resolveDestinationShape(FIXED_DESTINATION)).toEqual({
+      objective: "OUTCOME_LEADS",
       optimizationGoal: "CONVERSATIONS",
       destinationType: "WHATSAPP",
       ctaType: FIXED_CTA,
@@ -100,6 +101,7 @@ describe("resolveDestinationShape", () => {
   // from this same map — the additions/creative flow's link-CTA branch.
   it("website resolves to the link-based creative shape, sourced from the constants", () => {
     expect(resolveDestinationShape(WEBSITE_DESTINATION)).toEqual({
+      objective: "OUTCOME_LEADS",
       optimizationGoal: "OFFSITE_CONVERSIONS",
       destinationType: "WEBSITE",
       ctaType: WEBSITE_CTA,

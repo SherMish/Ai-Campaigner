@@ -1,5 +1,8 @@
 import type pg from "pg";
-import { resolveDestinationShape, resolveLeadActionType } from "@aic/shared";
+import {
+  resolveDestinationShape, resolveLeadActionType,
+  ENGAGEMENT_DESTINATION, ENGAGEMENT_ACTION_TYPES,
+} from "@aic/shared";
 import { WriteOutbox, builderKey, type WriteKind, type CreatingWriter } from "../execution/write-outbox.js";
 import type { BuilderWriter, CreateAdSetTargeting } from "./types.js";
 
@@ -119,7 +122,13 @@ export async function buildCampaignOnMeta(
   // Throws BEFORE any Meta call for an unrecognized destination — same
   // discipline as the additions flow (AIC-102): never a malformed write.
   resolveDestinationShape(input.destination);
-  const leadEventTypes = input.conversionEvent ? [resolveLeadActionType(input.conversionEvent)] : null;
+  // The campaign's RESULT definition (AIC-87). For engagement (AIC-107) it's
+  // the engagement action list rather than a Pixel/messaging event — set
+  // here, not left null, because CAMPAIGN_TYPE_REQUIRED_FIELDS requires
+  // engagement campaigns to carry one and the whole metrics layer reads it.
+  const leadEventTypes = input.destination === ENGAGEMENT_DESTINATION
+    ? [...ENGAGEMENT_ACTION_TYPES]
+    : input.conversionEvent ? [resolveLeadActionType(input.conversionEvent)] : null;
 
   const outbox = new WriteOutbox(pool);
   const creator = asCreatingWriter(writer);
@@ -136,6 +145,11 @@ export async function buildCampaignOnMeta(
         dailyBudgetAgorot: input.dailyBudgetAgorot,
         specialAdCategories: input.specialAdCategories,
         bidStrategy: input.bidStrategy,
+        // AIC-107: the objective is resolved from this in createCampaign.
+        // asCreatingWriter casts the payload `as never`, so leaving it out
+        // would NOT be a type error — it would just create every campaign as
+        // OUTCOME_LEADS, including engagement ones.
+        destination: input.destination,
       },
     },
     creator,
@@ -194,16 +208,21 @@ export async function buildCampaignOnMeta(
   // Every step landed — link the local shell row to its real Meta campaign.
   // Until this UPDATE, the row is deliberately NOT visible as "managed" to
   // the engine (listEligibleForGeneration requires meta_campaign_id NOT NULL).
+  // AIC-107: `objective` was the literal 'leads' here, which would have
+  // labelled an engagement campaign a lead campaign in our OWN records even
+  // once Meta had it right. Derived from the destination instead — one rule,
+  // both sides of the write.
+  const localObjective = input.destination === ENGAGEMENT_DESTINATION ? "engagement" : "leads";
   await pool.query(
     `UPDATE managed_campaigns
-     SET meta_campaign_id = $2, name = $3, objective = 'leads',
+     SET meta_campaign_id = $2, name = $3, objective = $9,
          whatsapp_destination = $4, agreed_budget_agorot = $5, budget_period = 'daily',
          website_url = $6, tracking_pixel_id = $7,
          lead_event_types = COALESCE($8::text[], lead_event_types)
      WHERE id = $1`,
     [
       input.localCampaignId, metaCampaignId, input.name, input.whatsappDestination, input.dailyBudgetAgorot,
-      input.destinationUrl ?? null, input.pixelId ?? null, leadEventTypes,
+      input.destinationUrl ?? null, input.pixelId ?? null, leadEventTypes, localObjective,
     ],
   );
 

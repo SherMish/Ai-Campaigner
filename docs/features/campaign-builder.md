@@ -383,6 +383,26 @@ component rather than inventing a new one) marking the recommended option
 and a one-line rationale underneath, pulled from `shared/recommended-defaults.ts`'s
 structural values + `web/src/strings.ts`'s matching copy.
 
+**The objective is a real choice (AIC-107), not a fixed field.** Step 1 offers
+Leads (recommended) or Engagement. The two are genuinely different campaigns
+on Meta — `OUTCOME_LEADS` vs `OUTCOME_ENGAGEMENT` — resolved from
+`resolveDestinationShape(destination).objective`, one place, never an inline
+literal. (It was one before: `FIXED_OBJECTIVE` had zero consumers while
+`createCampaign` hardcoded `"OUTCOME_LEADS"`, so an engagement campaign would
+have been created on Meta as a Leads campaign.)
+
+Choosing Engagement changes three later steps, each stating its reason rather
+than silently differing:
+- **Step 2 (יעד הפנייה)** has nothing to choose — the interaction happens on
+  the Page post — so it says that instead of rendering an empty panel.
+- **Step 7 (מודעות)** drops the upload tab: an engagement ad promotes an
+  *existing* post. `createCreativeFromUpload` refuses a CTA-less destination
+  outright rather than sending Meta `call_to_action: { type: null }`.
+- **Step 1 itself** states what the engine will NOT do for this type — no
+  budget-increase recommendations, no lead-quality question — per AIC-98,
+  so the customer learns it at the decision point, not by noticing an absence
+  later.
+
 **מומלץ vs fixed — the badge means "you can change this," and only appears
 where that's true.** A follow-up honesty pass (see below) drew the line hard:
 the goal and placements steps are *fixed* (no code path to change them in P0),

@@ -6,6 +6,49 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — AIC-107 slice 2: the builder can actually create an engagement campaign
+User: "dont see option for engagement here" — correct, step 1's objective was
+still a disabled field reading "פניות (Leads)".
+
+Found on the way, and the more important half: `FIXED_OBJECTIVE` had **zero
+consumers** while `createCampaign` re-hardcoded `objective: "OUTCOME_LEADS"`
+inline — the exact constant-with-no-consumers shape AIC-89 already had to fix
+for FIXED_DESTINATION/FIXED_CTA. Left alone, an engagement campaign would have
+been created **on Meta as a Leads campaign**, and every number downstream
+would have described the wrong thing. `objective` now lives on
+`DestinationShape` alongside `optimizationGoal`, so it is resolved from the
+destination in one place. Two adapter tests pin it: engagement sends
+OUTCOME_ENGAGEMENT and must NOT contain OUTCOME_LEADS; whatsapp still sends
+OUTCOME_LEADS.
+
+A second trap in the same area: `asCreatingWriter` casts its payload
+`as never`, so omitting `destination` from the create_campaign payload would
+NOT have been a type error — it would just have silently produced Leads
+campaigns. Passed explicitly, with a comment saying why.
+
+UI: step 1 is a real two-way choice (Leads / Engagement) with per-option
+hints, and — per AIC-98 — engagement states what the engine will NOT do for
+it (no budget-increase recommendations, no lead-quality question) rather than
+letting the customer find missing panels later. Step 2 (יעד הפנייה) explains
+that engagement has no destination to pick instead of rendering an empty
+panel. The creatives step drops the upload tab for engagement and says why:
+an engagement ad promotes an existing Page post, and `createCreativeFromUpload`
+now refuses a CTA-less destination outright rather than sending Meta
+`call_to_action: { type: null }`.
+
+`managed_campaigns.objective` also stops being the literal 'leads' — derived
+from the destination, so our own records don't mislabel it either.
+
+Live-verified in the browser end to end: engagement selectable, its limits
+note shown, destination step self-explaining, upload tab correctly absent
+with its reason, next-gating correct throughout. 474 server + 34 shared + 27
+web tests green; lead campaigns regression-tested unchanged.
+
+Still to come for full type support: result-type-aware dashboard copy
+(פניות/עלות לפנייה are wrong for engagement), engine rules
+(cost-per-engagement comparison, budget rules excluded, tracking-health
+reporting N/A), and engagement detection in the onboarding picker.
+
 ### 2026-08-18 — Page picker bugfix #2: promote_pages is empty for a brand-new account — the exact case it served
 The scoping fix below traded one bug for another, caught by the user within
 minutes. `{ad_account}/promote_pages` only lists Pages the account has

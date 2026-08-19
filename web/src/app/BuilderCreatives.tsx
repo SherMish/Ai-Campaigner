@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { strings, creativeValidationMessage } from "../strings";
 import {
   getPromotablePosts, uploadCreativeFile, createCreative, CreativeValidationError, ApiError,
@@ -71,6 +71,8 @@ interface Props {
   // routes instead of the customer's own. Has no effect on a caller that
   // supplies its own functions (AddContent.tsx never passes this).
   customerId?: string;
+  // AIC-107: engagement campaigns can only promote an existing Page post.
+  postsOnly?: boolean;
   // AIC-63: injectable so AddContent.tsx can point creative creation at
   // /app/additions/* instead of /app/builder/* — same component and UI,
   // different backend routes. Defaults to the builder's own endpoints.
@@ -81,12 +83,24 @@ interface Props {
 
 export function BuilderCreatives({
   ads, onChange, localCampaignId, whatsappNumber, destination, destinationUrl, customerId,
+  postsOnly = false,
   getPosts = () => getPromotablePosts(customerId),
   uploadFile = (file) => uploadCreativeFile(file, customerId),
   createCreativeFn = (body) => createCreative({ ...body, localCampaignId } as CreateCreativeBody, customerId),
 }: Props) {
   const [posts, setPosts] = useState<PromotablePost[] | null>(null);
   const [postsLoading, setPostsLoading] = useState(false);
+
+  // AIC-107: with no upload tab to click, nothing would ever switch a draft
+  // off its "upload" default or trigger the post fetch — the step would look
+  // permanently empty. Force both here instead.
+  useEffect(() => {
+    if (!postsOnly) return;
+    loadPosts();
+    const wrong = ads.filter((a) => a.source !== "post");
+    if (wrong.length) onChange(ads.map((a) => (a.source === "post" ? a : { ...a, source: "post" })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postsOnly, ads]);
 
   function update(key: string, patch: Partial<AdDraft>) {
     onChange(ads.map((a) => (a.clientKey === key ? { ...a, ...patch } : a)));
@@ -159,6 +173,7 @@ export function BuilderCreatives({
             posts={posts}
             postsLoading={postsLoading}
             onLoadPosts={loadPosts}
+            postsOnly={postsOnly}
             onUpdate={(patch) => update(ad.clientKey, patch)}
             onUpload={(file) => doUpload(ad, file)}
             onCreate={() => doCreate(ad)}
@@ -176,13 +191,14 @@ export function BuilderCreatives({
 }
 
 function AdCard({
-  index, ad, posts, postsLoading, onLoadPosts, onUpdate, onUpload, onCreate, onRemove,
+  index, ad, posts, postsLoading, onLoadPosts, postsOnly, onUpdate, onUpload, onCreate, onRemove,
 }: {
   index: number;
   ad: AdDraft;
   posts: PromotablePost[] | null;
   postsLoading: boolean;
   onLoadPosts: () => void;
+  postsOnly: boolean;
   onUpdate: (patch: Partial<AdDraft>) => void;
   onUpload: (file: File) => void;
   onCreate: () => void;
@@ -206,16 +222,25 @@ function AdCard({
 
       {ad.status !== "created" && (
         <>
-          <div className="row gap12" style={{ marginBottom: 14 }}>
-            <button
-              className={`btn btn-sm ${ad.source === "upload" ? "btn-dark" : "btn-outline"}`}
-              onClick={() => onUpdate({ source: "upload" })}
-            >{c.uploadTab}</button>
-            <button
-              className={`btn btn-sm ${ad.source === "post" ? "btn-dark" : "btn-outline"}`}
-              onClick={() => { onUpdate({ source: "post" }); onLoadPosts(); }}
-            >{c.postTab}</button>
-          </div>
+          {/* AIC-107: an engagement ad promotes an EXISTING Page post — an
+              uploaded creative has no post to engage with, and the adapter
+              refuses it (no CTA shape). So the choice isn't offered, and
+              per AIC-98 the reason is stated rather than the tab silently
+              vanishing. */}
+          {postsOnly ? (
+            <p className="muted" style={{ fontSize: "0.85rem", marginBottom: 14 }}>{c.postsOnlyNote}</p>
+          ) : (
+            <div className="row gap12" style={{ marginBottom: 14 }}>
+              <button
+                className={`btn btn-sm ${ad.source === "upload" ? "btn-dark" : "btn-outline"}`}
+                onClick={() => onUpdate({ source: "upload" })}
+              >{c.uploadTab}</button>
+              <button
+                className={`btn btn-sm ${ad.source === "post" ? "btn-dark" : "btn-outline"}`}
+                onClick={() => { onUpdate({ source: "post" }); onLoadPosts(); }}
+              >{c.postTab}</button>
+            </div>
+          )}
 
           {ad.source === "upload" ? (
             <div className="stack gap12">

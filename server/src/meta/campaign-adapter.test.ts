@@ -32,7 +32,7 @@ describe("GraphCampaignAdapter create-writes — always PAUSED", () => {
 
     const id = await adapter.createCampaign({
       adAccountId: "act_123", name: "Test", dailyBudgetAgorot: 4000,
-      specialAdCategories: [], bidStrategy: "LOWEST_COST_WITHOUT_CAP",
+      specialAdCategories: [], bidStrategy: "LOWEST_COST_WITHOUT_CAP", destination: "whatsapp",
     });
 
     expect(id).toBe("meta_camp_1");
@@ -143,8 +143,43 @@ describe("GraphCampaignAdapter create-writes — always PAUSED", () => {
 
     await expect(adapter.createCampaign({
       adAccountId: "act_123", name: "Test", dailyBudgetAgorot: 4000,
-      specialAdCategories: [], bidStrategy: "LOWEST_COST_WITHOUT_CAP",
+      specialAdCategories: [], bidStrategy: "LOWEST_COST_WITHOUT_CAP", destination: "whatsapp",
     })).rejects.toThrow(/Invalid parameter/);
+  });
+
+  // AIC-107: the objective now comes from the destination shape. Before this,
+  // "OUTCOME_LEADS" was an inline literal here while FIXED_OBJECTIVE sat
+  // unused — so an engagement campaign would have been created on Meta as a
+  // Leads campaign, and every downstream number would have described the
+  // wrong thing.
+  it("createCampaign sends the objective its destination implies — engagement is NOT created as Leads", async () => {
+    const mock = fakeFetch({ id: "meta_camp_eng" });
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await adapter.createCampaign({
+      adAccountId: "act_123", name: "Engagement test", dailyBudgetAgorot: 2000,
+      specialAdCategories: [], bidStrategy: "LOWEST_COST_WITHOUT_CAP", destination: "engagement",
+    });
+
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    const body = String(init.body);
+    expect(body).toContain("OUTCOME_ENGAGEMENT");
+    expect(body).not.toContain("OUTCOME_LEADS");
+  });
+
+  it("REGRESSION: a whatsapp campaign is still created as OUTCOME_LEADS", async () => {
+    const mock = fakeFetch({ id: "meta_camp_wa" });
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await adapter.createCampaign({
+      adAccountId: "act_123", name: "WA test", dailyBudgetAgorot: 2000,
+      specialAdCategories: [], bidStrategy: "LOWEST_COST_WITHOUT_CAP", destination: "whatsapp",
+    });
+
+    const [, waInit] = mock.mock.calls[0] as [string, RequestInit];
+    expect(String(waInit.body)).toContain("OUTCOME_LEADS");
   });
 });
 

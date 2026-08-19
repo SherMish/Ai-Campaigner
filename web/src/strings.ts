@@ -1234,12 +1234,19 @@ export const strings = {
 
       goal: {
         title: "המטרה של הקמפיין",
-        // AIC-89: destination-neutral — the goal is "get leads," not
-        // "get leads over WhatsApp." The next step is where the channel
-        // is actually chosen.
-        body: "נאסוף פניות מהקהל שלכם. בשלב הבא תבחרו איך הן יגיעו אליכם — וואטסאפ או האתר שלכם.",
+        // AIC-107: the objective is a REAL choice now, not a disabled field.
+        // The two options optimize for genuinely different things and the
+        // engine treats them differently — so the copy says what each one
+        // gets you, and (per AIC-98) what it does NOT.
+        body: "מה הקמפיין הזה אמור להשיג? אפשר לשנות בהמשך רק על ידי יצירת קמפיין חדש.",
         objectiveLabel: "יעד הקמפיין",
-        objectiveValue: "פניות (Leads)",
+        objectiveLeads: "פניות (Leads)",
+        objectiveLeadsHint: "אנשים יפנו אליכם — בוואטסאפ או דרך האתר. בשלב הבא תבחרו איך.",
+        objectiveEngagement: "מעורבות (Engagement)",
+        objectiveEngagementHint: "אנשים יגיבו, ישתפו ויתייגו על פוסט בעמוד שלכם. מתאים לבדיקה מהירה איזה תוכן עובד — לא לאיסוף פניות.",
+        // AIC-98: state what the engine does NOT do for this type, rather
+        // than letting the customer discover a missing panel later.
+        objectiveEngagementLimits: "בקמפיין מעורבות לא נמליץ על הגדלת תקציב, ואין שאלת איכות פניות — אין פניות למדוד.",
         fixedNote: "הגדרות הרכש (Auction) קבועות בשלב הזה ולא מוצגות כבחירה.",
       },
       // AIC-89: destination is a real choice now — WhatsApp remains the
@@ -1255,6 +1262,9 @@ export const strings = {
         whatsappLabel: "מספר וואטסאפ, עם קידומת מדינה",
         whatsappPlaceholder: "972501234567",
         whatsappInvalid: "מספר לא תקין — רק ספרות, כולל קידומת מדינה (למשל 972501234567).",
+        // AIC-107 + AIC-98: an engagement campaign has no destination to
+        // pick, and an empty step would look broken. Say why.
+        engagementNoDestination: "בקמפיין מעורבות אין יעד לבחור — האינטראקציה קורית על הפוסט עצמו בעמוד שלכם. אפשר להמשיך.",
         websiteBody: "לקוחות שילחצו על המודעה יגיעו לכתובת הזו. חשוב שה-Pixel של מטא יהיה מותקן באתר כדי שנוכל לספור את הפניות.",
         urlLabel: "כתובת דף היעד",
         urlPlaceholder: "https://example.co.il/signup",
@@ -1356,6 +1366,10 @@ export const strings = {
           "התוכן שאתם מעלים (תמונות, טקסט, הבטחות) הוא באחריותכם — כולל דיוק ועמידה בדרישות החוק והמדיניות של מטא. אנחנו לא בודקים או עורכים את התוכן.",
         uploadTab: "העלאת תוכן",
         postTab: "פוסט קיים",
+        // AIC-107 + AIC-98: in an engagement campaign there is no upload
+        // option — the ad promotes an existing post, and a missing tab with
+        // no explanation reads as a bug.
+        postsOnlyNote: "בקמפיין מעורבות מקדמים פוסט שכבר קיים בעמוד — אין העלאת תוכן חדש כאן. בוחרים פוסט מהרשימה.",
         adTitle: "מודעה",
         addAd: "הוספת מודעה",
         removeAd: "הסרה",
