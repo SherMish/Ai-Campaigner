@@ -32,7 +32,8 @@ import { REQUIRED_SCOPES, type CheckedAsset } from "../meta/access-layers.js";
 import { OUR_BUSINESS_PORTFOLIO_ID, OUR_SYSTEM_USER_ID } from "../config/meta-identity.js";
 import {
   getOrCreateOnboarding, setStep, recordCheck, markComplete,
-  provisionConnection, PageNotReadableError, IncompleteProvisioningError, CHECK_FOR_ASSET,
+  provisionConnection, PageNotReadableError, InstagramNotReadableError,
+  IncompleteProvisioningError, CHECK_FOR_ASSET,
 } from "../services/customer-onboarding.js";
 import { ConnectionService } from "../meta/connection-service.js";
 import { PgConnectionStore } from "../meta/connection-store.js";
@@ -539,8 +540,8 @@ adminRouter.post("/customers/:id/onboarding/step", async (req, res) => {
 adminRouter.post("/customers/:id/onboarding/check", async (req, res) => {
   const asset = String(req.body?.asset ?? "") as CheckedAsset;
   const assetId = String(req.body?.assetId ?? "").trim();
-  if (asset !== "page" && asset !== "ad_account") {
-    res.status(400).json({ error: "asset must be 'page' or 'ad_account'" });
+  if (asset !== "page" && asset !== "ad_account" && asset !== "instagram") {
+    res.status(400).json({ error: "asset must be 'page', 'ad_account' or 'instagram'" });
     return;
   }
   if (!assetId) {
@@ -640,14 +641,21 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
     }
   }
 
+  // AIC-108: instagram_id is re-verified here for exactly the same reason
+  // page_id is — a failing read feeds the same worst-health-wins fold and
+  // flips the whole connection to `revoked`. Both are checked immediately
+  // before the write, never trusted from an earlier pass or the client.
+  const instagramId = b.instagramId ? String(b.instagramId).trim() : null;
   let pageVerdict = null as Awaited<ReturnType<AccessProbe["probeAsset"]>>["verdict"] | null;
-  if (pageId) {
+  let instagramVerdict = null as Awaited<ReturnType<AccessProbe["probeAsset"]>>["verdict"] | null;
+  if (pageId || instagramId) {
     const probe = probeOrNull();
     if (!probe) {
       res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
       return;
     }
-    pageVerdict = (await probe.probeAsset("page", pageId)).verdict;
+    if (pageId) pageVerdict = (await probe.probeAsset("page", pageId)).verdict;
+    if (instagramId) instagramVerdict = (await probe.probeAsset("instagram", instagramId)).verdict;
   }
 
   try {
@@ -659,7 +667,7 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
       adAccountName: b.adAccountName ? String(b.adAccountName) : null,
       currency: b.currency ? String(b.currency) : null,
       pageId,
-      instagramId: b.instagramId ? String(b.instagramId) : null,
+      instagramId,
       metaCampaignId: hasCampaign ? String(b.metaCampaignId) : undefined,
       campaignName: hasCampaign ? String(b.campaignName) : undefined,
       objective: b.objective ? String(b.objective) : undefined,
@@ -671,7 +679,7 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
       websiteUrl: b.websiteUrl ? String(b.websiteUrl) : null,
       destinationType,
       whatsappDestination: b.whatsappDestination ? String(b.whatsappDestination) : null,
-    }, pageVerdict);
+    }, pageVerdict, instagramVerdict);
 
     const actor = await actorFor(req as AuthedRequest);
     await logAdminAction(pool, {
@@ -684,7 +692,7 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
       // Records whether a page_id was saved AND the verdict that allowed it —
       // so "was the Page genuinely verified when this was provisioned" is
       // answerable later without re-deriving it.
-      detail: JSON.stringify({ ...result, pageVerdict }),
+      detail: JSON.stringify({ ...result, pageVerdict, instagramVerdict }),
     });
 
     res.json({ result });
@@ -692,6 +700,12 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
     if (e instanceof PageNotReadableError) {
       // 409, not 500: this is a refusal, and the operator can act on it.
       res.status(409).json({ error: e.message, diagnosis: e.diagnosis, pageVerdict });
+      return;
+    }
+    // AIC-108: same refusal shape, tagged so the client can point at the
+    // Instagram field rather than the Page one.
+    if (e instanceof InstagramNotReadableError) {
+      res.status(409).json({ error: e.message, diagnosis: e.diagnosis, asset: "instagram", instagramVerdict });
       return;
     }
     if (e instanceof IncompleteProvisioningError) {

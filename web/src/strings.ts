@@ -537,6 +537,12 @@ export const strings = {
       // first one from scratch always needs a Page, so skipping it here
       // used to lead to a confusing "not ready" screen one click later
       // instead of a clear reason on this one.
+      // AIC-108: instagram_id feeds the SAME connection-health fold as the
+      // Page, so an unverified one silently stops the engine. Optional to
+      // fill; mandatory to verify once filled.
+      checkInstagram: "בדיקת אינסטגרם",
+      instagramGateNote: "אפשר להשאיר ריק. אם ממלאים — חייבים לאמת: מזהה שלא נקרא בהצלחה יהפוך את כל החיבור ל־revoked ויעצור את מנוע ההמלצות בשקט, בדיוק כמו מזהה עמוד.",
+      errorInstagramNotVerified: "מזהה האינסטגרם שהוקלד לא אומת. מריצים \"בדיקת אינסטגרם\" עם המזהה הזה בדיוק, או משאירים ריק.",
       errorPageRequiredForNewCampaign: "לבניית קמפיין ראשון צריך קודם למלא ולאמת מזהה עמוד (למעלה, שלב 1 או 2).",
       // Shown once a supported campaign is picked — the destination below
       // was DETECTED from Meta's own ad-set configuration, not guessed.

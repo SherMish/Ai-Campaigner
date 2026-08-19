@@ -32,7 +32,7 @@ interface StoredCheck {
 interface OnboardingState {
   customerId: string;
   currentStep: number;
-  checks: Partial<Record<"ad_account" | "page" | "token" | "connection", StoredCheck>>;
+  checks: Partial<Record<"ad_account" | "page" | "instagram" | "token" | "connection", StoredCheck>>;
   startedAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -113,7 +113,7 @@ export function AdminOnboarding() {
 
   const [acctId, setAcctId] = useState("");
   const [pageId, setPageId] = useState("");
-  const [checkingAsset, setCheckingAsset] = useState<"ad_account" | "page" | null>(null);
+  const [checkingAsset, setCheckingAsset] = useState<"ad_account" | "page" | "instagram" | null>(null);
   const [checkingToken, setCheckingToken] = useState(false);
   const [tokenMissing, setTokenMissing] = useState<string[] | null>(null);
 
@@ -299,7 +299,7 @@ export function AdminOnboarding() {
     return w.campaignUnsupportedUnrecognizedObjective;
   }
 
-  function runCheck(asset: "ad_account" | "page", assetId: string) {
+  function runCheck(asset: "ad_account" | "page" | "instagram", assetId: string) {
     if (!id || !assetId.trim()) return;
     setCheckingAsset(asset);
     setError(null);
@@ -367,6 +367,18 @@ export function AdminOnboarding() {
     return !form.pageIdForm.trim();
   }
 
+  // AIC-108: the Instagram twin of pageIdUnverified. Same rule, same reason —
+  // an unreadable instagram_id feeds the same worst-health-wins fold and
+  // silently stops the engine. Blank is fine and carries no risk (the health
+  // check skips a null id entirely); typed means it must have passed for
+  // THIS exact id.
+  function instagramIdUnverified(): boolean {
+    const typed = form.instagramId.trim();
+    if (!typed) return false;
+    const check = state?.checks.instagram;
+    return !check || !check.ok || check.assetId !== typed;
+  }
+
   function submitProvision() {
     if (!id) return;
     const budgetAgorot = Math.round(Number(form.budgetShekels) * 100);
@@ -376,6 +388,10 @@ export function AdminOnboarding() {
     }
     if (pageIdUnverified()) {
       setError(w.errorPageNotVerified);
+      return;
+    }
+    if (instagramIdUnverified()) {
+      setError(w.errorInstagramNotVerified);
       return;
     }
     // AIC-103: the SAME table/function resolveAdditionAvailability checks at
@@ -445,6 +461,10 @@ export function AdminOnboarding() {
     }
     if (pageIdUnverified()) {
       setStartNewCampaignError(w.errorPageNotVerified);
+      return;
+    }
+    if (instagramIdUnverified()) {
+      setStartNewCampaignError(w.errorInstagramNotVerified);
       return;
     }
     setStartingNewCampaign(true);
@@ -705,8 +725,25 @@ export function AdminOnboarding() {
               <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickPageEmpty}</p>
             )}
           </div>
-          <div className="field"><label>{w.fieldInstagramId}</label>
-            <input value={form.instagramId} onChange={(e) => setForm({ ...form, instagramId: e.target.value })} /></div>
+          <div className="field">
+            <label>{w.fieldInstagramId}</label>
+            <div className="row gap12" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
+              <input
+                style={{ flex: 1, minWidth: 160 }}
+                value={form.instagramId}
+                onChange={(e) => setForm({ ...form, instagramId: e.target.value })}
+              />
+              <button
+                type="button" className="btn btn-outline btn-sm"
+                disabled={checkingAsset !== null || !form.instagramId.trim()}
+                onClick={() => runCheck("instagram", form.instagramId)}
+              >
+                {checkingAsset === "instagram" ? w.checking : w.checkInstagram}
+              </button>
+            </div>
+            <p className="muted" style={{ fontSize: "0.75rem", marginTop: 4 }}>{w.instagramGateNote}</p>
+            {form.instagramId.trim() && <CheckResult check={state?.checks.instagram} />}
+          </div>
           <div className="field">
             <label>{w.pickCampaignLabel}</label>
             <select
@@ -735,7 +772,7 @@ export function AdminOnboarding() {
                 <p className="muted" style={{ fontSize: "0.78rem" }}>{w.pickCampaignEmpty}</p>
                 <button
                   type="button" className="btn btn-primary btn-sm" style={{ marginTop: 6 }}
-                  disabled={startingNewCampaign || newCampaignPageMissing() || pageIdUnverified()} onClick={startNewCampaign}
+                  disabled={startingNewCampaign || newCampaignPageMissing() || pageIdUnverified() || instagramIdUnverified()} onClick={startNewCampaign}
                 >
                   {startingNewCampaign ? w.startNewCampaignBusy : w.startNewCampaignCta}
                 </button>
@@ -787,10 +824,11 @@ export function AdminOnboarding() {
 
         {!noCampaignsForSelectedAccount && (
           <>
-            <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={provisioning || pageIdUnverified()} onClick={submitProvision}>
+            <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={provisioning || pageIdUnverified() || instagramIdUnverified()} onClick={submitProvision}>
               {w.provisionSubmit}
             </button>
             {pageIdUnverified() && <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>{w.errorPageNotVerified}</p>}
+            {instagramIdUnverified() && <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>{w.errorInstagramNotVerified}</p>}
           </>
         )}
 

@@ -31,7 +31,14 @@ export type AccessLayer = 1 | 2 | 3;
 // What the operator is checking, per asset kind. Ad accounts and Pages have
 // different layer-1 endpoints (`client_ad_accounts` vs `client_pages`) and
 // different scope requirements, so the diagnosis differs per kind.
-export type CheckedAsset = "ad_account" | "page";
+// AIC-108: instagram joins the checkable assets. It is NOT cosmetic — a
+// failing Instagram read feeds the same worst-health-wins aggregation as
+// page/ad_account (ConnectionService.verify), so an unreadable id flips the
+// whole connection to `revoked` and silently stops the engine. Confirmed
+// live 2026-08-19: a typo'd id returns Graph code 100 and an id not shared
+// with us returns code 10 — both land in classifyGraphError's
+// PERMISSION_CODES, i.e. `revoked`.
+export type CheckedAsset = "ad_account" | "page" | "instagram";
 
 // The raw observations, all four independently gathered. `null` means "not
 // checked / unknown", which is deliberately NOT the same as `false` — an
@@ -113,6 +120,10 @@ export function classifyAccess(obs: AccessObservations): AccessVerdict {
 export const REQUIRED_SCOPES: Record<CheckedAsset, readonly string[]> = {
   ad_account: ["ads_read", "ads_management"],
   page: ["pages_show_list", "pages_read_engagement"],
+  // An IG Business account is read THROUGH its connected Page, so the Page
+  // scopes are what the read needs; instagram_basic is what makes the IG
+  // fields themselves readable.
+  instagram: ["pages_show_list", "instagram_basic"],
 };
 
 export function hasRequiredScopes(asset: CheckedAsset, granted: readonly string[]): boolean {

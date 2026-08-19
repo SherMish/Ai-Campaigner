@@ -6,6 +6,47 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — AIC-108: an Instagram ID could silently stop the engine, with no way to check it
+Confirmed the premise end to end before building, since the ticket flagged
+that the risk had been read from the call site rather than traced:
+
+`ConnectionService.verify()` folds the Instagram read into the SAME
+worst-health-wins aggregation as the Page (`HEALTH_PRIORITY`: revoked=2 beats
+ok=0), and `classifyGraphError` maps both realistic failures to `revoked` —
+verified live against Meta on 2026-08-19: a typo'd id returns **code 100**, an
+id not shared with us returns **code 10**, and both are in `PERMISSION_CODES`.
+A revoked connection drops the campaign from `listEligibleForGeneration`. So
+one mistyped Instagram ID silently stopped the recommendation engine —
+identical to AIC-69's page_id incident, except page_id has a gate and
+Instagram had none. The fix is NOT smaller than the ticket assumed.
+
+Fixed by giving Instagram the same treatment as the Page, not by removing the
+field (removing it would leave the column and the health check in place, so
+existing rows would stay dangerous):
+
+- `instagram` is now a real `CheckedAsset` end to end — probe, check route,
+  stored check key. Layer 1 returns `null` (unknown) rather than a fabricated
+  `false`: an IG account is shared THROUGH its Page, so there is no
+  `client_instagram_accounts` edge to ask, and claiming "not shared" would be
+  a fact we do not have. The direct read mirrors `verifyPath("instagram")`
+  exactly, so a pass here really does mean the health check will pass.
+- `InstagramNotReadableError`, mirroring `PageNotReadableError`, refuses the
+  write before it happens; the route re-verifies immediately before saving
+  and returns a 409 tagged `asset: "instagram"` so the client can point at the
+  right field.
+- Wizard: a `בדיקת אינסטגרם` button beside the field, a note stating the rule,
+  and a client-side gate on BOTH write paths (provision and Branch A's
+  "צור קמפיין חדש", which also writes a connection).
+
+Blank stays completely safe — the health check skips a null instagram_id, so
+a customer without Instagram carries no risk and needs no check.
+
+Live-verified in the browser against the real bogus id: typed-but-unverified
+blocks the save with a reason; running the check and having it FAIL leaves it
+blocked; clearing the field unblocks it. 6 new DB tests cover blank-saves,
+unverified-blocked, failed-blocked, verified-saves, atomicity (nothing
+written on refusal), and a bad Instagram blocking even when the Page is fine.
+
 ### 2026-08-19 — AIC-107 slice 2: the builder can actually create an engagement campaign
 User: "dont see option for engagement here" — correct, step 1's objective was
 still a disabled field reading "פניות (Leads)".

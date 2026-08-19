@@ -668,14 +668,29 @@ started requiring a Page to BUILD one, which is exactly the contradiction an
 operator hit live. The label now carries both cases explicitly rather than
 picking whichever is true more often.
 
-**Instagram is deliberately still a free-text field, pending a decision.**
-`meta_connections.instagram_id` is verified on every
-`ConnectionService.verify()` and folds into `worstHealth` — so a bad value
-degrades the whole connection, the same failure class as AIC-69's page_id
-bug — yet it has no save-gate, and `instagram_actor_id` appears nowhere in
-creative creation, so it currently carries that risk while doing nothing for
-delivery. Giving it a picker would polish a field that arguably shouldn't be
-here; the real choice is gate-it-like-page_id vs. remove-it-until-used.
+**Instagram is gated exactly like the Page (AIC-108).** It had to be:
+`ConnectionService.verify()` folds the Instagram read into the *same*
+worst-health-wins aggregation as the Page, and `classifyGraphError` maps both
+realistic failures to `revoked` — confirmed live 2026-08-19, a typo'd id
+returns Graph code 100 and an id not shared with us returns code 10, both in
+`PERMISSION_CODES`. A revoked connection drops the campaign out of
+`listEligibleForGeneration`, so a single mistyped Instagram id silently
+stopped the recommendation engine. Identical to the AIC-69 page_id incident,
+except page_id had a gate and this had none.
+
+So `instagram` is now a full `CheckedAsset`: `בדיקת אינסטגרם` beside the
+field, `InstagramNotReadableError` refusing the write server-side, and a
+client-side gate on both write paths (provisioning and Branch A's
+"צור קמפיין חדש", which also writes a connection). **Optional to fill,
+mandatory to verify once filled** — blank is genuinely safe, because the
+health check skips a null `instagram_id` entirely.
+
+Two deliberate choices worth keeping: layer 1 reports `null` (unknown) for
+Instagram rather than `false`, because an IG account is shared *through* its
+Page and there is no `client_instagram_accounts` edge to ask — claiming "the
+customer never shared it" would be a fact we don't have. And the field was
+gated rather than removed: removing the input would leave the column and the
+health check in place, so every existing row would stay dangerous.
 
 **The step-1 ad-account field's `act_` prefix is now a fixed, non-typed
 chip**, not part of the placeholder text — the operator types only the

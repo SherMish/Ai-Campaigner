@@ -11,6 +11,7 @@ import {
   provisionConnection,
   PageNotReadableError,
   IncompleteProvisioningError,
+  InstagramNotReadableError,
 } from "./customer-onboarding.js";
 import type { AccessVerdict } from "../meta/access-layers.js";
 
@@ -267,6 +268,64 @@ d("customer onboarding (DB)", () => {
       expect(r.pageIdSaved).toBe(true);
       const conn = await pool.query<{ page_id: string }>(`SELECT page_id FROM meta_connections WHERE id = $1`, [r.connectionId]);
       expect(conn.rows[0].page_id).toBe("1216278568228263");
+    });
+
+    // ── AIC-108: instagram_id carries the SAME engine-stopping risk as
+    // page_id (ConnectionService.verify folds both into worst-health-wins,
+    // and classifyGraphError maps a bad id to `revoked`) but had no gate.
+    // Confirmed live 2026-08-19: typo'd id → Graph code 100, not-ours id →
+    // code 10, both in PERMISSION_CODES.
+    describe("instagram gate (AIC-108)", () => {
+      it("blank Instagram saves normally — no check, no risk", async () => {
+        const customerId = await seedCustomer("iblank");
+        const r = await provisionConnection(pool, base(customerId), null);
+        const conn = await pool.query<{ instagram_id: string | null }>(
+          `SELECT instagram_id FROM meta_connections WHERE id = $1`, [r.connectionId]);
+        expect(conn.rows[0].instagram_id).toBeNull();
+      });
+
+      it("REFUSES an Instagram id the backend cannot read", async () => {
+        const customerId = await seedCustomer("ibad");
+        await expect(
+          provisionConnection(pool, { ...base(customerId), instagramId: "17841400000000000" }, null, NOT_SHARED),
+        ).rejects.toBeInstanceOf(InstagramNotReadableError);
+      });
+
+      it("refuses an UNVERIFIED Instagram id too — absence of proof is not proof", async () => {
+        const customerId = await seedCustomer("iunver");
+        await expect(
+          provisionConnection(pool, { ...base(customerId), instagramId: "17841400000000000" }, null, null),
+        ).rejects.toBeInstanceOf(InstagramNotReadableError);
+      });
+
+      it("the refusal writes NOTHING — no half-provisioned connection left behind", async () => {
+        const customerId = await seedCustomer("iatomic");
+        await expect(
+          provisionConnection(pool, { ...base(customerId), instagramId: "999" }, null, NOT_SHARED),
+        ).rejects.toThrow();
+        const conns = await pool.query(`SELECT id FROM meta_connections WHERE customer_id = $1`, [customerId]);
+        expect(conns.rows).toHaveLength(0);
+      });
+
+      it("saves the instagram_id once the read genuinely passes", async () => {
+        const customerId = await seedCustomer("iok");
+        const r = await provisionConnection(pool, { ...base(customerId), instagramId: "17841405309211844" }, null, OK);
+        const conn = await pool.query<{ instagram_id: string }>(
+          `SELECT instagram_id FROM meta_connections WHERE id = $1`, [r.connectionId]);
+        expect(conn.rows[0].instagram_id).toBe("17841405309211844");
+      });
+
+      it("a bad Instagram id blocks the save even when the Page is perfectly fine", async () => {
+        const customerId = await seedCustomer("ipageok");
+        await expect(
+          provisionConnection(
+            pool,
+            { ...base(customerId), pageId: "1216278568228263", instagramId: "999" },
+            OK,   // Page verified
+            NOT_SHARED, // Instagram not
+          ),
+        ).rejects.toBeInstanceOf(InstagramNotReadableError);
+      });
     });
 
     it("a connected campaign has no create_campaign history, so it reads as not-built-here", async () => {

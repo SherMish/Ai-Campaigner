@@ -16,7 +16,7 @@ import { FIXED_DESTINATION, WEBSITE_DESTINATION, missingRequiredFields, type Cam
 // The checks the wizard runs, in the order the operator performs them. Keyed
 // strings rather than positional indexes so re-ordering the script later
 // doesn't silently re-map stored results to different checks.
-export type OnboardingCheckKey = "ad_account" | "page" | "token" | "connection";
+export type OnboardingCheckKey = "ad_account" | "page" | "instagram" | "token" | "connection";
 
 export interface StoredCheck {
   ok: boolean;
@@ -205,6 +205,24 @@ export class PageNotReadableError extends Error {
   }
 }
 
+// AIC-108: the identical guard for instagram_id, because it carries the
+// identical risk and had none. ConnectionService.verify() runs
+// verifyAssetAccess("instagram", …) in the SAME worst-health-wins fold as the
+// Page, and classifyGraphError maps both realistic failures to `revoked`
+// (confirmed live 2026-08-19: a typo'd id → Graph code 100, an id not shared
+// with us → code 10; both are in PERMISSION_CODES). So an unverified
+// Instagram id written here silently stops the engine exactly like AIC-69's
+// page_id did — with the field having no live consumer to justify the risk.
+export class InstagramNotReadableError extends Error {
+  constructor(public readonly instagramId: string, public readonly diagnosis: string) {
+    super(
+      `refusing to save instagram_id ${instagramId}: the backend cannot read it (${diagnosis}). ` +
+        `Writing it would flip the connection to 'revoked' and silently stop the recommendation engine.`,
+    );
+    this.name = "InstagramNotReadableError";
+  }
+}
+
 // AIC-103: the provisioning-time enforcement point of the one declared
 // required-fields table (shared/recommended-defaults.ts) — mirrors
 // PageNotReadableError's "refuse before the write, not after" shape. Not an
@@ -246,10 +264,20 @@ export async function provisionConnection(
   // Verified immediately before the write by the caller, never trusted from
   // the client. `null` means no Page was offered at all, which is legal.
   pageVerdict: AccessVerdict | null,
+  // AIC-108: same contract as pageVerdict — verified by the caller
+  // immediately before the write, never trusted from the client. `null` means
+  // no Instagram id was offered, which is legal and carries no risk (the
+  // health check skips a null instagram_id entirely).
+  instagramVerdict: AccessVerdict | null = null,
 ): Promise<ProvisionResult> {
   if (input.pageId) {
     if (!pageVerdict || !pageVerdict.ok) {
       throw new PageNotReadableError(input.pageId, pageVerdict?.diagnosis ?? "unverified");
+    }
+  }
+  if (input.instagramId) {
+    if (!instagramVerdict || !instagramVerdict.ok) {
+      throw new InstagramNotReadableError(input.instagramId, instagramVerdict?.diagnosis ?? "unverified");
     }
   }
 
@@ -394,4 +422,5 @@ export const checkFromProbe = (p: AssetProbeResult): { verdict: AccessVerdict; d
 export const CHECK_FOR_ASSET: Record<CheckedAsset, OnboardingCheckKey> = {
   ad_account: "ad_account",
   page: "page",
+  instagram: "instagram",
 };

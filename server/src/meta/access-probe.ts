@@ -77,6 +77,12 @@ export class AccessProbe {
 
   // Layer 1 — did the customer's share actually land in OUR portfolio?
   private async sharedIds(asset: CheckedAsset): Promise<string[] | null> {
+    // AIC-108: an IG Business account is shared THROUGH its connected Page,
+    // not as a portfolio asset of its own — there is no
+    // `client_instagram_accounts` edge to ask. null = unknown, which
+    // classifyAccess already handles; inventing `false` here would tell the
+    // operator the customer never shared it, which we do not know.
+    if (asset === "instagram") return null;
     const edge = asset === "page" ? "client_pages" : "client_ad_accounts";
     const { ok, body } = await this.get(
       `${this.deps.businessPortfolioId}/${edge}?fields=id,name&limit=200`,
@@ -120,7 +126,12 @@ export class AccessProbe {
   private async directRead(asset: CheckedAsset, id: string): Promise<{ ok: boolean; detail: string | null }> {
     const path = asset === "page"
       ? `${id}?fields=id,name`
-      : `${id}?fields=name,account_status,business`;
+      : asset === "instagram"
+        // Mirrors verifyPath("instagram") in client.ts — the read whose
+        // failure is what would flip the connection to `revoked`. Asking for
+        // `username` too makes the operator-facing detail recognisable.
+        ? `${id}?fields=id,username`
+        : `${id}?fields=name,account_status,business`;
     const { ok, body } = await this.get(path);
     if (ok) return { ok: true, detail: null };
     const err = body.error as { message?: string } | undefined;
