@@ -434,6 +434,23 @@ describe("increase_budget", () => {
     expect(d.maxSpendImpactAgorot).toBeGreaterThan(0);
   });
 
+  // AIC-107: the SAME evidence that fires for a lead campaign must NOT fire
+  // for an engagement one. "Cost per engagement is good, spend more" would
+  // push real money at a metric with no business outcome behind it — the one
+  // capability the ticket deliberately excludes from this campaign type.
+  it("REFUSES to fire for an engagement campaign, on evidence that would fire for leads", () => {
+    const evidence = {
+      current: { spendAgorot: 70000, leads: 24, cplAgorot: 2900, days: 7 },
+      previous: { spendAgorot: 70000, leads: 20, cplAgorot: 3500, days: 7 },
+      creatives: [cr("cr_a", 35000, 12, 2916), cr("cr_b", 35000, 12, 2916)],
+    };
+    // Sanity: this evidence really does produce the recommendation for leads.
+    expect(evaluateCampaign(baseEvidence(evidence)).type).toBe("increase_budget");
+    // …and never does once the campaign is engagement.
+    expect(evaluateCampaign(baseEvidence({ ...evidence, isEngagement: true })).type)
+      .not.toBe("increase_budget");
+  });
+
   it("does NOT fire when CPL is worsening", () => {
     const d = evaluateCampaign(
       baseEvidence({

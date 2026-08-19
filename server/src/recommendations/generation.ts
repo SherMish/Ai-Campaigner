@@ -1,3 +1,4 @@
+import { isEngagementResult } from "@aic/shared";
 import type pg from "pg";
 import type { InsightsPeriod } from "../meta/types.js";
 import type { SnapshotStore } from "../meta/snapshot-store.js";
@@ -281,6 +282,11 @@ export async function runGenerationTick(deps: {
       campaign: {
         id: campaign.id,
         currentBudgetAgorot,
+        // AIC-107: derived from the campaign's own result definition — the
+        // same single source of truth (managed_campaigns.lead_event_types)
+        // the metrics layer uses, so the engine can never disagree with the
+        // dashboard about what this campaign counts. Gates increase_budget.
+        isEngagement: isEngagementResult(campaign.leadEventTypes),
         thresholdOverrides: campaign.thresholdOverrides,
         lastActionAtByType,
       },

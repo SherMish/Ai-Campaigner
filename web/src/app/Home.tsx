@@ -250,7 +250,7 @@ function RangeSwitcher({ value, onChange }: { value: RangeKey; onChange: (r: Ran
 // Leads per week — the rail's "is this trending anywhere" glance. Built from
 // the disjoint per-day series (never the overlapping rolling windows), bucketed
 // into trailing 7-day blocks, oldest first.
-function LeadsGraph({ daily }: { daily: DailyPoint[] }) {
+function LeadsGraph({ daily, isEngagement = false }: { daily: DailyPoint[]; isEngagement?: boolean }) {
   const weeks: Array<{ label: string; leads: number }> = [];
   if (daily.length > 0) {
     const last = daily[daily.length - 1].date;
@@ -273,7 +273,7 @@ function LeadsGraph({ daily }: { daily: DailyPoint[] }) {
   return (
     <div className="card">
       <div className="row between" style={{ flexWrap: "wrap", alignItems: "baseline", gap: 10 }}>
-        <b style={{ fontSize: "0.98rem" }}>{h.graphTitle}</b>
+        <b style={{ fontSize: "0.98rem" }}>{isEngagement ? h.graphTitleEngagement : h.graphTitle}</b>
         {hasAny && <span className="bars-total">{total} {h.graphTotalSuffix}</span>}
       </div>
       {!hasAny ? (
@@ -351,6 +351,10 @@ export function Home() {
   // "today card + separate 7-day KPIs" split, which showed two sets of
   // numbers for the same campaign and read as a contradiction.
   const agg = r?.ranges[range] ?? r?.current;
+  // AIC-107: which RESULT this campaign counts. `objective` is written from
+  // the destination at build time (campaign-create.ts), so it is the same
+  // single source of truth the engine uses — not a second guess from copy.
+  const isEngagementCampaign = ov.campaign?.objective === "engagement";
   const leads = agg?.leads ?? 0;
   const cpl = agg?.cplAgorot ?? null;
   const spend = agg?.spendAgorot ?? 0;
@@ -413,12 +417,12 @@ export function Home() {
           <div className="grid-3">
             <div className="kpi">
               <b>{cpl === null ? L.none : shekels(cpl)}</b>
-              <div className="lbl">{h.kpiCpl}</div>
+              <div className="lbl">{isEngagementCampaign ? h.kpiCplEngagement : h.kpiCpl}</div>
               <Delta pct={r?.delta.cplPct ?? null} goodDown />
             </div>
             <div className="kpi">
               <b>{leads}</b>
-              <div className="lbl">{h.kpiLeads}</div>
+              <div className="lbl">{isEngagementCampaign ? h.kpiLeadsEngagement : h.kpiLeads}</div>
               <Delta pct={r?.delta.leadsPct ?? null} />
             </div>
             <div className="kpi">
@@ -455,8 +459,17 @@ export function Home() {
             <RecTeaser ov={ov} />
           )}
 
-          {/* weekly feedback */}
-          {ov.leadQuality && <LeadQualityCard leadQuality={ov.leadQuality} />}
+          {/* weekly feedback — AIC-107: "how many were relevant?" has no
+              subject for an engagement campaign, so it is replaced by what
+              the engine actually does for this type, not left blank. */}
+          {isEngagementCampaign ? (
+            <div className="card">
+              <b>{h.engagementScopeTitle}</b>
+              <p className="muted" style={{ marginTop: 10 }}>{h.engagementScopeBody}</p>
+            </div>
+          ) : (
+            ov.leadQuality && <LeadQualityCard leadQuality={ov.leadQuality} />
+          )}
 
           {/* recent activity — real action history (empty until we act) */}
           <div className="card">
@@ -504,7 +517,7 @@ export function Home() {
               <div className="summary-row"><span className="k">{h.sLeads}</span><b>{leads}</b></div>
             </div>
           </div>
-          {r && <LeadsGraph daily={r.daily} />}
+          {r && <LeadsGraph isEngagement={isEngagementCampaign} daily={r.daily} />}
         </div>
       </div>
     </div>

@@ -117,6 +117,11 @@ export interface CampaignEvidence {
   // level CPL these ad sets report is still real, only the per-creative
   // breakdown within them isn't).
   flexibleCreativeAdSetIds?: Set<string>;
+  // AIC-107: an engagement campaign counts engagements, not leads. Creative
+  // comparison ports unchanged (cost-per-result is cost-per-result), but
+  // budget increases are DELIBERATELY excluded — see increaseBudget. Optional
+  // so every existing lead-campaign caller is untouched.
+  isEngagement?: boolean;
   currentBudgetAgorot: number; // daily budget
   deliveryDays: number;
   // Ad sets AIC-39 excluded from this evidence because they aren't delivering
@@ -638,6 +643,14 @@ function decreaseBudget(ev: CampaignEvidence, thresholds: RuleThresholds = RULE_
 
 // Increase budget when CPL is stable-or-improving and volume is healthy/growing.
 function increaseBudget(ev: CampaignEvidence, thresholds: RuleThresholds = RULE_THRESHOLDS): RecommendationDraft | null {
+  // AIC-107: never propose scaling an engagement campaign. Cost-per-engagement
+  // looking good is not a reason to spend more — an engagement campaign has no
+  // business outcome behind the number, so "results are cheap, increase the
+  // budget" would push real money at a metric that doesn't pay for itself.
+  // Excluding it is what keeps the type's positioning honest, and it is a
+  // rule-level refusal rather than a UI omission so the engine cannot produce
+  // the recommendation at all.
+  if (ev.isEngagement) return null;
   const t = thresholds;
   const cur = ev.current.cplAgorot;
   const prev = ev.previous.cplAgorot;

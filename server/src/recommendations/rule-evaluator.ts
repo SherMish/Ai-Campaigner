@@ -26,6 +26,10 @@ export interface EvaluableCampaign {
   // carrier for the same reason: both callers of evaluateCampaign inherit it
   // automatically instead of one silently missing it.
   lastActionAtByType?: Record<string, Date> | null;
+  // AIC-107: same carrier, same reason as the two fields above — both
+  // callers of evaluateCampaign inherit it instead of one silently missing
+  // it. Gates increase_budget for engagement campaigns.
+  isEngagement?: boolean;
 }
 
 // Assemble the evidence a campaign's rules need, from the snapshot store.
@@ -97,6 +101,7 @@ export async function buildCampaignEvidence(
       .map((a) => ({ ...a, label: adSetLabels?.get(a.adSetId) })),
     flexibleCreativeAdSetIds,
     currentBudgetAgorot: campaign.currentBudgetAgorot,
+    isEngagement: campaign.isEngagement,
     deliveryDays: deliveryDaysActive(curDaily),
     deliveryProblemAdSetIds: (() => {
       const d = deliveryProblemAdSetIds ?? excluded;

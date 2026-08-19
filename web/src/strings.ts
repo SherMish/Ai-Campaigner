@@ -787,6 +787,16 @@ export const strings = {
         // class of small lie as a false "פעיל". The window is stated once
         // above the group (kpiWindow) rather than repeated three times.
         kpiCpl: "עלות לפנייה", kpiLeads: "פניות", kpiSpend: "הוצאה",
+        // AIC-107: the same three KPIs for an engagement campaign, where
+        // "פניות" would be simply false — there are no leads to count.
+        kpiCplEngagement: "עלות למעורבות", kpiLeadsEngagement: "מעורבות",
+        graphTitleEngagement: "מעורבות לפי שבוע",
+        // AIC-98: the lead-quality card is meaningless here ("how many were
+        // relevant?" has no subject), so it is replaced by a statement of
+        // what the engine does and does not do for this type — never an
+        // empty slot the customer has to interpret.
+        engagementScopeTitle: "מה נמדד בקמפיין הזה",
+        engagementScopeBody: "אנחנו משווים בין המודעות לפי עלות למעורבות ומזהים איזה תוכן עובד. אין כאן שאלת איכות פניות — הקמפיין לא אוסף פניות — ולא נמליץ על הגדלת תקציב.",
         // One explicit range switcher replaced the old "today card + 7-day
         // KPIs" split, which read as two contradictory sets of numbers. Now
         // there's one set and the customer picks the window.

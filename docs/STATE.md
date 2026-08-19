@@ -6,6 +6,44 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — AIC-107 slices 3+4: the dashboard stops calling engagements "פניות", and the engine stops offering to scale them
+Two honesty gaps that would have shipped with an engagement campaign the
+moment one existed.
+
+**Copy.** The dashboard hardcoded `פניות` / `עלות לפנייה` everywhere. For an
+engagement campaign both are simply false — there are no leads. KPI labels,
+the weekly graph title, and the lead-quality card are now result-type aware,
+keyed on `campaign.objective` (written from the destination at build time, so
+the UI and the engine read the same fact rather than guessing separately).
+The lead-quality card is not merely hidden: "how many were relevant?" has no
+subject here, so it is REPLACED (per AIC-98) by a statement of what the
+engine does and does not do for this type — comparison by cost-per-engagement,
+no lead-quality question, no budget-increase recommendations.
+
+**Engine.** `increase_budget` now refuses outright for an engagement campaign.
+This is a rule-level refusal, not a UI omission, so the recommendation cannot
+be produced at all: "cost per engagement is good, spend more" would push real
+money at a metric with no business outcome behind it, which is exactly the
+capability AIC-107 excludes on purpose. `isEngagement` rides the same carrier
+as `thresholdOverrides` and `lastActionAtByType` (EvaluableCampaign →
+CampaignEvidence), so both callers of `evaluateCampaign` inherit it rather
+than one silently missing it — and it is derived via `isEngagementResult()`
+from `lead_event_types`, the same single source of truth the metrics layer
+uses.
+
+Locked in by a test that runs the SAME evidence both ways: it must fire
+`increase_budget` for a lead campaign and must not for an engagement one.
+Creative comparison is deliberately untouched — cost-per-result is
+cost-per-result, and that rule ports unchanged.
+
+475 unit + 319 integration green (the 2 known pre-existing integration
+failures — operator-accounts, write-outbox — unchanged).
+
+Still open on AIC-107: engagement detection in the onboarding picker
+(adopting an existing OUTCOME_ENGAGEMENT campaign), tracking-health reporting
+"not applicable" rather than a silent pass, and recalibrated
+minimum-results-per-creative gates for engagement volume.
+
 ### 2026-08-19 — AIC-108: an Instagram ID could silently stop the engine, with no way to check it
 Confirmed the premise end to end before building, since the ticket flagged
 that the risk had been read from the call site rather than traced:
