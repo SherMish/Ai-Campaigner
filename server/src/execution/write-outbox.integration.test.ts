@@ -106,6 +106,40 @@ d("WriteOutbox (DB)", () => {
     await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
   });
 
+  // Found live 2026-08-19, on a real customer mid-onboarding. A row reached
+  // status='succeeded' with result=NULL, which is a PERMANENT deadlock:
+  //   - checkSettled needs status='succeeded' AND result -> returns null
+  //   - the claim needs status='pending'                  -> matches 0 rows
+  // so every retry forever threw "create already in progress — retry
+  // shortly". The message was actively false: nothing was in progress, and
+  // retrying could never help.
+  //
+  // Deliberately NOT auto-retried: we cannot know whether the original create
+  // reached Meta, and a blind retry could duplicate a real, spending object —
+  // the exact thing this outbox exists to prevent. So it fails LOUDLY and
+  // accurately instead, naming the state and what to check.
+  it("a 'succeeded' row with no recorded id fails with an accurate message, not a false 'in progress'", async () => {
+    const { campaignId, customerId } = await makeCampaign();
+    const outbox = new WriteOutbox(pool);
+    const writer = new CountingCreatingWriter();
+    const entry = { idempotencyKey: builderKey(campaignId, "create_ad_set", "adset-corrupt"), campaignId, recommendationId: null, kind: "create_ad_set" as const, payload: {} };
+
+    await outbox.enqueue(entry);
+    // The exact corrupt shape observed in production.
+    await pool.query(
+      `UPDATE meta_write_outbox SET status = 'succeeded', result = NULL WHERE idempotency_key = $1`,
+      [entry.idempotencyKey],
+    );
+
+    await expect(outbox.applyIdempotent(entry, writer)).rejects.toThrow(/no recorded Meta id/i);
+    // Must NOT say "in progress" — that sent an operator into an endless retry
+    // loop on a live call.
+    await expect(outbox.applyIdempotent(entry, writer)).rejects.not.toThrow(/already in progress/);
+    // And must never silently re-create, which could duplicate a live object.
+    expect(writer.calls).toBe(0);
+    await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
+  });
+
   it("a concurrent double-submit never calls Meta twice — the loser backs off instead of racing", async () => {
     const { campaignId, customerId } = await makeCampaign();
     const outbox = new WriteOutbox(pool);

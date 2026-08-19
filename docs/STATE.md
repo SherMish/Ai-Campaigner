@@ -6,6 +6,47 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — Cleaned up a real orphan; new design decided: a failed build leaves nothing behind
+**The incident.** A refused ad-set create (Meta: Page not linked to a WhatsApp
+Business Account) left campaign `120250929135090544` ACTIVE with zero ad sets
+on a real customer's ad account, unreferenced by our own `managed_campaigns`
+row. Not spending — nothing delivers without an ad set — but stranded.
+
+Removed at the user's instruction, and the cleanup had two halves, the second
+being the one that is easy to miss:
+- Deleted the campaign on Meta (`DELETE /{id}` → `{"success":true}`; account
+  now reports zero campaigns).
+- Deleted the 10 `meta_write_outbox` rows for that build. The outbox remembers
+  each created object's real Meta id, so leaving them would have made the next
+  attempt "resume" onto a campaign that no longer exists.
+
+The `managed_campaigns` shell row was deliberately kept — `agreed_budget_agorot
+= 2000`, `meta_campaign_id = null` — so the operator can retry cleanly.
+
+**Also found: a permanent deadlock in the outbox.** A row sat at
+`status='succeeded'` with `result=NULL`, which nothing can resolve —
+`checkSettled` requires a result, the claim requires `pending`. Every retry
+forever reported *"create already in progress — retry shortly"*, false on both
+counts. Now fails with what is actually true and says to check Meta first.
+Deliberately NOT auto-retried: we cannot know whether the original create
+reached Meta, and re-creating blindly could duplicate a live spending object.
+
+**The design decision (user).** AIC-50 kept partial creates as resume points.
+That reasoning rested on creates being PAUSED — AIC-106 made them ACTIVE the
+same day, turning every resume point into a live object. Replacement, now
+written up in [campaign-builder.md](features/campaign-builder.md) and clearly
+marked **decided, not yet built**:
+- a failed build rolls back every object it created, on Meta *and* in the
+  outbox — the ad account returns to its pre-attempt state;
+- resume moves to the client: the wizard's entered fields persist in browser
+  localStorage, cleared on successful submit and expiring after ~6 hours, so a
+  stale wizard can never be resumed into a different customer's session.
+
+**Also corrected:** AIC-50's section still stated the hard rule "every create
+sends `status=PAUSED`; there is no code path that can create a live object" —
+reversed by AIC-106 earlier the same day. Third stale-doc/spec correction
+today; the CLAUDE.md rule now covers exactly this class.
+
 ### 2026-08-19 — The operator sees the REAL error; and why a WhatsApp "verify" button can't be built
 Two findings from the same live incident.
 

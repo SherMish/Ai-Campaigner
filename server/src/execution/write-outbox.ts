@@ -136,6 +136,27 @@ export class WriteOutbox {
     if (claim.rows.length === 0) {
       const settledNow = await this.checkSettled(entry.idempotencyKey);
       if (settledNow) return settledNow;
+
+      // Found live 2026-08-19: a row can sit at status='succeeded' with
+      // result=NULL, which no code path can resolve — checkSettled needs a
+      // result, the claim needs 'pending'. Every retry forever reported
+      // "already in progress", which was FALSE: nothing was in progress and
+      // retrying could never help. Say what is actually true instead.
+      //
+      // Deliberately NOT auto-retried. We cannot know whether the original
+      // create reached Meta, and re-creating could duplicate a real, live,
+      // SPENDING object — precisely what this outbox exists to prevent. A
+      // human has to look at Meta and decide.
+      const { rows: state } = await this.pool.query<{ status: string }>(
+        `SELECT status FROM meta_write_outbox WHERE idempotency_key = $1`,
+        [entry.idempotencyKey],
+      );
+      if (state[0]?.status === "succeeded") {
+        throw new Error(
+          `outbox row ${entry.idempotencyKey} is marked succeeded but has no recorded Meta id — ` +
+            `check Meta for a matching object before retrying (retrying blindly could create a duplicate)`,
+        );
+      }
       throw new Error(`create already in progress for ${entry.idempotencyKey} — retry shortly`);
     }
 

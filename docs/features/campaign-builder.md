@@ -167,10 +167,14 @@ recommendation's target, so folding them into the recommendation-approval
 interface would be the wrong shape. `SafeExecutor`/recommendations are
 untouched by this ticket.
 
-**Hard rule, enforced in the adapter, not configurable by a caller:** every
-create sends `status=PAUSED`. There is no code path that can create a live
-object — `campaign-adapter.test.ts` pins this directly against the real
-field names sent to Meta.
+**This rule was REVERSED by AIC-106 (2026-08-19).** It used to read: "every
+create sends `status=PAUSED`; there is no code path that can create a live
+object." That is no longer true — creates send `status=ACTIVE` and the
+campaign spends the moment the build returns. `campaign-adapter.test.ts`
+still pins the status against the real field names sent to Meta; it now pins
+`ACTIVE`. See "Creation goes live immediately" below for what replaced the
+gate, and the section directly beneath this one for the consequence nobody
+noticed at the time.
 
 **Idempotent via the AIC-13 outbox, extended, not duplicated** (migration
 020 widens `meta_write_outbox.kind` to include the three create kinds + adds
@@ -227,6 +231,59 @@ rather than silently returning the WhatsApp shape — the fix for a real bug
 (2026-08-14) where `createAdSet` wrote `"CONVERSATIONS"`/`"WHATSAPP"` as
 inline literals nothing actually resolved from the campaign's real lead type,
 which is exactly how a Pixel campaign once reached Meta with a WhatsApp shape.
+
+### DECIDED, NOT YET BUILT — a failed build must leave nothing behind
+
+**Status: design decision (user, 2026-08-19). Not implemented. Do not read
+the sections below as describing this behaviour yet.**
+
+AIC-50 deliberately treated a partially-created build as a **resume point**:
+objects already created on Meta were kept, and a retry reused them rather
+than making duplicates. The original wording was "an already-created PAUSED
+object from a failed attempt is never an orphan to clean up — it's exactly
+the resume point the next call expects to find."
+
+That reasoning depended entirely on the word **PAUSED**. AIC-106 made creates
+ACTIVE the same day, which silently converted every resume point into a
+*live* object sitting in a customer's ad account. The premise expired and the
+design outlived it — found live on a real onboarding call, where a refused
+ad-set create left an ACTIVE campaign with zero ad sets stranded on the
+customer's account, unreferenced by our own DB.
+
+**The replacement design:**
+
+1. **Meta is all-or-nothing.** If any step of a build fails, every object that
+   build created is removed, returning the ad account to exactly its
+   pre-attempt state. No partial campaigns, no orphaned ad sets, nothing for
+   an operator to find and wonder about.
+2. **Rollback must also purge that build's outbox rows.** This is the part
+   that is easy to miss and fatal to get wrong: the outbox remembers each
+   created object's real Meta id. Deleting objects on Meta while leaving
+   those rows behind means the next attempt "resumes" onto ids that no
+   longer exist. Cleanup is not complete until both sides are clean.
+3. **Resume moves to the client, where it belongs.** What an operator
+   actually wants back after a failure is *the work they typed* — goal,
+   budget, audience, ad copy — not Meta objects. So the wizard's entered
+   fields persist in browser localStorage, and:
+   - they are cleared on a **successful** submit, and
+   - they **expire on their own** after ~6 hours, so a stale half-filled
+     wizard from a previous call can never be silently resumed into a
+     different customer's session.
+
+**Why this is better than what it replaces.** The old design optimised for
+not re-calling Meta; the new one optimises for never leaving a live object
+nobody approved. Re-creating a campaign is cheap and idempotent-safe once the
+outbox rows are gone. An unexplained ACTIVE campaign in a paying customer's
+ad account is not cheap — it is the kind of thing that erodes trust in every
+number the product shows.
+
+**Known trade-off, stated rather than buried:** a transient failure (rate
+limit, timeout) will also roll back, so the retry rebuilds from scratch —
+more Meta writes than the resume design needed. That is the accepted cost of
+the guarantee. If it proves expensive in practice, the narrower option is to
+roll back only on terminal refusals and keep resume for transient ones, which
+needs a trustworthy transient-vs-terminal signal (`is_transient` exists on
+Meta's error body; it has not been verified across error types).
 
 ### The destination choice (AIC-89)
 
