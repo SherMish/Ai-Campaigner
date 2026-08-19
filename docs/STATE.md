@@ -6,6 +6,29 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — Instagram picker: also in steps 1 and 2, where the script already promised it
+User report: "still dont see instagram picker" — while looking at step 1,
+where it was never added. Real gap, not user error: step 1's own script text
+says "אם נדרש, חוזרים על אותו תהליך עבור עמוד הפייסבוק (Page) / אינסטגרם
+(Instagram) תחת דפים" — but only the Page had a matching field. Instagram was
+only ever added to step 4's provisioning form (AIC-108 mirrored the `page_id`
+TEXT FIELD that lived there before it became a picker), and nobody carried it
+back to steps 1/2 the way the Page picker already had it in both places.
+
+Added the same picker + check button to step 1 and step 2, reusing the
+`igAccounts` list step 4 already loads (no new fetch) and the same
+carry-over sync the Page field already had: a successful check in step 1/2
+fills step 4's field automatically, so nothing is re-entered.
+
+Verified live against the real customer (act_1573023157816786,
+@ads_agent_il): both step-1 and step-4 dropdowns list the account; selecting
++ checking in step 1 shows "תקין" and carries the id into step 4's field.
+
+Also confirmed while investigating: the earlier "not there" report was a
+false alarm about STEP 4 specifically — that picker was correctly rendering,
+just as a collapsed `<select>` showing its placeholder until opened. The real
+gap was step 1/2 having no field at all, not step 4 being broken.
+
 ### 2026-08-19 — AIC-105 Branch A: the build refuses an incomplete campaign; spec corrected
 Two things, one unit of work.
 

@@ -699,6 +699,16 @@ leaked another customer's Page three times before `promote_pages` fixed it):
 `act_2181076988590009/instagram_accounts` returns `[]` for the same token, so
 one customer's IG account cannot be offered to another.
 
+**Reachable in step 1 and step 2 too, not only step 4.** Found live
+2026-08-19: step 1's own script text already told the operator to "repeat the
+process for the Facebook Page / Instagram, under Pages" — but only the Page
+had a field there. Instagram was only ever added to step 4's provisioning
+form (AIC-108 mirrored the `page_id` text field that already lived there),
+and nobody went back to add it where the script promised it. The picker in
+steps 1/2 shares the same `igAccounts` list step 4 loads — no new fetch —
+and a successful check there carries the id into step 4 automatically,
+mirroring the existing Page carry-over.
+
 **So Instagram is a picker too, not a text field.** `GET
 /admin/customers/:id/onboarding/instagram-accounts?metaAdAccountId=…` →
 `listInstagramAccounts`, scoped to the same ad account the Page list uses.

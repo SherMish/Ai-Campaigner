@@ -119,6 +119,10 @@ export function AdminOnboarding() {
 
   const [acctId, setAcctId] = useState("");
   const [pageId, setPageId] = useState("");
+  // Same role as pageId (step 1/2's check-button value), for Instagram. Kept
+  // separate from form.instagramId (step 4's provisioning value) — same split
+  // as pageId/pageIdForm, synced on a successful check in runCheck below.
+  const [instagramId, setInstagramId] = useState("");
   const [checkingAsset, setCheckingAsset] = useState<"ad_account" | "page" | "instagram" | null>(null);
   const [checkingToken, setCheckingToken] = useState(false);
   const [tokenMissing, setTokenMissing] = useState<string[] | null>(null);
@@ -223,9 +227,9 @@ export function AdminOnboarding() {
   // the cross-customer mix-up the scoping exists to prevent.
   useEffect(() => {
     if (!igAccounts) return;
-    setForm((f) =>
-      !f.instagramId || igAccounts.some((a) => a.id === f.instagramId) ? f : { ...f, instagramId: "" },
-    );
+    const ok = (v: string) => !v || igAccounts.some((a) => a.id === v);
+    if (!ok(instagramId)) setInstagramId("");
+    setForm((f) => (ok(f.instagramId) ? f : { ...f, instagramId: "" }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [igAccounts]);
   useEffect(() => {
@@ -358,6 +362,11 @@ export function AdminOnboarding() {
         // put in the provisioning form themselves.
         if (asset === "page" && r.result.verdict.ok) {
           setForm((f) => (f.pageIdForm ? f : { ...f, pageIdForm: assetId.trim() }));
+        }
+        // Same carry-over for Instagram: verified once in step 1/2, never
+        // re-typed in step 4.
+        if (asset === "instagram" && r.result.verdict.ok) {
+          setForm((f) => (f.instagramId ? f : { ...f, instagramId: assetId.trim() }));
         }
         // An ad account that just passed here may not be in the step-4
         // picker's list yet — that list was fetched once, at mount, and this
@@ -658,6 +667,40 @@ export function AdminOnboarding() {
           </button>
         </div>
         <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>{w.pageRequirementNote}</p>
+
+        {/* Instagram, mirroring the Page picker directly above. Previously
+            only reachable in step 4's provisioning form, even though this
+            step's own script tells the operator to repeat the sharing step
+            for Instagram here — a gap between the copy and the UI it
+            described (found live, user report 2026-08-19). Same igAccounts
+            list step 4 already loads (scoped to pageScopeAccount), so no new
+            fetch — just a second control over data that was already there. */}
+        <div className="row gap16" style={{ marginTop: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div className="field" style={{ minWidth: 260 }}>
+            <label>{w.fieldInstagramId}</label>
+            <select value={instagramId} onChange={(e) => setInstagramId(e.target.value)} disabled={loadingIg}>
+              <option value="">{w.pickInstagramPlaceholder}</option>
+              {(igAccounts ?? []).map((a) => <option key={a.id} value={a.id}>@{a.username}</option>)}
+            </select>
+            {loadingIg && <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickInstagramLoading}</p>}
+            {igError && (
+              <p style={{ color: "#c0362c", fontSize: "0.78rem", marginTop: 4 }}>
+                {igError}{" "}
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => loadInstagram(pageScopeAccount)}>{w.pickRetry}</button>
+              </p>
+            )}
+            {!pageScopeAccount && (
+              <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickPageNeedsAccount}</p>
+            )}
+            {!loadingIg && !igError && pageScopeAccount && igAccounts?.length === 0 && (
+              <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickInstagramEmpty}</p>
+            )}
+          </div>
+          <button className="btn btn-outline btn-sm" disabled={checkingAsset !== null || !instagramId.trim()} onClick={() => runCheck("instagram", instagramId)}>
+            {checkingAsset === "instagram" ? w.checking : w.checkInstagram}
+          </button>
+        </div>
+        <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>{w.instagramGateNote}</p>
         <CheckResult check={state?.checks.page} />
       </div>
 
@@ -679,9 +722,13 @@ export function AdminOnboarding() {
           <button className="btn btn-outline btn-sm" disabled={checkingAsset !== null || !pageId.trim()} onClick={() => runCheck("page", pageId)}>
             {checkingAsset === "page" ? w.checking : w.checkPage}
           </button>
+          <button className="btn btn-outline btn-sm" disabled={checkingAsset !== null || !instagramId.trim()} onClick={() => runCheck("instagram", instagramId)}>
+            {checkingAsset === "instagram" ? w.checking : w.checkInstagram}
+          </button>
         </div>
         <CheckResult check={state?.checks.ad_account} />
         <CheckResult check={state?.checks.page} />
+        <CheckResult check={state?.checks.instagram} />
       </div>
 
       {/* Step 3 — token scope check. The one failure assignment can never fix. */}
