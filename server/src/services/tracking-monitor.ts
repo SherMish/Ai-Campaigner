@@ -31,6 +31,21 @@ export async function recordCampaignTracking(deps: {
 }): Promise<{ raisedOps: boolean }> {
   const { pool, ops, campaignId, customerId, summary } = deps;
 
+  // AIC-107: `not_applicable` is persisted as ok-with-a-reason, unlike
+  // `unknown`. The distinction matters: `unknown` must not overwrite a real
+  // prior verdict (it means "we could not tell"), whereas not-applicable IS
+  // the settled truth for this campaign type and should stop any stale
+  // `broken` flag from an earlier lead configuration hanging around.
+  if (summary.state === "not_applicable") {
+    await pool.query(
+      `UPDATE managed_campaigns
+       SET tracking_ok = true, tracking_reason = $2, tracking_detail = $3, tracking_checked_at = now()
+       WHERE id = $1`,
+      [campaignId, summary.reason, JSON.stringify(summary.detail)],
+    );
+    return { raisedOps: false };
+  }
+
   if (summary.state === "unknown") {
     // Record only that we looked — never a verdict.
     await pool.query(

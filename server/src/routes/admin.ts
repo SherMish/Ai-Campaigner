@@ -624,7 +624,7 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
     return;
   }
   let budget: number | undefined;
-  let destinationType: "whatsapp" | "website" | undefined;
+  let destinationType: "whatsapp" | "website" | "engagement" | undefined;
   if (hasCampaign) {
     budget = Number(b.agreedBudgetAgorot);
     if (!Number.isInteger(budget) || budget <= 0) {
@@ -634,9 +634,12 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
     // AIC-103: not a free-text-with-a-default anymore — the wizard must ask
     // "where does someone land after clicking your ad?" and get a real
     // answer, since that answer decides which fields below are required.
-    destinationType = b.destinationType === "website" ? "website" : b.destinationType === "whatsapp" ? "whatsapp" : undefined;
+    destinationType = b.destinationType === "website" ? "website"
+      : b.destinationType === "whatsapp" ? "whatsapp"
+      : b.destinationType === "engagement" ? "engagement"
+      : undefined;
     if (!destinationType) {
-      res.status(400).json({ error: "destinationType ('whatsapp' or 'website') is required" });
+        res.status(400).json({ error: "destinationType ('whatsapp', 'website' or 'engagement') is required" });
       return;
     }
   }

@@ -311,6 +311,7 @@ d("onboarding wizard routes (AIC-101)", () => {
     const WHATSAPP_CAMP = "camp_whatsapp_1";
     const PIXEL_CAMP = "camp_pixel_1";
     const TRAFFIC_CAMP = "camp_traffic_1";
+    const ENGAGEMENT_CAMP = "camp_engagement_1";
     const EMPTY_CAMP = "camp_empty_1";
 
     // A dedicated fake, local to this block: the shared fakeGraph above has
@@ -333,6 +334,7 @@ d("onboarding wizard routes (AIC-101)", () => {
               { id: WHATSAPP_CAMP, name: "WhatsApp campaign", status: "ACTIVE", effective_status: "ACTIVE", objective: "OUTCOME_LEADS", daily_budget: "2000" },
               { id: PIXEL_CAMP, name: "Website campaign", status: "ACTIVE", effective_status: "ACTIVE", objective: "OUTCOME_LEADS", daily_budget: "3000" },
               { id: TRAFFIC_CAMP, name: "Old traffic campaign", status: "PAUSED", effective_status: "PAUSED", objective: "OUTCOME_TRAFFIC", daily_budget: null },
+              { id: ENGAGEMENT_CAMP, name: "Engagement test", status: "ACTIVE", effective_status: "ACTIVE", objective: "OUTCOME_ENGAGEMENT", daily_budget: "1500" },
               { id: EMPTY_CAMP, name: "Brand new, no ad sets yet", status: "ACTIVE", effective_status: "ACTIVE", objective: "OUTCOME_LEADS", daily_budget: null },
             ],
           });
@@ -342,6 +344,9 @@ d("onboarding wizard routes (AIC-101)", () => {
         }
         if (u.includes(`${PIXEL_CAMP}/adsets`)) {
           return json({ data: [{ id: "as_px", optimization_goal: "OFFSITE_CONVERSIONS", promoted_object: { pixel_id: "984664453249037", custom_event_type: "COMPLETE_REGISTRATION" } }] });
+        }
+        if (u.includes(`${ENGAGEMENT_CAMP}/adsets`)) {
+          return json({ data: [{ id: "as_eng", optimization_goal: "POST_ENGAGEMENT", destination_type: null, promoted_object: null }] });
         }
         if (u.includes(`${TRAFFIC_CAMP}/adsets`)) {
           return json({ data: [{ id: "as_tr", optimization_goal: "LINK_CLICKS" }] });
@@ -414,6 +419,25 @@ d("onboarding wizard routes (AIC-101)", () => {
       expect(campaigns.find((c) => c.id === PIXEL_CAMP)?.destination).toEqual({
         supported: true, destinationType: "website",
         trackingPixelId: "984664453249037", leadEventTypes: ["offsite_conversion.fb_pixel_complete_registration"],
+      });
+    });
+
+    // AIC-107: engagement is a supported type now, so the picker must offer
+    // it — and must carry its RESULT definition, detected from Meta rather
+    // than asked, exactly like the website type carries its pixel/event.
+    it("an OUTCOME_ENGAGEMENT campaign is detected as adoptable, with its result definition", async () => {
+      const id = await seedCustomer("disc-engagement");
+      vi.stubGlobal("fetch", fakeDiscoveryGraph(ACCT));
+      const res = await request(app)
+        .get(`/api/admin/customers/${id}/onboarding/campaigns`)
+        .query({ metaAdAccountId: ACCT })
+        .set("Authorization", ADMIN);
+
+      const eng = res.body.campaigns.find((c: { id: string }) => c.id === ENGAGEMENT_CAMP);
+      expect(eng.destination).toEqual({
+        supported: true,
+        destinationType: "engagement",
+        leadEventTypes: ["post_engagement"],
       });
     });
 

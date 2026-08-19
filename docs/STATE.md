@@ -6,6 +6,47 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — AIC-107 slices 5+6: Measurement Trust says "not applicable", and an existing engagement campaign can be adopted
+**Tracking health.** An engagement campaign is counted on-platform by Meta —
+there is no Pixel that could silently break — so AIC-88's Measurement Trust
+question does not apply to it. `summarizeTracking` gained a FOURTH state,
+`not_applicable`, deliberately folded into neither `ok` nor `unknown`: `ok`
+would assert measurement health nobody checked, and `unknown` would imply a
+check that could succeed later. Neither is true. The ticket calls this out
+explicitly — report not-applicable with a reason, never a silent pass.
+
+It is evaluated BEFORE the "no ad sets readable" branch on purpose: an
+engagement campaign with zero readable ad sets still isn't a measurement
+mystery, and `unknown` there would send someone hunting a Pixel problem that
+cannot exist. `recordCampaignTracking` persists it as ok-with-a-reason (unlike
+`unknown`, which only stamps `tracking_checked_at`), so a stale `broken` flag
+from an earlier lead configuration can't linger.
+
+**Picker.** `detectDestination` now recognises `POST_ENGAGEMENT` and returns
+`{ destinationType: "engagement", leadEventTypes: ["post_engagement"] }` —
+detected from Meta, never asked, the same rule the website type already
+follows for its pixel/event. Checked before the lead-implication filter,
+because POST_ENGAGEMENT deliberately implies no lead action and would
+otherwise be discarded as `unrecognized_objective` — which was only true
+while engagement was unsupported. Engagement + lead ad sets in one campaign
+is `mixed_ad_sets`, the existing ambiguity reason: one campaign cannot have
+two result definitions.
+
+Provisioning accepts the third `destinationType` (the two-way ternary became
+a lookup, so engagement can't be silently treated as website), and the wizard
+STATES the detected type rather than offering a third radio an operator could
+set against what Meta actually reports — with the WhatsApp/website field
+groups correctly absent.
+
+479 unit + 33 onboarding integration green; lead detection regression-tested
+unchanged (whatsapp → whatsapp, pixel → website, traffic → unsupported).
+
+This completes AIC-107's core. Not done, and deliberately so: the ticket's
+evidence-gate recalibration (minimum-results-per-creative is noisier per unit
+for engagement, and the ticket warns against inheriting the lead gates
+unexamined) — that needs real engagement volume to calibrate against, not a
+guessed constant.
+
 ### 2026-08-19 — AIC-107 slices 3+4: the dashboard stops calling engagements "פניות", and the engine stops offering to scale them
 Two honesty gaps that would have shipped with an engagement campaign the
 moment one existed.

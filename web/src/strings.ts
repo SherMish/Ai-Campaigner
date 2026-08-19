@@ -524,6 +524,11 @@ export const strings = {
       // (its old label) was misleading for the build-a-new-campaign path.
       pageRequirementNote: "לחיבור קמפיין קיים — לא חובה. לבניית קמפיין חדש — חובה, כי כל מודעה רצה דרך עמוד.",
       pickCampaignEmpty: "לא נמצאו קמפיינים בחשבון הפרסום הזה.",
+      // AIC-107: engagement is DETECTED from Meta's own objective, never
+      // chosen by hand here — so it is stated, not offered as a radio the
+      // operator could set against what Meta actually reports.
+      destinationEngagement: "מעורבות",
+      destinationEngagementDetected: "זוהה קמפיין מעורבות. אין יעד פנייה להגדיר — האינטראקציה קורית על הפוסט עצמו, ולכן גם אין מספר וואטסאפ, כתובת אתר או פיקסל.",
       pickCampaignError: "לא הצלחנו לטעון את רשימת הקמפיינים.",
       pickRetry: "ניסיון נוסף",
       // AIC-105 Branch A: the customer's ad account has zero campaigns —

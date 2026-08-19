@@ -50,6 +50,7 @@ interface AdAccountOption {
 type DetectedDestination =
   | { supported: true; destinationType: "whatsapp" }
   | { supported: true; destinationType: "website"; trackingPixelId: string; leadEventTypes: [string] }
+  | { supported: true; destinationType: "engagement"; leadEventTypes: [string] }
   | { supported: false; reason: "no_ad_sets" | "unrecognized_objective" | "mixed_ad_sets" };
 type UnsupportedReason = Extract<DetectedDestination, { supported: false }>["reason"];
 interface PageOption {
@@ -123,7 +124,7 @@ export function AdminOnboarding() {
     // AIC-103: destinationType drives which fields below are actually
     // required — asked explicitly (default "whatsapp", the P0 recommendation)
     // rather than inferred, since nothing exists yet to infer it from.
-    destinationType: "whatsapp" as "whatsapp" | "website",
+    destinationType: "whatsapp" as "whatsapp" | "website" | "engagement",
     whatsappDestination: "",
     leadEventTypes: "", trackingPixelId: "", websiteUrl: "",
   });
@@ -286,6 +287,11 @@ export function AdminOnboarding() {
         next.destinationType = camp.destination.destinationType;
         if (camp.destination.destinationType === "website") {
           next.trackingPixelId = camp.destination.trackingPixelId;
+          next.leadEventTypes = camp.destination.leadEventTypes.join(",");
+        }
+        // AIC-107: engagement carries its result definition too, but no
+        // pixel/URL — detected, never asked, same rule as the other types.
+        if (camp.destination.destinationType === "engagement") {
           next.leadEventTypes = camp.destination.leadEventTypes.join(",");
         }
       }
@@ -666,7 +672,10 @@ export function AdminOnboarding() {
             meaningful once there's an actual campaign to attach it to
             (Branch A's "no campaigns yet" path asks this inside the builder
             instead — asking twice would be redundant). */}
-        {!noCampaignsForSelectedAccount && (
+        {!noCampaignsForSelectedAccount && form.destinationType === "engagement" && (
+          <p className="muted" style={{ fontSize: "0.85rem", marginTop: 12 }}>ℹ️ {w.destinationEngagementDetected}</p>
+        )}
+        {!noCampaignsForSelectedAccount && form.destinationType !== "engagement" && (
           <div style={{ marginTop: 12 }}>
             <label style={{ display: "block", marginBottom: 6, fontSize: "0.9rem" }}>{w.fieldDestinationType}</label>
             <div className="row gap12">
@@ -755,7 +764,9 @@ export function AdminOnboarding() {
               {(campaigns ?? []).map((c) => (
                 <option key={c.id} value={c.id} disabled={!c.destination.supported}>
                   {c.name} — {c.destination.supported
-                    ? (c.destination.destinationType === "whatsapp" ? w.destinationWhatsapp : w.destinationWebsite)
+                    ? (c.destination.destinationType === "whatsapp" ? w.destinationWhatsapp
+                       : c.destination.destinationType === "engagement" ? w.destinationEngagement
+                       : w.destinationWebsite)
                     : campaignUnsupportedReason(c.destination.reason)}
                 </option>
               ))}
@@ -802,7 +813,7 @@ export function AdminOnboarding() {
                     : null;
                 })()}
               </div>
-              {form.destinationType === "whatsapp" ? (
+              {form.destinationType === "engagement" ? null : form.destinationType === "whatsapp" ? (
                 <div className="field"><label>{w.fieldWhatsappDestination} *</label>
                   <input required value={form.whatsappDestination} onChange={(e) => setForm({ ...form, whatsappDestination: e.target.value })} placeholder="972…" /></div>
               ) : (

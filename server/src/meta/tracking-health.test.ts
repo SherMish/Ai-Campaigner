@@ -118,7 +118,7 @@ describe("summarizeTracking", () => {
 
   it("UNKNOWN when no ad set's goal implies a countable lead event", () => {
     const s = summarizeTracking(
-      [{ ...PIXEL_ADSET, optimizationGoal: "LINK_CLICKS", customEventType: null }],
+      [{ ...PIXEL_ADSET, optimizationGoal: "LINK_CLICKS", customEventType: null, destinationType: null, pixelId: null }],
       WHATSAPP_DEFAULT,
     );
     expect(s.state).toBe("unknown");
@@ -148,7 +148,7 @@ describe("summarizeTracking", () => {
 
   it("a non-judgeable ad set alongside a matching one does NOT make it broken", () => {
     const s = summarizeTracking(
-      [WHATSAPP_ADSET, { ...PIXEL_ADSET, optimizationGoal: "LINK_CLICKS", customEventType: null }],
+      [WHATSAPP_ADSET, { ...PIXEL_ADSET, optimizationGoal: "LINK_CLICKS", customEventType: null, destinationType: null, pixelId: null }],
       WHATSAPP_DEFAULT,
     );
     expect(s.state).toBe("ok");
@@ -203,5 +203,54 @@ describe("detectDestination", () => {
   it("a custom (unrecognized) pixel event maps to nothing — still 'unrecognized_objective', never a guess", () => {
     const custom: AdSetTrackingConfig = { ...PIXEL_ADSET, customEventType: "CUSTOM" };
     expect(detectDestination([custom])).toEqual({ supported: false, reason: "unrecognized_objective" });
+  });
+});
+
+// AIC-107: an engagement campaign is counted on-platform by Meta. There is no
+// Pixel that could silently break, so the Measurement Trust question does not
+// apply — and the ticket is explicit that this must be REPORTED, never a
+// silent pass.
+describe("engagement campaigns — not applicable, never a silent pass (AIC-107)", () => {
+  const ENGAGEMENT = ["post_engagement"];
+
+  it("reports not_applicable with a reason, not ok", () => {
+    const r = summarizeTracking(
+      [{ adSetId: "as_1", optimizationGoal: "POST_ENGAGEMENT", customEventType: null, destinationType: null, pixelId: null }],
+      ENGAGEMENT,
+    );
+    expect(r.state).toBe("not_applicable");
+    // The distinction that matters: `ok` would assert measurement health we
+    // never checked; not_applicable says the check doesn't apply.
+    expect(r.state).not.toBe("ok");
+    expect(r.reason).toBeTruthy();
+  });
+
+  it("stays not_applicable even with NO readable ad sets — that is not a measurement mystery", () => {
+    // Deliberately ordered before the "no ad sets readable" branch: reporting
+    // `unknown` here would send someone hunting for a Pixel problem that
+    // cannot exist for this campaign type.
+    expect(summarizeTracking([], ENGAGEMENT).state).toBe("not_applicable");
+  });
+
+  it("never reports broken for an engagement campaign, whatever the ad sets say", () => {
+    const r = summarizeTracking(
+      [{ adSetId: "as_1", optimizationGoal: "OFFSITE_CONVERSIONS", customEventType: "LEAD", destinationType: null, pixelId: "px_1" }],
+      ENGAGEMENT,
+    );
+    expect(r.state).toBe("not_applicable");
+  });
+
+  it("REGRESSION: a real lead campaign is judged exactly as before", () => {
+    const ok = summarizeTracking(
+      [{ adSetId: "as_1", optimizationGoal: "CONVERSATIONS", customEventType: null, destinationType: null, pixelId: null }],
+      ["onsite_conversion.messaging_conversation_started"],
+    );
+    expect(ok.state).toBe("ok");
+
+    const broken = summarizeTracking(
+      [{ adSetId: "as_1", optimizationGoal: "OFFSITE_CONVERSIONS", customEventType: "LEAD", destinationType: null, pixelId: "px_1" }],
+      ["onsite_conversion.messaging_conversation_started"],
+    );
+    expect(broken.state).toBe("broken");
   });
 });

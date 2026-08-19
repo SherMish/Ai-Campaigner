@@ -1,7 +1,7 @@
 import type pg from "pg";
 import type { AccessVerdict, CheckedAsset } from "../meta/access-layers.js";
 import type { AssetProbeResult } from "../meta/access-probe.js";
-import { FIXED_DESTINATION, WEBSITE_DESTINATION, missingRequiredFields, type CampaignRequiredField } from "@aic/shared";
+import { FIXED_DESTINATION, WEBSITE_DESTINATION, ENGAGEMENT_DESTINATION, missingRequiredFields, type CampaignRequiredField } from "@aic/shared";
 
 // AIC-101 + AIC-68 — the onboarding wizard's state and its provisioning step.
 //
@@ -185,7 +185,7 @@ export interface ProvisionInput {
   // time. Drives which of the fields above are actually required (see the
   // shared CAMPAIGN_TYPE_REQUIRED_FIELDS table) and what lead_event_types
   // defaults to when left blank.
-  destinationType?: "whatsapp" | "website";
+  destinationType?: "whatsapp" | "website" | "engagement";
   // AIC-103: found live — this was NEVER a field on the provisioning form at
   // all, so every WhatsApp campaign provisioned through this wizard got
   // whatsapp_destination = '' (the column's own NOT NULL DEFAULT) regardless
@@ -230,7 +230,7 @@ export class InstagramNotReadableError extends Error {
 // free_beta_signups_leads (provisioned complete-looking, actually missing
 // website_url, discovered only via a customer's raw 409 months later).
 export class IncompleteProvisioningError extends Error {
-  constructor(public readonly destinationType: "whatsapp" | "website", public readonly missingFields: CampaignRequiredField[]) {
+  constructor(public readonly destinationType: "whatsapp" | "website" | "engagement", public readonly missingFields: CampaignRequiredField[]) {
     super(`refusing to provision a ${destinationType} campaign missing required field(s): ${missingFields.join(", ")}`);
     this.name = "IncompleteProvisioningError";
   }
@@ -300,7 +300,13 @@ export async function provisionConnection(
   // account alone (Branch A) has no destination to validate yet.
   if (hasCampaign) {
     const destinationType = input.destinationType ?? "whatsapp";
-    const missing = missingRequiredFields(destinationType === "whatsapp" ? FIXED_DESTINATION : WEBSITE_DESTINATION, {
+    // AIC-107: three types now, so the mapping is a lookup rather than a
+    // two-way ternary that would silently treat engagement as website.
+    const destinationKey =
+      destinationType === "whatsapp" ? FIXED_DESTINATION
+      : destinationType === "engagement" ? ENGAGEMENT_DESTINATION
+      : WEBSITE_DESTINATION;
+    const missing = missingRequiredFields(destinationKey, {
       whatsappDestination: input.whatsappDestination ?? null,
       websiteUrl: input.websiteUrl ?? null,
       trackingPixelId: input.trackingPixelId ?? null,

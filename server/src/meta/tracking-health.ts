@@ -1,3 +1,4 @@
+import { isEngagementResult } from "@aic/shared";
 // AIC-88: does this campaign's DECLARED lead definition actually match what
 // Meta is configured to optimize for?
 //
@@ -58,7 +59,15 @@ export interface TrackingReader {
 // module otherwise mirrors (delivery-health writes its flag unconditionally),
 // so `recordCampaignTracking` deliberately does NOT persist `tracking_ok` on
 // `unknown`.
-export type TrackingState = "ok" | "broken" | "unknown";
+// AIC-107 adds a FOURTH state, `not_applicable`, and it is deliberately not
+// folded into either `ok` or `unknown`. An engagement campaign is counted
+// natively by Meta on-platform: there is no Pixel that could silently break,
+// so "measurement is healthy" (`ok`) would imply a check we never performed,
+// and "we could not determine this" (`unknown`) would imply a check that
+// could succeed later. Neither is true — the check does not apply. The
+// ticket calls this out explicitly: report not-applicable with a reason,
+// never a silent pass.
+export type TrackingState = "ok" | "broken" | "unknown" | "not_applicable";
 
 export interface TrackingSummary {
   state: TrackingState;
@@ -158,6 +167,17 @@ export function summarizeTracking(
   configs: AdSetTrackingConfig[],
   leadEventTypes: readonly string[],
 ): TrackingSummary {
+  // AIC-107: checked FIRST, before "no ad sets readable" — an engagement
+  // campaign with zero readable ad sets still isn't a measurement question,
+  // and reporting `unknown` there would invite someone to go looking for a
+  // Pixel problem that cannot exist.
+  if (isEngagementResult(leadEventTypes)) {
+    return {
+      state: "not_applicable",
+      reason: "engagement is counted on-platform by Meta — there is no Pixel or off-site event that could silently break",
+      detail: { declaredLeadEventTypes: [...leadEventTypes] },
+    };
+  }
   if (configs.length === 0) {
     return { state: "unknown", reason: "no ad sets readable", detail: {} };
   }
@@ -218,10 +238,30 @@ export function summarizeTracking(
 export type DetectedDestination =
   | { supported: true; destinationType: "whatsapp" }
   | { supported: true; destinationType: "website"; trackingPixelId: string; leadEventTypes: [string] }
+  // AIC-107: adoptable now that engagement is a supported campaign type.
+  // Carries leadEventTypes for the same reason the website variant does —
+  // provisioning writes the campaign's RESULT definition from what was
+  // detected, never from what an operator was asked to guess.
+  | { supported: true; destinationType: "engagement"; leadEventTypes: [string] }
   | { supported: false; reason: "no_ad_sets" | "unrecognized_objective" | "mixed_ad_sets" };
 
 export function detectDestination(configs: AdSetTrackingConfig[]): DetectedDestination {
   if (configs.length === 0) return { supported: false, reason: "no_ad_sets" };
+
+  // AIC-107: detected BEFORE the lead-implication filter below, because
+  // POST_ENGAGEMENT deliberately implies no lead action — it would otherwise
+  // be filtered out and the campaign reported as `unrecognized_objective`,
+  // which was true only while engagement was unsupported.
+  const engagementGoals = configs.filter(
+    (c) => (c.optimizationGoal ?? "").toUpperCase() === "POST_ENGAGEMENT",
+  );
+  if (engagementGoals.length > 0) {
+    // Mixed engagement + lead ad sets is the same ambiguity `mixed_ad_sets`
+    // already exists for: one campaign cannot have two result definitions.
+    const leadish = configs.filter((c) => impliedLeadActionType(c) !== null);
+    if (leadish.length > 0) return { supported: false, reason: "mixed_ad_sets" };
+    return { supported: true, destinationType: "engagement", leadEventTypes: ["post_engagement"] };
+  }
 
   // Same filtering discipline as summarizeTracking: an ad set whose goal
   // implies nothing (LINK_CLICKS, REACH, a secondary test ad set, …) is
