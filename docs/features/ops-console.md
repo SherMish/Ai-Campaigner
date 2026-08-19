@@ -668,24 +668,36 @@ started requiring a Page to BUILD one, which is exactly the contradiction an
 operator hit live. The label now carries both cases explicitly rather than
 picking whichever is true more often.
 
-**Instagram is currently DISABLED in the form, and the reason is an App
-setting, not a token one.** Confirmed live 2026-08-19: the permission list
-shown when minting a System User token does not contain `instagram_basic` at
-all — Meta's own dialog explains why ("an app admin may need to customize or
-add a use case to this app"). Our Meta App has no Instagram use case, so no
-token minted from it can carry the scope, so we cannot read (let alone list)
-an IG account. Every Instagram check therefore resolves to layer 3
-`token_missing_scopes` and the gate below refuses the save — meaning the
-field was impossible to complete. A field nobody can fill is a trap on a live
-call, so it renders disabled with that reason (AIC-98).
+**Instagram rides on the ADS grant — it needs no `instagram_*` scope and no
+Meta App use case.** This was briefly believed to be blocked, on the strength
+of the token-minting permission list not offering `instagram_basic`. Measuring
+it disproved that. Confirmed live 2026-08-19 against the production System
+User token, whose scopes contain no `instagram_*` entry whatsoever: once the
+customer grants partner access to the ad account, the IG account attached to
+it becomes readable both ways —
 
-Nothing is lost by this: `instagram_id` has no live consumer, and zero
-connections have one set. To re-enable, add the Instagram use case to the
-Meta App, re-mint the System User token with `instagram_basic` (plus
-`instagram_manage_ads` if IG placements are ever wanted), rotate
-`META_SYSTEM_USER_TOKEN`, and flip `INSTAGRAM_SUPPORTED` in
-`AdminOnboarding.tsx` — the verification and gate below are already built and
-need no change.
+    act_1573023157816786/instagram_accounts  -> [{id: 17841447360487819, username: ads_agent_il}]
+    17841447360487819?fields=id,username     -> 200 OK
+
+The lesson is the one this whole module exists for: **the layer that grants
+access is not always the layer you would predict.** IG is reached as an
+ad-account asset, so `ads_management` carries it. Reasoning from how Instagram
+"usually" works produced a confident, wrong answer twice — once about the
+token, once about the App.
+
+`REQUIRED_SCOPES.instagram` is therefore `["ads_management"]`, and that entry
+is deliberately the MINIMAL claim. The two error directions are not
+symmetric: requiring too much makes an unreadable id report
+`token_missing_scopes` — "rotate the production secret" — for what is usually
+a typo; requiring too little falls through to `unreadable_unknown_cause`,
+which is honest and carries the real Graph error. It is not proven minimal:
+isolating the load-bearing scope would need variant tokens we cannot mint
+without rotating production.
+
+The edge is also correctly SCOPED, unlike `me/accounts` for Pages (which
+leaked another customer's Page three times before `promote_pages` fixed it):
+`act_2181076988590009/instagram_accounts` returns `[]` for the same token, so
+one customer's IG account cannot be offered to another.
 
 **The gate itself is exactly the Page's (AIC-108).** It had to be:
 `ConnectionService.verify()` folds the Instagram read into the *same*

@@ -6,6 +6,52 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — Instagram actually works: the entry below was wrong, and so was the scope table
+**Corrects the block immediately following this one.** That entry concluded
+Instagram was blocked by the Meta App lacking an Instagram use case. It was
+measured wrong twice, and the customer granting partner access to the ad
+account disproved it outright.
+
+Verified live against the production System User token — whose scopes still
+contain **no `instagram_*` entry at all**:
+
+    act_1573023157816786/instagram_accounts -> [{id: 17841447360487819, username: ads_agent_il}]
+    17841447360487819?fields=id,username    -> 200 OK
+    act_2181076988590009/instagram_accounts -> []   (correctly scoped, no leak)
+
+**Instagram rides on the ADS grant.** The IG account is attached to the ad
+account, so partner access to that account carries it; `instagram_basic` was
+never involved. Both earlier conclusions — "the token lacks the scope", then
+"the App lacks the use case" — were reasoned from how Instagram usually works
+rather than measured. Neither survived a probe.
+
+**The real bug this exposed.** `REQUIRED_SCOPES.instagram` listed
+`instagram_basic` (flagged at the time as reasoned-not-verified). Because
+`classifyAccess` short-circuits on `directReadOk === true`, this never blocked
+a working account — but on a FAILING read it made the verdict
+`token_missing_scopes`, i.e. *"regenerate the System User token and rotate the
+secret"*, for what is usually a typo. That is precisely the wild goose chase
+`access-layers.ts`'s own header warns against. Fixed test-first; the entry is
+now `["ads_management"]`, deliberately the minimal claim, since
+under-requiring degrades to the honest `unreadable_unknown_cause` while
+over-requiring sends someone to rotate production credentials.
+
+Measured before and after, on the real accounts:
+
+| IG id | before | after |
+| --- | --- | --- |
+| `17841447360487819` (real) | `ok` | `ok` |
+| bogus id | `token_missing_scopes` ❌ | `unreadable_unknown_cause` ✅ |
+
+**The field is re-enabled** — the `INSTAGRAM_SUPPORTED` flag and its
+`instagramUnavailable` copy are deleted rather than flipped, since the premise
+they encoded is false. Still true and unchanged: zero connections have
+`instagram_id` set, and it has no live consumer.
+
+Standing lesson, now paid for twice in one day: **the layer that grants access
+is not always the one you would predict.** Probe the edge before writing the
+rule.
+
 ### 2026-08-19 — Instagram: the field was impossible to complete, and the cause is an App setting
 Follow-up to AIC-108, from the user asking why Instagram has no picker like
 the Page now does. Traced it to the root rather than adding a picker:

@@ -120,10 +120,24 @@ export function classifyAccess(obs: AccessObservations): AccessVerdict {
 export const REQUIRED_SCOPES: Record<CheckedAsset, readonly string[]> = {
   ad_account: ["ads_read", "ads_management"],
   page: ["pages_show_list", "pages_read_engagement"],
-  // An IG Business account is read THROUGH its connected Page, so the Page
-  // scopes are what the read needs; instagram_basic is what makes the IG
-  // fields themselves readable.
-  instagram: ["pages_show_list", "instagram_basic"],
+  // Instagram rides on the ADS grant, not on instagram_* scopes. Measured
+  // live 2026-08-19 on the production System User token, which carries no
+  // instagram_* scope at all: IG account 17841447360487819 (ads_agent_il)
+  // both listed under act_1573023157816786/instagram_accounts and
+  // direct-read 200 OK. The previous `["pages_show_list","instagram_basic"]`
+  // was reasoned from how IG *usually* works, never measured, and wrong.
+  //
+  // Deliberately the MINIMAL claim. The two error directions are not
+  // symmetric: requiring too much makes an unreadable id report
+  // `token_missing_scopes`, i.e. "rotate the production secret" — the exact
+  // wild goose chase this module's header warns about. Requiring too little
+  // just falls through to `unreadable_unknown_cause`, which is honest and
+  // carries the real Graph error. So when unsure, under-require.
+  //
+  // Not proven minimal: isolating the load-bearing scope needs variant
+  // tokens we can't mint without rotating production. `ads_management` is
+  // named because the asset is granted as an ad-account asset.
+  instagram: ["ads_management"],
 };
 
 export function hasRequiredScopes(asset: CheckedAsset, granted: readonly string[]): boolean {

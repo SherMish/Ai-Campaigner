@@ -96,4 +96,57 @@ describe("hasRequiredScopes", () => {
   it("extra scopes are fine", () => {
     expect(hasRequiredScopes("ad_account", ["ads_read", "ads_management", "pages_show_list"])).toBe(true);
   });
+
+  // Verified live 2026-08-19, against the real production System User token.
+  // An IG Business account shared with us as an AD-ACCOUNT asset reads fine
+  // on an ads/business-scoped token: `17841447360487819` (ads_agent_il) both
+  // listed under act_1573023157816786/instagram_accounts AND direct-read
+  // 200 OK, with NO instagram_* scope on the token. The earlier
+  // `instagram_basic` requirement was reasoned, never measured, and it was
+  // wrong. It matters because an unreadable id then blames layer 3 and sends
+  // the operator to rotate a production secret — see the case below.
+  it("Instagram reads ride on the ads/business grant, NOT instagram_basic", () => {
+    const productionScopes = [
+      "ads_management",
+      "ads_read",
+      "business_management",
+      "catalog_management",
+      "pages_manage_ads",
+      "pages_read_engagement",
+      "pages_show_list",
+      "public_profile",
+      "threads_business_basic",
+    ];
+    expect(hasRequiredScopes("instagram", productionScopes)).toBe(true);
+  });
+});
+
+describe("classifyAccess — Instagram diagnosis (AIC-108 follow-up)", () => {
+  // The bug: with `instagram_basic` wrongly required, a TYPO'd or not-yet-
+  // shared IG id produced `token_missing_scopes`, i.e. "regenerate the System
+  // User token and rotate the secret". This module's own header warns against
+  // exactly that: sending an operator to rotate a production secret for
+  // something that was never broken. A token that can demonstrably read
+  // Instagram must never be blamed.
+  const scopedToken = {
+    sharedToPortfolio: null,
+    assignedToSystemUser: null,
+    tokenHasScopes: true,
+    directReadOk: false,
+  };
+
+  it("does NOT blame the token when the read fails but the token is scoped", () => {
+    const v = classifyAccess(scopedToken);
+    expect(v.ok).toBe(false);
+    expect(v.diagnosis).not.toBe("token_missing_scopes");
+    expect(v.diagnosis).toBe("unreadable_unknown_cause");
+  });
+
+  it("still passes a readable Instagram account", () => {
+    expect(classifyAccess({ ...scopedToken, directReadOk: true })).toEqual({
+      ok: true,
+      layer: null,
+      diagnosis: "ok",
+    });
+  });
 });
