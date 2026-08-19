@@ -8,6 +8,14 @@ import { pool } from "../db/pool.js";
 import { createApp } from "../app.js";
 import { signAuthToken } from "../auth/tokens.js";
 
+// AIC-106 — a build now requires an agreed daily ceiling, and fails closed
+// without one. In production that figure is set at provisioning (onboarding
+// step 4); these route tests create the campaign shell via /builder/start,
+// which leaves it at 0, so they have to model the provisioning step too.
+async function agreeBudget(localCampaignId: string, agorot = 10000) {
+  await pool.query(`UPDATE managed_campaigns SET agreed_budget_agorot = $2 WHERE id = $1`, [localCampaignId, agorot]);
+}
+
 const HAS_DB = !!process.env.DATABASE_URL;
 const d = HAS_DB ? describe : describe.skip;
 
@@ -106,6 +114,57 @@ d("guided builder routes (DB + HTTP)", () => {
     expect(ok.body.category).toBe("fitness");
   });
 
+  // AIC-106 — the refusal has to be legible, not just correct. Before this,
+  // a missing ceiling surfaced as 502 "failed to build campaign", i.e. "Meta
+  // is broken" — sending an operator mid-call to go inspect Meta when the
+  // real fix is one field in provisioning. A guard that fails closed but lies
+  // about why is only half a guard.
+  async function buildWithBudget(token: string, localCampaignId: string, creativeId: string, dailyBudgetAgorot: number) {
+    return request(app)
+      .post("/api/app/builder/build")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        localCampaignId, name: "My Business", dailyBudgetAgorot,
+        specialAdCategories: [], whatsappDestination: "972500000000",
+        targeting: { ageMin: 18, ageMax: 45, genders: "female" },
+        ads: [{ clientKey: "adset-1-ad-1", name: "Ad 1", creativeId }],
+      });
+  }
+
+  async function readyToBuild(tag: string) {
+    vi.stubGlobal("fetch", mockMetaFetch());
+    const { token } = await seedReadyCustomer(tag);
+    const start = await request(app).post("/api/app/builder/start").set("Authorization", `Bearer ${token}`);
+    const localCampaignId = start.body.localCampaignId as string;
+    const creative = await request(app)
+      .post("/api/app/builder/creative")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ localCampaignId, clientKey: "adset-1-ad-1", name: "Ad 1", postId: "post_1" });
+    return { token, localCampaignId, creativeId: creative.body.creativeId as string };
+  }
+
+  it("refuses a build with NO agreed ceiling as 409 with a specific code — never 502", async () => {
+    const { token, localCampaignId, creativeId } = await readyToBuild("noceiling");
+    // deliberately NO agreeBudget() — this is the real Branch A state
+    const build = await buildWithBudget(token, localCampaignId, creativeId, 4000);
+
+    expect(build.status).toBe(409);
+    expect(build.body.code).toBe("budget_ceiling_missing");
+    // 502 would say "Meta failed" about a problem entirely on our side.
+    expect(build.status).not.toBe(502);
+  });
+
+  it("refuses an OVER-ceiling build as 409 with its own distinct code", async () => {
+    const { token, localCampaignId, creativeId } = await readyToBuild("overceiling");
+    await agreeBudget(localCampaignId, 2000);
+    const build = await buildWithBudget(token, localCampaignId, creativeId, 9900);
+
+    expect(build.status).toBe(409);
+    // A different fix from the missing-ceiling case (lower the number vs.
+    // agree one at all), so it must be distinguishable by the client.
+    expect(build.body.code).toBe("budget_over_ceiling");
+  });
+
   it("full happy path: start → existing-post creative → build, all PAUSED and idempotent", async () => {
     vi.stubGlobal("fetch", mockMetaFetch());
     const { customerId, token } = await seedReadyCustomer("happy");
@@ -113,6 +172,7 @@ d("guided builder routes (DB + HTTP)", () => {
     const start = await request(app).post("/api/app/builder/start").set("Authorization", `Bearer ${token}`);
     expect(start.status).toBe(200);
     const localCampaignId = start.body.localCampaignId as string;
+    await agreeBudget(localCampaignId);
     expect(localCampaignId).toBeTruthy();
 
     // Resuming /start returns the SAME shell row (no duplicate).
@@ -165,6 +225,7 @@ d("guided builder routes (DB + HTTP)", () => {
     const { token } = await seedReadyCustomer("upload-validate");
     const start = await request(app).post("/api/app/builder/start").set("Authorization", `Bearer ${token}`);
     const localCampaignId = start.body.localCampaignId as string;
+    await agreeBudget(localCampaignId);
 
     const bad = await request(app)
       .post("/api/app/builder/creative")
@@ -192,6 +253,7 @@ d("guided builder routes (DB + HTTP)", () => {
     const b = await seedReadyCustomer("owner-b");
     const startA = await request(app).post("/api/app/builder/start").set("Authorization", `Bearer ${a.token}`);
     const localCampaignId = startA.body.localCampaignId as string;
+    await agreeBudget(localCampaignId);
 
     const stolen = await request(app)
       .post("/api/app/builder/creative")
@@ -227,6 +289,7 @@ d("guided builder routes (DB + HTTP)", () => {
 
     const start = await request(app).post("/api/app/builder/start").set("Authorization", `Bearer ${token}`);
     const localCampaignId = start.body.localCampaignId as string;
+    await agreeBudget(localCampaignId);
 
     const creative = await request(app)
       .post("/api/app/builder/creative")

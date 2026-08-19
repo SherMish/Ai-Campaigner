@@ -8,6 +8,14 @@ import request from "supertest";
 import { pool } from "../db/pool.js";
 import { createApp } from "../app.js";
 
+// AIC-106 — a build now requires an agreed daily ceiling, and fails closed
+// without one. In production that figure is set at provisioning (onboarding
+// step 4); these route tests create the campaign shell via /builder/start,
+// which leaves it at 0, so they have to model the provisioning step too.
+async function agreeBudget(localCampaignId: string, agorot = 10000) {
+  await pool.query(`UPDATE managed_campaigns SET agreed_budget_agorot = $2 WHERE id = $1`, [localCampaignId, agorot]);
+}
+
 const HAS_DB = !!process.env.DATABASE_URL;
 const d = HAS_DB ? describe : describe.skip;
 const ADMIN = "Bearer test-admin-builder";
@@ -96,6 +104,7 @@ d("admin builder routes — AIC-105 Branch A (DB + HTTP)", () => {
     const start = await request(app).post(`/api/admin/customers/${id}/builder/start`).set("Authorization", ADMIN);
     expect(start.status).toBe(200);
     const localCampaignId = start.body.localCampaignId as string;
+    await agreeBudget(localCampaignId);
     expect(localCampaignId).toBeTruthy();
 
     const posts = await request(app).get(`/api/admin/customers/${id}/builder/posts`).set("Authorization", ADMIN);
@@ -147,6 +156,7 @@ d("admin builder routes — AIC-105 Branch A (DB + HTTP)", () => {
     const b = await seedReadyCustomer("owner-b");
     const startA = await request(app).post(`/api/admin/customers/${a}/builder/start`).set("Authorization", ADMIN);
     const localCampaignId = startA.body.localCampaignId as string;
+    await agreeBudget(localCampaignId);
 
     const stolen = await request(app)
       .post(`/api/admin/customers/${b}/builder/creative`)

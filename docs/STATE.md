@@ -6,6 +6,54 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — AIC-106 half 1: the create path gets a real budget ceiling
+Prerequisite for removing the launch gate. The gate is currently the only thing
+between a mistyped budget and live spend, so the ceiling has to be real before
+it comes out.
+
+Found by tracing callers rather than trusting names — the gap was worse than
+AIC-106's own description ("verify the guard applies to create, not just
+update"):
+
+- `assertWithinBudget` had exactly ONE caller, `safe-executor.ts`. Nothing
+  bounded a CREATE.
+- `builder/campaign-create.ts`'s closing UPDATE **wrote**
+  `agreed_budget_agorot = input.dailyBudgetAgorot`. The builder proposed the
+  budget AND rewrote the ceiling to match — in either direction. A build under
+  the agreed figure silently ratcheted the customer's agreement DOWN, and later
+  recommendations were then measured against a number nobody agreed to.
+
+**A passing test was defending the bug.** `campaign-create.integration.test.ts`
+asserted `agreed_budget_agorot === 4000` after a build, encoding the overwrite
+as expected behaviour. That is most of why it survived a covered path.
+
+Now: `assertCreateWithinBudget` runs before the first Meta call (an
+over-ceiling campaign must not exist on Meta even PAUSED), and the create path
+READS the ceiling — provisioning owns it.
+
+**Fails closed on a missing ceiling.** Measured against the shared DB: 13 of 15
+campaign rows carry `agreed = 0` (12 `__it_*` leftovers, one real customer
+provisioned but unbuilt — an AIC-105 Branch A row). None are NULL, so 0 is the
+state that actually occurs. Treating it as unlimited would make the most
+dangerous state the most permissive one.
+
+**And it says why.** Both refusals were previously 502 "failed to build
+campaign" — "Meta is broken" about a precondition on our side, sending an
+operator mid-call to inspect Meta instead of filling one field. Now 409 with
+distinct codes, because the fixes differ: `budget_ceiling_missing` (agree a
+budget at provisioning) vs `budget_over_ceiling` (lower the number).
+
+Scope: the additions path needs no ceiling — budget is campaign-level (CBO) and
+neither `AddAdInput` nor `AddAdSetInput` has a budget field, so added content
+cannot raise spend. Verified by grep.
+
+816 server tests pass; the 3 failures are the known pre-existing set
+(write-outbox, operator-accounts, customer-overview lead-quality), confirmed
+unchanged against master.
+
+**Not done, deliberately:** the gate itself still stands. Removing it is the
+irreversible half and wants its own review.
+
 ### 2026-08-19 — Instagram gets a picker, on the edge the scope fix uncovered
 Follow-on from the entry below, now that there is a real IG account to build
 against. `GET /admin/customers/:id/onboarding/instagram-accounts` +

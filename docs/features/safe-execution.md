@@ -36,6 +36,53 @@ No budget changes automatically — only an approved recommendation, executed th
 the pipeline, can move budget, and the customer sees the exact new amount +
 `maxSpendImpactAgorot` before approving (carried on the recommendation from AIC-9).
 
+**The ceiling applies to CREATION too, and it is read there, never written
+(AIC-106).** Until 2026-08-19 it did not, in two compounding ways found by
+tracing every caller rather than trusting the module's name:
+
+1. `assertWithinBudget` had exactly ONE caller — `safe-executor.ts`, the
+   recommendation path. Nothing bounded a campaign CREATE at all.
+2. Worse, `builder/campaign-create.ts`'s closing UPDATE **set**
+   `agreed_budget_agorot = input.dailyBudgetAgorot`. The builder proposed a
+   budget *and* rewrote the ceiling to match it, in either direction — a build
+   under the agreed figure silently ratcheted the customer's agreement DOWN,
+   and every later recommendation was then measured against a number nobody
+   agreed to. The ceiling authorised itself.
+
+A passing test was holding (2) in place: `campaign-create.integration.test.ts`
+asserted `agreed_budget_agorot === 4000` after a build — i.e. it encoded the
+overwrite as the expected behaviour. Worth remembering when a bug survives a
+covered path: check whether a test is defending it.
+
+`assertCreateWithinBudget(agreed, proposed)` is the create-path guard, run
+BEFORE the first Meta call so an over-ceiling campaign never exists on Meta at
+all, not even PAUSED. It is separate from `assertWithinBudget` because creation
+has a precondition update never had: on an update the campaign is already
+running under an agreed ceiling, so one exists by definition; on a create it
+may never have been set. Measured 2026-08-19: 13 of 15 campaign rows carried
+`agreed = 0` (12 `__it_*` leftovers plus one real customer provisioned but not
+yet built). So it **fails closed** — 0/null is refused, not read as unlimited.
+The alternative would make the most dangerous state the most permissive one,
+precisely when AIC-106 removes the human checkpoint.
+
+The two failures are deliberately distinct types and HTTP codes, because they
+have different fixes — agree a budget at provisioning vs. lower the number:
+
+| Condition | Error | Route | `code` |
+| --- | --- | --- | --- |
+| no ceiling ever agreed (0/null) | `BudgetCeilingMissingError` | 409 | `budget_ceiling_missing` |
+| proposed above the ceiling | `BudgetLimitError` | 409 | `budget_over_ceiling` |
+
+Both were previously **502 "failed to build campaign"** — "Meta is broken" —
+about a precondition entirely on our side, which sends an operator mid-call to
+inspect Meta instead of filling one field. Failing closed while lying about
+why is only half a guard.
+
+Scope note: the additions path (AIC-63) needs no ceiling check. Budget is
+campaign-level (CBO) and neither `AddAdInput` nor `AddAdSetInput` carries a
+budget field, so a new ad or ad set delivers WITHIN the campaign's existing
+budget and cannot raise it — confirmed by grep, not just by the comment.
+
 **`agreed_budget_agorot` vs the live Meta budget (real bug fixed 2026-08-12).**
 The ceiling is deliberately NOT a live mirror of Meta — it's the max the engine's
 own automated proposals may ever push the daily budget to. But a customer or

@@ -4,6 +4,7 @@ import {
   ENGAGEMENT_DESTINATION, ENGAGEMENT_ACTION_TYPES,
 } from "@aic/shared";
 import { WriteOutbox, builderKey, type WriteKind, type CreatingWriter } from "../execution/write-outbox.js";
+import { assertCreateWithinBudget } from "../execution/budget.js";
 import type { BuilderWriter, CreateAdSetTargeting } from "./types.js";
 
 // The builder's idempotent multi-step create (AIC-50): campaign → ad set(s) →
@@ -122,6 +123,31 @@ export async function buildCampaignOnMeta(
   // Throws BEFORE any Meta call for an unrecognized destination — same
   // discipline as the additions flow (AIC-102): never a malformed write.
   resolveDestinationShape(input.destination);
+
+  // AIC-106 — the agreed ceiling is checked BEFORE the first Meta call, and
+  // it is READ here, never written. Both halves matter, and both were broken:
+  //
+  //  - `assertWithinBudget` had exactly one caller (safe-executor.ts, the
+  //    recommendation path), so nothing bounded a CREATE at all; and
+  //  - the UPDATE at the end of this function used to SET
+  //    `agreed_budget_agorot = input.dailyBudgetAgorot`, so the builder
+  //    rewrote the ceiling to whatever it had just proposed. The ceiling
+  //    authorised itself, in either direction — a build under the agreed
+  //    figure silently ratcheted the customer's agreement DOWN.
+  //
+  // The ceiling belongs to provisioning (what the operator agreed with the
+  // customer). Refusing before the first write is the point: once AIC-106
+  // removes the launch gate there is no later checkpoint, and an over-ceiling
+  // campaign must not exist on Meta even PAUSED.
+  const { rows: ceilingRows } = await pool.query<{ agreed_budget_agorot: string | number | null }>(
+    `SELECT agreed_budget_agorot FROM managed_campaigns WHERE id = $1`,
+    [input.localCampaignId],
+  );
+  const agreedCeilingAgorot = ceilingRows[0]?.agreed_budget_agorot ?? null;
+  assertCreateWithinBudget(
+    agreedCeilingAgorot === null ? null : Number(agreedCeilingAgorot),
+    input.dailyBudgetAgorot,
+  );
   // The campaign's RESULT definition (AIC-87). For engagement (AIC-107) it's
   // the engagement action list rather than a Pixel/messaging event — set
   // here, not left null, because CAMPAIGN_TYPE_REQUIRED_FIELDS requires
@@ -214,14 +240,16 @@ export async function buildCampaignOnMeta(
   // both sides of the write.
   const localObjective = input.destination === ENGAGEMENT_DESTINATION ? "engagement" : "leads";
   await pool.query(
+    // NB: agreed_budget_agorot is deliberately absent — see the ceiling guard
+    // at the top of this function. Provisioning owns it; the builder reads it.
     `UPDATE managed_campaigns
-     SET meta_campaign_id = $2, name = $3, objective = $9,
-         whatsapp_destination = $4, agreed_budget_agorot = $5, budget_period = 'daily',
-         website_url = $6, tracking_pixel_id = $7,
-         lead_event_types = COALESCE($8::text[], lead_event_types)
+     SET meta_campaign_id = $2, name = $3, objective = $8,
+         whatsapp_destination = $4, budget_period = 'daily',
+         website_url = $5, tracking_pixel_id = $6,
+         lead_event_types = COALESCE($7::text[], lead_event_types)
      WHERE id = $1`,
     [
-      input.localCampaignId, metaCampaignId, input.name, input.whatsappDestination, input.dailyBudgetAgorot,
+      input.localCampaignId, metaCampaignId, input.name, input.whatsappDestination,
       input.destinationUrl ?? null, input.pixelId ?? null, leadEventTypes, localObjective,
     ],
   );

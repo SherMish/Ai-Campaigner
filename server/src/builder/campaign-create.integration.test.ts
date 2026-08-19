@@ -18,6 +18,17 @@ async function makeCustomer(tag: string): Promise<{ customerId: string; adAccoun
   return { customerId, adAccountId: acct.rows[0].id };
 }
 
+// AIC-106: a build now requires an agreed ceiling, because create fails closed
+// without one. Provisioning is what sets it in production (step 4 of the
+// onboarding wizard, "תקציב יומי שסוכם עם הלקוח"), so the build tests below
+// have to model that rather than starting from a bare shell row. The default
+// sits above baseInput's 4000 so it constrains nothing unless a test means it to.
+async function startProvisioned(customerId: string, adAccountId: string, agreedAgorot = 10000) {
+  const started = await startBuilderCampaign(pool, customerId, adAccountId);
+  await pool.query(`UPDATE managed_campaigns SET agreed_budget_agorot = $2 WHERE id = $1`, [started.id, agreedAgorot]);
+  return started;
+}
+
 function baseInput(localCampaignId: string, adAccountId: string): BuildCampaignInput {
   return {
     localCampaignId,
@@ -49,6 +60,75 @@ d("campaign builder create-writes (DB)", () => {
     await pool.end();
   });
 
+  // AIC-106 half 1 — the budget ceiling on CREATE.
+  //
+  // Today `assertWithinBudget` has exactly one caller (safe-executor.ts:142,
+  // the recommendation-execution path). The create path never consults it,
+  // and worse: campaign-create.ts's final UPDATE WRITES
+  // `agreed_budget_agorot = input.dailyBudgetAgorot`, so the builder both
+  // proposes the budget AND rewrites the ceiling to match it. The ceiling is
+  // self-certifying — a mistyped number becomes its own authorisation.
+  //
+  // That is survivable only while the launch gate exists, because a human
+  // approves before anything spends. AIC-106 removes that gate, so this has
+  // to be a real ceiling first. These three cases are the contract.
+  describe("budget ceiling on create (AIC-106)", () => {
+    // The ceiling is the figure the OPERATOR agreed with the customer at
+    // provisioning, so the test sets it the way provisioning does and then
+    // asks the builder for more.
+    async function provisioned(tag: string, agreedAgorot: number) {
+      const { customerId, adAccountId } = await makeCustomer(tag);
+      const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
+      await pool.query(`UPDATE managed_campaigns SET agreed_budget_agorot = $2 WHERE id = $1`, [localCampaignId, agreedAgorot]);
+      return { customerId, adAccountId, localCampaignId };
+    }
+
+    it("refuses a build whose daily budget exceeds the agreed ceiling, before any Meta write", async () => {
+      const { adAccountId, localCampaignId } = await provisioned("ceil-over", 2000);
+      const writer = new FakeBuilderWriter();
+      const input = { ...baseInput(localCampaignId, adAccountId), dailyBudgetAgorot: 9900 };
+
+      await expect(buildCampaignOnMeta(pool, writer, input)).rejects.toThrow();
+
+      // Refused BEFORE the first Meta call — an over-ceiling campaign must not
+      // exist on Meta at all, not even PAUSED. Once the launch gate is gone
+      // there is no later checkpoint that would catch it.
+      const { rows } = await pool.query(`SELECT meta_campaign_id FROM managed_campaigns WHERE id = $1`, [localCampaignId]);
+      expect(rows[0].meta_campaign_id).toBeNull();
+    });
+
+    it("does NOT overwrite the agreed ceiling with the builder's own number", async () => {
+      const { adAccountId, localCampaignId } = await provisioned("ceil-keep", 5000);
+      const writer = new FakeBuilderWriter();
+      // Comfortably under the ceiling, so the build itself succeeds.
+      const input = { ...baseInput(localCampaignId, adAccountId), dailyBudgetAgorot: 1500 };
+
+      await buildCampaignOnMeta(pool, writer, input);
+
+      // The ceiling is the operator's agreement with the customer. A build
+      // spending less than agreed must not silently RATCHET IT DOWN either —
+      // the agreed figure is not the builder's to edit in either direction.
+      const { rows } = await pool.query(`SELECT agreed_budget_agorot FROM managed_campaigns WHERE id = $1`, [localCampaignId]);
+      expect(Number(rows[0].agreed_budget_agorot)).toBe(5000);
+    });
+
+    // Measured 2026-08-19 against the shared DB: no campaign row has a NULL
+    // ceiling, but 13 have `agreed = 0` — 12 `__it_*` leftovers and one real
+    // customer whose connection is provisioned but whose campaign is not yet
+    // built (exactly AIC-105 Branch A). So 0, not NULL, is the state that
+    // actually occurs, and it must fail CLOSED: with the launch gate gone,
+    // a campaign with no agreed ceiling has nothing bounding its spend.
+    it("refuses to build when no ceiling was ever agreed (0), rather than treating it as unlimited", async () => {
+      const { adAccountId, localCampaignId } = await provisioned("ceil-zero", 0);
+      const writer = new FakeBuilderWriter();
+
+      await expect(buildCampaignOnMeta(pool, writer, baseInput(localCampaignId, adAccountId))).rejects.toThrow();
+
+      const { rows } = await pool.query(`SELECT meta_campaign_id FROM managed_campaigns WHERE id = $1`, [localCampaignId]);
+      expect(rows[0].meta_campaign_id).toBeNull();
+    });
+  });
+
   it("startBuilderCampaign creates a shell row and is idempotent (resume finds the same row)", async () => {
     const { customerId, adAccountId } = await makeCustomer("start");
     const first = await startBuilderCampaign(pool, customerId, adAccountId);
@@ -62,7 +142,7 @@ d("campaign builder create-writes (DB)", () => {
 
   it("creates every object PAUSED, logs action_history for each, and links the campaign on success", async () => {
     const { customerId, adAccountId } = await makeCustomer("happy");
-    const { id: localCampaignId } = await startBuilderCampaign(pool, customerId, adAccountId);
+    const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
     const writer = new FakeBuilderWriter();
 
     const result = await buildCampaignOnMeta(pool, writer, baseInput(localCampaignId, adAccountId));
@@ -81,7 +161,12 @@ d("campaign builder create-writes (DB)", () => {
     const camp = await pool.query(`SELECT meta_campaign_id, status, name, agreed_budget_agorot FROM managed_campaigns WHERE id = $1`, [localCampaignId]);
     expect(camp.rows[0].meta_campaign_id).toBe(result.metaCampaignId);
     expect(camp.rows[0].status).toBe("under_review"); // building never activates
-    expect(camp.rows[0].agreed_budget_agorot).toBe(4000);
+    // AIC-106: this line used to assert 4000 — i.e. that after a build the
+    // agreed ceiling equals whatever the BUILDER proposed. That assertion was
+    // codifying the bug, which is a large part of why it survived: the
+    // ceiling-overwrite had a passing test defending it. The ceiling belongs
+    // to provisioning, so it must still be the 10000 that was agreed.
+    expect(Number(camp.rows[0].agreed_budget_agorot)).toBe(10000);
 
     const history = await pool.query(`SELECT action_type, target_meta_id FROM action_history WHERE campaign_id = $1 ORDER BY occurred_at`, [localCampaignId]);
     expect(history.rows.map((r) => r.action_type)).toEqual(["create_campaign", "create_ad_set", "create_ad", "create_ad"]);
@@ -89,7 +174,7 @@ d("campaign builder create-writes (DB)", () => {
 
   it("a mid-build failure is reconcilable: resuming skips every already-created object and only retries the failed step", async () => {
     const { customerId, adAccountId } = await makeCustomer("resume");
-    const { id: localCampaignId } = await startBuilderCampaign(pool, customerId, adAccountId);
+    const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
     const writer = new FakeBuilderWriter();
     writer.failNextCreateAd = 1; // the FIRST ad's create call fails first time through
 
@@ -115,7 +200,7 @@ d("campaign builder create-writes (DB)", () => {
 
   it("a full re-run after success makes no new Meta calls at all", async () => {
     const { customerId, adAccountId } = await makeCustomer("rerun");
-    const { id: localCampaignId } = await startBuilderCampaign(pool, customerId, adAccountId);
+    const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
     const writer = new FakeBuilderWriter();
 
     const first = await buildCampaignOnMeta(pool, writer, baseInput(localCampaignId, adAccountId));
@@ -131,7 +216,7 @@ d("campaign builder create-writes (DB)", () => {
   // just WhatsApp — the create-path counterpart to AIC-102's additions fix.
   it("a website-destination build passes pixelId/conversionEvent to the ad set and persists website_url/lead_event_types/tracking_pixel_id", async () => {
     const { customerId, adAccountId } = await makeCustomer("website");
-    const { id: localCampaignId } = await startBuilderCampaign(pool, customerId, adAccountId);
+    const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
     const writer = new FakeBuilderWriter();
 
     const input: BuildCampaignInput = {
@@ -163,7 +248,7 @@ d("campaign builder create-writes (DB)", () => {
 
   it("REGRESSION: an unrecognized destination throws before any Meta call", async () => {
     const { customerId, adAccountId } = await makeCustomer("baddest");
-    const { id: localCampaignId } = await startBuilderCampaign(pool, customerId, adAccountId);
+    const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
     const writer = new FakeBuilderWriter();
 
     const input: BuildCampaignInput = { ...baseInput(localCampaignId, adAccountId), destination: "something_unrecognized" };

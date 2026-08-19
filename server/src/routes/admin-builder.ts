@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { BudgetCeilingMissingError, BudgetLimitError } from "../execution/budget.js";
 import multer from "multer";
 import { validateCreativeCopy, MAX_VIDEO_BYTES, SPECIAL_AD_CATEGORY, FIXED_BID_STRATEGY, FIXED_DESTINATION, type SpecialAdCategory } from "@aic/shared";
 import { pool } from "../db/pool.js";
@@ -283,6 +284,18 @@ adminBuilderRouter.post("/customers/:id/builder/build", async (req, res) => {
 
     res.json(result);
   } catch (e) {
+    // AIC-106 — a budget refusal is a precondition WE enforced, not a Meta
+    // failure, so it must not be reported as 502 ("Meta is broken"). That
+    // wrong diagnosis lands on an operator mid-call and sends them to check
+    // Meta rather than the one field they actually need to fill.
+    if (e instanceof BudgetCeilingMissingError) {
+      res.status(409).json({ error: "no agreed daily budget is set for this customer — set it in provisioning before building", code: "budget_ceiling_missing" });
+      return;
+    }
+    if (e instanceof BudgetLimitError) {
+      res.status(409).json({ error: e.message, code: "budget_over_ceiling" });
+      return;
+    }
     console.error("[admin-builder] build failed", e);
     res.status(502).json({ error: "failed to build campaign" });
   }
