@@ -6,6 +6,29 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — Instagram gets a picker, on the edge the scope fix uncovered
+Follow-on from the entry below, now that there is a real IG account to build
+against. `GET /admin/customers/:id/onboarding/instagram-accounts` +
+`GraphCampaignAdapter.listInstagramAccounts`, wired into step 4 as a dropdown
+in place of the free-text field.
+
+The case for picking is sharper than it was for Pages: an IG id is 17 digits
+with no human-readable part, so a typo is both easy to make and impossible to
+spot by eye — and under AIC-108's gate a bad id flips the connection to
+`revoked` and silently stops the engine.
+
+Simpler than `listPages`, which needed a same-business ∪ promote_pages union
+after two wrong turns: this edge is per-account by construction. Verified live
+through the real adapter, not a mock —
+
+    act_1573023157816786 -> [{17841447360487819, ads_agent_il}]
+    act_2181076988590009 -> []
+
+Locked in as tests: the scoping (never offer another account's IG), the
+username fallback to the id, the 400 when unscoped, and the 503 with no token.
+An empty list renders its reason — no IG account attached to this ad account,
+fixed in Meta Business Settings — rather than an empty dropdown (AIC-98).
+
 ### 2026-08-19 — Instagram actually works: the entry below was wrong, and so was the scope table
 **Corrects the block immediately following this one.** That entry concluded
 Instagram was blocked by the Meta App lacking an Instagram use case. It was

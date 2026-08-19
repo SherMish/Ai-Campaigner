@@ -782,6 +782,34 @@ adminRouter.get("/customers/:id/onboarding/pages", async (req, res) => {
   }
 });
 
+// Every Instagram account attached to one ad account, so the operator picks
+// instead of transcribing an 17-digit id. Same shape and same scoping rule as
+// the Pages route above; the difference is that this edge is per-account by
+// construction, so it needs no union — verified live 2026-08-19 that the two
+// real ad accounts return different results on one token.
+//
+// Deliberately NOT filtered to "unused": instagram_id has no uniqueness
+// constraint and one IG account can legitimately back several customers, so
+// there is no conflict to warn about (same reasoning as Pages).
+adminRouter.get("/customers/:id/onboarding/instagram-accounts", async (req, res) => {
+  const metaAdAccountId = String(req.query.metaAdAccountId ?? "").trim();
+  if (!metaAdAccountId) {
+    res.status(400).json({ error: "metaAdAccountId is required" });
+    return;
+  }
+  const reader = buildCampaignDiscoveryReader();
+  if (!reader) {
+    res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
+    return;
+  }
+  try {
+    res.json({ instagramAccounts: await reader.listInstagramAccounts(metaAdAccountId) });
+  } catch (e) {
+    console.error("[admin] list instagram accounts failed", e);
+    res.status(502).json({ error: "failed to load instagram accounts" });
+  }
+});
+
 // Every campaign under one ad account, destination DETECTED per campaign
 // (tracking-health.ts's detectDestination) rather than asked. An unsupported
 // campaign (no ad sets yet, an objective that implies no lead, mixed ad

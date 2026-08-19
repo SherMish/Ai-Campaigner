@@ -699,6 +699,25 @@ leaked another customer's Page three times before `promote_pages` fixed it):
 `act_2181076988590009/instagram_accounts` returns `[]` for the same token, so
 one customer's IG account cannot be offered to another.
 
+**So Instagram is a picker too, not a text field.** `GET
+/admin/customers/:id/onboarding/instagram-accounts?metaAdAccountId=…` →
+`listInstagramAccounts`, scoped to the same ad account the Page list uses.
+The case for picking is even stronger here than for Pages: an IG id is 17
+digits with no human-readable part, so a typo is both easy to make and
+impossible to catch by eye — and under AIC-108's gate a bad id flips the whole
+connection to `revoked` and silently stops the engine.
+
+Unlike `listPages` this needs no union and no business filter, because the
+edge is already per-account. Selecting a different ad account clears an IG
+selection the new account doesn't have, for the same reason the Page list
+does: a stale selection is exactly the cross-customer mix-up the scoping
+exists to prevent.
+
+An empty list is rendered as its reason — no Instagram account is attached to
+this ad account, which is fixed in Meta Business Settings, not here — rather
+than as an empty dropdown (AIC-98). A missing `username` falls back to the
+id: an option an operator cannot identify is worse than a raw number.
+
 **The gate itself is exactly the Page's (AIC-108).** It had to be:
 `ConnectionService.verify()` folds the Instagram read into the *same*
 worst-health-wins aggregation as the Page, and `classifyGraphError` maps both

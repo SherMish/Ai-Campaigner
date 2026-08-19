@@ -462,7 +462,7 @@ export const strings = {
 
       // Step 4 — provisioning (AIC-68).
       provisionTitle: "פרטי החיבור",
-      fieldInstagramId: "מזהה אינסטגרם (לא חובה)",
+      fieldInstagramId: "חשבון אינסטגרם (לא חובה)",
       fieldCampaignName: "שם הקמפיין",
       // AIC-106: this is the AGREED ceiling (agreed_budget_agorot), typed by
       // the operator — deliberately never auto-filled from Meta's live
@@ -554,6 +554,10 @@ export const strings = {
       // by the gate below. A field nobody can complete is a trap on a live
       // call, so it is disabled with the real reason (AIC-98) rather than
       // left enabled to fail at the end.
+      pickInstagramPlaceholder: "בחרו חשבון…",
+      pickInstagramLoading: "טוען חשבונות אינסטגרם…",
+      pickInstagramEmpty: "אין חשבון אינסטגרם המקושר לחשבון המודעות הזה. מקשרים אותו בהגדרות העסק ב-Meta, ואז רועננו.",
+      pickInstagramError: "טעינת חשבונות האינסטגרם נכשלה",
       instagramGateNote: "אפשר להשאיר ריק. אם ממלאים — חייבים לאמת: מזהה שלא נקרא בהצלחה יהפוך את כל החיבור ל־revoked ויעצור את מנוע ההמלצות בשקט, בדיוק כמו מזהה עמוד.",
       errorInstagramNotVerified: "מזהה האינסטגרם שהוקלד לא אומת. מריצים \"בדיקת אינסטגרם\" עם המזהה הזה בדיוק, או משאירים ריק.",
       errorPageRequiredForNewCampaign: "לבניית קמפיין ראשון צריך קודם למלא ולאמת מזהה עמוד (למעלה, שלב 1 או 2).",

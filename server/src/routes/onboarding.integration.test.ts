@@ -537,6 +537,81 @@ d("onboarding wizard routes (AIC-101)", () => {
       process.env.META_SYSTEM_USER_TOKEN = saved;
       expect(res.status).toBe(503);
     });
+
+    // The Instagram picker. Mirrors the Pages cases above because it exists
+    // for the same reason — an operator transcribing a 17-digit id onto a
+    // live call — but the edge is per-account by construction, so the scoping
+    // case is a straight assertion rather than a union.
+    const IG = "17841447360487819";
+    function fakeIgGraph() {
+      return vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u.includes(`${ACCT}/instagram_accounts`)) {
+          return json({ data: [{ id: IG, username: "ads_agent_il" }] });
+        }
+        if (u.includes(`${OTHER_ACCT}/instagram_accounts`)) return json({ data: [] });
+        throw new Error(`unexpected fetch ${u}`);
+      }) as unknown as typeof fetch;
+    }
+
+    it("lists the Instagram accounts attached to the PICKED ad account", async () => {
+      const id = await seedCustomer("disc-ig");
+      vi.stubGlobal("fetch", fakeIgGraph());
+      const res = await request(app)
+        .get(`/api/admin/customers/${id}/onboarding/instagram-accounts`)
+        .query({ metaAdAccountId: ACCT })
+        .set("Authorization", ADMIN);
+      expect(res.status).toBe(200);
+      expect(res.body.instagramAccounts).toEqual([{ id: IG, username: "ads_agent_il" }]);
+    });
+
+    // The bug the Page picker shipped three times: offering one customer's
+    // asset while a different customer's account is selected. Verified live
+    // that this edge does not have it (the two real accounts return different
+    // results on one token); locked in here so it stays that way.
+    it("never offers another ad account's Instagram — an empty list is a real answer", async () => {
+      const id = await seedCustomer("disc-ig-scoped");
+      vi.stubGlobal("fetch", fakeIgGraph());
+      const res = await request(app)
+        .get(`/api/admin/customers/${id}/onboarding/instagram-accounts`)
+        .query({ metaAdAccountId: OTHER_ACCT })
+        .set("Authorization", ADMIN);
+      expect(res.status).toBe(200);
+      expect(res.body.instagramAccounts).toEqual([]);
+    });
+
+    // Meta returns `username`, and an account can have none. Falling back to
+    // the id beats rendering a bare "@" an operator cannot identify.
+    it("falls back to the id when Meta returns no username", async () => {
+      const id = await seedCustomer("disc-ig-noname");
+      vi.stubGlobal("fetch", vi.fn(async () => json({ data: [{ id: IG }] })) as unknown as typeof fetch);
+      const res = await request(app)
+        .get(`/api/admin/customers/${id}/onboarding/instagram-accounts`)
+        .query({ metaAdAccountId: ACCT })
+        .set("Authorization", ADMIN);
+      expect(res.status).toBe(200);
+      expect(res.body.instagramAccounts).toEqual([{ id: IG, username: IG }]);
+    });
+
+    it("400s when metaAdAccountId is missing — an Instagram list is meaningless unscoped", async () => {
+      const id = await seedCustomer("disc-ig-noacct");
+      const res = await request(app)
+        .get(`/api/admin/customers/${id}/onboarding/instagram-accounts`)
+        .set("Authorization", ADMIN);
+      expect(res.status).toBe(400);
+    });
+
+    it("503s honestly for the Instagram picker when no META_SYSTEM_USER_TOKEN is configured", async () => {
+      const id = await seedCustomer("disc-ig-notoken");
+      const saved = process.env.META_SYSTEM_USER_TOKEN;
+      delete process.env.META_SYSTEM_USER_TOKEN;
+      const res = await request(app)
+        .get(`/api/admin/customers/${id}/onboarding/instagram-accounts`)
+        .query({ metaAdAccountId: ACCT })
+        .set("Authorization", ADMIN);
+      process.env.META_SYSTEM_USER_TOKEN = saved;
+      expect(res.status).toBe(503);
+    });
   });
 
   it("finalize refuses before anything is provisioned", async () => {

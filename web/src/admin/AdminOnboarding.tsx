@@ -53,6 +53,11 @@ type DetectedDestination =
   | { supported: true; destinationType: "engagement"; leadEventTypes: [string] }
   | { supported: false; reason: "no_ad_sets" | "unrecognized_objective" | "mixed_ad_sets" };
 type UnsupportedReason = Extract<DetectedDestination, { supported: false }>["reason"];
+interface InstagramOption {
+  id: string;
+  username: string;
+}
+
 interface PageOption {
   id: string;
   name: string;
@@ -141,6 +146,13 @@ export function AdminOnboarding() {
   const [pages, setPages] = useState<PageOption[] | null>(null);
   const [loadingPages, setLoadingPages] = useState(false);
   const [pagesError, setPagesError] = useState<string | null>(null);
+  // Same move for Instagram. Worth a picker for a sharper reason than the
+  // Page's: an IG id is 17 digits with no human-readable part, so a typo is
+  // both easy to make and impossible to spot by eye — and AIC-108's gate
+  // means a bad one flips the whole connection to `revoked`.
+  const [igAccounts, setIgAccounts] = useState<InstagramOption[] | null>(null);
+  const [loadingIg, setLoadingIg] = useState(false);
+  const [igError, setIgError] = useState<string | null>(null);
 
   const [provisioning, setProvisioning] = useState(false);
   const [provisionResult, setProvisionResult] = useState<string | null>(null);
@@ -203,8 +215,19 @@ export function AdminOnboarding() {
   const pageScopeAccount = form.metaAdAccountId || (acctId.trim() ? `${ACT_PREFIX}${acctId.trim()}` : "");
   useEffect(() => {
     loadPages(pageScopeAccount);
+    loadInstagram(pageScopeAccount);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageScopeAccount]);
+  // Drop a selected IG account the newly-picked ad account doesn't have, for
+  // the same reason the Page effect below does: a stale selection is exactly
+  // the cross-customer mix-up the scoping exists to prevent.
+  useEffect(() => {
+    if (!igAccounts) return;
+    setForm((f) =>
+      !f.instagramId || igAccounts.some((a) => a.id === f.instagramId) ? f : { ...f, instagramId: "" },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [igAccounts]);
   useEffect(() => {
     if (!pages) return;
     const ok = (v: string) => !v || pages.some((p) => p.id === v);
@@ -246,6 +269,21 @@ export function AdminOnboarding() {
       .then((r) => setPages(r.pages))
       .catch((e) => setPagesError(e instanceof Error ? e.message : w.pickPageError))
       .finally(() => setLoadingPages(false));
+  }
+
+  // Scoped per ad account like the Pages loader, but this edge is scoped by
+  // construction so it needs no union: verified live that the two real ad
+  // accounts return different results on one token.
+  function loadInstagram(metaAdAccountId: string) {
+    if (!id || !metaAdAccountId) { setIgAccounts(null); return; }
+    setLoadingIg(true);
+    setIgError(null);
+    api<{ instagramAccounts: InstagramOption[] }>(
+      `/admin/customers/${id}/onboarding/instagram-accounts?metaAdAccountId=${encodeURIComponent(metaAdAccountId)}`,
+    )
+      .then((r) => setIgAccounts(r.instagramAccounts))
+      .catch((e) => setIgError(e instanceof Error ? e.message : w.pickInstagramError))
+      .finally(() => setLoadingIg(false));
   }
 
   function loadCampaigns(metaAdAccountId: string) {
@@ -737,11 +775,17 @@ export function AdminOnboarding() {
           <div className="field">
             <label>{w.fieldInstagramId}</label>
             <div className="row gap12" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
-              <input
+              <select
                 style={{ flex: 1, minWidth: 160 }}
                 value={form.instagramId}
                 onChange={(e) => setForm({ ...form, instagramId: e.target.value })}
-              />
+                disabled={!pageScopeAccount || loadingIg}
+              >
+                <option value="">{w.pickInstagramPlaceholder}</option>
+                {(igAccounts ?? []).map((a) => (
+                  <option key={a.id} value={a.id}>@{a.username}</option>
+                ))}
+              </select>
               <button
                 type="button" className="btn btn-outline btn-sm"
                 disabled={checkingAsset !== null || !form.instagramId.trim()}
@@ -750,6 +794,19 @@ export function AdminOnboarding() {
                 {checkingAsset === "instagram" ? w.checking : w.checkInstagram}
               </button>
             </div>
+            {loadingIg && <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickInstagramLoading}</p>}
+            {igError && (
+              <p style={{ color: "#c0362c", fontSize: "0.78rem", marginTop: 4 }}>
+                {igError}{" "}
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => loadInstagram(pageScopeAccount)}>{w.pickRetry}</button>
+              </p>
+            )}
+            {/* An empty list is a real answer, not a blank (AIC-98): no IG
+                account is attached to this ad account, which is fixed in Meta
+                Business Settings rather than by anything here. */}
+            {!loadingIg && !igError && pageScopeAccount && igAccounts?.length === 0 && (
+              <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickInstagramEmpty}</p>
+            )}
             <p className="muted" style={{ fontSize: "0.75rem", marginTop: 4 }}>
               {w.instagramGateNote}
             </p>

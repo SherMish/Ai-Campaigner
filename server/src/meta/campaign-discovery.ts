@@ -21,6 +21,14 @@ export interface PageOption {
   name: string;
 }
 
+export interface InstagramOption {
+  id: string;
+  // Meta returns `username` for an IG account, not `name`. Kept as its own
+  // field rather than mapped to `name` so the UI can render it as @handle,
+  // which is what an operator actually recognizes on a call.
+  username: string;
+}
+
 export interface DiscoveredCampaign {
   id: string; // Meta campaign id
   name: string;
@@ -50,6 +58,18 @@ export interface CampaignDiscoveryReader {
   // act_2181076988590009 returns the Pisga Page, act_1573023157816786
   // returns [] — the two accounts genuinely differ.
   listPages(adAccountId: string): Promise<PageOption[]>;
+  // Every Instagram account attached to ONE ad account. Scoped by
+  // construction, which is why this edge and not a portfolio-wide one:
+  // verified live 2026-08-19 that act_1573023157816786 returns
+  // @ads_agent_il while act_2181076988590009 returns [] on the same token —
+  // so one customer's IG account can never be offered to another. That is
+  // the failure the Page picker hit three times before landing on its union.
+  //
+  // Needs NO instagram_* scope: IG is reached as an ad-account asset, so the
+  // ads grant carries it (the production token has no instagram_* scope at
+  // all and reads this fine). See REQUIRED_SCOPES.instagram in
+  // access-layers.ts for why that entry is deliberately minimal.
+  listInstagramAccounts(adAccountId: string): Promise<InstagramOption[]>;
   // Every campaign under one ad account, each with its destination DETECTED
   // (see tracking-health.ts's detectDestination) rather than asked — the
   // ticket's "detect, don't ask" rule for adopting vs. building.

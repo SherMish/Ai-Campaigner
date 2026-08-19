@@ -17,7 +17,7 @@ import { shekelToAgorot, resolveDestinationShape } from "@aic/shared";
 import { extractLeads } from "./insights.js";
 import { normalizeAdMedia, type AdMedia, type AdMediaReader, type RawAdMedia } from "./ad-media.js";
 import { detectDestination, type AdSetTrackingConfig, type TrackingReader } from "./tracking-health.js";
-import type { AdAccountOption, PageOption, DiscoveredCampaign, CampaignDiscoveryReader } from "./campaign-discovery.js";
+import type { AdAccountOption, PageOption, InstagramOption, DiscoveredCampaign, CampaignDiscoveryReader } from "./campaign-discovery.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
 // Marketing API. Budgets are read/written in the account currency's MINOR unit,
@@ -356,6 +356,26 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     const byId = new Map<string, PageOption>();
     for (const p of [...sameBusiness, ...promotable]) byId.set(String(p.id), opt(p));
     return [...byId.values()];
+  }
+
+  // Unlike listPages, this needs no union and no business filter: the edge is
+  // already per-account and already scoped. Verified live 2026-08-19 on the
+  // production token — act_1573023157816786 → [@ads_agent_il],
+  // act_2181076988590009 → []. The two accounts genuinely differ, so a
+  // non-empty result is real rather than a permissions artifact.
+  //
+  // An empty list here is INFORMATIVE, not an error: it means no Instagram
+  // account is attached to this ad account (fixed in Meta Business Settings,
+  // not by us). The caller renders that reason rather than a blank (AIC-98).
+  async listInstagramAccounts(adAccountId: string): Promise<InstagramOption[]> {
+    type RawIg = { id: string; username?: string };
+    const body = await this.get(`${adAccountId}/instagram_accounts?fields=id,username&limit=200`);
+    return ((body.data as RawIg[]) ?? []).map((a) => ({
+      id: String(a.id),
+      // Fall back to the id rather than rendering an empty @ — a nameless
+      // option an operator cannot identify is worse than a raw id.
+      username: a.username ? String(a.username) : String(a.id),
+    }));
   }
 
   // Every campaign under one ad account, destination DETECTED per campaign
