@@ -9,6 +9,9 @@ import type { CreativeWriter } from "./creative-types.js";
 // startBuilderCampaign's UNIQUE(customer_id) constraint on managed_campaigns).
 export interface BuilderContext {
   customerId: string;
+  // AIC-106 — read from the customer record, never operator-entered. See the
+  // note in contextFromRow: this is what the creation confirmation names.
+  businessName: string;
   category: string; // free text (AIC-44 manual onboarding), may be ''
   adAccountUuid: string; // ad_accounts.id — the FK managed_campaigns.ad_account_id needs
   metaAdAccountId: string; // "act_..." — what every real Meta API call needs
@@ -17,6 +20,7 @@ export interface BuilderContext {
 
 interface ReadinessRow {
   category: string | null;
+  business_name: string | null;
   already_has_campaign: boolean;
   access_health: string | null;
   ad_account_uuid: string | null;
@@ -33,6 +37,12 @@ function contextFromRow(customerId: string, r: ReadinessRow | undefined): Builde
   if (r.access_health !== "ok" || !r.ad_account_uuid || !r.meta_ad_account_id || !r.page_id) return null;
   return {
     customerId,
+    // AIC-106 — the confirmation shown at creation names the customer, and
+    // that name must come from the RECORD being provisioned, never from
+    // operator-entered text. It is the only thing that catches building
+    // against the wrong customer once the launch gate is gone, so a name the
+    // operator typed themselves would confirm nothing.
+    businessName: r.business_name ?? "",
     category: r.category ?? "",
     adAccountUuid: r.ad_account_uuid,
     metaAdAccountId: r.meta_ad_account_id,
@@ -46,7 +56,7 @@ function contextFromRow(customerId: string, r: ReadinessRow | undefined): Builde
 // crashing partway through a build or silently creating on a broken account.
 export async function resolveBuilderContext(pool: pg.Pool, userId: string): Promise<BuilderContext | null> {
   const { rows } = await pool.query<{ customer_id: string | null } & ReadinessRow>(
-    `SELECT u.customer_id, c.category,
+    `SELECT u.customer_id, c.category, c.business_name,
             EXISTS(SELECT 1 FROM managed_campaigns mc WHERE mc.customer_id = u.customer_id AND mc.meta_campaign_id IS NOT NULL) AS already_has_campaign,
             conn.access_health, aa.id AS ad_account_uuid, aa.meta_ad_account_id, conn.page_id
      FROM app_users u
@@ -71,7 +81,7 @@ export async function resolveBuilderContext(pool: pg.Pool, userId: string): Prom
 // every caller sits behind requireAdmin; this only resolves READINESS.
 export async function resolveBuilderContextForCustomer(pool: pg.Pool, customerId: string): Promise<BuilderContext | null> {
   const { rows } = await pool.query<ReadinessRow>(
-    `SELECT c.category,
+    `SELECT c.category, c.business_name,
             EXISTS(SELECT 1 FROM managed_campaigns mc WHERE mc.customer_id = c.id AND mc.meta_campaign_id IS NOT NULL) AS already_has_campaign,
             conn.access_health, aa.id AS ad_account_uuid, aa.meta_ad_account_id, conn.page_id
      FROM customers c

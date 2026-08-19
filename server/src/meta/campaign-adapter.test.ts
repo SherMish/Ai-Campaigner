@@ -1,6 +1,6 @@
 // Unit tests for GraphCampaignAdapter's create-writes (AIC-50) — the hard
 // rule this ticket exists to enforce: every object the builder creates lands
-// PAUSED, never live. Mocks global fetch (no other GraphCampaignAdapter
+// ACTIVE from creation (AIC-106). Mocks global fetch (no other GraphCampaignAdapter
 // method has a unit test today — every prior write was verified via a live
 // reversible dogfood test instead; this one gets a unit test too because the
 // paused-invariant is safety-critical and cheap to pin down here directly).
@@ -24,8 +24,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("GraphCampaignAdapter create-writes — always PAUSED", () => {
-  it("createCampaign sends status=PAUSED and the campaign fields", async () => {
+// AIC-106 removed the launch gate: creation IS the go-live moment, so these
+// assertions flipped from PAUSED to ACTIVE. This is the single most
+// consequential line in the file — it is where money starts moving — so it is
+// asserted explicitly on all three creates rather than inferred.
+describe("GraphCampaignAdapter create-writes — ACTIVE on create (AIC-106)", () => {
+  it("createCampaign sends status=ACTIVE and the campaign fields", async () => {
     const mock = fakeFetch({ id: "meta_camp_1" });
     vi.stubGlobal("fetch", mock);
     const adapter = new GraphCampaignAdapter("tok");
@@ -39,12 +43,12 @@ describe("GraphCampaignAdapter create-writes — always PAUSED", () => {
     const [url, init] = mock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain("act_123/campaigns");
     const body = new URLSearchParams(String(init.body));
-    expect(body.get("status")).toBe("PAUSED");
+    expect(body.get("status")).toBe("ACTIVE");
     expect(body.get("objective")).toBe("OUTCOME_LEADS");
     expect(body.get("daily_budget")).toBe("4000");
   });
 
-  it("createAdSet sends status=PAUSED and is created on the ad account's edge with campaign_id in the body", async () => {
+  it("createAdSet sends status=ACTIVE and is created on the ad account's edge with campaign_id in the body", async () => {
     const mock = fakeFetch({ id: "meta_adset_1" });
     vi.stubGlobal("fetch", mock);
     const adapter = new GraphCampaignAdapter("tok");
@@ -60,7 +64,7 @@ describe("GraphCampaignAdapter create-writes — always PAUSED", () => {
     const [url, init] = mock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain("act_123/adsets");
     const body = new URLSearchParams(String(init.body));
-    expect(body.get("status")).toBe("PAUSED");
+    expect(body.get("status")).toBe("ACTIVE");
     expect(body.get("campaign_id")).toBe("meta_camp_1");
     expect(JSON.parse(body.get("targeting") ?? "{}")).toMatchObject({ age_min: 18, age_max: 45 });
     // AIC-89 sub-fix: these come from resolveDestinationShape(FIXED_DESTINATION),
@@ -115,7 +119,7 @@ describe("GraphCampaignAdapter create-writes — always PAUSED", () => {
     });
   });
 
-  it("createAd sends status=PAUSED and is created on the ad account's edge with adset_id + creative in the body", async () => {
+  it("createAd sends status=ACTIVE and is created on the ad account's edge with adset_id + creative in the body", async () => {
     const mock = fakeFetch({ id: "meta_ad_1" });
     vi.stubGlobal("fetch", mock);
     const adapter = new GraphCampaignAdapter("tok");
@@ -128,7 +132,7 @@ describe("GraphCampaignAdapter create-writes — always PAUSED", () => {
     const [url, init] = mock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain("act_123/ads");
     const body = new URLSearchParams(String(init.body));
-    expect(body.get("status")).toBe("PAUSED");
+    expect(body.get("status")).toBe("ACTIVE");
     expect(body.get("adset_id")).toBe("meta_adset_1");
     expect(JSON.parse(body.get("creative") ?? "{}")).toEqual({ creative_id: "crea_1" });
   });

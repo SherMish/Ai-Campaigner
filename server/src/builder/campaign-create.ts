@@ -244,6 +244,12 @@ export async function buildCampaignOnMeta(
     // at the top of this function. Provisioning owns it; the builder reads it.
     `UPDATE managed_campaigns
      SET meta_campaign_id = $2, name = $3, objective = $8,
+         -- AIC-106: creation IS the launch. Stamped here so nothing downstream
+         -- still treats this campaign as awaiting approval — customer-overview
+         -- gates its "approve launch" state on this being NULL, and a live,
+         -- spending campaign prompting for approval is the dashboard
+         -- contradicting reality.
+         launch_approved_at = COALESCE(launch_approved_at, now()),
          whatsapp_destination = $4, budget_period = 'daily',
          website_url = $5, tracking_pixel_id = $6,
          lead_event_types = COALESCE($7::text[], lead_event_types)

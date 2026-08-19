@@ -545,157 +545,61 @@ horizontally scrollable (shrinking the circles/labels a bit) plus a
 the full wizard at 375px afterward — the two-up age-range `.field-row` and
 every other step render cleanly at that width.
 
-### The launch gate (AIC-53)
+### Creation goes live immediately — the launch gate is gone (AIC-106)
 
-The controlled path from "built (PAUSED)" to "spending (ACTIVE)" — so a
-campaign never starts spending a customer's money without an explicit
-approval. The full flow: builder finishes → everything exists PAUSED on Meta
-(AIC-50) → first-campaign review (AIC-18/38, the existing operator review,
-moves the local row to `status='active'`) → **customer launch approval** →
-activate.
+There is no PAUSED-then-approve step. The builder creates the campaign, ad
+set(s) and ad(s) **ACTIVE**, and the campaign is spending the moment the build
+returns. `launch_approved_at` is stamped in the same write, so nothing
+downstream still treats the campaign as awaiting approval.
 
-**Why "review-approved" is not "launched."** Before this ticket,
-`campaign-review.ts`'s `submitReview(approved)` set `status='active'`, which
-for a pre-existing (already-live) campaign correctly meant "we now manage
-it." But a *builder-created* campaign is `status='active'` while still
-**PAUSED on Meta** — reviewed and managed, but not yet spending. So AIC-53
-adds a separate `launch_approved_at` column (migration 022): NULL = reviewed
-but the customer hasn't said "go live" yet. Every campaign that existed
-before this migration is backfilled non-NULL (they were already spending, so
-retroactively "launched"); only a fresh builder campaign is genuinely NULL.
+This REVERSES AIC-50/AIC-53's original hard rule ("a create must never produce
+a live, spending object"), deliberately. The governing distinction is now:
 
-**The one activation path** (`server/src/launch/activate.ts`,
-`activateCampaign`): deliberately its OWN small pipeline, not AIC-12's
-`SafeExecutor` (which is bound to a `recommendation` record — there is none
-here) and not AIC-50's create-writes (which hardcode PAUSED). Same
-discipline as both, though: gate (already-launched → idempotent no-op; not
-linked → fail; `status !== 'active'` → refuse, because review hasn't passed)
-→ read live status → write `ACTIVE` → **read-back verify it landed** → log to
-`action_history` (`action_type='activate_campaign'`, `human_involved=true`) +
-set `launch_approved_at`. A failed write is reported honestly and never
-marks the campaign launched, so a retry is always safe.
+> **Creating something new** no longer needs approval.
+> **Changing something the customer already has running** still does.
 
-**"No builder path can activate directly" — enforced, not just intended.**
-The activate write lives only behind this gate; `buildCampaignOnMeta`
-(AIC-50) never touches campaign status, and a fresh build always lands
-`under_review`. `activateCampaign` refuses any campaign whose local status
-isn't `active`, so a not-yet-reviewed campaign cannot be activated even by
-calling the gate directly. The one write method on the adapter that can send
-`status=ACTIVE` (`GraphCampaignAdapter.activateCampaign`) takes no status
-parameter — the same "hard rule in the adapter" shape the create-writes use
-for PAUSED, in reverse. Pinned by `campaign-adapter.test.ts`.
+Recommendation approvals (AIC-12/13) are untouched — a proposed budget change,
+creative pause, or audience pause on a running campaign still requires an
+explicit approval through the safe-execute pipeline.
 
-**Customer surface** (`server/src/services/customer-launch.ts` +
-`web/src/app/Home.tsx`'s `LaunchModal`): a review-approved, still-unlaunched,
-Meta-linked campaign surfaces as a new `ready_to_launch` home state (it
-outranks delivery/collecting — a PAUSED campaign has no delivery data to
-judge, and the one actionable thing is the launch itself). Approving opens a
-modal showing exactly what will run — campaign name, daily budget, **the
-estimated monthly max spend** (daily × 30), ad count, lead destination —
-then a single "אישור והפעלה". This is the AIC-23 informed-approval pattern:
-the customer sees budget + max spend before anything spends. Approving is the
-only thing that flips the campaign live.
+**What replaced the gate.** The gate was doing two jobs, and only one of them
+was approval:
 
-#### Two rules that apply because it's a consent surface (bug fix, 2026-08-14)
+1. *A ceiling on spend.* Now the create-path budget guard
+   (`assertCreateWithinBudget`, see
+   [safe-execution.md](safe-execution.md)) — it refuses an over-ceiling or
+   ceiling-less build BEFORE the first Meta call, so nothing reaches Meta
+   unbounded.
+2. *Catching the wrong customer.* This was incidental but real: the customer
+   reviewed the campaign and would have said "this isn't mine." An operator
+   running several onboardings in one session is most likely to have exactly
+   this wrong, and a budget ceiling cannot catch it — a correctly-typed budget
+   against the wrong customer passes every numeric check.
 
-Every row exists so the customer can check "is this what I think I'm
-approving?" before real money moves. Two facts on this modal were derived
-from assumptions that AIC-87 (per-campaign lead definitions) and connecting
-an externally-created campaign both invalidated:
+So the review step now carries a confirmation naming the customer, the daily
+budget, and that it starts immediately:
 
-- **The destination row was hardcoded to WhatsApp.** Its label was a fixed
-  `"פניות אל וואטסאפ"` and its value was `whatsapp_destination` — a column
-  that is `NOT NULL DEFAULT ''`, so for the real connected Pixel campaign it
-  rendered a confident WhatsApp label beside a **blank value**. It now
-  resolves through `services/launch-destination.ts` into one of three states:
-  `whatsapp` (the number), `website` (which action counts as a lead, named in
-  plain Hebrew via `strings.launch.leadEvent`, plus the pixel's host — e.g.
-  "הרשמה — pisga.app"), or `unknown`. The event is deliberately named in the
-  customer's language, not as `CompleteRegistration`: an SMB owner cannot
-  verify a Meta event id, and verification is this screen's whole purpose.
-  The standard-event mapping is the inverse of AIC-88's `PIXEL_EVENT_ACTION`
-  (`standardEventForAction`), reused rather than copied so the two can't drift.
-- **The ad count came from our own build history.** It was `COUNT(*)` over
-  `action_history` rows with `action_type='create_ad'` — ads *we* created —
-  which reads 0 for any campaign connected from outside the builder even when
-  real ads exist. It now reads live Meta state (`getCampaignState().adStatuses`),
-  the same honest source AIC-71 uses for the delivering-ad count.
+> יצירת קמפיין עבור **יורם גאון** · ₪40 ליום · הקמפיין יתחיל לפעול מיד
 
-**Rule 1 — never render a fact we don't have.** A row whose value is unknown
-is omitted, not printed blank. A confident label beside an empty value
-asserts something untrue at the worst possible moment.
+The name comes from `BuilderContext.businessName`, sourced from the customer
+record via `/builder/context` — **never** from operator-entered text. A name
+the operator typed themselves would confirm nothing about who is being spent
+for; that is the whole point of the control.
 
-**Rule 2 — if we can't verify, block.** `LaunchBlocker` is `no_ads` (Meta
-reports zero live ads — approving would spend nothing and do nothing),
-`unknown_destination` (we can't say where leads arrive), or
-`verification_unavailable` (Meta unreachable — *not* the same as "fine",
-including the ordinary case of an ad-account API rate limit). Each disables
-approval **with its reason stated**, never a silently dead button. Blockers
-are re-checked server-side in `approveLaunch` and return `409` — the disabled
-button is a courtesy, not the gate.
+**What the AIC-18 first-campaign review still does — and no longer does.** It
+still exists and still moves the local row `under_review → active`. It no
+longer sits between creation and spend, because the Meta objects are live from
+creation. Treat it as a management record, not a spend gate.
 
-#### Activation left the dashboard stale (bug fix, 2026-08-15, found live)
-
-`activateCampaign` only ever writes to Meta (PAUSED → ACTIVE) — it never
-touches `managed_campaigns.delivery_ok`/`delivering`/`delivering_ad_count`
-(AIC-39/71), which are otherwise only recomputed on the hourly engine tick.
-`LaunchModal`'s `approve()` already called `invalidateOverview()` on success,
-so the client correctly re-fetched the overview — but the overview correctly
-returned whatever the *last tick* had cached, which for a campaign PAUSED for
-weeks before this launch was `delivering: false, delivering_ad_count: 0`.
-
-Confirmed live on the real free_beta campaign: **seconds after approving**,
-Meta genuinely showed 2 ads ACTIVE (a third blocked only by its own,
-separately-paused ad set — a real fact about the account, not a bug), while
-Home confidently said "לא מתפרסם / אין כרגע מודעות שמוצגות ללקוחות" (nothing
-is showing) right after the single most consequential action a customer can
-take.
-
-This is the exact other half of the lesson [manual-controls.md](manual-controls.md)
-already documents for AIC-66's pause/resume routes — a synchronous backend
-recompute matters as much as invalidating the client cache, and a write path
-is only fully fixed once both halves are done. `approveLaunch`
-(`services/customer-launch.ts`) now calls the identical `refreshDeliveryNow`
-(`services/delivery-monitor.ts`) on a genuine `"activated"` outcome — same
-function, same call shape as the manual-controls routes, not a second
-implementation. `buildLaunchReader` (`launch/writer.ts`) is now typed as
-`LaunchStateReader & DeliveryReader` so the one adapter instance serves both
-purposes, the same intersection-type pattern `buildAdditionWriter` already
-used. Best-effort: a refresh failure (verified live — a transient Meta
-ad-account rate limit, from this session's own heavy probing) is logged and
-swallowed, leaving the stale row rather than writing a guess; the next hourly
-tick catches up regardless.
-
-Test-first: a new DB integration case seeds the exact stale state (the last
-tick's cached `delivering: false, delivering_ad_count: 0` from before
-launch), asserts `POST /launch/approve` refreshes both to the real
-post-activation Meta values within the same request.
-
-**Verification**: the two integration suites named above (13 tests total),
-plus a real-browser walk of a locally-seeded review-approved campaign — the
-`ready_to_launch` hero, the modal's full spend summary (₪40/day → ₪1200/mo
-max, 3 ads), and the honest 503 degradation when no Meta token is configured
-(error copy shown, modal stays open, DB confirmed *not* marked launched). The
-actual PAUSED→ACTIVE flip against a real Meta campaign is the consequential
-live write — it's part of AIC-50's still-pending dogfood, deliberately gated
-behind explicit human go-ahead rather than run autonomously.
-
-**Open question, not yet decided or built (AIC-106).** The product decision
-behind [add-content.md](add-content.md)'s AIC-106 change — approval gates
-belong only in the recommendation engine, not on *creating* something new —
-would, if extended here, remove this gate entirely (not "auto-approve",
-gone). It's deliberately **not** applied to this gate yet: unlike additions
-(budget-neutral — see add-content.md), a builder-created campaign's own
-`agreed_budget_agorot` is currently set circularly, FROM the same
-`dailyBudgetAgorot` the customer just typed
-(`builder/campaign-create.ts`'s create SQL), so it enforces no real ceiling —
-removing the one manual checkpoint before spend starts would leave a typo'd
-budget with nothing standing between it and real money. AIC-106 holds this
-half until that's fixed: the create path needs to stop *writing*
-`agreed_budget_agorot` from customer input and start *validating* against a
-value set independently at provisioning, plus a backfill for campaigns
-(including Pisga's own) whose value was already set circularly. Until then,
-this section describes the gate as it still stands.
+**The launch-approval path still exists in code** (`launch/activate.ts`,
+`services/customer-launch.ts`, `/app/launch`), and is deliberately retained
+for now: it is the only way to activate a campaign that was created PAUSED
+under the old behaviour. Verified 2026-08-19 that no such campaign remains
+(both live campaigns have `launch_approved_at` set), so it is currently
+unreachable for new work — `readyToLaunch` requires `launch_approved_at IS
+NULL`, which creation now always stamps. Removing that path is tracked as
+cleanup rather than done here, so a stranded old campaign can never become
+unactivatable.
 
 ### Add to an existing campaign (AIC-63)
 

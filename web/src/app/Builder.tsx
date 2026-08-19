@@ -51,6 +51,8 @@ export function Builder({ customerId, onExit }: Props = {}) {
   const exit = onExit ?? (() => nav("/app"));
   const [phase, setPhase] = useState<"loading" | "not_ready" | "ready" | "error">("loading");
   const [category, setCategory] = useState<BusinessCategory>("other");
+  // AIC-106 — from the customer record via /builder/context, never typed here.
+  const [businessName, setBusinessName] = useState("");
   const [localCampaignId, setLocalCampaignId] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [wizard, setWizard] = useState<WizardState | null>(null);
@@ -73,6 +75,7 @@ export function Builder({ customerId, onExit }: Props = {}) {
         // selector shows a real, correctable option (never a blank/mystery).
         const cat = normalizeBusinessCategory(ctx.category);
         setCategory(cat);
+        setBusinessName(ctx.businessName ?? "");
         const aud = resolveAudienceDefault(cat);
         setWizard({
           destination: FIXED_DESTINATION,
@@ -424,6 +427,20 @@ export function Builder({ customerId, onExit }: Props = {}) {
               <div className="summary-row"><span className="k">{rv.audienceLine}</span><b>{wizard.ageMin}–{wizard.ageMax}, {au.genderOptions[wizard.gender]} · {rv.geoValue}</b></div>
               <div className="summary-row"><span className="k">{rv.placementsLine}</span><b>{rv.placementsValue}</b></div>
               <div className="summary-row"><span className="k">{rv.adsLine}</span><b>{createdAds.length}</b></div>
+              {/* AIC-106 — the launch gate is gone, so this is the last thing
+                  seen before money moves. It names the customer explicitly
+                  because that is the one error the gate used to catch: a
+                  correctly-typed budget against the wrong customer. */}
+              <div
+                className="card"
+                style={{ marginTop: 18, background: "var(--warn-bg, #fff8e6)", borderColor: "var(--warn-border, #e8c766)" }}
+              >
+                <b style={{ display: "block", marginBottom: 8 }}>{rv.confirmTitle}</b>
+                <p style={{ margin: "0 0 6px" }}>
+                  {rv.confirmFor} <b>{businessName || "—"}</b> · <b>₪{wizard.dailyBudgetShekels}</b> {rv.confirmPerDay}
+                </p>
+                <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>{rv.confirmStartsNow}</p>
+              </div>
               {buildError && <p className="muted" style={{ marginTop: 16, color: "var(--orange)" }}>{buildError}</p>}
               <button className="btn btn-primary btn-wide" style={{ marginTop: 20 }} disabled={building || createdAds.length === 0} onClick={submit}>
                 {building ? rv.creating : rv.createCta}

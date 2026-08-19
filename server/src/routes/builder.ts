@@ -36,7 +36,10 @@ builderRouter.get("/context", requireAuth, async (req, res) => {
   try {
     const ctx = await resolveBuilderContext(pool, (req as AuthedRequest).userId!);
     if (!ctx) return notReady(res);
-    res.json({ category: ctx.category });
+    // AIC-106 — businessName rides along so the client can name the customer
+    // in the creation confirmation. Sourced from the customer record via
+    // BuilderContext, never from anything the operator typed.
+    res.json({ category: ctx.category, businessName: ctx.businessName });
   } catch (e) {
     console.error("[builder] context failed", e);
     res.status(500).json({ error: "failed to load builder context" });

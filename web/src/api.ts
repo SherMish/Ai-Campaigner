@@ -480,7 +480,9 @@ function builderBasePath(customerId?: string): string {
   return customerId ? `/admin/customers/${customerId}/builder` : "/app/builder";
 }
 
-export const getBuilderContext = (customerId?: string) => api<{ category: string }>(`${builderBasePath(customerId)}/context`);
+export const getBuilderContext = (customerId?: string) =>
+  // AIC-106 — businessName names the customer in the creation confirmation.
+  api<{ category: string; businessName: string }>(`${builderBasePath(customerId)}/context`);
 export const startBuilder = (customerId?: string) =>
   api<{ localCampaignId: string }>(`${builderBasePath(customerId)}/start`, { method: "POST" });
 

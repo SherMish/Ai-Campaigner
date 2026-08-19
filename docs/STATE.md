@@ -6,6 +6,46 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — AIC-106 half 2: the launch gate is removed; creation goes live
+Creation IS the go-live moment now. The builder creates campaign, ad set(s) and
+ad(s) **ACTIVE**, and `launch_approved_at` is stamped in the same write.
+
+This reverses AIC-50/AIC-53's original hard rule ("a create must never produce a
+live, spending object"), deliberately. The governing distinction is now:
+creating something new needs no approval; changing something already running
+still does. Recommendation approvals (AIC-12/13) are untouched.
+
+**Why the stamp matters.** `customer-overview.ts` gates its "approve launch"
+state on `launch_approved_at IS NULL`. Without stamping it at build time, a
+live, spending campaign would have kept prompting the customer to approve its
+launch — the dashboard contradicting reality. Locked in by a test.
+
+**What replaced the gate.** It was doing two jobs, only one of which was
+approval. The spend ceiling is now the create-path budget guard (half 1). The
+other job was incidental but real: catching a correctly-typed budget against
+the WRONG customer, which no numeric check can catch. So creation now confirms
+with the customer's name, the daily budget, and that it starts immediately —
+the name sourced from the customer record via `BuilderContext.businessName`,
+never from operator-entered text, since a name the operator typed would confirm
+nothing.
+
+**Consequence worth stating:** the AIC-18 first-campaign review still exists and
+still moves `under_review → active`, but it no longer sits between creation and
+spend. It is a management record, not a spend gate.
+
+**Copy that was silently false is corrected:** the review step said
+"יצירת הקמפיין (מושהה)" and "הקמפיין נוצר במצב מושהה".
+
+**Deliberately NOT deleted:** the launch-approval path (`launch/activate.ts`,
+`services/customer-launch.ts`, `/app/launch`, the Home modal). It is the only
+way to activate a campaign created PAUSED under the old behaviour. Verified
+against the DB that none remain (both live campaigns are already launched), so
+it is unreachable for new work — but deleting it before that check would have
+risked stranding an old campaign as permanently unactivatable. Removal is
+cleanup, tracked separately.
+
+818 server + 27 web tests pass; the 3 failures are the known pre-existing set.
+
 ### 2026-08-19 — AIC-106 half 1: the create path gets a real budget ceiling
 Prerequisite for removing the launch gate. The gate is currently the only thing
 between a mistyped budget and live spend, so the ceiling has to be real before

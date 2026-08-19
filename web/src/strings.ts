@@ -1434,10 +1434,20 @@ export const strings = {
         placementsValue: "אוטומטי (Advantage+)",
         geoValue: "כל ישראל",
         adsLine: "מודעות",
-        createCta: "יצירת הקמפיין (מושהה)",
+        createCta: "יצירת הקמפיין והפעלה מיידית",
         creating: "יוצר…",
-        successTitle: "הקמפיין נוצר במצב מושהה",
-        successBody: "בשלב הבא נעביר אותו בבדיקה ותאשרו את ההפעלה מהדף הראשי.",
+        // AIC-106 — the confirmation that replaces the launch gate. Three
+        // facts, in this order: WHICH CUSTOMER, how much per day, and that it
+        // starts now. The customer name is the load-bearing one — it is the
+        // only thing that catches building against the wrong customer, and
+        // it is exactly what an operator running several onboardings in one
+        // session is most likely to have wrong.
+        confirmTitle: "הקמפיין יתחיל לפעול מיד",
+        confirmFor: "יצירת קמפיין עבור",
+        confirmPerDay: "ליום",
+        confirmStartsNow: "אין שלב אישור נוסף — ברגע שלוחצים, הקמפיין עולה לאוויר ומתחיל להוציא תקציב.",
+        successTitle: "הקמפיין פעיל",
+        successBody: "הקמפיין עלה לאוויר ומתחיל להגיע לאנשים. אפשר לעקוב אחרי התוצאות מהדף הראשי.",
         goHome: "למעבר לדף הראשי",
         errorGeneric: "משהו השתבש ביצירת הקמפיין. אפשר לנסות שוב — מה שכבר נוצר לא ייווצר פעמיים.",
       },

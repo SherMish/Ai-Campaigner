@@ -72,6 +72,22 @@ d("campaign builder create-writes (DB)", () => {
   // That is survivable only while the launch gate exists, because a human
   // approves before anything spends. AIC-106 removes that gate, so this has
   // to be a real ceiling first. These three cases are the contract.
+  // AIC-106 — creation IS the launch now, so the row must say so. Otherwise
+  // customer-overview.ts (which gates its "approve launch" state on
+  // launch_approved_at IS NULL) would keep prompting a customer to approve a
+  // campaign that is already live and spending — the dashboard contradicting
+  // reality, which is the one thing the product cannot do.
+  it("stamps launch_approved_at at build time — no lingering 'pending launch' for a live campaign", async () => {
+    const { customerId, adAccountId } = await makeCustomer("launched");
+    const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
+    const writer = new FakeBuilderWriter();
+
+    await buildCampaignOnMeta(pool, writer, baseInput(localCampaignId, adAccountId));
+
+    const { rows } = await pool.query(`SELECT launch_approved_at FROM managed_campaigns WHERE id = $1`, [localCampaignId]);
+    expect(rows[0].launch_approved_at).not.toBeNull();
+  });
+
   describe("budget ceiling on create (AIC-106)", () => {
     // The ceiling is the figure the OPERATOR agreed with the customer at
     // provisioning, so the test sets it the way provisioning does and then

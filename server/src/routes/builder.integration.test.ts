@@ -143,6 +143,20 @@ d("guided builder routes (DB + HTTP)", () => {
     return { token, localCampaignId, creativeId: creative.body.creativeId as string };
   }
 
+  // AIC-106 — the confirmation that replaces the launch gate names the
+  // customer, and its whole value is that the name is NOT operator-entered.
+  // If it could be typed, it would confirm nothing about who is being spent
+  // for. Locked in at the source.
+  it("serves the customer's business name from the record for the creation confirmation", async () => {
+    vi.stubGlobal("fetch", mockMetaFetch());
+    const { customerId, token } = await seedReadyCustomer("bizname");
+    await pool.query(`UPDATE customers SET business_name = $2 WHERE id = $1`, [customerId, "יורם גאון"]);
+
+    const ctx = await request(app).get("/api/app/builder/context").set("Authorization", `Bearer ${token}`);
+    expect(ctx.status).toBe(200);
+    expect(ctx.body.businessName).toBe("יורם גאון");
+  });
+
   it("refuses a build with NO agreed ceiling as 409 with a specific code — never 502", async () => {
     const { token, localCampaignId, creativeId } = await readyToBuild("noceiling");
     // deliberately NO agreeBudget() — this is the real Branch A state

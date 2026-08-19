@@ -494,9 +494,27 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   }
 
   // ── Create-writes (AIC-50, the builder) ────────────────────────────────────
-  // Every create is status=PAUSED — the builder NEVER produces a live, spending
-  // object directly (the hard rule this ticket exists to enforce). Activation
-  // is a separate, approved write (AIC-53), never something a create call does.
+  // Every create is status=ACTIVE. This REVERSES AIC-50/AIC-53's original hard
+  // rule ("never produce a live, spending object directly"), deliberately, per
+  // AIC-106: the launch gate is removed and creation IS the go-live moment.
+  //
+  // These three lines are where money starts moving, so be explicit about what
+  // is and is not still guarding them:
+  //
+  //   - STILL GUARDING: the create-path budget ceiling
+  //     (assertCreateWithinBudget, AIC-106 half 1) refuses an over-ceiling or
+  //     ceiling-less build BEFORE the first call here, so nothing reaches Meta
+  //     unbounded; and the operator-facing confirmation names the customer,
+  //     the daily budget, and that it starts immediately.
+  //   - NO LONGER GUARDING: the customer's launch approval (AIC-53, removed),
+  //     and the AIC-18 admin first-campaign review — that review still exists
+  //     and still moves `status` under_review → active, but it no longer sits
+  //     between creation and spend, because the Meta objects are live the
+  //     moment they are created.
+  //
+  // Changing something already running still requires approval (AIC-12/13).
+  // That distinction — create freely, change deliberately — is the whole of
+  // AIC-106's decision.
   //
   // Field-shape confidence note: campaign create (name/objective/status/budget/
   // special_ad_categories) mirrors the same fields already read+written
@@ -515,7 +533,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     return this.postCreate(params.adAccountId, "campaigns", {
       name: params.name,
       objective,
-      status: "PAUSED",
+      status: "ACTIVE",
       buying_type: "AUCTION",
       special_ad_categories: params.specialAdCategories,
       daily_budget: String(params.dailyBudgetAgorot),
@@ -545,7 +563,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     return this.postCreate(params.adAccountId, "adsets", {
       name: params.name,
       campaign_id: params.metaCampaignId,
-      status: "PAUSED",
+      status: "ACTIVE",
       billing_event: "IMPRESSIONS",
       optimization_goal: shape.optimizationGoal,
       destination_type: shape.destinationType,
@@ -563,7 +581,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     return this.postCreate(params.adAccountId, "ads", {
       name: params.name,
       adset_id: params.metaAdSetId,
-      status: "PAUSED",
+      status: "ACTIVE",
       creative: { creative_id: params.creativeId },
     });
   }
