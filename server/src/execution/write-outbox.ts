@@ -179,6 +179,23 @@ export class WriteOutbox {
     }
   }
 
+  // Rollback support (user decision, 2026-08-19). Deleting objects on Meta is
+  // only HALF of undoing a build: this table remembers each created object's
+  // real Meta id, so leaving the rows behind makes the next attempt "resume"
+  // onto ids that no longer exist. That exact state had to be repaired by
+  // hand in production once — the row was unresolvable and every retry
+  // reported a false "already in progress".
+  //
+  // Keyed on the builder's localCampaignId prefix, which is how builderKey()
+  // namespaces every row belonging to one build.
+  async purgeForBuild(localCampaignId: string): Promise<number> {
+    const { rowCount } = await this.pool.query(
+      `DELETE FROM meta_write_outbox WHERE idempotency_key LIKE $1`,
+      [`${localCampaignId}:%`],
+    );
+    return rowCount ?? 0;
+  }
+
   private async checkSettled(idempotencyKey: string): Promise<string | null> {
     const { rows } = await this.pool.query<{ status: string; result: { metaId: string } | null }>(
       `SELECT status, result FROM meta_write_outbox WHERE idempotency_key = $1`,

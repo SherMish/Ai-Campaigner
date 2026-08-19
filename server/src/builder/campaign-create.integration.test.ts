@@ -146,6 +146,88 @@ d("campaign builder create-writes (DB)", () => {
     });
   });
 
+  // Rollback (user decision, 2026-08-19): a build is ALL-OR-NOTHING on Meta.
+  // Replaces AIC-50's resume-point design, whose reasoning rested entirely on
+  // creates being PAUSED — AIC-106 made them ACTIVE the same day, so every
+  // "resume point" became a live object sitting in a customer's ad account.
+  // Found live: a refused ad-set create left an ACTIVE campaign with zero ad
+  // sets stranded on a real customer's account.
+  describe("rollback — a failed build leaves nothing behind", () => {
+    it("deletes everything it created, newest first, when a later step fails", async () => {
+      const { customerId, adAccountId } = await makeCustomer("rollback");
+      const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
+      const writer = new FakeBuilderWriter();
+      writer.failNextCreateAd = 1; // campaign + ad set land, then the ad fails
+
+      await expect(buildCampaignOnMeta(pool, writer, baseInput(localCampaignId, adAccountId))).rejects.toThrow();
+
+      // Reverse order: children before parents. Meta cascades a campaign
+      // delete, but relying on that would leave the ad set orphaned if the
+      // campaign delete were the one that failed.
+      expect(writer.deleted).toEqual(["meta_adset_2", "meta_camp_1"]);
+    });
+
+    it("purges the outbox rows too — otherwise the retry resumes onto deleted ids", async () => {
+      const { customerId, adAccountId } = await makeCustomer("rollbackoutbox");
+      const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
+      const writer = new FakeBuilderWriter();
+      writer.failNextCreateAd = 1;
+
+      await expect(buildCampaignOnMeta(pool, writer, baseInput(localCampaignId, adAccountId))).rejects.toThrow();
+
+      // THE half that is easy to miss. The outbox remembers each created
+      // object's real Meta id; deleting on Meta while leaving these rows makes
+      // the next attempt "resume" onto a campaign that no longer exists —
+      // exactly the deadlock that had to be cleaned up by hand in production.
+      const { rows } = await pool.query(
+        `SELECT idempotency_key FROM meta_write_outbox WHERE idempotency_key LIKE $1`,
+        [`${localCampaignId}%`],
+      );
+      expect(rows).toHaveLength(0);
+    });
+
+    it("leaves the local shell row unlinked and reusable, not deleted", async () => {
+      const { customerId, adAccountId } = await makeCustomer("rollbackshell");
+      const { id: localCampaignId } = await startProvisioned(customerId, adAccountId, 7000);
+      const writer = new FakeBuilderWriter();
+      writer.failNextCreateAd = 1;
+
+      await expect(buildCampaignOnMeta(pool, writer, baseInput(localCampaignId, adAccountId))).rejects.toThrow();
+
+      // The operator retries into the SAME shell row, ceiling intact — the
+      // agreed budget was never the builder's to discard.
+      const { rows } = await pool.query(
+        `SELECT meta_campaign_id, agreed_budget_agorot FROM managed_campaigns WHERE id = $1`,
+        [localCampaignId],
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].meta_campaign_id).toBeNull();
+      expect(Number(rows[0].agreed_budget_agorot)).toBe(7000);
+    });
+
+    it("a cleanup failure never masks the ORIGINAL error", async () => {
+      const { customerId, adAccountId } = await makeCustomer("rollbackcleanupfail");
+      const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
+      const writer = new FakeBuilderWriter();
+      writer.failNextCreateAd = 1;
+      writer.failDeletes = true; // every delete call throws
+
+      // The operator must still see WHY the build failed, not a cleanup error.
+      await expect(buildCampaignOnMeta(pool, writer, baseInput(localCampaignId, adAccountId)))
+        .rejects.toThrow(/simulated Meta create-ad failure/);
+    });
+
+    it("a successful build deletes nothing", async () => {
+      const { customerId, adAccountId } = await makeCustomer("rollbacknoop");
+      const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
+      const writer = new FakeBuilderWriter();
+
+      await buildCampaignOnMeta(pool, writer, baseInput(localCampaignId, adAccountId));
+
+      expect(writer.deleted).toEqual([]);
+    });
+  });
+
   describe("budget ceiling on create (AIC-106)", () => {
     // The ceiling is the figure the OPERATOR agreed with the customer at
     // provisioning, so the test sets it the way provisioning does and then
@@ -246,30 +328,46 @@ d("campaign builder create-writes (DB)", () => {
     expect(history.rows.map((r) => r.action_type)).toEqual(["create_campaign", "create_ad_set", "create_ad", "create_ad"]);
   });
 
-  it("a mid-build failure is reconcilable: resuming skips every already-created object and only retries the failed step", async () => {
+  // REWRITTEN 2026-08-19. This test used to assert AIC-50's resume design:
+  // "resuming skips every already-created object and only retries the failed
+  // step", checking that campaign/ad-set were NOT re-created on retry.
+  //
+  // That behaviour is deliberately gone. Its reasoning rested on creates being
+  // PAUSED; AIC-106 made them ACTIVE, so every "already-created object" the
+  // old test was protecting became a LIVE object stranded in a customer's ad
+  // account — which is exactly what happened in production. Keeping the old
+  // assertion would have been a passing test defending the thing we removed.
+  //
+  // The retry contract now: the first attempt rolls back to nothing, and the
+  // second attempt rebuilds the whole campaign from scratch. More Meta calls
+  // than resume needed — the accepted cost of never stranding a live object.
+  it("after a failed build rolls back, a retry rebuilds everything cleanly", async () => {
     const { customerId, adAccountId } = await makeCustomer("resume");
     const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
     const writer = new FakeBuilderWriter();
-    writer.failNextCreateAd = 1; // the FIRST ad's create call fails first time through
+    writer.failNextCreateAd = 1; // the FIRST ad's create fails on the first pass
 
     await expect(buildCampaignOnMeta(pool, writer, baseInput(localCampaignId, adAccountId))).rejects.toThrow("simulated Meta create-ad failure");
 
-    // The campaign and the ad set already landed on Meta — confirm they're
-    // NOT re-created on resume. Neither ad has succeeded yet (the first one
-    // is what failed).
+    // Attempt 1 created a campaign + ad set, then rolled both back.
     expect(writer.campaignCalls).toHaveLength(1);
     expect(writer.adSetCalls).toHaveLength(1);
-    expect(writer.adCalls).toHaveLength(0);
+    expect(writer.deleted).toEqual(["meta_adset_2", "meta_camp_1"]);
 
     const result = await buildCampaignOnMeta(pool, writer, baseInput(localCampaignId, adAccountId));
     expect(result.adSets[0].ads).toHaveLength(2);
-    // Still only ONE call each for campaign/ad-set — resume never re-created them.
-    expect(writer.campaignCalls).toHaveLength(1);
-    expect(writer.adSetCalls).toHaveLength(1);
-    expect(writer.adCalls).toHaveLength(2); // both ads now created, none duplicated
+
+    // Rebuilt from scratch — a SECOND campaign and ad set, because the first
+    // pair no longer exists anywhere. This is the deliberate trade.
+    expect(writer.campaignCalls).toHaveLength(2);
+    expect(writer.adSetCalls).toHaveLength(2);
+    expect(writer.adCalls).toHaveLength(2);
+
+    // And nothing from attempt 1 was left behind to be deleted twice.
+    expect(writer.deleted).toEqual(["meta_adset_2", "meta_camp_1"]);
 
     const camp = await pool.query(`SELECT meta_campaign_id FROM managed_campaigns WHERE id = $1`, [localCampaignId]);
-    expect(camp.rows[0].meta_campaign_id).toBeTruthy();
+    expect(camp.rows[0].meta_campaign_id).toBe(result.metaCampaignId);
   });
 
   it("a full re-run after success makes no new Meta calls at all", async () => {

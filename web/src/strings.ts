@@ -1334,6 +1334,11 @@ export const strings = {
         title: "תקציב יומי",
         label: "תקציב יומי (₪)",
         invalid: "התקציב חייב להיות מספר חיובי.",
+        // AIC-106 follow-up, found live: an over-ceiling budget was accepted
+        // here and only refused on the wizard's FINAL click. The refusal
+        // belongs at the field, and it names the actual ceiling rather than
+        // saying "invalid".
+        overCeiling: "התקציב היומי חורג מהתקציב שסוכם עם הלקוח (₪{max} ליום). אפשר להקטין כאן, או לעדכן את התקציב המוסכם באשף החיבור.",
         rationale:
           "תקציב של כ־₪40 ליום נותן למנוע מספיק נתונים תוך כשבוע כדי להתחיל להשוות מודעות ולזהות מה מביא פניות בעלות טובה. אפשר להתחיל נמוך יותר ולהעלות בהמשך — זו נקודת פתיחה, לא מספר קבוע.",
       },

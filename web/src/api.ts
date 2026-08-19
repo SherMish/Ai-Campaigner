@@ -482,7 +482,7 @@ function builderBasePath(customerId?: string): string {
 
 export const getBuilderContext = (customerId?: string) =>
   // AIC-106 — businessName names the customer in the creation confirmation.
-  api<{ category: string; businessName: string }>(`${builderBasePath(customerId)}/context`);
+  api<{ category: string; businessName: string; agreedBudgetAgorot: number | null }>(`${builderBasePath(customerId)}/context`);
 export const startBuilder = (customerId?: string) =>
   api<{ localCampaignId: string }>(`${builderBasePath(customerId)}/start`, { method: "POST" });
 

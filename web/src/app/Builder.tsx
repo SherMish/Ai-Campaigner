@@ -46,6 +46,46 @@ interface Props {
   onExit?: () => void;
 }
 
+// Draft persistence (user decision, 2026-08-19). Replaces AIC-50's
+// resume-on-Meta design: what an operator actually wants back after a failed
+// build is the work they TYPED — budget, audience, ad copy — not half-created
+// Meta objects. So the answers live here, and Meta stays all-or-nothing.
+//
+// Scoped per customer, because this wizard is also driven by an operator
+// running several onboardings in one session. Without that, a half-filled
+// wizard from one customer's call would restore into the next customer's.
+const DRAFT_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const draftKey = (customerId?: string) => `aic_builder_draft:${customerId ?? "self"}`;
+
+function loadDraft(customerId?: string): WizardState | null {
+  try {
+    const raw = localStorage.getItem(draftKey(customerId));
+    if (!raw) return null;
+    const { savedAt, wizard } = JSON.parse(raw) as { savedAt: number; wizard: WizardState };
+    // Expiry is the safety property, not housekeeping: a stale draft from an
+    // earlier call must never silently reappear mid-conversation with someone
+    // else. Anything past the TTL is dropped rather than offered.
+    if (!savedAt || Date.now() - savedAt > DRAFT_TTL_MS) {
+      localStorage.removeItem(draftKey(customerId));
+      return null;
+    }
+    return wizard ?? null;
+  } catch {
+    // Corrupt/unparseable draft is not worth a broken wizard — start clean.
+    return null;
+  }
+}
+
+function saveDraft(customerId: string | undefined, wizard: WizardState): void {
+  try {
+    localStorage.setItem(draftKey(customerId), JSON.stringify({ savedAt: Date.now(), wizard }));
+  } catch { /* quota/private mode — a lost draft must never block the build */ }
+}
+
+function clearDraft(customerId?: string): void {
+  try { localStorage.removeItem(draftKey(customerId)); } catch { /* ignore */ }
+}
+
 export function Builder({ customerId, onExit }: Props = {}) {
   const nav = useNavigate();
   const exit = onExit ?? (() => nav("/app"));
@@ -53,6 +93,11 @@ export function Builder({ customerId, onExit }: Props = {}) {
   const [category, setCategory] = useState<BusinessCategory>("other");
   // AIC-106 — from the customer record via /builder/context, never typed here.
   const [businessName, setBusinessName] = useState("");
+  // AIC-106 follow-up, found live: the wizard accepted ₪40/day against an
+  // agreed ceiling of ₪20 and only refused on the FINAL click, after every
+  // step was filled. The ceiling is known from provisioning, so the budget
+  // step can refuse it where it is typed.
+  const [agreedBudgetAgorot, setAgreedBudgetAgorot] = useState<number | null>(null);
   const [localCampaignId, setLocalCampaignId] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [wizard, setWizard] = useState<WizardState | null>(null);
@@ -76,8 +121,12 @@ export function Builder({ customerId, onExit }: Props = {}) {
         const cat = normalizeBusinessCategory(ctx.category);
         setCategory(cat);
         setBusinessName(ctx.businessName ?? "");
+        setAgreedBudgetAgorot(ctx.agreedBudgetAgorot ?? null);
         const aud = resolveAudienceDefault(cat);
-        setWizard({
+        // A saved draft wins over the defaults — that is the whole point of
+        // keeping it. loadDraft has already dropped anything expired.
+        const draft = loadDraft(customerId);
+        setWizard(draft ?? {
           destination: FIXED_DESTINATION,
           whatsappNumber: "",
           destinationUrl: "",
@@ -117,7 +166,12 @@ export function Builder({ customerId, onExit }: Props = {}) {
   }
 
   function patch(p: Partial<WizardState>) {
-    setWizard((prev) => (prev ? { ...prev, ...p } : prev));
+    setWizard((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...p };
+      saveDraft(customerId, next); // every edit persists — no separate "save" step
+      return next;
+    });
   }
 
   function chooseDestination(dest: string) {
@@ -167,10 +221,19 @@ export function Builder({ customerId, onExit }: Props = {}) {
     : isWebsite
       ? /^https?:\/\/.+/.test(wizard.destinationUrl) && !!wizard.pixelId && !!wizard.conversionEvent
       : /^\d{6,15}$/.test(wizard.whatsappNumber);
+  // Over the ceiling agreed with the customer at provisioning. Checked HERE,
+  // at the field, instead of at build time — the server still enforces it
+  // (assertCreateWithinBudget) because a client check is a convenience, never
+  // the guarantee.
+  const budgetOverCeiling =
+    agreedBudgetAgorot !== null &&
+    Number.isFinite(wizard.dailyBudgetShekels) &&
+    Math.round(wizard.dailyBudgetShekels * 100) > agreedBudgetAgorot;
+
   const canNext = [
     true, // goal
     destinationValid,
-    Number.isFinite(wizard.dailyBudgetShekels) && wizard.dailyBudgetShekels > 0,
+    Number.isFinite(wizard.dailyBudgetShekels) && wizard.dailyBudgetShekels > 0 && !budgetOverCeiling,
     true, // special category
     wizard.ageMin >= 13 && wizard.ageMax > wizard.ageMin && wizard.ageMax <= 65,
     true, // placements
@@ -197,6 +260,7 @@ export function Builder({ customerId, onExit }: Props = {}) {
         ads: createdAds.map((a) => ({ clientKey: a.clientKey, name: a.name, creativeId: a.creativeId! })),
       }, customerId);
       setBuildResult(result);
+      clearDraft(customerId); // the wizard's job is done — nothing left to resume
     } catch (e) {
       // "i want to see the error on the ui not a useless message." The admin
       // build route attaches `detail` (the real failure reason) — surface it
@@ -373,6 +437,15 @@ export function Builder({ customerId, onExit }: Props = {}) {
                 <label>{bg.label}</label>
                 <input type="number" min={1} value={wizard.dailyBudgetShekels} onChange={(e) => patch({ dailyBudgetShekels: Number(e.target.value) })} />
               </div>
+              {/* AIC-106 follow-up: the refusal belongs AT the field. Before
+                  this, an over-ceiling number was accepted here and only
+                  rejected on the wizard's final click, after every remaining
+                  step had been filled in. */}
+              {budgetOverCeiling && agreedBudgetAgorot !== null && (
+                <p style={{ marginTop: 10, color: "#c0362c" }}>
+                  {bg.overCeiling.replace("{max}", String(Math.floor(agreedBudgetAgorot / 100)))}
+                </p>
+              )}
               <p className="muted" style={{ marginTop: 12 }}>{bg.rationale}</p>
             </div>
           )}

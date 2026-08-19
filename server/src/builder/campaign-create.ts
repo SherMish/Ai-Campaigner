@@ -202,6 +202,29 @@ export async function buildCampaignOnMeta(
   const outbox = new WriteOutbox(pool);
   const creator = asCreatingWriter(writer);
 
+  // Rollback (user decision, 2026-08-19): a build is ALL-OR-NOTHING on Meta.
+  // Every id created below is recorded here so a failure at ANY later step
+  // can undo the whole attempt, returning the ad account to exactly its
+  // pre-attempt state.
+  //
+  // This REPLACES AIC-50's resume-point design. That design's reasoning
+  // ("an already-created object from a failed attempt is never an orphan to
+  // clean up — it's the resume point the next call expects") rested entirely
+  // on creates being PAUSED. AIC-106 made them ACTIVE, so every resume point
+  // became a LIVE object in a customer's ad account. Found live: a refused
+  // ad-set create stranded an ACTIVE campaign with zero ad sets.
+  const createdMetaIds: string[] = [];
+
+  try {
+    return await runBuild();
+  } catch (buildError) {
+    await rollback(pool, writer, input.localCampaignId, createdMetaIds, buildError as Error);
+    // Rethrow the ORIGINAL failure. A cleanup problem must never replace the
+    // reason the build actually failed — that is what the operator needs.
+    throw buildError;
+  }
+
+  async function runBuild(): Promise<BuildCampaignResult> {
   const metaCampaignId = await outbox.applyIdempotent(
     {
       idempotencyKey: builderKey(input.localCampaignId, "create_campaign", "campaign"),
@@ -223,7 +246,8 @@ export async function buildCampaignOnMeta(
     },
     creator,
   );
-  await logCreate(pool, input.localCampaignId, "create_campaign", metaCampaignId, `created campaign "${input.name}" (paused)`);
+  createdMetaIds.push(metaCampaignId);
+  await logCreate(pool, input.localCampaignId, "create_campaign", metaCampaignId, `created campaign "${input.name}"`);
 
   const adSetResults: BuildCampaignResult["adSets"] = [];
   for (const as of input.adSets) {
@@ -249,7 +273,8 @@ export async function buildCampaignOnMeta(
       },
       creator,
     );
-    await logCreate(pool, input.localCampaignId, "create_ad_set", metaAdSetId, `created ad set "${as.name}" (paused)`);
+    createdMetaIds.push(metaAdSetId);
+    await logCreate(pool, input.localCampaignId, "create_ad_set", metaAdSetId, `created ad set "${as.name}"`);
 
     const adResults: Array<{ clientKey: string; metaAdId: string }> = [];
     for (const ad of as.ads) {
@@ -268,7 +293,8 @@ export async function buildCampaignOnMeta(
         },
         creator,
       );
-      await logCreate(pool, input.localCampaignId, "create_ad", metaAdId, `created ad "${ad.name}" (paused)`);
+      createdMetaIds.push(metaAdId);
+      await logCreate(pool, input.localCampaignId, "create_ad", metaAdId, `created ad "${ad.name}"`);
       adResults.push({ clientKey: ad.clientKey, metaAdId });
     }
     adSetResults.push({ clientKey: as.clientKey, metaAdSetId, ads: adResults });
@@ -304,4 +330,60 @@ export async function buildCampaignOnMeta(
   );
 
   return { metaCampaignId, adSets: adSetResults };
+  }
+}
+
+// Best-effort undo of one build attempt. Two halves, and it is not a rollback
+// unless BOTH run:
+//   1. delete the Meta objects this attempt created, newest first (children
+//      before parents — Meta cascades a campaign delete, but relying on that
+//      would strand the ad set if the campaign delete were the one to fail);
+//   2. purge this build's outbox rows, because the outbox remembers each
+//      object's real Meta id and would otherwise "resume" the next attempt
+//      onto ids that no longer exist.
+//
+// Deliberately swallows its own errors: the caller rethrows the ORIGINAL
+// build failure, which is what the operator needs to see. A cleanup problem
+// is logged loudly (and left visible in the objects that survived) rather
+// than replacing the real reason with a confusing secondary error.
+async function rollback(
+  pool: pg.Pool,
+  writer: BuilderWriter,
+  localCampaignId: string,
+  createdMetaIds: readonly string[],
+  cause: Error,
+): Promise<void> {
+  const undeleted: string[] = [];
+  for (const metaId of [...createdMetaIds].reverse()) {
+    try {
+      await writer.deleteObject(metaId);
+    } catch (e) {
+      undeleted.push(metaId);
+      console.error("[builder] rollback: failed to delete", metaId, (e as Error).message);
+    }
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO action_history
+         (campaign_id, recommendation_id, what, action_type, target_meta_id,
+          previous_state, new_state, why, approved_by, human_involved, result)
+       VALUES ($1, NULL, $2, 'rollback_build', NULL, '{}'::jsonb, $3, $4, NULL, false, $5)`,
+      [
+        localCampaignId,
+        `rolled back a failed build (${createdMetaIds.length} object(s) created, ${undeleted.length} could not be deleted)`,
+        JSON.stringify({ deleted: createdMetaIds.filter((id) => !undeleted.includes(id)), undeleted }),
+        `build failed: ${cause.message}`,
+        undeleted.length === 0 ? "success" : "partial",
+      ],
+    );
+  } catch (e) {
+    console.error("[builder] rollback: failed to log", (e as Error).message);
+  }
+
+  try {
+    await new WriteOutbox(pool).purgeForBuild(localCampaignId);
+  } catch (e) {
+    console.error("[builder] rollback: failed to purge outbox", (e as Error).message);
+  }
 }

@@ -211,6 +211,26 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // ARCHIVED vs DELETED: archive is recoverable and keeps history; delete is
   // permanent. The product defaults to archive and treats delete as the
   // deliberate harder option (admin-only, confirm-to-type).
+  // Rollback (user decision, 2026-08-19). Meta's DELETE /{id} is the same call
+  // for a campaign, an ad set and an ad, so one method covers all three.
+  //
+  // Only ever called by the builder's rollback path, on objects THAT SAME
+  // ATTEMPT just created — never on anything pre-existing. That scoping is
+  // what makes a hard delete (rather than the product's usual archive
+  // default, see the note above) the right call here: these objects have
+  // existed for seconds, carry no history worth keeping, and their entire
+  // reason for existing was a build that did not complete.
+  async deleteObject(metaId: string): Promise<void> {
+    const r = await fetch(`${BASE}/${this.ver}/${metaId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${this.token}` },
+    });
+    if (!r.ok) {
+      const body = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+      throw graphError(`DELETE ${metaId}`, r.status, body);
+    }
+  }
+
   async setAdSetStatus(adSetId: string, status: ManualObjectStatus): Promise<void> {
     await this.post(adSetId, { status });
   }

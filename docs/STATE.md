@@ -6,6 +6,52 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — Rollback shipped: a failed build now leaves nothing behind
+Implements the design decided earlier today, after a refused ad-set create
+stranded an ACTIVE campaign on a real customer's ad account.
+
+- `GraphCampaignAdapter.deleteObject` — Meta's `DELETE /{id}`, one call for
+  campaign / ad set / ad.
+- `buildCampaignOnMeta` records every id it creates; any failure deletes them
+  newest-first (children before parents — Meta cascades a campaign delete, but
+  relying on that strands the ad set if the campaign delete is the one to fail).
+- `WriteOutbox.purgeForBuild` clears that build's rows. The half that is easy
+  to miss: the outbox remembers each object's real Meta id, so deleting on Meta
+  while leaving the rows makes the next attempt resume onto ids that no longer
+  exist — the exact state repaired by hand this morning.
+- Cleanup is best-effort and never masks the original error; undeleted ids land
+  in `action_history` as `rollback_build` with `result: 'partial'`.
+- The local shell row survives, unlinked, ceiling intact — the operator retries
+  into the same row.
+
+**Resume moved to the client.** `Builder.tsx` persists the wizard to
+localStorage on every edit, keyed per customer, cleared on success and expiring
+after 6h. Per-customer keying and the TTL are both safety properties: without
+them a half-filled wizard from one call could restore into the next customer's
+session.
+
+**A test that was defending the old behaviour got rewritten, not patched.**
+`campaign-create.integration.test.ts` asserted "resuming skips every
+already-created object and only retries the failed step" — protecting exactly
+what broke. It now asserts the rollback contract. Five new rollback tests cover
+newest-first deletion, outbox purge, shell-row reuse, original-error-wins, and
+no-op on success.
+
+**Also fixed, same live report:** the wizard accepted a budget above the agreed
+ceiling and only refused on the final click. `/builder/context` now returns
+`agreedBudgetAgorot` and the budget step refuses it at the field, naming the
+real ceiling. Server enforcement unchanged — the client check is convenience,
+not the guarantee.
+
+**AIC-50 corrected rather than closed.** Its PAUSED hard rule is dead
+(AIC-106), but its partial-failure bullet asked for rollback all along; the
+original implementation read "reconcilable" as *resume*, which was defensible
+only while creates were PAUSED. Ticket updated, with read-back verify, the
+N-ad-set criterion and the dogfood run left explicitly unchecked rather than
+quietly claimed.
+
+838 server + 27 web tests pass; the 2 failures are the known pre-existing pair.
+
 ### 2026-08-19 — Cleaned up a real orphan; new design decided: a failed build leaves nothing behind
 **The incident.** A refused ad-set create (Meta: Page not linked to a WhatsApp
 Business Account) left campaign `120250929135090544` ACTIVE with zero ad sets

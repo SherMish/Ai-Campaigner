@@ -54,7 +54,7 @@ adminBuilderRouter.get("/customers/:id/builder/context", async (req, res) => {
     // AIC-106 — businessName rides along so the client can name the customer
     // in the creation confirmation. Sourced from the customer record via
     // BuilderContext, never from anything the operator typed.
-    res.json({ category: ctx.category, businessName: ctx.businessName });
+    res.json({ category: ctx.category, businessName: ctx.businessName, agreedBudgetAgorot: ctx.agreedBudgetAgorot });
   } catch (e) {
     console.error("[admin-builder] context failed", e);
     res.status(500).json({ error: "failed to load builder context" });

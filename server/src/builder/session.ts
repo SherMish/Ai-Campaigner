@@ -12,6 +12,10 @@ export interface BuilderContext {
   // AIC-106 — read from the customer record, never operator-entered. See the
   // note in contextFromRow: this is what the creation confirmation names.
   businessName: string;
+  // The agreed ceiling from provisioning, so the budget step can refuse an
+  // over-ceiling number where it is typed rather than at the end of the
+  // wizard. null when none is set yet.
+  agreedBudgetAgorot: number | null;
   category: string; // free text (AIC-44 manual onboarding), may be ''
   adAccountUuid: string; // ad_accounts.id — the FK managed_campaigns.ad_account_id needs
   metaAdAccountId: string; // "act_..." — what every real Meta API call needs
@@ -21,6 +25,11 @@ export interface BuilderContext {
 interface ReadinessRow {
   category: string | null;
   business_name: string | null;
+  // AIC-106 follow-up, found live: the wizard let an operator enter ₪40/day
+  // against an agreed ceiling of ₪20 and only refused on the FINAL click,
+  // after the whole wizard was filled. The ceiling has to be known at the
+  // budget STEP, so it travels with the context.
+  agreed_budget_agorot: number | string | null;
   already_has_campaign: boolean;
   access_health: string | null;
   ad_account_uuid: string | null;
@@ -43,6 +52,7 @@ function contextFromRow(customerId: string, r: ReadinessRow | undefined): Builde
     // against the wrong customer once the launch gate is gone, so a name the
     // operator typed themselves would confirm nothing.
     businessName: r.business_name ?? "",
+    agreedBudgetAgorot: r.agreed_budget_agorot == null ? null : Number(r.agreed_budget_agorot),
     category: r.category ?? "",
     adAccountUuid: r.ad_account_uuid,
     metaAdAccountId: r.meta_ad_account_id,
@@ -57,6 +67,9 @@ function contextFromRow(customerId: string, r: ReadinessRow | undefined): Builde
 export async function resolveBuilderContext(pool: pg.Pool, userId: string): Promise<BuilderContext | null> {
   const { rows } = await pool.query<{ customer_id: string | null } & ReadinessRow>(
     `SELECT u.customer_id, c.category, c.business_name,
+            (SELECT mc.agreed_budget_agorot FROM managed_campaigns mc
+              WHERE mc.customer_id = u.customer_id AND mc.meta_campaign_id IS NULL
+              ORDER BY mc.created_at LIMIT 1) AS agreed_budget_agorot,
             EXISTS(SELECT 1 FROM managed_campaigns mc WHERE mc.customer_id = u.customer_id AND mc.meta_campaign_id IS NOT NULL) AS already_has_campaign,
             conn.access_health, aa.id AS ad_account_uuid, aa.meta_ad_account_id, conn.page_id
      FROM app_users u
@@ -82,6 +95,9 @@ export async function resolveBuilderContext(pool: pg.Pool, userId: string): Prom
 export async function resolveBuilderContextForCustomer(pool: pg.Pool, customerId: string): Promise<BuilderContext | null> {
   const { rows } = await pool.query<ReadinessRow>(
     `SELECT c.category, c.business_name,
+            (SELECT mc.agreed_budget_agorot FROM managed_campaigns mc
+              WHERE mc.customer_id = c.id AND mc.meta_campaign_id IS NULL
+              ORDER BY mc.created_at LIMIT 1) AS agreed_budget_agorot,
             EXISTS(SELECT 1 FROM managed_campaigns mc WHERE mc.customer_id = c.id AND mc.meta_campaign_id IS NOT NULL) AS already_has_campaign,
             conn.access_health, aa.id AS ad_account_uuid, aa.meta_ad_account_id, conn.page_id
      FROM customers c

@@ -232,10 +232,28 @@ rather than silently returning the WhatsApp shape — the fix for a real bug
 inline literals nothing actually resolved from the campaign's real lead type,
 which is exactly how a Pixel campaign once reached Meta with a WhatsApp shape.
 
-### DECIDED, NOT YET BUILT — a failed build must leave nothing behind
+### The budget ceiling is enforced at the field, not at the end
 
-**Status: design decision (user, 2026-08-19). Not implemented. Do not read
-the sections below as describing this behaviour yet.**
+Found live 2026-08-19, immediately after the ceiling shipped: an operator
+agreed ₪20/day at provisioning, the wizard happily accepted ₪40/day at its
+budget step, and the refusal only arrived on the FINAL click —
+`proposed budget 4000 exceeds agreed ceiling 2000`, after every remaining step
+had been filled in.
+
+The ceiling is known from provisioning, so `/builder/context` now returns
+`agreedBudgetAgorot` alongside `category` and `businessName`, and the budget
+step refuses an over-ceiling number where it is typed, naming the actual
+ceiling rather than saying "invalid".
+
+The server check (`assertCreateWithinBudget`) is unchanged and still the
+guarantee — a client check is a convenience that can be bypassed, never the
+enforcement. This is AIC-105's first error rule ("validate inline, at the
+field, before submit is possible; never a post-submit toast") applied to the
+one field where getting it wrong wastes the most of an operator's call.
+
+### A failed build leaves nothing behind (rollback)
+
+**Shipped 2026-08-19.** Replaces AIC-50's resume-point design.
 
 AIC-50 deliberately treated a partially-created build as a **resume point**:
 objects already created on Meta were kept, and a retry reused them rather
@@ -250,25 +268,35 @@ design outlived it — found live on a real onboarding call, where a refused
 ad-set create left an ACTIVE campaign with zero ad sets stranded on the
 customer's account, unreferenced by our own DB.
 
-**The replacement design:**
+**How it works:**
 
-1. **Meta is all-or-nothing.** If any step of a build fails, every object that
-   build created is removed, returning the ad account to exactly its
-   pre-attempt state. No partial campaigns, no orphaned ad sets, nothing for
-   an operator to find and wonder about.
-2. **Rollback must also purge that build's outbox rows.** This is the part
-   that is easy to miss and fatal to get wrong: the outbox remembers each
-   created object's real Meta id. Deleting objects on Meta while leaving
-   those rows behind means the next attempt "resumes" onto ids that no
-   longer exist. Cleanup is not complete until both sides are clean.
-3. **Resume moves to the client, where it belongs.** What an operator
-   actually wants back after a failure is *the work they typed* — goal,
-   budget, audience, ad copy — not Meta objects. So the wizard's entered
-   fields persist in browser localStorage, and:
-   - they are cleared on a **successful** submit, and
-   - they **expire on their own** after ~6 hours, so a stale half-filled
-     wizard from a previous call can never be silently resumed into a
-     different customer's session.
+1. **Meta is all-or-nothing.** `buildCampaignOnMeta` records every id it
+   creates. Any failure calls `rollback()`, which deletes them **newest
+   first** — children before parents. Meta does cascade a campaign delete,
+   but relying on that would strand the ad set if the campaign delete were
+   the call that failed. `GraphCampaignAdapter.deleteObject` is one method
+   for all three kinds, since Meta's `DELETE /{id}` is the same call.
+2. **It also purges that build's outbox rows** (`WriteOutbox.purgeForBuild`,
+   keyed on the `localCampaignId:` prefix that `builderKey()` namespaces
+   every row with). Easy to miss and fatal to skip: the outbox remembers
+   each object's real Meta id, so deleting on Meta while leaving the rows
+   makes the next attempt "resume" onto ids that no longer exist. That exact
+   state had to be repaired by hand in production once.
+3. **The original error always wins.** Cleanup is best-effort and swallows
+   its own failures — logged, plus an `action_history` row (`rollback_build`)
+   recording which ids could not be deleted, with `result: 'partial'`. An
+   operator must see *why the build failed*, never a secondary cleanup error
+   standing in front of it.
+4. **The local shell row survives**, unlinked and with its agreed ceiling
+   intact. The operator retries into the same row; the agreed budget was
+   never the builder's to discard.
+5. **Resume moved to the client.** What an operator actually wants back after
+   a failure is *the work they typed* — budget, audience, ad copy — not Meta
+   objects. `Builder.tsx` persists the wizard to `localStorage` on every
+   edit, keyed **per customer**, cleared on successful submit and expiring
+   after 6h. Both of those are safety properties, not housekeeping: without
+   per-customer keying or the TTL, a half-filled wizard from one call could
+   restore into the next customer's session.
 
 **Why this is better than what it replaces.** The old design optimised for
 not re-calling Meta; the new one optimises for never leaving a live object

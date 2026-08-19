@@ -68,6 +68,15 @@ export interface BuilderWriter {
   createAd(params: CreateAdParams): Promise<string>; // → new meta_ad_id
   listPixels(adAccountId: string): Promise<PixelOption[]>;
   checkPixelEventRecency(pixelId: string, eventName: string): Promise<PixelRecencyCheck>;
+  // Rollback (user decision, 2026-08-19). A build is all-or-nothing on Meta:
+  // if any step fails, everything that attempt created is deleted, so the ad
+  // account returns to exactly its pre-attempt state. Replaces AIC-50's
+  // resume-point design, whose reasoning rested on creates being PAUSED —
+  // AIC-106 made them ACTIVE, turning every resume point into a live object.
+  //
+  // One method for all three kinds: Meta's DELETE /{id} is the same call for
+  // a campaign, an ad set and an ad.
+  deleteObject(metaId: string): Promise<void>;
 }
 
 // Deterministic fake for tests: records every create call (so a test can
@@ -79,7 +88,17 @@ export class FakeBuilderWriter implements BuilderWriter {
   public adCalls: CreateAdParams[] = [];
   public failNextCreateAdSet = 0;
   public failNextCreateAd = 0;
+  // Rollback assertions: what the build deleted, in the order it deleted it.
+  public deleted: string[] = [];
+  // Simulates a cleanup call that itself fails — rollback must stay
+  // best-effort and must never mask the ORIGINAL error with a cleanup error.
+  public failDeletes = false;
   private counter = 0;
+
+  async deleteObject(metaId: string): Promise<void> {
+    if (this.failDeletes) throw new Error(`simulated delete failure for ${metaId}`);
+    this.deleted.push(metaId);
+  }
 
   async createCampaign(params: CreateCampaignParams): Promise<string> {
     this.campaignCalls.push(params);
