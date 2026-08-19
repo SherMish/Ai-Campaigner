@@ -6,6 +6,41 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — AIC-105 Branch A: the build refuses an incomplete campaign; spec corrected
+Two things, one unit of work.
+
+**The gap.** AIC-103 enforces the per-destination required-fields table at
+provisioning, at use, and as a health check. AIC-105's Branch A slipped between
+all three: it provisions the CONNECTION with no campaign, and the builder
+creates the campaign afterwards — nothing re-ran the check. So the one path that
+produces new campaigns was the one path whose end state was unverified. Pisga's
+own missing `website_url`, reintroduced through the new route.
+
+Confirmed by test before fixing, not assumed: a website build with no
+`destinationUrl` and a WhatsApp build with no number both created a live
+campaign. AIC-89 does not cover it — `resolveDestinationShape` only checks the
+destination is KNOWN, not that its fields are present.
+
+AIC-106 raised the cost rather than causing it: the campaign is ACTIVE on
+creation, so an incomplete one starts spending while unable to attribute a
+single lead. `CampaignConfigIncompleteError` now refuses before the first Meta
+write, surfacing as `409 campaign_config_incomplete` with a `missingFields`
+array — never 502, which would blame Meta for our precondition.
+
+**The spec correction.** AIC-105's "Operator cannot activate a campaign — launch
+gate intact and tested" was false the moment AIC-106 shipped. Struck and dated
+on the ticket, with the Branch A section rewritten to describe what is actually
+true. AIC-106 *predicted* this invalidation and shipped anyway, leaving the
+correction to be found later.
+
+That pattern is now a rule in `CLAUDE.md` alongside the docs rule: **if your
+change makes another ticket's acceptance criteria false, correct that ticket in
+the same unit of work** — predicting the staleness is not discharging it. Plus
+two distinctions that kept collapsing this session: *unverified* is not *not
+done*, and *pre-existing* is not *accepted*.
+
+822 server + 27 web tests pass; the 3 failures are the known pre-existing set.
+
 ### 2026-08-19 — AIC-106 half 2: the launch gate is removed; creation goes live
 Creation IS the go-live moment now. The builder creates campaign, ad set(s) and
 ad(s) **ACTIVE**, and `launch_approved_at` is stamped in the same write.

@@ -2,6 +2,7 @@ import type pg from "pg";
 import {
   resolveDestinationShape, resolveLeadActionType,
   ENGAGEMENT_DESTINATION, ENGAGEMENT_ACTION_TYPES,
+  missingRequiredFields,
 } from "@aic/shared";
 import { WriteOutbox, builderKey, type WriteKind, type CreatingWriter } from "../execution/write-outbox.js";
 import { assertCreateWithinBudget } from "../execution/budget.js";
@@ -47,6 +48,20 @@ export interface BuildCampaignInput {
   pixelId?: string; // website only
   conversionEvent?: string; // website only — a LEAD_CONVERSION_EVENTS value
   adSets: BuilderAdSetSpec[];
+}
+
+// AIC-103 x AIC-105 — distinct from BudgetLimitError/BudgetCeilingMissingError
+// because the fix is different again: fill in a campaign field, not adjust a
+// number. Carries WHICH fields so the caller can name them rather than saying
+// "invalid config" (AIC-98, and AIC-105's operator-error rules).
+export class CampaignConfigIncompleteError extends Error {
+  constructor(
+    public readonly destination: string,
+    public readonly missingFields: readonly string[],
+  ) {
+    super(`campaign config incomplete for destination "${destination}": missing ${missingFields.join(", ")}`);
+    this.name = "CampaignConfigIncompleteError";
+  }
 }
 
 export interface BuildCampaignResult {
@@ -155,6 +170,34 @@ export async function buildCampaignOnMeta(
   const leadEventTypes = input.destination === ENGAGEMENT_DESTINATION
     ? [...ENGAGEMENT_ACTION_TYPES]
     : input.conversionEvent ? [resolveLeadActionType(input.conversionEvent)] : null;
+
+  // AIC-103 x AIC-105 Branch A — the per-destination required fields, checked
+  // HERE and not only at provisioning.
+  //
+  // AIC-103 declared the table and enforced it at provisioning, at use, and as
+  // a health check. Branch A slipped between them: it provisions the CONNECTION
+  // with no campaign, then the builder creates the campaign afterwards, and
+  // nothing re-ran the check. So the one path that produces new campaigns was
+  // the one path whose end state was unverified — Pisga's own missing
+  // `website_url` reintroduced through the new route.
+  //
+  // AIC-106 raised the cost: the campaign is ACTIVE on creation, so an
+  // incomplete one starts SPENDING while unable to attribute a single lead,
+  // rather than sitting PAUSED where someone might notice. Refuse before the
+  // first Meta write, like the budget ceiling above.
+  //
+  // Deliberately checks the values being BUILT WITH, not the row on disk: the
+  // row is written after the Meta calls, so reading it here would check the
+  // wrong thing (and pass on a stale/empty shell every time).
+  const missing = missingRequiredFields(input.destination, {
+    whatsappDestination: input.whatsappDestination || null,
+    websiteUrl: input.destinationUrl ?? null,
+    trackingPixelId: input.pixelId ?? null,
+    leadEventTypes,
+  });
+  if (missing.length > 0) {
+    throw new CampaignConfigIncompleteError(input.destination, missing);
+  }
 
   const outbox = new WriteOutbox(pool);
   const creator = asCreatingWriter(writer);

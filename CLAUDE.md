@@ -23,6 +23,32 @@ code area to the doc that owns it. Start there before changing anything.
   It records *what changed and why*; behaviour is specified in the owning doc.
 - Use the **feature-docs** skill (`.claude/skills/feature-docs`) — it encodes this loop.
 
+### Specs travel with the code too
+The docs rule above exists because a stale doc gets **trusted**. A stale *spec*
+is worse, because it is what the next session builds against.
+
+- **If your change makes another ticket's acceptance criteria false, correct that
+  ticket in the SAME unit of work.** Strike the criterion, say what replaced it,
+  and date it. Do not leave the correction to be discovered.
+- **Predicting the staleness is not discharging it.** AIC-106 wrote "this
+  invalidates AIC-105's launch-gate criterion" and shipped anyway; the false AC
+  then survived in the backlog and cost a later session a detour to rediscover.
+  Foreseeing the contradiction is precisely when it is cheapest to fix.
+- Same for **tests and comments that assert the old behaviour**. A passing test
+  that encodes a bug as expected is an artifact that *looks like* verification
+  while preserving the wrong thing — the budget-ceiling overwrite survived for
+  exactly this reason (`campaign-create.integration.test.ts` asserted the
+  overwritten value). When a bug lives on a path tests already cover, check
+  whether a test is defending it.
+
+### Two distinctions that keep collapsing — hold them open
+- **"Unverified" is not "not done."** Say which one you mean. Reporting an
+  unchecked criterion as satisfied is how a spec drifts from production.
+- **"Pre-existing" is not "accepted."** A correct diagnosis ("this failure
+  predates my change") silently reads as a decision to tolerate it. Name the
+  diagnosis and the decision separately; a growing set of tolerated failures is
+  how the baseline moves without anyone choosing it.
+
 ### Ship discipline
 - **Commit** when a unit of work is finished — don't wait to be asked.
 - **Never `git push` without explicit user approval.** Commit freely; hold the push.

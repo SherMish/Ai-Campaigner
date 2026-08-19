@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { BudgetCeilingMissingError, BudgetLimitError } from "../execution/budget.js";
+import { CampaignConfigIncompleteError } from "../builder/campaign-create.js";
 import multer from "multer";
 import { validateCreativeCopy, MAX_VIDEO_BYTES, SPECIAL_AD_CATEGORY, FIXED_BID_STRATEGY, FIXED_DESTINATION, type SpecialAdCategory } from "@aic/shared";
 import { pool } from "../db/pool.js";
@@ -297,6 +298,17 @@ adminBuilderRouter.post("/customers/:id/builder/build", async (req, res) => {
     }
     if (e instanceof BudgetLimitError) {
       res.status(409).json({ error: e.message, code: "budget_over_ceiling" });
+      return;
+    }
+    // AIC-103 x AIC-105 — same reasoning as the budget refusals: our
+    // precondition, not Meta's failure, so never 502. Names the missing fields
+    // so the operator can fix them rather than guess (AIC-98).
+    if (e instanceof CampaignConfigIncompleteError) {
+      res.status(409).json({
+        error: e.message,
+        code: "campaign_config_incomplete",
+        missingFields: e.missingFields,
+      });
       return;
     }
     console.error("[admin-builder] build failed", e);

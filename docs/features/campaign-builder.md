@@ -545,6 +545,34 @@ horizontally scrollable (shrinking the circles/labels a bit) plus a
 the full wizard at 375px afterward — the two-up age-range `.field-row` and
 every other step render cleanly at that width.
 
+### The build refuses an incomplete campaign (AIC-103 x AIC-105)
+
+Before the first Meta call, the builder checks the destination's required
+fields from AIC-103's declared table (`CAMPAIGN_TYPE_REQUIRED_FIELDS`) and
+throws `CampaignConfigIncompleteError` if any are missing — website needs
+`website_url` + `tracking_pixel_id` + `lead_event_types`, WhatsApp needs
+`whatsapp_destination`, engagement needs `lead_event_types`.
+
+**Why here, when AIC-103 already enforces it at provisioning.** AIC-103
+enforced the table at provisioning, at use, and as a health check. AIC-105's
+Branch A slipped between all three: it provisions the CONNECTION with no
+campaign, and the builder creates the campaign afterwards — so nothing re-ran
+the check. The one path that produces new campaigns was the one path whose end
+state was unverified. That is Pisga's own missing `website_url` reintroduced
+through the new route.
+
+AIC-106 raised the cost of the gap rather than creating it: the campaign is
+ACTIVE on creation, so an incomplete one starts **spending** while unable to
+attribute a single lead, instead of sitting PAUSED where someone might notice.
+
+The check reads the values being BUILT WITH, not the row on disk — the row is
+written after the Meta calls, so reading it there would check the wrong thing
+and pass on an empty shell every time.
+
+Surfaces as `409 campaign_config_incomplete` with a `missingFields` array, so
+the operator is told which field to fill rather than "invalid config" — never
+502, which would blame Meta for our own precondition.
+
 ### Creation goes live immediately — the launch gate is gone (AIC-106)
 
 There is no PAUSED-then-approve step. The builder creates the campaign, ad

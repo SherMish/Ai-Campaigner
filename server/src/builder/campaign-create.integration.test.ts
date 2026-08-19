@@ -88,6 +88,64 @@ d("campaign builder create-writes (DB)", () => {
     expect(rows[0].launch_approved_at).not.toBeNull();
   });
 
+  // AIC-105 Branch A gap, found 2026-08-19. AIC-103 enforces the per-destination
+  // required fields at PROVISIONING — but Branch A provisions the connection
+  // with no campaign, and the builder creates the campaign afterwards. Nothing
+  // re-ran the check, so the one path that produces NEW campaigns was the one
+  // path whose end state was unverified.
+  //
+  // This is Pisga's own `website_url` failure reintroduced through the new
+  // route, and AIC-106 made it worse: the campaign now goes LIVE immediately,
+  // so it starts spending with a config that cannot attribute a single lead,
+  // instead of sitting PAUSED where someone might notice.
+  describe("per-destination required fields on create (AIC-103 x AIC-105)", () => {
+    it("refuses a website build with no destination URL, before any Meta write", async () => {
+      const { customerId, adAccountId } = await makeCustomer("nourl");
+      const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
+      const writer = new FakeBuilderWriter();
+      const input: BuildCampaignInput = {
+        ...baseInput(localCampaignId, adAccountId),
+        destination: WEBSITE_DESTINATION,
+        whatsappDestination: "",
+        // destinationUrl deliberately omitted — exactly what shipped on
+        // free_beta_signups_leads.
+        pixelId: "984664453249037",
+        conversionEvent: "COMPLETE_REGISTRATION",
+      };
+
+      await expect(buildCampaignOnMeta(pool, writer, input)).rejects.toThrow();
+
+      const { rows } = await pool.query(`SELECT meta_campaign_id FROM managed_campaigns WHERE id = $1`, [localCampaignId]);
+      expect(rows[0].meta_campaign_id).toBeNull();
+    });
+
+    it("still allows a complete website build", async () => {
+      const { customerId, adAccountId } = await makeCustomer("withurl");
+      const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
+      const writer = new FakeBuilderWriter();
+      const input: BuildCampaignInput = {
+        ...baseInput(localCampaignId, adAccountId),
+        destination: WEBSITE_DESTINATION,
+        whatsappDestination: "",
+        destinationUrl: "https://example.com/signup",
+        pixelId: "984664453249037",
+        conversionEvent: "COMPLETE_REGISTRATION",
+      };
+
+      const result = await buildCampaignOnMeta(pool, writer, input);
+      expect(result.metaCampaignId).toBeTruthy();
+    });
+
+    it("refuses a WhatsApp build with no WhatsApp destination", async () => {
+      const { customerId, adAccountId } = await makeCustomer("nowa");
+      const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
+      const writer = new FakeBuilderWriter();
+      const input: BuildCampaignInput = { ...baseInput(localCampaignId, adAccountId), whatsappDestination: "" };
+
+      await expect(buildCampaignOnMeta(pool, writer, input)).rejects.toThrow();
+    });
+  });
+
   describe("budget ceiling on create (AIC-106)", () => {
     // The ceiling is the figure the OPERATOR agreed with the customer at
     // provisioning, so the test sets it the way provisioning does and then

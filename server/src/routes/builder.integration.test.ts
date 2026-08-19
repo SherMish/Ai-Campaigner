@@ -157,6 +157,31 @@ d("guided builder routes (DB + HTTP)", () => {
     expect(ctx.body.businessName).toBe("יורם גאון");
   });
 
+  // AIC-103 x AIC-105 — the wizard must not be able to complete a campaign that
+  // cannot attribute a lead. Now that creation goes live immediately, an
+  // incomplete campaign SPENDS while unable to count a single result.
+  it("refuses an incomplete website build as 409, naming the missing fields", async () => {
+    const { token, localCampaignId, creativeId } = await readyToBuild("incomplete");
+    await agreeBudget(localCampaignId);
+    const build = await request(app)
+      .post("/api/app/builder/build")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        localCampaignId, name: "My Business", dailyBudgetAgorot: 4000,
+        specialAdCategories: [], destination: "website", whatsappDestination: "",
+        // no destinationUrl — the free_beta_signups_leads failure exactly
+        pixelId: "984664453249037", conversionEvent: "COMPLETE_REGISTRATION",
+        targeting: { ageMin: 18, ageMax: 45, genders: "female" },
+        ads: [{ clientKey: "adset-1-ad-1", name: "Ad 1", creativeId }],
+      });
+
+    expect(build.status).toBe(409);
+    expect(build.body.code).toBe("campaign_config_incomplete");
+    // Names WHICH field, so the operator can fix it instead of guessing.
+    expect(build.body.missingFields).toContain("website_url");
+    expect(build.status).not.toBe(502);
+  });
+
   it("refuses a build with NO agreed ceiling as 409 with a specific code — never 502", async () => {
     const { token, localCampaignId, creativeId } = await readyToBuild("noceiling");
     // deliberately NO agreeBudget() — this is the real Branch A state
