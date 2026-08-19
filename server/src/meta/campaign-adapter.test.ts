@@ -6,7 +6,7 @@
 // paused-invariant is safety-critical and cheap to pin down here directly).
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { FIXED_DESTINATION, FIXED_CTA, WEBSITE_DESTINATION, WEBSITE_CTA } from "@aic/shared";
-import { GraphCampaignAdapter } from "./campaign-adapter.js";
+import { GraphCampaignAdapter, GraphWriteError } from "./campaign-adapter.js";
 
 function fakeFetch(respond: { id: string }) {
   return vi.fn(async (_url: string, init?: RequestInit) => {
@@ -22,6 +22,72 @@ function fakeFetch(respond: { id: string }) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+// AIC-105's "Meta API failure" error category, built against a real live
+// case rather than an invented shape — found today, 2026-08-19, on a real
+// customer's WhatsApp campaign build: Meta refused ad set creation with a
+// clear, actionable reason (Page not linked to a WhatsApp Business Account),
+// and the code discarded it into a generic "failed to build campaign".
+// Scoped narrowly and deliberately: this surfaces Meta's OWN
+// error_user_title/error_user_msg when present, rather than building
+// AIC-105's full four-category translation table (still not done).
+function fakeGraphErrorFetch(errorBody: Record<string, unknown>, status = 400) {
+  return vi.fn(async () => ({
+    ok: false,
+    status,
+    json: async () => ({ error: errorBody }),
+  })) as unknown as typeof fetch;
+}
+
+describe("GraphWriteError — Meta's own actionable message, not a raw code", () => {
+  const REAL_WHATSAPP_PAGE_ERROR = {
+    message: "Invalid parameter",
+    type: "OAuthException",
+    code: 100,
+    error_subcode: 2446886,
+    is_transient: false,
+    error_user_title: "Page With WhatsApp Business Account Required",
+    error_user_msg: "Your Page is not linked to a WhatsApp account. Connect a WhatsApp Business account to drive traffic to WhatsApp.",
+    fbtrace_id: "AZgEpNwfQv5wPDqsYZ3os4p",
+  };
+
+  it("createAdSet throws GraphWriteError carrying Meta's own user-facing title+message", async () => {
+    vi.stubGlobal("fetch", fakeGraphErrorFetch(REAL_WHATSAPP_PAGE_ERROR));
+    const adapter = new GraphCampaignAdapter("tok");
+
+    let caught: unknown;
+    try {
+      await adapter.createAdSet({
+        adAccountId: "act_1", metaCampaignId: "camp_1", name: "Adset 1",
+        targeting: { ageMin: 18, ageMax: 45, genders: [], countries: ["IL"] },
+        pageId: "page_1", destination: FIXED_DESTINATION,
+      });
+    } catch (e) {
+      caught = e;
+    }
+
+    expect(caught).toBeInstanceOf(GraphWriteError);
+    const err = caught as GraphWriteError;
+    expect(err.userTitle).toBe("Page With WhatsApp Business Account Required");
+    expect(err.userMessage).toBe(
+      "Your Page is not linked to a WhatsApp account. Connect a WhatsApp Business account to drive traffic to WhatsApp.",
+    );
+    expect(err.isTransient).toBe(false);
+    expect(err.code).toBe(100);
+    expect(err.subcode).toBe(2446886);
+  });
+
+  it("still throws a plain Error when Meta gives no user-facing fields (nothing to surface)", async () => {
+    vi.stubGlobal("fetch", fakeGraphErrorFetch({ message: "Unknown error", type: "OAuthException", code: 1 }));
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await expect(adapter.createAdSet({
+      adAccountId: "act_1", metaCampaignId: "camp_1", name: "Adset 1",
+      targeting: { ageMin: 18, ageMax: 45, genders: [], countries: ["IL"] },
+      pageId: "page_1", destination: FIXED_DESTINATION,
+    })).rejects.not.toBeInstanceOf(GraphWriteError);
+  });
 });
 
 // AIC-106 removed the launch gate: creation IS the go-live moment, so these

@@ -13,6 +13,63 @@ import type {
 import type { LaunchWriter, MetaCampaignStatus } from "../launch/types.js";
 import type { AdditionWriter } from "../additions/types.js";
 import { intentStatus, type ControlWriter, type ManualObjectStatus, type ObjectIntent } from "../controls/types.js";
+
+// AIC-105's "Meta API failure" error category — built against a REAL live
+// case (2026-08-19: a customer's WhatsApp campaign build refused with a
+// clear, actionable Meta message that the generic Error(string) below was
+// throwing away). Carries Meta's own error_user_title/error_user_msg
+// STRUCTURALLY, so a caller (the build routes) can surface exactly what
+// Meta told the operator instead of a dead-end "failed to build campaign".
+//
+// Deliberately narrow: only extracts the fields Meta already provides in
+// plain, operator-readable form. Does NOT attempt AIC-105's full four-
+// category translation table (Meta-code → Hebrew symptom-table lookup) —
+// that is real, larger, separate work, still not done.
+export class GraphWriteError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly code: number | null,
+    public readonly subcode: number | null,
+    public readonly isTransient: boolean,
+    // Meta's own operator-facing strings, when it provides them (it does
+    // not always — see the second test case). null means "nothing to
+    // surface beyond the generic message", not "Meta had nothing to say".
+    public readonly userTitle: string | null,
+    public readonly userMessage: string | null,
+  ) {
+    super(message);
+    this.name = "GraphWriteError";
+  }
+}
+
+interface GraphErrorBody {
+  message?: string;
+  code?: number;
+  error_subcode?: number;
+  is_transient?: boolean;
+  error_user_title?: string;
+  error_user_msg?: string;
+}
+
+// Shared by every write path (post/postCreate/adimages/advideos): builds
+// the RIGHT error type from a failed Graph response. GraphWriteError only
+// when Meta gave BOTH title and message — a partial pair is not something
+// an operator could act on, so it falls through to the plain Error exactly
+// as before this change (unchanged behaviour for every case this file
+// hasn't seen live yet).
+function graphError(context: string, status: number, body: Record<string, unknown>): Error {
+  const err = (body.error ?? body) as GraphErrorBody;
+  const message = `${context} → ${status} ${JSON.stringify(err)}`;
+  if (err.error_user_title && err.error_user_msg) {
+    return new GraphWriteError(
+      message, status,
+      err.code ?? null, err.error_subcode ?? null, err.is_transient ?? false,
+      err.error_user_title, err.error_user_msg,
+    );
+  }
+  return new Error(message);
+}
 import { shekelToAgorot, resolveDestinationShape } from "@aic/shared";
 import { extractLeads } from "./insights.js";
 import { normalizeAdMedia, type AdMedia, type AdMediaReader, type RawAdMedia } from "./ad-media.js";
@@ -57,7 +114,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       body: new URLSearchParams(fields).toString(),
     });
     const body = (await r.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!r.ok) throw new Error(`POST ${id} → ${r.status} ${JSON.stringify(body.error ?? body)}`);
+    if (!r.ok) throw graphError(`POST ${id}`, r.status, body);
   }
 
   // Create a new object under `parentId` (e.g. an ad account, campaign, or ad
@@ -77,7 +134,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     });
     const json = (await r.json().catch(() => ({}))) as Record<string, unknown>;
     if (!r.ok || !json.id) {
-      throw new Error(`POST ${parentId}/${edge} → ${r.status} ${JSON.stringify(json.error ?? json)}`);
+      throw graphError(`POST ${parentId}/${edge}`, r.status, json);
     }
     return String(json.id);
   }
@@ -603,7 +660,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     const json = (await r.json().catch(() => ({}))) as { images?: Record<string, { hash?: string; url?: string }>; error?: unknown };
     const entry = json.images ? Object.values(json.images)[0] : undefined;
     if (!r.ok || !entry?.hash) {
-      throw new Error(`POST ${adAccountId}/adimages → ${r.status} ${JSON.stringify(json.error ?? json)}`);
+      throw graphError(`POST ${adAccountId}/adimages`, r.status, json);
     }
     return { hash: entry.hash, url: entry.url ?? "" };
   }
@@ -621,7 +678,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     });
     const json = (await r.json().catch(() => ({}))) as { id?: string; error?: unknown };
     if (!r.ok || !json.id) {
-      throw new Error(`POST ${adAccountId}/advideos → ${r.status} ${JSON.stringify(json.error ?? json)}`);
+      throw graphError(`POST ${adAccountId}/advideos`, r.status, json);
     }
     const videoId = json.id;
 

@@ -6,6 +6,45 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — Meta's own error message reaches the operator, instead of a dead-end 502
+Same real onboarding call as the ceiling gap: after fixing that, the build
+failed again with the generic `"failed to build campaign"`. The Railway log
+had the real cause — Meta REFUSED the write with a clear, specific,
+already-translated reason:
+
+    error_user_title: "Page With WhatsApp Business Account Required"
+    error_user_msg: "Your Page is not linked to a WhatsApp account.
+                      Connect a WhatsApp Business account to drive
+                      traffic to WhatsApp."
+
+The generic catch-all was discarding it. This is exactly AIC-105's "Meta API
+failure — never surface a raw code, translate it" acceptance criterion,
+built for the first time against a real live case instead of an invented
+error shape.
+
+`GraphWriteError` carries Meta's `error_user_title`/`error_user_msg`
+structurally whenever Meta provides both; every write path in
+`campaign-adapter.ts` throws it instead of a plain `Error(string)` in that
+case. The build routes surface it as `502 meta_write_refused` with Meta's
+real message, title, and `is_transient`.
+
+**Caught a real test-hygiene bug while writing the test for this**: the new
+test didn't stub `fetch` before its setup calls (start/creative), so those
+silently hit the REAL Meta API over the network — a harmless GET, but wrong
+and flaky. Fixed by stubbing `mockMetaFetch()` first, matching every other
+test in the file, and swapping to the error stub only for the build call.
+
+**Deliberately narrow, and said so in the code and the doc**: this is one
+slice of AIC-105's error-handling scope — the cases Meta already labels
+clearly for us. NOT built: the symptom-table translation for errors Meta
+doesn't label this well, the 409/state-conflict category, the transient-vs-
+real retry UX (the boolean rides along, nothing acts on it yet), inline
+pre-submit field validation. AIC-105 still owns tracking those.
+
+831 server tests pass (2 of the known 3 pre-existing failures tripped this
+run — the third, write-outbox, is the flaky one and didn't; consistent with
+prior observation). Typecheck and web build clean.
+
 ### 2026-08-19 — The agreed ceiling gets a place to be set, closing a live incident on a real call
 User report: got `no agreed daily budget is set for this customer` on the
 FINAL click of building a real customer's first campaign — after filling the

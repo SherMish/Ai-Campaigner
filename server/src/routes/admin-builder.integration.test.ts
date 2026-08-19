@@ -150,6 +150,74 @@ d("admin builder routes — AIC-105 Branch A (DB + HTTP)", () => {
     expect(again.status).toBe(409);
   });
 
+  // AIC-105's "Meta API failure" category, built against the REAL failure
+  // that blocked a real onboarding call, 2026-08-19: Meta refused ad set
+  // creation with a clear, specific reason, and the code was discarding it
+  // into "failed to build campaign" — leaving the operator with zero signal
+  // on a live call. This is that exact error body, verbatim from the
+  // Railway log, not invented.
+  it("surfaces Meta's own actionable message instead of the generic 'failed to build campaign'", async () => {
+    // Bug caught while writing this test: without stubbing fetch up front,
+    // start/posts/creative below silently hit the REAL Meta API (a harmless
+    // GET, but wrong and flaky) before the deliberate error stub further
+    // down ever took over. mockMetaFetch() first, exactly like every other
+    // test in this file, THEN swap to the error stub for the build call only.
+    vi.stubGlobal("fetch", mockMetaFetch());
+    const id = await seedReadyCustomer("metarefused");
+    const start = await request(app).post(`/api/admin/customers/${id}/builder/start`).set("Authorization", ADMIN);
+    const localCampaignId = start.body.localCampaignId as string;
+    await agreeBudget(localCampaignId);
+    const creative = await request(app)
+      .post(`/api/admin/customers/${id}/builder/creative`)
+      .set("Authorization", ADMIN)
+      .send({ localCampaignId, clientKey: "adset-1-ad-1", name: "Ad 1", postId: "post_1" });
+    const creativeId = creative.body.creativeId as string;
+
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.endsWith("/campaigns")) return jsonRes({ id: "meta_camp_real" });
+      if (u.endsWith("/adsets")) {
+        return {
+          ok: false,
+          status: 400,
+          json: async () => ({
+            error: {
+              message: "Invalid parameter",
+              type: "OAuthException",
+              code: 100,
+              error_subcode: 2446886,
+              is_transient: false,
+              error_user_title: "Page With WhatsApp Business Account Required",
+              error_user_msg: "Your Page is not linked to a WhatsApp account. Connect a WhatsApp Business account to drive traffic to WhatsApp.",
+              fbtrace_id: "AZgEpNwfQv5wPDqsYZ3os4p",
+            },
+          }),
+        } as unknown as Response;
+      }
+      throw new Error(`unexpected fetch ${u}`);
+    }));
+
+    const build = await request(app)
+      .post(`/api/admin/customers/${id}/builder/build`)
+      .set("Authorization", ADMIN)
+      .send({
+        localCampaignId, name: "My Business", dailyBudgetAgorot: 2000,
+        specialAdCategories: [], whatsappDestination: "972526964069",
+        targeting: { ageMin: 18, ageMax: 45, genders: "female" },
+        ads: [{ clientKey: "adset-1-ad-1", name: "Ad 1", creativeId }],
+      });
+
+    expect(build.status).toBe(502);
+    expect(build.body.code).toBe("meta_write_refused");
+    expect(build.body.error).toBe(
+      "Your Page is not linked to a WhatsApp account. Connect a WhatsApp Business account to drive traffic to WhatsApp.",
+    );
+    expect(build.body.metaTitle).toBe("Page With WhatsApp Business Account Required");
+    expect(build.body.transient).toBe(false);
+    // Never the raw code/subcode — that is exactly what this fix replaces.
+    expect(JSON.stringify(build.body)).not.toContain("2446886");
+  });
+
   it("rejects a creative call for a localCampaignId that belongs to a DIFFERENT customer", async () => {
     vi.stubGlobal("fetch", mockMetaFetch());
     const a = await seedReadyCustomer("owner-a");

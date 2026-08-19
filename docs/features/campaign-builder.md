@@ -545,6 +545,28 @@ horizontally scrollable (shrinking the circles/labels a bit) plus a
 the full wizard at 375px afterward — the two-up age-range `.field-row` and
 every other step render cleanly at that width.
 
+### Meta's own error message reaches the operator (AIC-105, narrow slice)
+
+Found live, same call as the ceiling gap above: a WhatsApp campaign build
+failed with `"failed to build campaign"` — Meta itself had refused with a
+specific, actionable reason (Page not linked to a WhatsApp Business Account),
+and the generic 502 catch-all discarded it.
+
+`GraphWriteError` (`meta/campaign-adapter.ts`) carries Meta's own
+`error_user_title`/`error_user_msg` structurally when Meta provides both —
+every write path (`post`, `postCreate`, `adimages`, `advideos`) now throws it
+in place of a plain `Error(string)` in that case. The build routes catch it
+before the generic fallback and return `502 meta_write_refused` with Meta's
+real message, its title, and `transient` (from `is_transient`).
+
+**Deliberately narrow — not AIC-105's full error-handling scope.** This is
+one category (Meta API failure) and only the slice of it Meta already labels
+for us. Still not built, and not claimed here: the three-layer symptom-table
+translation for errors Meta does NOT label this well, the 409/state-conflict
+category, the transient-vs-real UX (the boolean rides along but nothing acts
+on it yet), and inline pre-submit field validation. AIC-105's ticket still
+owns tracking those.
+
 ### The agreed ceiling now has somewhere to be set for Branch A (AIC-106 follow-up)
 
 Found live on a real onboarding call, the day the launch gate came out: an

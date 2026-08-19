@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { BudgetCeilingMissingError, BudgetLimitError } from "../execution/budget.js";
 import { CampaignConfigIncompleteError } from "../builder/campaign-create.js";
+import { GraphWriteError } from "../meta/campaign-adapter.js";
 import multer from "multer";
 import { validateCreativeCopy, MAX_VIDEO_BYTES, SPECIAL_AD_CATEGORY, FIXED_BID_STRATEGY, FIXED_DESTINATION, type SpecialAdCategory } from "@aic/shared";
 import { pool } from "../db/pool.js";
@@ -308,6 +309,25 @@ adminBuilderRouter.post("/customers/:id/builder/build", async (req, res) => {
         error: e.message,
         code: "campaign_config_incomplete",
         missingFields: e.missingFields,
+      });
+      return;
+    }
+    // AIC-105's "Meta API failure" category, built against a REAL live
+    // case (2026-08-19): Meta itself gave a clear, actionable reason (e.g.
+    // "Your Page is not linked to a WhatsApp account") and the code was
+    // discarding it into this same generic 502. When Meta provides its own
+    // operator-facing message, surface it — still 502 (it genuinely is an
+    // external failure we can't self-heal), but with the real reason instead
+    // of a dead end. `transient` rides along so a future retry-UX pass has
+    // the signal without needing to re-derive it (AIC-105's fourth error
+    // category, still not built).
+    if (e instanceof GraphWriteError && e.userMessage) {
+      console.error("[admin-builder] build failed (Meta refused)", e.userTitle, e.userMessage);
+      res.status(502).json({
+        error: e.userMessage,
+        code: "meta_write_refused",
+        metaTitle: e.userTitle,
+        transient: e.isTransient,
       });
       return;
     }
