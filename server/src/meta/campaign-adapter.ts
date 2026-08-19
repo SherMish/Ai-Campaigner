@@ -649,6 +649,18 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
 
   async createCreativeFromUpload(params: CreateUploadCreativeParams): Promise<string> {
     const shape = resolveDestinationShape(params.destination);
+    // AIC-107: an engagement campaign has no CTA of ours to impose — it
+    // promotes an existing Page post, whose own CTA stands. This upload path
+    // builds a link_data creative around a call_to_action, so it cannot
+    // serve that type; refusing loudly here beats sending Meta
+    // `call_to_action: { type: null }` and getting a confusing 400 (or worse,
+    // a creative that silently misrepresents the destination).
+    if (!shape.ctaType) {
+      throw new Error(
+        `destination '${params.destination}' has no call-to-action shape — ` +
+          `use the existing-post creative path instead of an upload`,
+      );
+    }
     const linkData: Record<string, unknown> =
       params.media.kind === "image"
         ? { image_hash: params.media.imageHash }

@@ -13,6 +13,10 @@ import {
   resolveSpecialAdCategoryHint,
   resolveDestinationShape,
   resolveLeadActionType,
+  ENGAGEMENT_DESTINATION,
+  ENGAGEMENT_ACTION_TYPES,
+  isEngagementResult,
+  missingRequiredFields,
 } from "./recommended-defaults.js";
 
 describe("normalizeBusinessCategory", () => {
@@ -133,6 +137,71 @@ describe("resolveLeadActionType", () => {
       expect(e.leadActionType.length).toBeGreaterThan(0);
       expect(seen.has(e.leadActionType)).toBe(false);
       seen.add(e.leadActionType);
+    }
+  });
+});
+
+// AIC-107 — engagement as a third campaign type. The whole point of keying
+// it on the RESULT definition (lead_event_types) rather than a separate
+// column is that there is exactly one source of truth for "what counts";
+// these lock that in, plus the lead types staying untouched.
+describe("engagement campaign type (AIC-107)", () => {
+  it("has its own destination shape — POST_ENGAGEMENT, and no CTA of ours to impose", () => {
+    const shape = resolveDestinationShape(ENGAGEMENT_DESTINATION);
+    expect(shape.optimizationGoal).toBe("POST_ENGAGEMENT");
+    // null, not a filler string: an engagement ad promotes an existing post,
+    // whose own CTA stands. A caller needing one must handle its absence.
+    expect(shape.ctaType).toBeNull();
+  });
+
+  it("leaves the lead destinations' shapes exactly as they were", () => {
+    expect(resolveDestinationShape(FIXED_DESTINATION).ctaType).toBe(FIXED_CTA);
+    expect(resolveDestinationShape(WEBSITE_DESTINATION).ctaType).toBe(WEBSITE_CTA);
+  });
+
+  it("recognizes an engagement result definition", () => {
+    expect(isEngagementResult(["post_engagement"])).toBe(true);
+    expect(isEngagementResult(["video_view"])).toBe(true);
+  });
+
+  it("does NOT mistake a lead campaign for an engagement one", () => {
+    expect(isEngagementResult(["onsite_conversion.messaging_conversation_started"])).toBe(false);
+    expect(isEngagementResult(["offsite_conversion.fb_pixel_complete_registration"])).toBe(false);
+    // Mixed is not engagement either — a campaign whose results are partly
+    // leads must never be labelled/priced as engagement.
+    expect(isEngagementResult(["post_engagement", "offsite_conversion.fb_pixel_lead"])).toBe(false);
+  });
+
+  it("treats an absent/empty result definition as not-engagement, never a guess", () => {
+    expect(isEngagementResult(null)).toBe(false);
+    expect(isEngagementResult(undefined)).toBe(false);
+    expect(isEngagementResult([])).toBe(false);
+  });
+
+  it("requires only a result definition — no WhatsApp number, URL or Pixel", () => {
+    const empty = { whatsappDestination: null, websiteUrl: null, trackingPixelId: null, leadEventTypes: null };
+    // Missing its result definition is still a refusal…
+    expect(missingRequiredFields(ENGAGEMENT_DESTINATION, empty)).toEqual(["lead_event_types"]);
+    // …but with one, nothing else is demanded (unlike the website type,
+    // which also needs a URL and a Pixel).
+    expect(
+      missingRequiredFields(ENGAGEMENT_DESTINATION, { ...empty, leadEventTypes: ["post_engagement"] }),
+    ).toEqual([]);
+  });
+
+  it("REGRESSION: the website type still demands URL + Pixel + result types", () => {
+    const empty = { whatsappDestination: null, websiteUrl: null, trackingPixelId: null, leadEventTypes: null };
+    expect(missingRequiredFields(WEBSITE_DESTINATION, empty)).toEqual([
+      "website_url", "tracking_pixel_id", "lead_event_types",
+    ]);
+  });
+
+  it("every engagement action type is distinct and non-empty", () => {
+    const seen = new Set<string>();
+    for (const t of ENGAGEMENT_ACTION_TYPES) {
+      expect(t.length).toBeGreaterThan(0);
+      expect(seen.has(t)).toBe(false);
+      seen.add(t);
     }
   });
 });

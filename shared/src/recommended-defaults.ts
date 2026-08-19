@@ -46,7 +46,11 @@ export const FIXED_PLACEMENTS = "advantage_plus";
 export interface DestinationShape {
   optimizationGoal: string;
   destinationType: string;
-  ctaType: string;
+  // AIC-107: null for engagement — an engagement ad promotes an existing
+  // Page post, whose own CTA (or absence of one) stands. Nullable rather
+  // than a filler value so a caller that needs a CTA has to handle "there
+  // isn't one" instead of silently sending something Meta never asked for.
+  ctaType: string | null;
 }
 
 // AIC-102: the additions/creative flow's second destination — a Pixel/
@@ -59,10 +63,39 @@ export interface DestinationShape {
 export const WEBSITE_DESTINATION = "website";
 export const WEBSITE_CTA = "LEARN_MORE"; // Meta call_to_action.type for a website-click ad
 
+// AIC-107 — the third campaign type. Engagement is NOT a lead type: the
+// result is an on-Page interaction, so there is no number to message, no URL
+// to land on, and no Pixel that could silently break. Meta's objective is
+// OUTCOME_ENGAGEMENT with POST_ENGAGEMENT optimization; the ad's CTA is the
+// post's own, so no ctaType is imposed here.
+export const ENGAGEMENT_DESTINATION = "engagement";
+
 const DESTINATION_SHAPES: Record<string, DestinationShape> = {
   [FIXED_DESTINATION]: { optimizationGoal: "CONVERSATIONS", destinationType: "WHATSAPP", ctaType: FIXED_CTA },
   [WEBSITE_DESTINATION]: { optimizationGoal: "OFFSITE_CONVERSIONS", destinationType: "WEBSITE", ctaType: WEBSITE_CTA },
+  [ENGAGEMENT_DESTINATION]: { optimizationGoal: "POST_ENGAGEMENT", destinationType: "ON_POST", ctaType: null },
 };
+
+// The Insights action types that COUNT as an engagement result, in the same
+// priority order `extractLeads` already applies to lead types (AIC-87): the
+// first present wins, never a sum — summing post_engagement with its own
+// components (reactions, comments, shares) would multi-count one interaction.
+export const ENGAGEMENT_ACTION_TYPES = [
+  "post_engagement", // Meta's own roll-up; the primary definition
+  "video_view",
+  "link_click",
+] as const;
+
+// One place that answers "is this campaign an engagement campaign", so no
+// surface re-derives it from a string literal. Deliberately keyed on the
+// campaign's RESULT definition (managed_campaigns.lead_event_types) rather
+// than a separate type column: AIC-87 already made that column the single
+// source of truth for what counts as a result, and a second marker could
+// drift from it.
+export function isEngagementResult(leadEventTypes: readonly string[] | null | undefined): boolean {
+  if (!leadEventTypes?.length) return false;
+  return leadEventTypes.every((t) => (ENGAGEMENT_ACTION_TYPES as readonly string[]).includes(t));
+}
 
 // AIC-89 — the website-destination builder step's conversion-event picker.
 // A curated set of Meta's own standard events relevant to lead generation
@@ -123,6 +156,12 @@ export type CampaignRequiredField = "whatsapp_destination" | "website_url" | "tr
 export const CAMPAIGN_TYPE_REQUIRED_FIELDS: Record<string, CampaignRequiredField[]> = {
   [FIXED_DESTINATION]: ["whatsapp_destination"],
   [WEBSITE_DESTINATION]: ["website_url", "tracking_pixel_id", "lead_event_types"],
+  // AIC-107: engagement needs its RESULT definition and nothing else — no
+  // WhatsApp number, no landing URL, no Pixel, because the interaction
+  // happens on the Page post itself. (A Page is required too, but that lives
+  // on meta_connections, not the campaign, so it is enforced by the
+  // connection-readiness path rather than this per-campaign table.)
+  [ENGAGEMENT_DESTINATION]: ["lead_event_types"],
 };
 
 export interface CampaignFieldValues {
