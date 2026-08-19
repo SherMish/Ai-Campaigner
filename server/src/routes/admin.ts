@@ -642,6 +642,20 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
         res.status(400).json({ error: "destinationType ('whatsapp', 'website' or 'engagement') is required" });
       return;
     }
+  } else if (b.agreedBudgetAgorot !== undefined && b.agreedBudgetAgorot !== null && b.agreedBudgetAgorot !== "") {
+    // AIC-106 — connect-only (Branch A). Optional at this layer: an
+    // omitted value is unchanged behaviour (no shell row created — see
+    // provisionConnection). But a VALUE that was sent and is invalid must
+    // still be rejected, the same as the hasCampaign case, rather than
+    // silently passed through as undefined and discovered only much later
+    // at build time on an unrelated screen — the exact live bug this fixes.
+    // No destinationType here — that only applies once a real campaign is
+    // being provisioned.
+    budget = Number(b.agreedBudgetAgorot);
+    if (!Number.isInteger(budget) || budget <= 0) {
+      res.status(400).json({ error: "agreedBudgetAgorot must be a positive integer (agorot) when provided" });
+      return;
+    }
   }
 
   // AIC-108: instagram_id is re-verified here for exactly the same reason

@@ -13,6 +13,7 @@ import {
   IncompleteProvisioningError,
   InstagramNotReadableError,
 } from "./customer-onboarding.js";
+import { startBuilderCampaign } from "../builder/campaign-create.js";
 import type { AccessVerdict } from "../meta/access-layers.js";
 
 const HAS_DB = !!process.env.DATABASE_URL;
@@ -354,6 +355,52 @@ d("customer onboarding (DB)", () => {
         systemUserId: "122103498795426897",
         metaAdAccountId: `act_it_${customerId.slice(0, 8)}`,
         ...overrides,
+      });
+
+      // AIC-106 gap, found live on a real onboarding call: the budget
+      // ceiling refuses a build with no agreed ceiling, but "צור קמפיין
+      // חדש" (Branch A's connect-only provision) never asked for one, and
+      // nothing else in the wizard did either — the operator filled the
+      // ENTIRE builder wizard (goal, destination, budget, audience,
+      // placements, 3 ads) and only discovered the missing ceiling on the
+      // final click. That budget is the PROPOSED spend, not the AGREED
+      // ceiling — the two must never be conflated (that conflation was
+      // half of the original AIC-106 bug).
+      it("connect-only provisioning with an agreed budget pre-creates the builder's shell row, ceiling included", async () => {
+        const customerId = await seedCustomer("branchabudget");
+        const r = await provisionConnection(pool, connectOnly(customerId, { agreedBudgetAgorot: 2000 }), null);
+        expect(r.campaignId).toBeNull(); // still no CAMPAIGN — only the shell row exists
+
+        const { id: shellId } = await startBuilderCampaign(pool, customerId, r.adAccountRowId);
+        const { rows } = await pool.query(
+          `SELECT meta_campaign_id, agreed_budget_agorot FROM managed_campaigns WHERE id = $1`,
+          [shellId],
+        );
+        // startBuilderCampaign must find the PRE-EXISTING row (idempotent
+        // reuse), not create a fresh one that silently drops the budget.
+        expect(rows[0].meta_campaign_id).toBeNull();
+        expect(Number(rows[0].agreed_budget_agorot)).toBe(2000);
+      });
+
+      it("connect-only provisioning with NO budget behaves exactly as before — no shell row, no crash", async () => {
+        const customerId = await seedCustomer("branchanobudget");
+        const r = await provisionConnection(pool, connectOnly(customerId), null);
+        expect(r.campaignId).toBeNull();
+        const { rows } = await pool.query(`SELECT id FROM managed_campaigns WHERE customer_id = $1`, [customerId]);
+        expect(rows).toHaveLength(0);
+      });
+
+      it("re-provisioning connect-only with a budget updates the shell row's ceiling rather than erroring", async () => {
+        const customerId = await seedCustomer("branchabudgetretry");
+        await provisionConnection(pool, connectOnly(customerId, { agreedBudgetAgorot: 1500 }), null);
+        const second = await provisionConnection(pool, connectOnly(customerId, { agreedBudgetAgorot: 3000 }), null);
+        expect(second.campaignId).toBeNull();
+        const { rows } = await pool.query(
+          `SELECT agreed_budget_agorot FROM managed_campaigns WHERE customer_id = $1`,
+          [customerId],
+        );
+        expect(rows).toHaveLength(1);
+        expect(Number(rows[0].agreed_budget_agorot)).toBe(3000);
       });
 
       it("a second connect-only call for the same customer + ad account reuses the same rows, not a crash", async () => {

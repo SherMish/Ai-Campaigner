@@ -159,18 +159,23 @@ export interface ProvisionInput {
   // written at all.
   pageId?: string | null;
   instagramId?: string | null;
-  // AIC-105 Branch A: every field below is optional AS A UNIT, keyed off
-  // metaCampaignId. Omitted entirely means "connect the account only — this
-  // customer has no Meta campaign yet" (the wizard's picker returned zero
-  // results). That's not a degraded case: it's the exact precondition
-  // resolveBuilderContextForCustomer checks — a healthy connection with no
-  // campaign row, ready for the operator to launch the builder and create the
-  // customer's FIRST campaign, which writes managed_campaigns itself via
+  // AIC-105 Branch A: every field below except agreedBudgetAgorot is
+  // optional AS A UNIT, keyed off metaCampaignId. Omitted entirely means
+  // "connect the account only — this customer has no Meta campaign yet"
+  // (the wizard's picker returned zero results). That's not a degraded
+  // case: it's the exact precondition resolveBuilderContextForCustomer
+  // checks — a healthy connection with no campaign row, ready for the
+  // operator to launch the builder and create the customer's FIRST
+  // campaign, which writes managed_campaigns itself via
   // startBuilderCampaign/buildCampaignOnMeta. Provide metaCampaignId without
   // campaignName (or vice versa) and this throws — never half a campaign row.
   metaCampaignId?: string;
   campaignName?: string;
   objective?: string;
+  // AIC-106: unlike the rest of this group, this one is ALSO meaningful with
+  // no campaign — see the connect-only branch below. This is the AGREED
+  // ceiling (what the operator agreed with the customer), never the
+  // builder's own proposed daily budget; the two must not be conflated.
   agreedBudgetAgorot?: number;
   budgetPeriod?: "daily" | "monthly";
   leadEventTypes?: string[] | null;
@@ -376,6 +381,36 @@ export async function provisionConnection(
     // AIC-105 Branch A: skipped entirely when there's no campaign yet — the
     // builder wizard writes this row itself (startBuilderCampaign), once the
     // operator actually creates one on Meta.
+    // AIC-106 gap, found live 2026-08-19: the budget ceiling refuses a build
+    // with no agreed ceiling, but Branch A's connect-only path (the branch
+    // below) never had anywhere to set one — an operator could complete the
+    // ENTIRE builder wizard and only discover the missing ceiling on the
+    // final click. `dailyBudgetAgorot` in that wizard is the PROPOSED
+    // spend; it is never the AGREED ceiling — conflating the two was half
+    // of the original bug this whole module exists to fix.
+    //
+    // So: when the operator supplies a budget at THIS point (before a
+    // campaign exists), pre-create the shell row `startBuilderCampaign`
+    // would otherwise create later, with the ceiling already set.
+    // `startBuilderCampaign`'s own idempotent SELECT finds this row and
+    // reuses it rather than creating a fresh (budget-less) one — no change
+    // needed there.
+    //
+    // Omitting the budget here is UNCHANGED behaviour (no shell row, exactly
+    // as before this fix) — this is additive, not a new requirement, so a
+    // caller that never sends a budget for the connect-only path is not
+    // broken by this.
+    if (!hasCampaign && Number.isInteger(input.agreedBudgetAgorot) && (input.agreedBudgetAgorot as number) > 0) {
+      await client.query(
+        `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, agreed_budget_agorot)
+         VALUES ($1, $2, 'under_review', $3)
+         ON CONFLICT (customer_id) DO UPDATE SET
+           agreed_budget_agorot = EXCLUDED.agreed_budget_agorot
+         WHERE managed_campaigns.meta_campaign_id IS NULL`,
+        [input.customerId, adAccountRowId, input.agreedBudgetAgorot],
+      );
+    }
+
     let campaignId: string | null = null;
     if (hasCampaign) {
       const camp = await client.query<{ id: string }>(

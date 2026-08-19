@@ -167,6 +167,12 @@ export function AdminOnboarding() {
   // to create the customer's first one.
   const [startingNewCampaign, setStartingNewCampaign] = useState(false);
   const [startNewCampaignError, setStartNewCampaignError] = useState<string | null>(null);
+  // AIC-106 gap, found live: nothing asked for this before the operator
+  // could reach the builder, so it was only discoverable on the wizard's
+  // final click, after the whole thing was filled in. Distinct from the
+  // wizard's own budget step (that one is the PROPOSED spend); this is the
+  // AGREED ceiling, set once, here, before the builder ever opens.
+  const [newCampaignBudgetShekels, setNewCampaignBudgetShekels] = useState("");
 
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeHealth, setFinalizeHealth] = useState<string | null>(null);
@@ -506,6 +512,11 @@ export function AdminOnboarding() {
   // extended provision endpoint treats that as "connect only"), then hands
   // off to the guided builder to create the customer's FIRST campaign, the
   // same wizard a self-serve customer would use.
+  function newCampaignBudgetMissing(): boolean {
+    const n = Number(newCampaignBudgetShekels);
+    return !Number.isFinite(n) || n <= 0;
+  }
+
   function startNewCampaign() {
     if (!id || !form.metaAdAccountId) return;
     if (newCampaignPageMissing()) {
@@ -520,6 +531,10 @@ export function AdminOnboarding() {
       setStartNewCampaignError(w.errorInstagramNotVerified);
       return;
     }
+    if (newCampaignBudgetMissing()) {
+      setStartNewCampaignError(w.errorNewCampaignBudgetRequired);
+      return;
+    }
     setStartingNewCampaign(true);
     setStartNewCampaignError(null);
     setProvisionBlocked(null);
@@ -531,6 +546,7 @@ export function AdminOnboarding() {
           metaAdAccountId: form.metaAdAccountId.trim(),
           pageId: form.pageIdForm.trim() || null,
           instagramId: form.instagramId.trim() || null,
+          agreedBudgetAgorot: Math.round(Number(newCampaignBudgetShekels) * 100),
         }),
       },
     )
@@ -887,9 +903,22 @@ export function AdminOnboarding() {
             {noCampaignsForSelectedAccount && (
               <div style={{ marginTop: 6 }}>
                 <p className="muted" style={{ fontSize: "0.78rem" }}>{w.pickCampaignEmpty}</p>
+                {/* AIC-106 gap, found live: this field is what was missing —
+                    an operator could complete the entire builder wizard and
+                    only discover there was no agreed ceiling on the final
+                    click. Required before "צור קמפיין חדש" is enabled, same
+                    pattern as the Page/Instagram verification gates above. */}
+                <div className="field" style={{ maxWidth: 220, marginTop: 10 }}>
+                  <label>{w.newCampaignBudgetLabel}</label>
+                  <input
+                    type="number" min="0" value={newCampaignBudgetShekels}
+                    onChange={(e) => setNewCampaignBudgetShekels(e.target.value)}
+                  />
+                  <p className="muted" style={{ fontSize: "0.72rem", marginTop: 4 }}>{w.newCampaignBudgetNote}</p>
+                </div>
                 <button
-                  type="button" className="btn btn-primary btn-sm" style={{ marginTop: 6 }}
-                  disabled={startingNewCampaign || newCampaignPageMissing() || pageIdUnverified() || instagramIdUnverified()} onClick={startNewCampaign}
+                  type="button" className="btn btn-primary btn-sm" style={{ marginTop: 10 }}
+                  disabled={startingNewCampaign || newCampaignPageMissing() || pageIdUnverified() || instagramIdUnverified() || newCampaignBudgetMissing()} onClick={startNewCampaign}
                 >
                   {startingNewCampaign ? w.startNewCampaignBusy : w.startNewCampaignCta}
                 </button>

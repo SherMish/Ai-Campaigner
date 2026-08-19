@@ -537,6 +537,15 @@ export const strings = {
       // campaign, operator acting on their behalf.
       startNewCampaignCta: "צור קמפיין חדש",
       startNewCampaignBusy: "מחברים את החשבון…",
+      // AIC-106 gap, found live 2026-08-19: an operator could complete the
+      // ENTIRE builder wizard (goal, budget, audience, placements, ads) and
+      // only discover there was no agreed ceiling on the final click — this
+      // field is what was missing. Deliberately distinct from the wizard's
+      // own budget step: THIS is what the operator agreed with the customer,
+      // set once, here, before the builder ever opens.
+      newCampaignBudgetLabel: "תקציב יומי שסוכם עם הלקוח (₪)",
+      newCampaignBudgetNote: "חובה למלא לפני בניית קמפיין ראשון — זו התקרה שתגביל כל תקציב שיוצע בהמשך, כולל בתוך אשף הבנייה.",
+      errorNewCampaignBudgetRequired: "צריך למלא תקציב יומי שסוכם עם הלקוח לפני בניית קמפיין ראשון.",
       // Found live: מזהה עמוד is labeled "לא חובה" (optional) because
       // that's true for CONNECTING an existing campaign — but building a
       // first one from scratch always needs a Page, so skipping it here
@@ -1422,7 +1431,14 @@ export const strings = {
       },
       review: {
         title: "סיכום לפני יצירה",
-        body: "כל מה שנוצר עכשיו יהיה במצב מושהה — לא יוצא כסף עד שתאשרו את ההפעלה בנפרד.",
+        // AIC-106 — this line still said the OLD thing (created PAUSED, no
+        // spend until a separate approval) directly above the NEW confirm
+        // card that says the opposite ("no separate approval step"). Missed
+        // when the launch gate came out because this string sits in a
+        // different part of the `review` block from createCta/successTitle,
+        // which is exactly the kind of miss the CLAUDE.md spec-correction
+        // rule exists to catch — found live, user report 2026-08-19.
+        body: "בודקים הכול לפני שיוצאים לאוויר — ברגע שיוצרים, הקמפיין פעיל ומתחיל להוציא תקציב מיד.",
         goalLine: "יעד",
         // AIC-89: same label, destination-aware value — Builder.tsx shows
         // the phone number or the URL depending on what was chosen.

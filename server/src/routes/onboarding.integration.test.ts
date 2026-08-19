@@ -296,6 +296,41 @@ d("onboarding wizard routes (AIC-101)", () => {
       expect(acct.rows).toHaveLength(1);
     });
 
+    // AIC-106 gap, found live: the budget ceiling refuses a build with no
+    // agreed ceiling, but connect-only provisioning (this endpoint, no
+    // campaign fields) never accepted a budget at all — an operator could
+    // finish the ENTIRE builder wizard and only discover the missing
+    // ceiling on the final click. Route-level, so it covers the exact
+    // request the real "צור קמפיין חדש" button sends.
+    it("AIC-106: connect-only provisioning WITH an agreed budget pre-creates the ceiling", async () => {
+      const id = await seedCustomer("provnocampbudget");
+      vi.stubGlobal("fetch", fakeGraph({}));
+      const res = await request(app).post(`/api/admin/customers/${id}/onboarding/provision`)
+        .set("Authorization", ADMIN)
+        .send({ metaAdAccountId: ACCT, systemUserId: "122103498795426897", agreedBudgetAgorot: 2500 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.result.campaignId).toBeNull(); // still no CAMPAIGN
+      const camps = await pool.query(
+        `SELECT meta_campaign_id, agreed_budget_agorot FROM managed_campaigns WHERE customer_id = $1`,
+        [id],
+      );
+      // But the shell row DOES exist now, with the ceiling already set.
+      expect(camps.rows).toHaveLength(1);
+      expect(camps.rows[0].meta_campaign_id).toBeNull();
+      expect(Number(camps.rows[0].agreed_budget_agorot)).toBe(2500);
+    });
+
+    it("AIC-106: 400s an invalid budget on connect-only provisioning instead of silently dropping it", async () => {
+      const id = await seedCustomer("provnocampbadbudget");
+      vi.stubGlobal("fetch", fakeGraph({}));
+      const res = await request(app).post(`/api/admin/customers/${id}/onboarding/provision`)
+        .set("Authorization", ADMIN)
+        .send({ metaAdAccountId: ACCT, systemUserId: "122103498795426897", agreedBudgetAgorot: 0 });
+
+      expect(res.status).toBe(400);
+    });
+
     it("400s a campaign missing campaignName, even with metaCampaignId present — never half a campaign row", async () => {
       const id = await seedCustomer("provhalfcamp");
       vi.stubGlobal("fetch", fakeGraph({}));

@@ -545,6 +545,31 @@ horizontally scrollable (shrinking the circles/labels a bit) plus a
 the full wizard at 375px afterward — the two-up age-range `.field-row` and
 every other step render cleanly at that width.
 
+### The agreed ceiling now has somewhere to be set for Branch A (AIC-106 follow-up)
+
+Found live on a real onboarding call, the day the launch gate came out: an
+operator could complete the ENTIRE builder wizard — goal, destination,
+budget, category, audience, placements, three ads — and only discover there
+was no agreed ceiling on the FINAL click, with `budget_ceiling_missing`.
+
+The gap: `startCampaign` (Branch A's "צור קמפיין חדש") provisions the
+CONNECTION only, with no campaign fields and no budget field anywhere in that
+form — the half-1 ceiling work assumed a budget would already exist by build
+time, but for a brand-new customer nothing had ever asked for one. The
+₪20/day the operator typed was the wizard's own PROPOSED-spend field, not the
+AGREED ceiling; those are deliberately different things and must never be
+conflated (that conflation was half of the original AIC-106 bug).
+
+Fix: `AdminOnboarding.tsx`'s "צור קמפיין חדש" section now has its own
+required "תקציב יומי שסוכם עם הלקוח" field, gating the button exactly like
+the Page/Instagram verification checks already do. `provisionConnection`
+accepts it on the connect-only path and pre-creates the shell row
+`startBuilderCampaign` would otherwise create later, with the ceiling
+already set — that function's own idempotent `SELECT ... WHERE
+meta_campaign_id IS NULL` finds and reuses it, so no change was needed there.
+Omitting the budget is unchanged behaviour (no shell row, exactly as
+before) — additive, not a new requirement on any other caller.
+
 ### The build refuses an incomplete campaign (AIC-103 x AIC-105)
 
 Before the first Meta call, the builder checks the destination's required

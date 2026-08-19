@@ -6,6 +6,55 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — The agreed ceiling gets a place to be set, closing a live incident on a real call
+User report: got `no agreed daily budget is set for this customer` on the
+FINAL click of building a real customer's first campaign — after filling the
+entire wizard (goal, destination, budget, category, audience, placements,
+three ads). Confirmed live: `agreed_budget_agorot` was 0 for this customer's
+shell row, and there was NO field anywhere in Branch A's flow to set it
+before reaching that click.
+
+Root cause: AIC-106 half 1 added the ceiling guard but only ever threaded
+`agreedBudgetAgorot` through the hasCampaign (Branch B / adopt) provisioning
+path. Branch A's "צור קמפיין חדש" provisions the connection alone — no
+campaign, no budget field, ever — because the half-1 work assumed a budget
+would already exist by build time. It didn't, for any brand-new customer.
+The ₪20/day the operator typed in the builder's own budget step is the
+PROPOSED spend, never the AGREED ceiling — conflating those two was half of
+the ORIGINAL bug this module exists to prevent, and this gap would have
+reintroduced the same conflation from the other direction if left as "just
+use the wizard's number."
+
+Fixed: a required "תקציב יומי שסוכם עם הלקוח" field next to "צור קמפיין חדש",
+gating the button the same way the Page/Instagram checks already do.
+`provisionConnection` now accepts the budget on the connect-only path and
+pre-creates the builder's shell row with the ceiling already set;
+`startBuilderCampaign`'s existing idempotent lookup finds and reuses it — no
+change needed there. Omitting the budget is unchanged behaviour (no shell
+row) — purely additive.
+
+**Caught and fixed a bug in my own first pass at the route change**: the
+`else if` branch I wrote for the connect-only budget validation initially
+swallowed the `destinationType` block that must only run for `hasCampaign` —
+typechecking passed but the logic was inverted. Caught before shipping by
+re-reading the diff rather than trusting the type-check alone.
+
+**Also fixed in the same unit of work**: `Builder.tsx`'s review-step subtitle
+still read "כל מה שנוצר עכשיו יהיה במצב מושהה — לא יוצא כסף עד שתאשרו..." —
+the OLD launch-gate copy — directly above the NEW confirmation card that says
+the opposite. Missed during AIC-106 half 2 because this string sits in a
+different part of the `review` block from `createCta`/`successTitle`, which
+were corrected. Exactly the class of miss the CLAUDE.md spec-correction rule
+exists to catch, this time inside code rather than a Linear ticket.
+
+New tests: 3 DB-level (`customer-onboarding.integration.test.ts`) covering
+budget-present, budget-absent (unchanged), and budget-on-retry; 2 route-level
+(`onboarding.integration.test.ts`) covering the exact request the real button
+sends, valid and invalid.
+
+830 server tests pass (3 known pre-existing failures, unchanged); 27 web
+tests pass; typecheck and build clean.
+
 ### 2026-08-19 — Instagram picker: also in steps 1 and 2, where the script already promised it
 User report: "still dont see instagram picker" — while looking at step 1,
 where it was never added. Real gap, not user error: step 1's own script text
