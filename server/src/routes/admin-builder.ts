@@ -331,7 +331,21 @@ adminBuilderRouter.post("/customers/:id/builder/build", async (req, res) => {
       });
       return;
     }
+    // "i want to see the error on the ui not a useless message" — the
+    // operator IS the person who has to act on this, mid-call. Surfacing
+    // Meta-labelled errors alone (above) was too narrow: the WriteOutbox's
+    // own "create already in progress … retry shortly" is perfectly good
+    // operator copy and was still being flattened away.
+    //
+    // `detail` is deliberately ADMIN-ONLY — the customer-facing builder
+    // route keeps the friendly generic message, since a customer can act on
+    // none of this. AIC-105's "no raw codes in the operator UI" rule is
+    // about not making an operator decode a number; a real sentence is
+    // exactly what that rule wants them to have.
     console.error("[admin-builder] build failed", e);
-    res.status(502).json({ error: "failed to build campaign" });
+    res.status(502).json({
+      error: "failed to build campaign",
+      detail: e instanceof Error ? e.message : String(e),
+    });
   }
 });

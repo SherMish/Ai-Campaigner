@@ -198,7 +198,15 @@ export function Builder({ customerId, onExit }: Props = {}) {
       }, customerId);
       setBuildResult(result);
     } catch (e) {
-      setBuildError(e instanceof ApiError ? e.message : rv.errorGeneric);
+      // "i want to see the error on the ui not a useless message." The admin
+      // build route attaches `detail` (the real failure reason) — surface it
+      // when present. Only the ADMIN route sends it, so a customer building
+      // their own campaign still sees the friendly message alone.
+      const detail = e instanceof ApiError
+        ? (e.body as { detail?: string } | undefined)?.detail
+        : undefined;
+      const base = e instanceof ApiError ? e.message : rv.errorGeneric;
+      setBuildError(detail ? `${base} — ${detail}` : base);
     } finally {
       setBuilding(false);
     }

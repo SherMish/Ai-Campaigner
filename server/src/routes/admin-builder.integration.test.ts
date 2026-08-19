@@ -218,6 +218,58 @@ d("admin builder routes — AIC-105 Branch A (DB + HTTP)", () => {
     expect(JSON.stringify(build.body)).not.toContain("2446886");
   });
 
+  // The complaint that drove this, verbatim: "i want to see the error on the
+  // ui not a useless message". My first pass (b7d2677) only surfaced errors
+  // Meta itself had labelled — too narrow. Found live immediately after: a
+  // build failed with the WriteOutbox's own "create already in progress …
+  // retry shortly", which is PERFECTLY good operator copy, and it was still
+  // being flattened to "failed to build campaign".
+  //
+  // This is the ADMIN route — an operator, not a customer. Withholding the
+  // real reason here helps nobody: they are the person who has to act on it,
+  // mid-call. `detail` carries it; the customer-facing route deliberately
+  // does NOT get this (see builder.ts).
+  it("gives the operator the real failure reason for a non-Meta error, not just 'failed to build campaign'", async () => {
+    vi.stubGlobal("fetch", mockMetaFetch());
+    const id = await seedReadyCustomer("realdetail");
+    const start = await request(app).post(`/api/admin/customers/${id}/builder/start`).set("Authorization", ADMIN);
+    const localCampaignId = start.body.localCampaignId as string;
+    await agreeBudget(localCampaignId);
+    const creative = await request(app)
+      .post(`/api/admin/customers/${id}/builder/creative`)
+      .set("Authorization", ADMIN)
+      .send({ localCampaignId, clientKey: "adset-1-ad-1", name: "Ad 1", postId: "post_1" });
+    const creativeId = creative.body.creativeId as string;
+
+    // A plain Error with NO Meta user-facing fields — the outbox-lock shape.
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.endsWith("/campaigns")) return jsonRes({ id: "meta_camp_detail" });
+      if (u.endsWith("/adsets")) {
+        return {
+          ok: false, status: 400,
+          json: async () => ({ error: { message: "Some internal Meta failure", type: "OAuthException", code: 1 } }),
+        } as unknown as Response;
+      }
+      throw new Error(`unexpected fetch ${u}`);
+    }));
+
+    const build = await request(app)
+      .post(`/api/admin/customers/${id}/builder/build`)
+      .set("Authorization", ADMIN)
+      .send({
+        localCampaignId, name: "My Business", dailyBudgetAgorot: 2000,
+        specialAdCategories: [], whatsappDestination: "972500000000",
+        targeting: { ageMin: 18, ageMax: 45, genders: "female" },
+        ads: [{ clientKey: "adset-1-ad-1", name: "Ad 1", creativeId }],
+      });
+
+    expect(build.status).toBe(502);
+    // The real reason reaches the operator instead of being swallowed.
+    expect(build.body.detail).toBeTruthy();
+    expect(String(build.body.detail)).toContain("Some internal Meta failure");
+  });
+
   it("rejects a creative call for a localCampaignId that belongs to a DIFFERENT customer", async () => {
     vi.stubGlobal("fetch", mockMetaFetch());
     const a = await seedReadyCustomer("owner-a");

@@ -6,6 +6,54 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — The operator sees the REAL error; and why a WhatsApp "verify" button can't be built
+Two findings from the same live incident.
+
+**1. The error surfacing was still too narrow.** The previous entry only
+surfaced errors Meta itself had LABELLED (`error_user_title`/`_msg`). Found
+immediately after, on the same customer: a build failed with the
+WriteOutbox's own `"create already in progress … retry shortly"` — perfectly
+good operator copy — still flattened to `"failed to build campaign"`.
+
+The admin build route now attaches `detail` (the real `Error.message`) and
+`Builder.tsx` renders it. Deliberately ADMIN-ONLY: the customer-facing
+builder route keeps the friendly generic message, because a customer can act
+on none of it. AIC-105's "no raw codes in the operator UI" rule is about not
+making an operator decode a NUMBER — a real sentence is what that rule
+wants them to have.
+
+**2. Researched the requested "verify WhatsApp number" button — it is NOT
+buildable as a read, and was deliberately not faked.** Tested every candidate
+against BOTH the Page that demonstrably works (Pisga, runs a live WhatsApp
+campaign) and the one that fails (Ads Agent):
+
+| Probe | Result |
+| --- | --- |
+| `whatsapp_business_account` | field does not exist |
+| `connected_whatsapp_business_account` | field does not exist |
+| `has_whatsapp_business_number` | accepted, returns NOTHING — even for the working Page |
+| `/whatsapp_numbers`, `/linked_whatsapp_business_account` | unknown path |
+| `owned_whatsapp_business_accounts` | `#200` permission denied |
+
+The `has_whatsapp_business_number` result is decisive: it is silently empty
+for a Page that IS correctly linked. A button built on it would report
+"unknown" always, or "not linked" for a working Page — a control that looks
+like verification while verifying nothing, which is the exact failure mode
+this codebase keeps getting burned by. Meta only reveals this at ad-set
+creation, which is a real write. So the honest answer to "warn me earlier"
+is (1) above: make the failure legible the instant it happens.
+
+**Flaky test recorded honestly, not waved through:**
+`recommendation-oversight.integration.test.ts` failed on 2 of 4 full-suite
+runs WITH these changes, passed on master's run, and passed in isolation
+BOTH with and without the changes. It touches recommendations/oversight;
+these changes touch builder routes + the Meta adapter. Most likely
+shared-DB ordering sensitivity (the suite went 833→834 tests, shifting
+timing). Calling it FLAKY-OBSERVED rather than "pre-existing, fine" — the
+distinction AIC-109 exists to protect.
+
+831 server + 27 web tests pass; the 3 known failures unchanged.
+
 ### 2026-08-19 — Meta's own error message reaches the operator, instead of a dead-end 502
 Same real onboarding call as the ceiling gap: after fixing that, the build
 failed again with the generic `"failed to build campaign"`. The Railway log
