@@ -6,6 +6,27 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — Onboarding wizard warns about the two prerequisites it cannot check
+Both bit a real onboarding call today, so step 1 now opens with a bordered
+warning covering them.
+
+- **WhatsApp Business number connected to the Facebook PAGE** — not just
+  installed on a phone. Meta refuses the ad set create without it, and refuses
+  at the very END, after the whole builder wizard has been filled in.
+- **An active payment method on the ad account** — this one fails SILENTLY:
+  Meta accepts the campaign, it reads ACTIVE, and never delivers. Nothing in
+  the product distinguishes that from a slow start, which makes it the more
+  expensive of the two.
+
+Placed at step 1, not near the build: that is the only moment the customer is
+on the call with their own Meta screen open, and the only point either is cheap
+to fix. Styled as a warning rather than a note — an operator scanning a script
+skips a grey paragraph. The copy states plainly that neither is auto-verified,
+rather than letting the wizard's five green checks imply otherwise.
+
+Verified in the browser, not just typechecked: renders above the numbered
+steps, 2px warning border, both items present.
+
 ### 2026-08-19 — Ad set creates now send advantage_audience (Meta requires it explicitly)
 Found live mid-build, after the WhatsApp Page link was fixed: Meta refuses an
 ad set create unless `targeting.targeting_automation.advantage_audience` is an

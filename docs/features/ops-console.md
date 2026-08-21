@@ -668,6 +668,29 @@ started requiring a Page to BUILD one, which is exactly the contradiction an
 operator hit live. The label now carries both cases explicitly rather than
 picking whichever is true more often.
 
+**Step 1 opens with the two prerequisites the wizard cannot check.** Every
+access check here verifies OUR access to the customer's assets. Neither of
+these is about our access, so all five steps can pass green and the build
+still fails — or worse, succeeds and never spends:
+
+- **A WhatsApp Business number connected to the Facebook PAGE**, not merely
+  installed on a phone. Meta refuses the ad set create outright without it
+  ("Your Page is not linked to a WhatsApp account") — and it refuses at the
+  END, after the entire builder wizard has been filled in.
+- **An active payment method on the ad account.** This one fails *silently*:
+  Meta accepts the campaign, it goes ACTIVE, and it simply never delivers.
+  Nothing in the product can tell that apart from a campaign that is merely
+  slow to start, which makes it the most expensive of the two to diagnose.
+
+Both bit a real onboarding call on 2026-08-19. The callout sits at the top of
+step 1 rather than near the build, because step 1 is the only moment the
+customer is on the call with their own Meta screen open — the only point
+either is cheap to fix. It is styled as a warning, not a note: an operator
+scanning a script will skip a grey paragraph.
+
+Neither is auto-verified, and the copy says so plainly rather than implying
+the wizard has checked.
+
 **Instagram rides on the ADS grant — it needs no `instagram_*` scope and no
 Meta App use case.** This was briefly believed to be blocked, on the strength
 of the token-minting permission list not offering `instagram_basic`. Measuring

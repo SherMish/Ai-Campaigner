@@ -611,6 +611,34 @@ export function AdminOnboarding() {
       <div className="card" style={{ marginTop: 12 }}>
         <b>{w.step1Title}</b>
         <p className="muted" style={{ fontSize: "0.85rem" }}>{w.step1Sub}</p>
+        {/* Two prerequisites Meta enforces on ITS side that NO check in this
+            wizard can see — every access check can pass and the build still
+            fail, or worse, succeed and never spend. Both bit a real
+            onboarding call on 2026-08-19, which is why this is loud and sits
+            at the top of step 1: it is the only moment the customer is on the
+            call with their own screen open, and the only moment either is
+            cheap to fix. */}
+        <div
+          style={{
+            marginTop: 12, marginBottom: 4, padding: "12px 14px",
+            border: "2px solid #c0362c", borderRadius: 8, background: "#fdf3f2",
+          }}
+        >
+          <b style={{ display: "block", marginBottom: 8, color: "#c0362c" }}>
+            ⚠️ {w.step1PrereqTitle}
+          </b>
+          <ul style={{ margin: 0, paddingInlineStart: 20 }}>
+            <li style={{ marginBottom: 8 }}>
+              <b>WhatsApp:</b> {w.step1PrereqWhatsapp}
+            </li>
+            <li>
+              <b>{w.fieldPaymentLabel}:</b> {w.step1PrereqPayment}
+            </li>
+          </ul>
+          <p className="muted" style={{ fontSize: "0.75rem", margin: "10px 0 0" }}>
+            {w.step1PrereqFooter}
+          </p>
+        </div>
         {/* Same script the customer's own Connect screen shows — one
             definition, so this and the customer-facing copy can never
             silently diverge again (they already have once). */}

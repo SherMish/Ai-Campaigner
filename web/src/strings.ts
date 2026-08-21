@@ -405,6 +405,26 @@ export const strings = {
 
       step1Title: "שלב 1 — הלקוח משתף גישה",
       step1Sub: "בשיחה, עם הלקוח מול המסך שלו.",
+      // Both of these are prerequisites Meta enforces on ITS side, invisible
+      // to every check this wizard runs — the access checks can all pass and
+      // the build still fails (or worse, succeeds and never spends).
+      // Added after both bit a real onboarding call on 2026-08-19:
+      //   * the WhatsApp number was connected in the WhatsApp Business APP but
+      //     never linked to the Facebook PAGE, so Meta refused the ad set with
+      //     "Your Page is not linked to a WhatsApp account" — at the very end,
+      //     after the whole builder wizard had been filled in;
+      //   * a missing payment method is worse, because it fails SILENTLY:
+      //     Meta accepts the campaign, it goes ACTIVE, and simply never
+      //     delivers. Nothing in our product can distinguish that from a
+      //     campaign that is merely slow to start.
+      // Deliberately placed at step 1, while the customer is still on the call
+      // with their own screen open — that is the only moment either is cheap
+      // to fix.
+      step1PrereqTitle: "לפני שממשיכים — שני דברים שחייבים להיות מוכנים אצל הלקוח",
+      step1PrereqWhatsapp: "מספר וואטסאפ עסקי (WhatsApp Business) מחובר לעמוד הפייסבוק עצמו — לא רק מותקן בטלפון. בעמוד: הגדרות ← וואטסאפ ← חיבור מספר ואימות בקוד. בלי זה Meta תסרב ליצור את הקמפיין.",
+      step1PrereqPayment: "אמצעי תשלום פעיל בחשבון הפרסום. בלי זה הקמפיין ייווצר, יופיע כפעיל — ופשוט לא יתחיל להוציא כסף. זו התקלה הכי קשה לזהות, כי שום בדיקה כאן לא תתפוס אותה.",
+      fieldPaymentLabel: "אמצעי תשלום",
+      step1PrereqFooter: "שתי הבדיקות האלה לא נבדקות אוטומטית באשף. שווה לוודא מול הלקוח עכשיו, בזמן שהוא מול המסך.",
       step2Title: "שלב 2 — אנחנו מקצים למשתמש המערכת",
       step2Sub: "אצלנו, בהגדרות העסק.",
       step2Script: [
