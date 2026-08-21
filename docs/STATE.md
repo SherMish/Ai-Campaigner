@@ -6,6 +6,30 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — Postmortem written: the builder's first real onboarding call
+[POSTMORTEM-2026-08-19.md](POSTMORTEM-2026-08-19.md), linked from INDEX.
+
+An operator hit **eight** separate walls trying to build one real customer's
+first campaign. Every one was real; most were ours. The doc is organised by what
+a future session needs rather than chronologically:
+
+1. **Meta facts we got wrong by reasoning instead of measuring** — each with the
+   repeatable probe that settled it (Instagram riding the ads grant,
+   `promote_pages` only listing already-advertised Pages, empty-array vs
+   permission-masked, pixel URL aggregation and why it proves less than it
+   looks).
+2. **Prerequisites Meta enforces that no check of ours can see** — Page↔WhatsApp
+   link, payment method, `advantage_audience`. All fail loudly; all fail LATE.
+3. **Bug patterns in our code, as named classes** — a guard that never runs; a
+   passing test defending the bug; a refusal that lies about its cause;
+   validation at the end instead of at the field; a design whose premise expired
+   underneath it; stale artifacts reading as verified fact.
+4. **Process failures, mine** — including poisoning a real customer's build with
+   my own test runs, and asserting a Meta behaviour I had not measured.
+5. The two distinctions that kept collapsing (unverified ≠ not done;
+   pre-existing ≠ accepted).
+6. What is still open.
+
 ### 2026-08-19 — Correction: a missing payment method fails LOUDLY, not silently
 The entry below claimed a missing payment method fails silently — campaign
 accepted, ACTIVE, never delivering. **That was wrong, and asserted without
