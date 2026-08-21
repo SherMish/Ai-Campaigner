@@ -70,7 +70,7 @@ function graphError(context: string, status: number, body: Record<string, unknow
   }
   return new Error(message);
 }
-import { shekelToAgorot, resolveDestinationShape } from "@aic/shared";
+import { shekelToAgorot, resolveDestinationShape, ADVANTAGE_AUDIENCE_ENABLED } from "@aic/shared";
 import { extractLeads } from "./insights.js";
 import { normalizeAdMedia, type AdMedia, type AdMediaReader, type RawAdMedia } from "./ad-media.js";
 import { detectDestination, type AdSetTrackingConfig, type TrackingReader } from "./tracking-health.js";
@@ -650,6 +650,11 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
         age_max: params.targeting.ageMax,
         genders: params.targeting.genders,
         geo_locations: { countries: params.targeting.countries },
+        // Meta REFUSES the create outright if this is absent — it must be an
+        // explicit 0 or 1 (found live 2026-08-19: "you need to enable or
+        // disable the Advantage audience feature"). The value is a stated
+        // product opinion, not a default — see ADVANTAGE_AUDIENCE_ENABLED.
+        targeting_automation: { advantage_audience: ADVANTAGE_AUDIENCE_ENABLED },
       },
     });
   }

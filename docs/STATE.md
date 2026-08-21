@@ -6,6 +6,21 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — Ad set creates now send advantage_audience (Meta requires it explicitly)
+Found live mid-build, after the WhatsApp Page link was fixed: Meta refuses an
+ad set create unless `targeting.targeting_automation.advantage_audience` is an
+explicit `0` or `1`. We were sending neither.
+
+Set to **0**, as a stated product opinion (`ADVANTAGE_AUDIENCE_ENABLED`) rather
+than a magic number. The wizard tells the customer the campaign targets a
+specific age range and gender, and the review step lists them back; Advantage
+audience lets Meta deliver outside that, which would make both untrue.
+
+Trade-off recorded in the owning doc rather than hidden: Advantage audience
+often improves delivery on small budgets, so this may cost performance.
+Revisiting is legitimate — but change the customer-facing promise first, then
+the flag.
+
 ### 2026-08-19 — Root cause found: the outbox drain was poisoning real customers' builds
 The unresolvable outbox row that blocked a real customer's campaign was not a
 mystery after all, and the cause was our own test runs.

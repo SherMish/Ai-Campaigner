@@ -232,6 +232,27 @@ rather than silently returning the WhatsApp shape — the fix for a real bug
 inline literals nothing actually resolved from the campaign's real lead type,
 which is exactly how a Pixel campaign once reached Meta with a WhatsApp shape.
 
+### Advantage audience is explicitly OFF, and that is a promise we made
+
+Meta refuses an ad set create outright unless `targeting.targeting_automation
+.advantage_audience` is an explicit `0` or `1` — an omitted flag is a hard
+error ("you need to enable or disable the Advantage audience feature"), found
+live 2026-08-19 mid-build.
+
+We send **0** (`ADVANTAGE_AUDIENCE_ENABLED` in `shared/recommended-defaults.ts`),
+and it is a product decision rather than a default. The wizard's audience step
+tells the customer plainly that *"the campaign targets all of Israel, by age
+and gender"*, and the review step lists the exact range and gender back to
+them. Advantage audience lets Meta deliver **outside** that whenever it
+predicts better results — which would make both statements untrue and the
+audience control an illusion.
+
+**The trade-off, recorded rather than hidden:** Advantage audience often
+improves delivery, especially on small budgets, so this may cost some
+performance. Revisiting it is legitimate — but the order matters: change what
+we PROMISE the customer first, then the flag. Flipping it while the copy still
+claims fixed targeting would be the product lying about its own behaviour.
+
 ### The budget ceiling is enforced at the field, not at the end
 
 Found live 2026-08-19, immediately after the ceiling shipped: an operator

@@ -205,6 +205,26 @@ export const RECOMMENDED_STRUCTURE = {
   adCountMax: 5,
 } as const;
 
+// ── Advantage audience (Meta's automatic audience expansion) ──────────────
+// Meta requires this to be EXPLICITLY 0 or 1 on every ad set create — an
+// omitted flag is a hard API refusal ("you need to enable or disable the
+// Advantage audience feature"), found live 2026-08-19 mid-build.
+//
+// We send 0, and that is a product decision rather than a default:
+// `strings.ts`'s audience step tells the customer plainly that "the campaign
+// targets all of Israel, by age and gender", and the review step lists the
+// exact age range and gender back to them. Advantage audience lets Meta
+// deliver OUTSIDE that range whenever it predicts better results — which
+// would make both of those statements untrue, and the audience control an
+// illusion.
+//
+// The honest trade-off, recorded rather than hidden: Advantage audience
+// often improves delivery, especially on small budgets, so this choice may
+// cost some performance. That is a decision to revisit deliberately — by
+// changing what we PROMISE the customer first, then this flag — not by
+// quietly flipping it and leaving the copy claiming fixed targeting.
+export const ADVANTAGE_AUDIENCE_ENABLED = 0 as const;
+
 // ── Budget: a starting range, framed honestly as "enough to gather data" —
 // never a guaranteed-exact number, since real CPL varies by category/creative. ──
 export const RECOMMENDED_BUDGET_AGOROT_PER_DAY: { min: Agorot; max: Agorot; recommended: Agorot } = {

@@ -133,6 +133,13 @@ describe("GraphCampaignAdapter create-writes — ACTIVE on create (AIC-106)", ()
     expect(body.get("status")).toBe("ACTIVE");
     expect(body.get("campaign_id")).toBe("meta_camp_1");
     expect(JSON.parse(body.get("targeting") ?? "{}")).toMatchObject({ age_min: 18, age_max: 45 });
+    // Meta REFUSES the create if this is absent — an explicit 0 or 1 is
+    // mandatory (found live 2026-08-19 mid-build). Asserted as 0 specifically:
+    // the wizard tells the customer the campaign targets a stated age range
+    // and gender, and Advantage audience would let Meta deliver outside it,
+    // making that promise untrue. Flipping this is a copy change first.
+    expect(JSON.parse(body.get("targeting") ?? "{}").targeting_automation)
+      .toEqual({ advantage_audience: 0 });
     // AIC-89 sub-fix: these come from resolveDestinationShape(FIXED_DESTINATION),
     // not an inline literal — the exact fields a Pixel destination must NOT get.
     expect(body.get("optimization_goal")).toBe("CONVERSATIONS");
