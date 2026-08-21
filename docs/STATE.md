@@ -6,6 +6,27 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — Correction: a missing payment method fails LOUDLY, not silently
+The entry below claimed a missing payment method fails silently — campaign
+accepted, ACTIVE, never delivering. **That was wrong, and asserted without
+verifying.** The operator hit Meta's real error the same day:
+
+    Update payment method: Visit the Billing and payment center
+    to add a valid payment method.
+
+Corrected in the wizard copy and in
+[ops-console.md](features/ops-console.md). Both prerequisites fail loudly and
+both fail LATE — at the ad-set create, after the entire builder wizard has been
+filled in. Late is the real cost; silence was never the problem.
+
+Worth recording as the same failure mode this session kept finding elsewhere: a
+confident claim about external behaviour, reasoned rather than measured, then
+written into product copy where it reads as verified fact.
+
+**Also confirmed by this report:** the `GraphWriteError` surfacing shipped in
+`b7d2677` is working in production — the operator saw Meta's own
+`error_user_msg` verbatim instead of "failed to build campaign".
+
 ### 2026-08-19 — Onboarding wizard warns about the two prerequisites it cannot check
 Both bit a real onboarding call today, so step 1 now opens with a bordered
 warning covering them.

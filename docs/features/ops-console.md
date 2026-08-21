@@ -677,10 +677,16 @@ still fails — or worse, succeeds and never spends:
   installed on a phone. Meta refuses the ad set create outright without it
   ("Your Page is not linked to a WhatsApp account") — and it refuses at the
   END, after the entire builder wizard has been filled in.
-- **An active payment method on the ad account.** This one fails *silently*:
-  Meta accepts the campaign, it goes ACTIVE, and it simply never delivers.
-  Nothing in the product can tell that apart from a campaign that is merely
-  slow to start, which makes it the most expensive of the two to diagnose.
+- **An active payment method on the ad account.** Meta refuses the create with
+  its own message ("Update payment method: Visit the Billing and payment
+  center to add a valid payment method").
+
+  *Corrected 2026-08-19: this doc briefly claimed a missing payment method
+  fails silently — campaign accepted, ACTIVE, never delivering. That was
+  asserted without verification and is wrong; the operator hit the real error
+  the same day. Both prerequisites fail loudly. What makes them expensive is
+  not silence, it is that both fail LATE — at the ad-set create, after the
+  whole builder wizard has been filled in.*
 
 Both bit a real onboarding call on 2026-08-19. The callout sits at the top of
 step 1 rather than near the build, because step 1 is the only moment the
