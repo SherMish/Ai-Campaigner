@@ -118,6 +118,44 @@ d("WriteOutbox (DB)", () => {
   // reached Meta, and a blind retry could duplicate a real, spending object —
   // the exact thing this outbox exists to prevent. So it fails LOUDLY and
   // accurately instead, naming the state and what to check.
+  // ROOT CAUSE of the corrupt rows above, found 2026-08-19 by timestamp:
+  // a real customer's create_creative row and a test's pause_ad row were
+  // updated 65ms apart, in the same drain batch.
+  //
+  // drainOnce selects `WHERE status='pending' AND next_attempt_at <= now()`
+  // with NO scoping, so it swept up a REAL customer's pending create row and
+  // marked it succeeded via writer.apply() — which returns void, so no Meta id
+  // was ever recorded. That is precisely the unresolvable state above.
+  //
+  // Creates must never drain, for a reason this module already documents:
+  // "a create can't drain in arbitrary background order" — the caller needs
+  // the new object's real id synchronously to build the next step's payload.
+  // The drain has no way to return one. Excluding create_* is therefore a
+  // correctness fix in its own right, not just protection from test bleed.
+  it("never drains a create_* row — the drain cannot record the new Meta id", async () => {
+    const { campaignId, customerId } = await makeCampaign();
+    const outbox = new WriteOutbox(pool);
+    const entry = { idempotencyKey: builderKey(campaignId, "create_ad_set", "adset-nodrain"), campaignId, recommendationId: null, kind: "create_ad_set" as const, payload: {} };
+
+    // A create left pending by a failed attempt — exactly the state a real
+    // customer's build leaves behind when Meta refuses a step.
+    await outbox.enqueue(entry);
+
+    const writer = new FakeMetaWriter();
+    await outbox.drainOnce(writer);
+
+    // Untouched: still pending, still retryable by the builder, and NEVER
+    // marked succeeded-without-a-result.
+    const { rows } = await pool.query<{ status: string; result: unknown }>(
+      `SELECT status, result FROM meta_write_outbox WHERE idempotency_key = $1`,
+      [entry.idempotencyKey],
+    );
+    expect(rows[0].status).toBe("pending");
+    expect(rows[0].result).toBeNull();
+    expect(writer.applied).toHaveLength(0);
+    await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
+  });
+
   it("a 'succeeded' row with no recorded id fails with an accurate message, not a false 'in progress'", async () => {
     const { campaignId, customerId } = await makeCampaign();
     const outbox = new WriteOutbox(pool);

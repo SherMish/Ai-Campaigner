@@ -64,9 +64,30 @@ export class WriteOutbox {
         payload: Record<string, unknown>;
         attempts: number;
       }>(
+        // create_* is EXCLUDED, and this is a correctness rule, not a filter.
+        // A drain applies a write through `writer.apply()`, which returns
+        // void — so it has no way to record the new object's Meta id, and a
+        // drained create lands as status='succeeded' with result=NULL: a row
+        // that `checkSettled` cannot resolve (no result) and the claim cannot
+        // reclaim (not 'pending'). Permanently stuck, and every retry then
+        // reported a false "already in progress".
+        //
+        // That is not hypothetical. Found 2026-08-19 by timestamp: a REAL
+        // customer's pending create_creative row and a test's pause_ad row
+        // were updated 65ms apart, in one drain batch — this SELECT is
+        // unscoped, so an integration-test drain running against the shared
+        // database swept up a live customer's half-finished build and poisoned
+        // it. It blocked that customer's campaign until the row was repaired
+        // by hand.
+        //
+        // Creates are synchronous-only by design (see applyIdempotent's note:
+        // "a create can't drain in arbitrary background order" — the caller
+        // needs the real id immediately to build the next step's payload).
+        // They must never appear here at all.
         `SELECT id, kind, payload, attempts
          FROM meta_write_outbox
          WHERE status = 'pending' AND next_attempt_at <= now()
+           AND kind NOT LIKE 'create\\_%'
          ORDER BY next_attempt_at
          FOR UPDATE SKIP LOCKED
          LIMIT $1`,

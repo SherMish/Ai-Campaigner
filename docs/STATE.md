@@ -6,6 +6,43 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-19 — Root cause found: the outbox drain was poisoning real customers' builds
+The unresolvable outbox row that blocked a real customer's campaign was not a
+mystery after all, and the cause was our own test runs.
+
+**Diagnosed by timestamp.** A real customer's pending `create_creative` row
+(owner: `free_beta test`) and a test's `pause_ad` row (owner: `__it_outbox`)
+were updated **65ms apart** — the same drain batch. `drainOnce`'s SELECT was
+unscoped (`WHERE status = 'pending' AND next_attempt_at <= now()`), so an
+integration-test drain running against the SHARED production database picked up
+a live customer's half-finished build, applied it with a FAKE writer, and
+marked it `succeeded`. `writer.apply()` returns void, so no Meta id was ever
+recorded — producing `succeeded` + `result=NULL`, which nothing can resolve.
+
+That is exactly the row that made the builder report a false *"create already
+in progress — retry shortly"* forever.
+
+**Fixed: the drain never sees a create.** `kind NOT LIKE 'create\_%'` is now
+part of the SELECT. This is a correctness rule independent of the test bleed —
+creates are synchronous-only by design (the caller needs the new id immediately
+to build the next step's payload), and a drain structurally cannot return one.
+Locked in by a test that enqueues a pending create, drains, and asserts the row
+is untouched.
+
+**Not fixed here, and the deeper fault:** integration tests run against the
+shared production database, so any unscoped query in a test can reach real
+customer rows. That is AIC-84 (Neon branch isolation) / AIC-109.
+
+**Cleaned up:** 3 test-owned outbox rows (`__it_*` customers) deleted — my own
+pollution. Two corrupt `create_creative` rows remain, owned by real but
+already-built campaigns (`free_beta test`, `Pisga — ארכיון`); they are inert,
+since those campaigns are linked and cannot be rebuilt, and were left alone
+rather than deleted from production without asking.
+
+837/841 server tests pass. The 2 known pre-existing failures remain; 2 further
+failures in that run were shared-DB timeout flakes, confirmed by re-running the
+same files twice clean.
+
 ### 2026-08-19 — Rollback shipped: a failed build now leaves nothing behind
 Implements the design decided earlier today, after a refused ad-set create
 stranded an ACTIVE campaign on a real customer's ad account.

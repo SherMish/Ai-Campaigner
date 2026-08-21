@@ -27,6 +27,37 @@ safe-execute pipeline (AIC-12) and emergency controls (AIC-14) extend this doc.
 > *stop this ad from delivering*, a real Meta write. They're unrelated
 > mechanisms with the same English word.
 
+## The drain never touches create_* writes (root cause, 2026-08-19)
+
+`drainOnce` applies a queued write through `writer.apply()`, which returns
+**void**. It therefore has no way to record a created object's Meta id — so a
+drained `create_*` row lands as `status='succeeded'` with `result=NULL`, which
+is a permanently stuck state: `checkSettled` cannot resolve it (no result) and
+the claim cannot reclaim it (not `pending`). Every retry then reported a false
+*"create already in progress — retry shortly"*.
+
+This was not hypothetical. Diagnosed by timestamp: a **real customer's**
+pending `create_creative` row and a test's `pause_ad` row were updated **65ms
+apart, in one drain batch**. The drain's `SELECT` was unscoped — `WHERE status
+= 'pending' AND next_attempt_at <= now()` — so an integration-test drain
+running against the *shared* database swept up a live customer's half-finished
+build and poisoned it, blocking that customer's campaign until the row was
+repaired by hand.
+
+Two separate faults, both now fixed or recorded:
+
+1. **The drain must never see a create.** Creates are synchronous-only by
+   design — `applyIdempotent`'s own note says "a create can't drain in
+   arbitrary background order", because the caller needs the real id
+   immediately to build the next step's payload. `kind NOT LIKE 'create\_%'`
+   is now part of the drain's SELECT. This is a correctness rule in its own
+   right, independent of any test bleed.
+2. **Integration tests run against the shared production database.** That is
+   the deeper fault, and it is not fixed here — it is what
+   [AIC-84](https://linear.app/pisga-app/issue/AIC-84) (Neon branch isolation)
+   and [AIC-109](https://linear.app/pisga-app/issue/AIC-109) exist for. Until
+   then, any unscoped query in a test can reach real customer rows.
+
 ## Budget safety (AIC-13)
 
 The customer's agreed budget (`managed_campaigns.agreed_budget_agorot`) is a hard
