@@ -72,6 +72,7 @@ function graphError(context: string, status: number, body: Record<string, unknow
 }
 import { shekelToAgorot, resolveDestinationShape, ADVANTAGE_AUDIENCE_ENABLED } from "@aic/shared";
 import { extractLeads } from "./insights.js";
+import type { RawAdMetaRow } from "./ad-meta-types.js";
 import { normalizeAdMedia, type AdMedia, type AdMediaReader, type RawAdMedia } from "./ad-media.js";
 import { detectDestination, type AdSetTrackingConfig, type TrackingReader } from "./tracking-health.js";
 import type { AdAccountOption, PageOption, InstagramOption, DiscoveredCampaign, CampaignDiscoveryReader } from "./campaign-discovery.js";
@@ -271,6 +272,30 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       }
     }
     return health;
+  }
+
+  // Every ad in a campaign, with the fields the per-ad cache needs. A separate
+  // call from getDeliveryHealth (which reads ads too, but discards name and
+  // rolls everything up to the ad set) so that function's contract is
+  // untouched — one extra Graph call per campaign per tick.
+  //
+  // `effective_status` is the field that matters here: it is where
+  // PENDING_REVIEW and DISAPPROVED live, and an ad in either has no Insights
+  // data at all — which is exactly why the customer's per-ad list could not
+  // see an ad they had just created.
+  async listAds(metaCampaignId: string): Promise<RawAdMetaRow[]> {
+    const body = await this.get(
+      `${metaCampaignId}/ads?fields=id,name,adset_id,effective_status,created_time&limit=200`,
+    );
+    return ((body.data as Array<Record<string, unknown>>) ?? []).map((a) => ({
+      adId: String(a.id),
+      adSetId: a.adset_id ? String(a.adset_id) : "",
+      name: a.name ? String(a.name) : null,
+      // Never defaulted to ACTIVE — an absent status is unknown, and
+      // classifyAdState renders it as such rather than claiming delivery.
+      effectiveStatus: a.effective_status ? String(a.effective_status) : "",
+      createdTime: a.created_time ? String(a.created_time) : null,
+    }));
   }
 
   // Per-ad creative media (AIC-73 round 2) — a nail salon's ads ARE images;

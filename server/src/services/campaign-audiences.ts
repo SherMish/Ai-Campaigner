@@ -4,6 +4,8 @@ import { listAdSetMeta } from "./audience-meta-cache.js";
 import { deriveAudienceLabels, type AdSetMeta } from "../meta/audience-label.js";
 import { resolveRangeWindow, type RangeKey } from "./readout.js";
 import { resolveCampaignId } from "./customer-recommendations.js";
+import { listAdMeta } from "./ad-meta-cache.js";
+import { classifyAdState, hasNoDataYet, type AdState } from "../meta/ad-state.js";
 
 // The opt-in "details" view (AIC-37): per-audience (ad set) breakdown, each with
 // its own per-creative rows. Progressive disclosure — the customer's default Home
@@ -27,6 +29,19 @@ export interface AudienceCreativeRow {
   leads: number;
   cplAgorot: number | null;
   deliveryStatus: string;
+  // Found live 2026-08-22: this list is built from insight_snapshots, i.e.
+  // ads that have MEASURED DATA. A customer added an ad, saw a success
+  // confirmation, and the list still showed only the old ads — the new one
+  // had no impressions yet, so no row existed. `PENDING_REVIEW`, the state
+  // every new ad passes through, appeared nowhere in the codebase.
+  //
+  // `adState` is Meta's effective_status classified (see meta/ad-state.ts).
+  // `hasData` distinguishes "no results yet" from "zero results" — a
+  // brand-new ad showing ₪0 / 0 leads is not the same claim as an ad that ran
+  // and produced nothing, and conflating them would be the product lying
+  // about a number.
+  adState: AdState;
+  hasData: boolean;
 }
 
 export interface AudienceRow {
@@ -82,7 +97,7 @@ export async function buildCampaignAudiences(
   const window = resolveRangeWindow(range, ref);
   const allTimeWindow = resolveRangeWindow("allTime", ref);
   const store = new PgSnapshotStore(pool);
-  const [adsetStats, creativeStats, allTimeCreativeStats, meta] = await Promise.all([
+  const [adsetStats, creativeStats, allTimeCreativeStats, meta, adMeta] = await Promise.all([
     store.adsetRangeStats(campaignId, window.start, window.end),
     store.creativeRangeStats(campaignId, window.start, window.end),
     // Only for moreCreativesCount below — real bug, found live: the campaign
@@ -94,6 +109,7 @@ export async function buildCampaignAudiences(
       ? Promise.resolve<Awaited<ReturnType<typeof store.creativeRangeStats>>>([])
       : store.creativeRangeStats(campaignId, allTimeWindow.start, allTimeWindow.end),
     listAdSetMeta(pool, campaignId),
+    listAdMeta(pool, campaignId),
   ]);
 
   const metaById = new Map(meta.map((m) => [m.adSetId, m]));
@@ -120,6 +136,11 @@ export async function buildCampaignAudiences(
   });
   const labels = deriveAudienceLabels(asMetaList);
 
+  // Meta's own effective_status per ad, from the cache — the only place a
+  // PENDING_REVIEW or DISAPPROVED ad exists at all, since neither ever
+  // produces an insight row.
+  const adStateById = new Map(adMeta.map((a) => [a.adId, a.effectiveStatus]));
+
   const creativesByAdSet = new Map<string, AudienceCreativeRow[]>();
   const creativeIdsInWindowByAdSet = new Map<string, Set<string>>();
   for (const c of creativeStats) {
@@ -132,11 +153,48 @@ export async function buildCampaignAudiences(
       leads: c.leads,
       cplAgorot: c.cplAgorot,
       deliveryStatus: c.deliveryStatus,
+      // Prefer the cached live status over the snapshot's, which is only as
+      // fresh as the last ingestion tick.
+      adState: classifyAdState(adStateById.get(c.metaObjectId) ?? c.deliveryStatus),
+      hasData: true,
     });
     creativesByAdSet.set(key, list);
     const ids = creativeIdsInWindowByAdSet.get(key) ?? new Set<string>();
     ids.add(c.metaObjectId);
     creativeIdsInWindowByAdSet.set(key, ids);
+  }
+
+  // THE FIX (2026-08-22). Merge in ads that EXIST on Meta but have no insight
+  // row yet — a just-created ad in review, or one Meta rejected (which will
+  // never gain data, so waiting would not help). Without this the customer
+  // gets a success message and then a list without their ad.
+  //
+  // Deliberately narrow: only states that EXPLAIN the missing data are merged
+  // (see hasNoDataYet). An ACTIVE ad with no rows in the selected window is a
+  // different, already-handled case — moreCreativesCount below says "N more
+  // with data from another period" for exactly that, and duplicating it here
+  // would double-count.
+  for (const a of adMeta) {
+    const state = classifyAdState(a.effectiveStatus);
+    if (!hasNoDataYet(state)) continue;
+    const inWindow = creativeIdsInWindowByAdSet.get(a.adSetId) ?? new Set<string>();
+    if (inWindow.has(a.adId)) continue; // already listed from real data
+    const list = creativesByAdSet.get(a.adSetId) ?? [];
+    list.push({
+      metaObjectId: a.adId,
+      creativeName: a.name,
+      // Zeroes here are NOT a claim of zero results — hasData:false is what
+      // tells the UI to render "no results yet" instead of "₪0, 0 leads".
+      spendAgorot: 0,
+      leads: 0,
+      cplAgorot: null,
+      deliveryStatus: a.effectiveStatus,
+      adState: state,
+      hasData: false,
+    });
+    creativesByAdSet.set(a.adSetId, list);
+    inWindow.add(a.adId);
+    creativeIdsInWindowByAdSet.set(a.adSetId, inWindow);
   }
 
   // moreCreativesCount: creatives with a row SOMEWHERE in this ad set's

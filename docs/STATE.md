@@ -6,6 +6,37 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-22 — The ad list shows ads that exist, not only ads that have data
+User report: added an ad from an existing post, got a success confirmation, and
+the dashboard still showed only 2 ads. Nothing had failed — the ad was ACTIVE on
+Meta within seconds (`120249289037720352`, `PENDING_REVIEW`).
+
+Cause: the per-ad list is built from `insight_snapshots` — ads with MEASURED
+data. A new ad has none, so it could not appear. The list was showing "ads that
+have data" while the customer read it as "my ads". `PENDING_REVIEW` — the state
+every new ad passes through — appeared **nowhere** in the codebase.
+
+Worse, waiting would not have fixed the other half: a `DISAPPROVED` ad never
+gains insight data at all, so it would have stayed invisible forever, reading as
+"the create silently failed".
+
+Fixed: `ad_meta` cache (migration 041) + `classifyAdState` + a merge in
+`campaign-audiences` for states that EXPLAIN missing data, refreshed in-request
+after an add (not just on the hourly tick — the AIC-71 shape). `hasData` is
+carried separately so the UI shows "awaiting review" rather than "₪0 · 0 leads",
+which would claim zero *results* for an ad that never had the chance.
+
+Tests proven to catch the bug: temporarily disabling the merge fails them, then
+passes with it restored.
+
+**Also recorded** (postmortem §1): Meta flagged a pure rate-limit error as
+`is_transient: false` while its own message said to retry. That flag was the
+candidate signal for transient-vs-terminal rollback and for AIC-105's fourth
+error category — it is not trustworthy on its own.
+
+848/850 server + 27 web tests pass; the 2 failures are the known pre-existing
+pair.
+
 ### 2026-08-19 — Postmortem written: the builder's first real onboarding call
 [POSTMORTEM-2026-08-19.md](POSTMORTEM-2026-08-19.md), linked from INDEX.
 

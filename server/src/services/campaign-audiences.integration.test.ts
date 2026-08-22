@@ -7,6 +7,7 @@ import { createApp } from "../app.js";
 import { signAuthToken } from "../auth/tokens.js";
 import { PgSnapshotStore } from "../meta/snapshot-store.js";
 import { upsertAdSetMeta } from "./audience-meta-cache.js";
+import { upsertAdMeta } from "./ad-meta-cache.js";
 import { buildCampaignAudiences } from "./campaign-audiences.js";
 import type { SnapshotUpsert } from "../meta/insights.js";
 
@@ -58,6 +59,95 @@ d("campaign audiences (DB + HTTP)", () => {
     await pool.query(`DELETE FROM app_users WHERE email LIKE '__it_aud_%'`);
     await pool.query(`DELETE FROM customers WHERE business_name LIKE '__it_aud_%'`);
     await pool.end();
+  });
+
+  // Found live 2026-08-22: a customer added an ad from an existing post, saw a
+  // success confirmation, and the dashboard still listed only their old ads.
+  // Nothing had failed — the ad was ACTIVE on Meta within seconds. But this
+  // list is built from insight_snapshots (ads that have MEASURED DATA), and a
+  // brand-new ad has none. It was showing "ads that have data" while the
+  // customer read it as "my ads".
+  describe("ads that exist but have no data yet are still shown (2026-08-22)", () => {
+    it("shows a just-created ad awaiting Meta review, not an empty list", async () => {
+      const { userId, campaignId } = await seedChain("inreview");
+      const store = new PgSnapshotStore(pool);
+      // One established ad WITH data...
+      await store.upsert([
+        snap(campaignId, { grain: "adset", metaObjectId: "as_r", spendAgorot: 10000, leads: 5, cplAgorot: 2000 }),
+        snap(campaignId, { grain: "creative", metaObjectId: "cr_old", parentMetaId: "as_r", creativeName: "Old", spendAgorot: 10000, leads: 5, cplAgorot: 2000 }),
+      ]);
+      await upsertAdSetMeta(pool, campaignId, [
+        { adSetId: "as_r", name: "Set R", ageMin: 18, ageMax: 45, genders: "all", geoSummary: "", isDynamicCreative: false },
+      ]);
+      // ...and the just-created one, which exists on Meta but has NO snapshot
+      // row — exactly the state the customer's new ad was in.
+      await upsertAdMeta(pool, campaignId, [
+        { adId: "cr_old", adSetId: "as_r", name: "Old", effectiveStatus: "ACTIVE", createdTime: null },
+        { adId: "cr_new", adSetId: "as_r", name: "מודעה 1", effectiveStatus: "PENDING_REVIEW", createdTime: null },
+      ]);
+
+      const result = await buildCampaignAudiences(pool, userId);
+      const ads = result!.audiences[0].creatives;
+      const byId = new Map(ads.map((c) => [c.metaObjectId, c]));
+
+      // The whole point: the ad the customer just made is in the list.
+      expect(byId.has("cr_new")).toBe(true);
+      expect(byId.get("cr_new")!.adState).toBe("in_review");
+      // hasData:false is what stops the UI printing "₪0 · 0 leads", which
+      // would be a claim of zero RESULTS rather than zero data.
+      expect(byId.get("cr_new")!.hasData).toBe(false);
+      // And the established ad is untouched.
+      expect(byId.get("cr_old")!.hasData).toBe(true);
+      expect(byId.get("cr_old")!.spendAgorot).toBe(10000);
+    });
+
+    it("shows a REJECTED ad, which would otherwise never appear at all", async () => {
+      const { userId, campaignId } = await seedChain("rejected");
+      const store = new PgSnapshotStore(pool);
+      await store.upsert([
+        snap(campaignId, { grain: "adset", metaObjectId: "as_j", spendAgorot: 5000, leads: 1, cplAgorot: 5000 }),
+        snap(campaignId, { grain: "creative", metaObjectId: "cr_ok", parentMetaId: "as_j", creativeName: "Fine", spendAgorot: 5000, leads: 1, cplAgorot: 5000 }),
+      ]);
+      await upsertAdSetMeta(pool, campaignId, [
+        { adSetId: "as_j", name: "Set J", ageMin: 18, ageMax: 45, genders: "all", geoSummary: "", isDynamicCreative: false },
+      ]);
+      await upsertAdMeta(pool, campaignId, [
+        { adId: "cr_ok", adSetId: "as_j", name: "Fine", effectiveStatus: "ACTIVE", createdTime: null },
+        { adId: "cr_bad", adSetId: "as_j", name: "Rejected one", effectiveStatus: "DISAPPROVED", createdTime: null },
+      ]);
+
+      const result = await buildCampaignAudiences(pool, userId);
+      const byId = new Map(result!.audiences[0].creatives.map((c) => [c.metaObjectId, c]));
+      // The nastier half of the bug: a rejected ad NEVER gains insight data,
+      // so under the old list it was invisible forever — indistinguishable
+      // from "the create silently failed", when Meta had refused the content
+      // and could say why.
+      expect(byId.has("cr_bad")).toBe(true);
+      expect(byId.get("cr_bad")!.adState).toBe("rejected");
+    });
+
+    it("does not duplicate an ad that already has data", async () => {
+      const { userId, campaignId } = await seedChain("nodupe");
+      const store = new PgSnapshotStore(pool);
+      await store.upsert([
+        snap(campaignId, { grain: "adset", metaObjectId: "as_d", spendAgorot: 5000, leads: 1, cplAgorot: 5000 }),
+        snap(campaignId, { grain: "creative", metaObjectId: "cr_d", parentMetaId: "as_d", creativeName: "Dup", spendAgorot: 5000, leads: 1, cplAgorot: 5000 }),
+      ]);
+      await upsertAdSetMeta(pool, campaignId, [
+        { adSetId: "as_d", name: "Set D", ageMin: 18, ageMax: 45, genders: "all", geoSummary: "", isDynamicCreative: false },
+      ]);
+      // Same ad in BOTH sources, and in a mergeable state — it must still
+      // appear exactly once, with its real numbers rather than the zeroes.
+      await upsertAdMeta(pool, campaignId, [
+        { adId: "cr_d", adSetId: "as_d", name: "Dup", effectiveStatus: "PENDING_REVIEW", createdTime: null },
+      ]);
+
+      const result = await buildCampaignAudiences(pool, userId);
+      const rows = result!.audiences[0].creatives.filter((c) => c.metaObjectId === "cr_d");
+      expect(rows).toHaveLength(1);
+      expect(rows[0].hasData).toBe(true);
+      expect(rows[0].spendAgorot).toBe(5000);
+    });
   });
 
   it("groups creatives under their ad set and labels by age (structured dimension)", async () => {

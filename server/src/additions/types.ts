@@ -1,3 +1,4 @@
+import type { RawAdMetaRow } from "../meta/ad-meta-types.js";
 // The write surface for adding an ad/ad-set to an EXISTING campaign (AIC-63).
 // Reuses BuilderWriter (createAdSet/createAd, always PAUSED — AIC-50) and
 // CreativeWriter (AIC-51) unchanged; this module adds only what's genuinely
@@ -71,6 +72,12 @@ export class FakeAddContentWriter extends FakeBuilderWriter implements BuilderWr
   get activateAdSetCalls(): string[] { return this.additions.activateAdSetCalls; }
   set failNextActivateAd(n: number) { this.additions.failNextActivateAd = n; }
   set failNextActivateAdSet(n: number) { this.additions.failNextActivateAdSet = n; }
+
+  // The per-ad cache refresh that runs in-request after an add (2026-08-22).
+  // Returns whatever ads this fake has been told about, so a test can assert
+  // that a newly-added ad reaches the cache and therefore the customer's list.
+  public adsOnMeta: RawAdMetaRow[] = [];
+  async listAds(_metaCampaignId: string): Promise<RawAdMetaRow[]> { return this.adsOnMeta; }
 
   getAdSetMeta(metaCampaignId: string): Promise<AdSetMeta[]> { return this.additions.getAdSetMeta(metaCampaignId); }
   getAdSetStatus(adSetId: string): Promise<MetaCampaignStatus> { return this.additions.getAdSetStatus(adSetId); }

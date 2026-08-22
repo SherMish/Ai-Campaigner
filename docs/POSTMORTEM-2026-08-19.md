@@ -53,6 +53,21 @@ The Page picker took three attempts:
    was meant to serve.
 3. The union of same-business Pages ∪ `promote_pages` — what ships.
 
+### `is_transient` is not trustworthy
+
+Meta rate-limited us on 2026-08-22 with:
+
+```json
+{"code": 17, "error_user_title": "Ad Account Has Too Many API Calls",
+ "error_user_msg": "…Please wait a bit and try again.", "is_transient": false}
+```
+
+A pure rate limit — the textbook transient error, whose own message says to
+retry — flagged `is_transient: false`. This matters because `is_transient` was
+the candidate signal for "roll back only on terminal failures" and for
+AIC-105's transient-vs-real error category. **Do not build either on this flag
+alone.**
+
 ### An empty array is not always "none"
 
 `{"data":[]}` can mean *no such objects* or *you cannot see them*. The tell is

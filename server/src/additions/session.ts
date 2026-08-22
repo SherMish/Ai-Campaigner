@@ -5,6 +5,7 @@ import type { CreativeWriter } from "../builder/creative-types.js";
 import type { AdditionWriter } from "./types.js";
 import type { DeliveryReader } from "../meta/delivery-health.js";
 import type { AdMediaReader } from "../meta/ad-media.js";
+import type { AdMetaReader } from "../services/ad-meta-cache.js";
 import { isMessagingAction, deriveIsMessaging } from "../meta/tracking-health.js";
 import { classifyConnectionReadiness, type ConnectionReadinessReason } from "../services/connection-readiness.js";
 import { resolveCreativeDestination, type CreativeDestination, type CreativeBlockReason } from "../meta/destination.js";
@@ -211,7 +212,7 @@ export async function resolveAdditionAvailability(
 // Also a DeliveryReader (AIC-71 follow-up): the manual-controls routes reuse
 // this same adapter instance to recompute delivery state right after a write,
 // instead of waiting for the next hourly engine tick.
-export function buildAdditionWriter(): (BuilderWriter & CreativeWriter & AdditionWriter & DeliveryReader & AdMediaReader) | null {
+export function buildAdditionWriter(): (BuilderWriter & CreativeWriter & AdditionWriter & DeliveryReader & AdMediaReader & AdMetaReader) | null {
   const token = process.env.META_SYSTEM_USER_TOKEN;
   if (!token) return null;
   const ver = process.env.META_GRAPH_VERSION || "v21.0";

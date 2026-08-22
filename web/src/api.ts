@@ -175,6 +175,11 @@ export const requestBudgetChange = (requestedAgorot?: number) =>
     body: JSON.stringify(requestedAgorot != null ? { requestedAgorot } : {}),
   });
 // ── Opt-in audience details (AIC-37) ────────────────────────────────────────
+// Mirrors server/src/services/campaign-audiences.ts.
+export type AdState =
+  | "active" | "in_review" | "rejected" | "paused"
+  | "blocked_by_parent" | "gone" | "unknown";
+
 export interface AudienceCreativeRow {
   metaObjectId: string;
   creativeName: string | null;
@@ -182,6 +187,13 @@ export interface AudienceCreativeRow {
   leads: number;
   cplAgorot: number | null;
   deliveryStatus: string;
+  // 2026-08-22: an ad can now appear here with NO measured data — one Meta is
+  // still reviewing, or one it rejected (which will never gain data). Before
+  // this, such an ad was simply absent, so a customer who had just added one
+  // saw a success message and then a list without it.
+  adState: AdState;
+  // false = "no results yet", which is NOT the same claim as ₪0 / 0 leads.
+  hasData: boolean;
 }
 export interface AudienceRow {
   adSetId: string;

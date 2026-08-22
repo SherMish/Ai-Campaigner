@@ -21,6 +21,44 @@ wiring per ticket.
 
 ---
 
+
+## The ad list shows ads that EXIST, not only ads that have data (2026-08-22)
+
+Found live: a customer added an ad from an existing post, got a success
+confirmation, and the dashboard still listed only their old ads. Nothing had
+failed — the ad was on Meta within seconds.
+
+The per-ad list is built from `insight_snapshots`, i.e. ads with **measured
+data**. A brand-new ad has none: no impressions, no spend, no row. So the list
+was showing *"ads that have data"* while the customer read it as *"my ads"*.
+
+Two states make this permanent rather than a delay:
+
+- **`PENDING_REVIEW`** — every new ad sits here for its first hours. This value
+  appeared **nowhere** in the codebase before this fix.
+- **`DISAPPROVED`** — a rejected ad *never* gains insight data, so waiting would
+  never have helped. It would have stayed invisible forever, indistinguishable
+  from "the create silently failed", when in fact Meta refused the content and
+  can say why.
+
+**How it works now.** `ad_meta` (migration 041) caches per-ad
+`effective_status`, upserted with the same prune discipline as `ad_set_meta`
+(AIC-65 — without the prune a deleted ad stays listed forever).
+`campaign-audiences` merges in cached ads that have no insight row, but only
+for states that *explain* the missing data (`hasNoDataYet`). An ACTIVE ad with
+no rows in the selected window is a different, already-handled case —
+`moreCreativesCount` covers it, and merging both would double-count.
+
+`hasData: false` is carried separately from the zeroes on purpose: rendering
+"₪0 · 0 leads" for a brand-new ad would be a claim of zero **results** for
+something that has not had the chance to produce any. The UI shows the state
+and its explanation instead.
+
+**Refreshed in-request after an add**, not just on the tick — the same shape
+AIC-71 applied to pause/resume and the launch flow, for the same reason: the
+dashboard must not contradict what we just told the customer. Waiting for the
+hourly tick would have left the original bug in place for up to an hour.
+
 ## Routes & screens
 
 | Route | Screen | Ticket | States implemented |

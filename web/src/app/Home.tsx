@@ -871,7 +871,19 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
                                 <div key={c.metaObjectId}>
                                   <div className="row between" style={{ gap: 10, alignItems: "flex-start" }}>
                                     <div className="row gap8" style={{ flexWrap: "wrap", alignItems: "center" }}>
-                                      <RowStatus label={AD_DELIVERY_BADGE[adDelivery]} tone={AD_DELIVERY_TONE[adDelivery]} />
+                                      {/* An ad with no data yet carries its OWN
+                                          state — in review, or rejected. The
+                                          normal delivery badge would call a
+                                          just-created ad "running", which it
+                                          is not yet, and would call a rejected
+                                          one "running" forever. */}
+                                      {c.adState === "in_review" ? (
+                                        <RowStatus label={D.adInReview} tone="neutral" />
+                                      ) : c.adState === "rejected" ? (
+                                        <RowStatus label={D.adRejected} tone="warn" />
+                                      ) : (
+                                        <RowStatus label={AD_DELIVERY_BADGE[adDelivery]} tone={AD_DELIVERY_TONE[adDelivery]} />
+                                      )}
                                       {/* Honest count: what Meta actually
                                           reports for this creative, never
                                           inferred from the ad's name. */}
@@ -912,11 +924,22 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
                                   {/* Same metric set as the audience row —
                                       previously the ad row silently dropped
                                       עלות לפנייה. */}
-                                  <div className="row gap12" style={{ flexWrap: "wrap", marginTop: 6 }}>
-                                    <Metric label={D.spendCol} value={shekels(c.spendAgorot)} small />
-                                    <Metric label={D.leadsCol} value={String(c.leads)} small />
-                                    <Metric label={D.cplCol} value={c.cplAgorot === null ? L.none : shekels(c.cplAgorot)} small />
-                                  </div>
+                                  {/* hasData:false means "no results YET",
+                                      which is a different claim from "₪0, 0
+                                      leads" — that would report zero RESULTS
+                                      for an ad that has not had the chance to
+                                      produce any. Say which one is true. */}
+                                  {c.hasData ? (
+                                    <div className="row gap12" style={{ flexWrap: "wrap", marginTop: 6 }}>
+                                      <Metric label={D.spendCol} value={shekels(c.spendAgorot)} small />
+                                      <Metric label={D.leadsCol} value={String(c.leads)} small />
+                                      <Metric label={D.cplCol} value={c.cplAgorot === null ? L.none : shekels(c.cplAgorot)} small />
+                                    </div>
+                                  ) : (
+                                    <p className="muted" style={{ fontSize: "0.8rem", marginTop: 6 }}>
+                                      {c.adState === "rejected" ? D.adRejectedBody : D.adInReviewBody}
+                                    </p>
+                                  )}
                                 </div>
                               );
                             })}

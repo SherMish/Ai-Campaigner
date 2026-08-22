@@ -270,6 +270,7 @@ additionsRouter.post("/ad", requireAuth, async (req, res) => {
     const result = await addAdToExistingCampaign(pool, writer, {
       localCampaignId: ctx.localCampaignId,
       metaAdAccountId: ctx.metaAdAccountId,
+      metaCampaignId: ctx.metaCampaignId,
       metaAdSetId: body.metaAdSetId,
       name: body.name,
       creativeId: body.creativeId,

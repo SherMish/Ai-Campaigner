@@ -4,6 +4,7 @@ import { WriteOutbox, builderKey } from "../execution/write-outbox.js";
 import { asCreatingWriter } from "../builder/campaign-create.js";
 import type { BuilderWriter, CreateAdSetTargeting } from "../builder/types.js";
 import { approveAddition, type ApproveResult } from "./approve.js";
+import { refreshAdMetaNow, type AdMetaReader } from "../services/ad-meta-cache.js";
 import type { AdditionWriter } from "./types.js";
 
 // Adding content to a campaign we ALREADY manage (AIC-63) — the everyday
@@ -34,6 +35,9 @@ import type { AdditionWriter } from "./types.js";
 export interface AddAdInput {
   localCampaignId: string;
   metaAdAccountId: string;
+  // Needed to refresh the per-ad cache in-request after the add — see the
+  // refreshAdMetaNow call below for why that matters to the customer.
+  metaCampaignId: string;
   metaAdSetId: string; // an EXISTING ad set — caller must verify ownership first
   name: string;
   creativeId: string;
@@ -97,7 +101,7 @@ async function recordPending(
 
 export async function addAdToExistingCampaign(
   pool: pg.Pool,
-  writer: BuilderWriter & AdditionWriter,
+  writer: BuilderWriter & AdditionWriter & AdMetaReader,
   input: AddAdInput,
 ): Promise<AddResult> {
   const outbox = new WriteOutbox(pool);
@@ -125,6 +129,24 @@ export async function addAdToExistingCampaign(
   // its parent ad set, which may be deliberately paused; approveAddition's
   // kind='ad' branch already encodes that.
   const activation = await approveAddition(pool, writer, additionId, input.localCampaignId);
+
+  // Refresh the per-ad cache in-request (2026-08-22, found live). Without it
+  // the customer sees a success confirmation and then a dashboard that still
+  // lists only their old ads, because the per-ad list is insight-derived and
+  // a new ad has no impressions yet — it would not appear until the next tick
+  // (up to an hour), and a REJECTED ad would never appear at all.
+  //
+  // Same refresh-in-request shape AIC-71 applied to manual pause/resume and
+  // the launch flow, for the same reason: the dashboard must not contradict
+  // what we just told the customer. Isolated — the ad is already live on
+  // Meta, so a cache-refresh failure must never turn a successful add into a
+  // reported failure.
+  try {
+    await refreshAdMetaNow(pool, writer, input.localCampaignId, input.metaCampaignId);
+  } catch (e) {
+    console.error(`[additions] ad-meta refresh failed after add — ${(e as Error).message}`);
+  }
+
   return { additionId, metaAdSetId: input.metaAdSetId, metaAdIds: [metaAdId], activation };
 }
 

@@ -17,6 +17,7 @@ import { recordCampaignTracking } from "../services/tracking-monitor.js";
 import { LEAD_ACTION_PRIORITY } from "../meta/insights.js";
 import { deriveAudienceLabels, type AdSetMeta } from "../meta/audience-label.js";
 import { upsertAdSetMeta } from "../services/audience-meta-cache.js";
+import { refreshAdMetaNow } from "../services/ad-meta-cache.js";
 import { recordNoRecReason } from "../services/evaluation-reason.js";
 import { recordLiveBudget } from "../services/live-budget.js";
 import { recordLeadsToDate } from "../services/leads-to-date.js";
@@ -345,6 +346,19 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
       audienceMetaReader: adapter,
       recordAudienceMeta: async (campaign, adsets) => {
         await upsertAdSetMeta(pool, campaign.id, adsets);
+        // Per-AD cache alongside the per-ad-set one (2026-08-22). The
+        // customer's ad list is insight-derived, so an ad with no impressions
+        // yet — every ad for its first hours, and a rejected one forever — is
+        // invisible without this. Isolated: a failure here must not take down
+        // an otherwise-successful tick, and a stale ad cache is far less
+        // harmful than a lost delivery/tracking result.
+        if (campaign.metaCampaignId) {
+          try {
+            await refreshAdMetaNow(pool, adapter, campaign.id, campaign.metaCampaignId);
+          } catch (e) {
+            console.error(`[generation] ad-meta refresh failed for ${campaign.id} — ${(e as Error).message}`);
+          }
+        }
       },
       trackingReader: adapter,
       recordTracking: async (campaign, tr) => {

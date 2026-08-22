@@ -1022,6 +1022,15 @@ export const strings = {
           // real ad is named "almond green, french, video, pink lines" but has
           // exactly one creative; claiming 4 would invent data).
           adOne: "מודעה אחת",
+          // Found live 2026-08-22: a customer added an ad, got a success
+          // message, and the dashboard still showed only the old ads — the
+          // per-ad list is built from measured data and a new ad has none.
+          // These states are what an ad genuinely IS in its first hours, and
+          // what a rejected one is forever.
+          adInReview: "בבדיקה",
+          adInReviewBody: "המודעה נוצרה ומחכה לאישור של Meta. בדרך כלל זה לוקח כמה שעות. ברגע שתאושר היא תתחיל להופיע ונתחיל לראות תוצאות.",
+          adRejected: "נדחתה",
+          adRejectedBody: "Meta דחתה את המודעה הזו, ולכן היא לא תרוץ. בדרך כלל זה נובע מהתוכן או מהתמונה. אפשר לראות את הסיבה המדויקת ב-Meta ולהעלות גרסה מתוקנת.",
           adCreativesSuffix: "קרייטיבים",
           // Actions are demoted to a quiet link — secondary and mildly
           // destructive, so they must not out-rank the audience label.
