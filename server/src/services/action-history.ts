@@ -17,12 +17,41 @@ export interface ActionHistoryEntry {
   result: "success" | "failed";
 }
 
+// Who actually performed an action. Three actors, because there ARE three
+// (the AIC-66 model): the engine acting on its own, the customer acting in
+// their own dashboard, and us acting on their behalf.
+//
+// Found live 2026-08-22: the customer's feed labelled EVERY entry "בוצע על
+// ידינו" ("done by us") — including ad sets the customer had paused
+// themselves. The data was never wrong (`human_involved = true`,
+// `approved_by = 'customer'`); this projection collapsed three actors into
+// one boolean, and the UI read `automated: false` as "us". Taking credit for
+// the customer's own actions is a trust failure, not a copy nit.
+export type ActionActor = "automated" | "customer" | "us";
+
 // Condensed, jargon-free projection for later reuse on the customer side.
 export interface CondensedEntry {
   when: string; // ISO
   summary: string; // plain Hebrew, no Ads Manager terms
+  // Kept for backwards compatibility with existing consumers/tests; `actor`
+  // is the field that can actually tell the truth.
   automated: boolean;
+  actor: ActionActor;
   result: "success" | "failed";
+}
+
+// `approved_by` is the actor of record. Values seen in practice:
+//   'customer'  — the customer's own dashboard (manual controls, launch
+//                 approval, recommendation approval)
+//   'operator'  — us, acting on their behalf
+//   NULL        — no human approver. With human_involved = true this is a
+//                 human-initiated write that predates or sidesteps the actor
+//                 field (e.g. builder create_ad). Attributed to "us" because
+//                 that is the honest reading — a human did it and it was not
+//                 the customer's dashboard — never to the customer.
+export function actorOf(humanInvolved: boolean, approvedBy: string | null): ActionActor {
+  if (!humanInvolved) return "automated";
+  return approvedBy === "customer" ? "customer" : "us";
 }
 
 const SUMMARY_HE: Record<string, string> = {
@@ -127,6 +156,7 @@ export function condense(entries: ActionHistoryEntry[]): CondensedEntry[] {
     when: e.occurredAt.toISOString(),
     summary: SUMMARY_HE[e.actionType] ?? "שינוי בקמפיין",
     automated: !e.humanInvolved,
+    actor: actorOf(e.humanInvolved, e.approvedBy ?? null),
     result: e.result,
   }));
 }

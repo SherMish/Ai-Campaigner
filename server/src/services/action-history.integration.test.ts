@@ -23,6 +23,45 @@ d("action history surface (DB + HTTP)", () => {
   beforeAll(() => { process.env.ADMIN_TOKEN = "test-admin"; });
   afterAll(async () => { await pool.end(); });
 
+  // Found live 2026-08-22, user report: the customer's own activity feed
+  // labelled EVERY entry "בוצע על ידינו" ("done by us") — including ad sets
+  // the CUSTOMER had paused themselves from their own dashboard.
+  //
+  // The data was never wrong: those rows carry human_involved = true and
+  // approved_by = 'customer'. The projection collapsed three actors (engine /
+  // the customer / us) into one boolean, and the UI then read `automated:
+  // false` as "us". So the product took credit for the customer's own
+  // actions, which is a trust problem, not a copy nit.
+  it("says WHO acted — the engine, the customer, or us — never crediting us for the customer's action", async () => {
+    const { campaignId, customerId } = await makeCampaign();
+    await pool.query(
+      `INSERT INTO action_history (campaign_id, what, action_type, why, approved_by, human_involved, result, occurred_at)
+       VALUES ($1,'auto','increase_budget','healthy', NULL, false, 'success', now() - interval '3 hour')`,
+      [campaignId],
+    );
+    await pool.query(
+      `INSERT INTO action_history (campaign_id, what, action_type, why, approved_by, human_involved, result, occurred_at)
+       VALUES ($1,'customer paused it','pause_ad_set','customer action', 'customer', true, 'success', now() - interval '2 hour')`,
+      [campaignId],
+    );
+    await pool.query(
+      `INSERT INTO action_history (campaign_id, what, action_type, why, approved_by, human_involved, result, occurred_at)
+       VALUES ($1,'operator paused it','pause_ad','operator action', 'operator', true, 'success', now() - interval '1 hour')`,
+      [campaignId],
+    );
+
+    const condensed = condense(await listCampaignActionHistory(pool, campaignId));
+    const byType = new Map(condensed.map((c) => [c.summary, c]));
+
+    // Engine, no human — genuinely automatic.
+    expect(byType.get("העלאת תקציב")!.actor).toBe("automated");
+    // THE BUG: this used to render as "done by us".
+    expect(byType.get("השהיית קהל")!.actor).toBe("customer");
+    // Us acting on their behalf — the only case "by us" is true.
+    expect(byType.get("השהיית מודעה")!.actor).toBe("us");
+    await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
+  });
+
   it("lists newest-first, distinguishes automated vs human, condenses jargon-free", async () => {
     const { campaignId, customerId } = await makeCampaign();
 

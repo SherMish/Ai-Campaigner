@@ -128,7 +128,11 @@ export interface CustomerOverview {
   } | null;
   leadQuality: LeadQualityStatus | null;
   recentActivity: Array<{
-    when: string; summary: string; automated: boolean; result: "success" | "failed";
+    when: string; summary: string; automated: boolean;
+    // 2026-08-22: `automated` alone could not distinguish the customer's own
+    // action from ours, so the feed credited us for everything they did.
+    actor: "automated" | "customer" | "us";
+    result: "success" | "failed";
   }>;
   pendingRecommendations: number;
   pendingRecommendationType: RecommendationType | null;

@@ -486,7 +486,7 @@ export function Home() {
                     <span className="when">
                       {new Date(it.when).toLocaleDateString("he-IL", { day: "numeric", month: "short" })}
                     </span>
-                    <span>{it.summary} · <span className="muted">{it.automated ? L.automated : L.byUs}</span></span>
+                    <span>{it.summary} · <span className="muted">{it.actor === "automated" ? L.automated : it.actor === "customer" ? L.byYou : L.byUs}</span></span>
                   </div>
                 ))}
               </div>

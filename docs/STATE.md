@@ -6,6 +6,32 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-22 — Two truth bugs found while mapping the recommendation engine
+**1. The activity feed credited us for the customer's own actions.** User
+report: every entry read "בוצע על ידינו" ("done by us") — including ad sets the
+CUSTOMER had paused from their own dashboard.
+
+The data was never wrong: those rows carry `human_involved = true` and
+`approved_by = 'customer'`. The projection collapsed three actors (engine / the
+customer / us) into one boolean, and the UI read `automated: false` as "us".
+`actorOf()` now returns `automated | customer | us`, and the feed says
+"בוצע על ידך" when the customer did it. A NULL approver with a human involved
+attributes to "us" — never to the customer, which is the direction that would
+lie.
+
+**2. `tracking_broken` could never be cached — the CHECK constraint rejected
+it.** AIC-88 added the reason and wired it end to end (classifier, customer
+copy, ops label), but `managed_campaigns.no_rec_reason`'s CHECK was last
+widened in migration 035 and never gained the value. `recordNoRecReason`'s
+write is wrapped in a swallowing try/catch, so every attempt raised a
+constraint violation, was logged, and the column stayed stale — a campaign with
+broken tracking has never been able to say so on the dashboard.
+
+`docs/RULES.md` warns about exactly this silent-failure class. It had already
+happened. Verified against the live DB before and after: the constraint held 8
+values without `tracking_broken`; migration 042 widens it, and writing the
+value now succeeds.
+
 ### 2026-08-22 — The ad list shows ads that exist, not only ads that have data
 User report: added an ad from an existing post, got a success confirmation, and
 the dashboard still showed only 2 ads. Nothing had failed — the ad was ACTIVE on

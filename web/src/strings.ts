@@ -934,6 +934,10 @@ export const strings = {
           none: "—",
           automated: "בוצע אוטומטית",
           byUs: "בוצע על ידינו",
+          // Found live 2026-08-22: every entry read "בוצע על ידינו", including
+          // ad sets the CUSTOMER had paused from their own dashboard. We were
+          // taking credit for their actions. There are three actors, not two.
+          byYou: "בוצע על ידך",
         },
         // AIC-37: opt-in per-audience / per-creative details — collapsed by
         // default, never the landing view.
