@@ -150,11 +150,19 @@ d("guided builder routes (DB + HTTP)", () => {
   it("serves the customer's business name from the record for the creation confirmation", async () => {
     vi.stubGlobal("fetch", mockMetaFetch());
     const { customerId, token } = await seedReadyCustomer("bizname");
-    await pool.query(`UPDATE customers SET business_name = $2 WHERE id = $1`, [customerId, "יורם גאון"]);
+    // Renaming to a BARE name (this was "יורם גאון") defeated every
+    // prefix-based cleanup and leaked one row per run — 18 of them before it
+    // was caught. The test's point is that the name comes from the RECORD,
+    // which any name proves, so it keeps the __it_ prefix.
+    // MUST keep this file's own cleanup prefix (__it_builder_route_) — a
+    // bare name, or any other prefix, escapes the afterAll delete below and
+    // leaks one row per run. That is exactly what happened here twice.
+    const BIZ = "__it_builder_route_biz יורם גאון";
+    await pool.query(`UPDATE customers SET business_name = $2 WHERE id = $1`, [customerId, BIZ]);
 
     const ctx = await request(app).get("/api/app/builder/context").set("Authorization", `Bearer ${token}`);
     expect(ctx.status).toBe(200);
-    expect(ctx.body.businessName).toBe("יורם גאון");
+    expect(ctx.body.businessName).toBe(BIZ);
   });
 
   // AIC-103 x AIC-105 — the wizard must not be able to complete a campaign that
