@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { strings } from "../strings";
+import { noRecCopy } from "./state-copy";
 import {
   listRecommendations,
   getRecommendation,
@@ -50,8 +51,15 @@ export function Recommendations() {
           <>
             {data.pending.length === 0 ? (
               <div className="card" style={{ marginBottom: 28 }}>
-                <b style={{ fontSize: "1.1rem" }}>{rc.emptyTitle}</b>
-                <p className="muted" style={{ marginTop: 8 }}>{rc.empty}</p>
+                {/* AIC-98, fixed 2026-08-22: this used to show only a generic
+                    "no recommendations yet" — LESS than the dashboard the
+                    customer just clicked through from, which names the
+                    reason. Someone opening this screen is asking WHY there is
+                    nothing; a drill-down owes at least as much as its
+                    summary. Same copy source as the dashboard card, so the
+                    two can never drift apart. */}
+                <b style={{ fontSize: "1.1rem" }}>{noRecCopy(data.noRecReason).title}</b>
+                <p className="muted" style={{ marginTop: 8 }}>{noRecCopy(data.noRecReason).body}</p>
               </div>
             ) : (
               data.pending.map((r) => (

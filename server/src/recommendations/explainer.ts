@@ -6,8 +6,14 @@ import type { NoActionReason } from "./rules.js";
 // Kept in one place (never scattered through logic). Figures are injected by
 // CODE from the structured recommendation — the text never generates a number.
 export const EXPLAINER_HE = {
-  pauseCreative: (spend: string, leads: string) =>
-    `מודעה אחת הוציאה ${spend} וקיבלה ${leads} פניות בלבד, בזמן שהמודעות האחרות מביאות פניות בעלות נמוכה משמעותית. אנחנו ממליצים לעצור אותה.`,
+  // Copy audit 2026-08-22: this hardcoded the PLURAL "המודעות האחרות" ("the
+  // other ads"), which is wrong for the commonest small-business shape —
+  // exactly two ads, i.e. one other. The peer count was computed in the rule
+  // and simply never passed on; it is now part of the evidence.
+  pauseCreative: (spend: string, leads: string, otherCount: number) =>
+    `מודעה אחת הוציאה ${spend} וקיבלה ${leads} פניות בלבד, בזמן ש${
+      otherCount === 1 ? "המודעה האחרת מביאה" : "המודעות האחרות מביאות"
+    } פניות בעלות נמוכה משמעותית. אנחנו ממליצים לעצור אותה.`,
   increaseBudget: (from: string, to: string) =>
     `הקמפיין מביא פניות בעלות טובה כבר כמה ימים. אנחנו ממליצים להגדיל את התקציב היומי מ־${from} ל־${to}.`,
   decreaseBudget: (from: string, to: string) =>
@@ -16,10 +22,24 @@ export const EXPLAINER_HE = {
     `הביצועים של אחת המודעות נחלשו משמעותית לעומת הביצועים הקודמים שלה. אנחנו ממליצים להחליף את הקריאייטיב.`,
   // Named by its human dimension (AIC-37, e.g. "35–45" / "נשים" / a city) — never
   // "ad set N". Falls back to the generic phrasing if no label was derivable.
-  pauseAudience: (label: string | null) =>
-    label
-      ? `הקהל ${label} מביא פניות ביקר משמעותית מהקהל האחר. אנחנו ממליצים לעצור אותו ולהפנות את התקציב לקהל שמביא תוצאות טובות יותר.`
-      : `אחד הקהלים בקמפיין מביא פניות בעלות גבוהה משמעותית מהקהל השני. אנחנו ממליצים לעצור אותו ולהפנות את התקציב לקהל שמביא תוצאות טובות יותר.`,
+  // Copy audit 2026-08-22, three defects in these two lines:
+  //  1. "ביקר" — a typo for "ביוקר". It means "visited". The FALLBACK branch
+  //     one line below had it right ("בעלות גבוהה"), which is what proved it
+  //     a slip rather than a choice.
+  //  2. "מהקהל האחר" (singular) — wrong with three or more audiences.
+  //  3. "מהקהל השני" — literally "the SECOND audience", which is unanswerable
+  //     once there are three: the customer cannot tell which one is meant.
+  //
+  // Fixed by NAMING the winning audience rather than counting positions — we
+  // already have its label, and "cheaper than 45–65" is both correct at any
+  // count and more useful than any positional phrasing.
+  pauseAudience: (label: string | null, bestLabel: string | null, otherCount: number) => {
+    const others = otherCount === 1 ? "מהקהל האחר" : "משאר הקהלים";
+    const versus = bestLabel ? `מהקהל ${bestLabel}` : others;
+    return label
+      ? `הקהל ${label} מביא פניות בעלות גבוהה משמעותית ${versus}. אנחנו ממליצים לעצור אותו ולהפנות את התקציב לקהל שמביא תוצאות טובות יותר.`
+      : `אחד הקהלים בקמפיין מביא פניות בעלות גבוהה משמעותית ${versus}. אנחנו ממליצים לעצור אותו ולהפנות את התקציב לקהל שמביא תוצאות טובות יותר.`;
+  },
   stable: () => `הקמפיין יציב ואין כרגע שינוי שאנחנו ממליצים לבצע.`,
   collecting: () => `אין כרגע מספיק מידע שמצדיק שינוי. נמשיך לעקוב.`,
   budgetBelowThreshold: () => `בתקציב הנוכחי אנחנו לא יכולים לזהות מה עובד. שווה לשקול להעלות אותו.`,
@@ -106,10 +126,16 @@ export function explain(rec: RecommendationRecord): string {
       return EXPLAINER_HE.pauseCreative(
         formatShekel(n(rec.evidence.spendAgorot)),
         String(n(rec.evidence.leads)),
+        // Older rows predate this field. Defaulting to 2 keeps the PLURAL
+        // phrasing they were written with, so an existing recommendation's
+        // wording never changes underneath a customer mid-decision.
+        typeof rec.evidence.otherCreativeCount === "number" ? rec.evidence.otherCreativeCount : 2,
       );
     case "pause_adset":
       return EXPLAINER_HE.pauseAudience(
         typeof rec.evidence.audienceLabel === "string" ? rec.evidence.audienceLabel : null,
+        typeof rec.evidence.bestAudienceLabel === "string" ? rec.evidence.bestAudienceLabel : null,
+        typeof rec.evidence.otherAudienceCount === "number" ? rec.evidence.otherAudienceCount : 2,
       );
     case "increase_budget":
       return EXPLAINER_HE.increaseBudget(

@@ -19,6 +19,7 @@ import {
   condense,
   type CondensedEntry,
 } from "./action-history.js";
+import type { NoActionReason } from "../recommendations/rules.js";
 
 // The customer-facing shape of one recommendation (AIC-23). Deterministic
 // plain-Hebrew explanation is built server-side by `explain()` from the
@@ -37,6 +38,14 @@ export interface CustomerRecList {
   campaignId: string | null;
   pending: CustomerRec[];
   history: CondensedEntry[];
+  // AIC-98 gap, found 2026-08-22: when `pending` is empty this screen said
+  // only "אין עדיין המלצות" — strictly LESS than the dashboard the customer
+  // just clicked through from, which names the reason. A customer who opens
+  // המלצות is ASKING why there is nothing; a drill-down that answers less
+  // than its own summary is backwards. The reason is already computed and
+  // already has copy — it was simply never sent to this endpoint.
+  noRecReason: NoActionReason | null;
+  noRecDetail: Record<string, unknown> | null;
 }
 
 function toDto(rec: RecommendationRecord): CustomerRec {
@@ -72,23 +81,30 @@ export async function listCustomerRecommendations(
   userId: string,
 ): Promise<CustomerRecList> {
   const campaignId = await resolveCampaignId(pool, userId);
-  if (!campaignId) return { campaignId: null, pending: [], history: [] };
+  if (!campaignId) return { campaignId: null, pending: [], history: [], noRecReason: null, noRecDetail: null };
 
   const store = new PgRecommendationStore(pool);
-  const [proposed, customerId] = await Promise.all([
+  const [proposed, campaignRow] = await Promise.all([
     store.listProposed(campaignId),
     pool
-      .query<{ customer_id: string }>(
-        `SELECT customer_id FROM managed_campaigns WHERE id = $1`,
+      .query<{ customer_id: string; no_rec_reason: string | null; no_rec_detail: Record<string, unknown> | null }>(
+        `SELECT customer_id, no_rec_reason, no_rec_detail FROM managed_campaigns WHERE id = $1`,
         [campaignId],
       )
-      .then((r) => r.rows[0]?.customer_id ?? null),
+      .then((r) => r.rows[0] ?? null),
   ]);
+  const customerId = campaignRow?.customer_id ?? null;
   const history = customerId
     ? condense(await listCustomerActionHistory(pool, customerId)).slice(0, 12)
     : [];
 
-  return { campaignId, pending: proposed.map(toDto), history };
+  return {
+    campaignId,
+    pending: proposed.map(toDto),
+    history,
+    noRecReason: (campaignRow?.no_rec_reason as NoActionReason | null) ?? null,
+    noRecDetail: campaignRow?.no_rec_detail ?? null,
+  };
 }
 
 // A single recommendation, ownership-checked against the caller's campaign.

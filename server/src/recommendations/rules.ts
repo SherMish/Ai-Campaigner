@@ -512,6 +512,10 @@ function weakestInGroup(
       leads: weak.leads,
       cplAgorot: weak.cplAgorot,
       bestPeerCplAgorot: bestCpl,
+      // Copy fix 2026-08-22: the explanation used to hardcode "המודעות
+      // האחרות" (plural), which is wrong when there is exactly one other ad.
+      // The count was available here and simply never passed on.
+      otherCreativeCount: withData.length - 1,
     },
     currentBudgetAgorot: null,
     proposedBudgetAgorot: null,
@@ -582,6 +586,11 @@ function pauseUnderperformingAudience(
       bestAdSetId: bestAdset.adSetId,
       bestAudienceLabel: bestAdset.label ?? bestAdset.adSetId,
       bestAdSetCplAgorot: bestCpl,
+      // Copy fix 2026-08-22: the explanation said "מהקהל השני" ("the SECOND
+      // audience"), which is meaningless with three or more — the customer
+      // cannot tell which one is meant. Count passed so the copy can name the
+      // winner instead of counting positions.
+      otherAudienceCount: withData.length - 1,
     },
     currentBudgetAgorot: null,
     proposedBudgetAgorot: null,

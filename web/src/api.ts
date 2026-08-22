@@ -156,7 +156,13 @@ export interface CustomerRec {
 export interface CustomerRecList {
   campaignId: string | null;
   pending: CustomerRec[];
-  history: Array<{ when: string; summary: string; automated: boolean; result: "success" | "failed" }>;
+  history: Array<{ when: string; summary: string; automated: boolean; actor: "automated" | "customer" | "us"; result: "success" | "failed" }>;
+  // 2026-08-22: when `pending` is empty this screen said only "no
+  // recommendations yet" — strictly less than the dashboard the customer
+  // clicked through from, which names the reason. A drill-down that answers
+  // less than its own summary is backwards (AIC-98).
+  noRecReason: NoActionReason | null;
+  noRecDetail: Record<string, unknown> | null;
 }
 export interface ApproveOutcome {
   outcome: "executed" | "aborted" | "failed";
