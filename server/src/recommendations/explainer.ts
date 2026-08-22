@@ -1,5 +1,6 @@
 import { formatShekel } from "@aic/shared";
 import type { RecommendationRecord } from "./types.js";
+import type { NoActionReason } from "./rules.js";
 
 // ── Centralized Hebrew copy for customer-facing explanations ──────────────────
 // Kept in one place (never scattered through logic). Figures are injected by
@@ -31,6 +32,14 @@ export const EXPLAINER_HE = {
   // AIC-85: replaces singleAdSet — same content, renamed to match the fixed
   // comparableAdsets() check (a dormant ad set no longer silently counts).
   noComparableAudiences: () => `הקמפיין יציב. יש כרגע קהל אחד פעיל, כך שאין עם מה להשוות כדי להמליץ על שינוי קהל.`,
+  // Found 2026-08-22: `cooling_down` had NO case in explain(), so it fell to
+  // `default: stable()` — "the campaign is stable" — while the web surface
+  // said "עוקבים אחרי השינוי האחרון" for the very same reason. Two copy
+  // sources contradicting each other about one state. Dormant in practice
+  // (no_action is never persisted as a row, so explain() never saw it), but a
+  // latent lie, and the switch below is now exhaustive so it cannot recur.
+  coolingDown: () =>
+    `ביצענו שינוי בקמפיין לאחרונה, ואנחנו נותנים לו זמן לפעול לפני שנמליץ על שינוי נוסף. שינוי על גבי שינוי לא מאפשר לדעת מה מהם עבד.`,
   belowObjectEvidenceFloor: () => `יש לנו כמה עיצובים או קהלים להשוות, אבל עדיין לא מספיק נתונים על כל אחד כדי לדעת מה עובד טוב יותר. נמשיך לעקוב.`,
   // Defensive — see rules.ts's classifyNoAction comment: in practice the
   // AIC-86 advisory recommendation intercepts this condition first.
@@ -121,8 +130,13 @@ export function explain(rec: RecommendationRecord): string {
         ? EXPLAINER_HE.addCreativesWithData(String(leads), formatShekel(n(rec.evidence.currentCplAgorot)), isFlexibleAd)
         : EXPLAINER_HE.addCreativesNoData(isFlexibleAd);
     }
-    case "no_action":
-      switch (rec.evidence.reason) {
+    case "no_action": {
+      // `evidence` is a loose bag (Record<string, unknown>), so this switch was
+      // never type-protected — which is how `cooling_down` silently fell
+      // through to "stable". Narrowing to the real union restores the
+      // exhaustiveness guarantee at the one place it matters.
+      const reason = rec.evidence.reason as NoActionReason | undefined;
+      switch (reason) {
         case "collecting":
           return EXPLAINER_HE.collecting();
         case "budget_below_threshold":
@@ -137,9 +151,26 @@ export function explain(rec: RecommendationRecord): string {
           return EXPLAINER_HE.noComparableCreatives();
         case "below_object_evidence_floor":
           return EXPLAINER_HE.belowObjectEvidenceFloor();
-        default:
+        case "cooling_down":
+          return EXPLAINER_HE.coolingDown();
+        case "stable":
           return EXPLAINER_HE.stable();
+        case undefined:
+          // No reason recorded (an older row, or a write that failed) — the
+          // neutral statement is the honest one.
+          return EXPLAINER_HE.stable();
+        default: {
+          // Exhaustive by construction: a new NoActionReason without copy here
+          // is a COMPILE error, not a silent fallback to "stable". The web
+          // surface already had this discipline (Record<NoActionReason, ...>);
+          // this switch did not, which is exactly how cooling_down came to
+          // claim the campaign was stable.
+          const _exhaustive: never = reason;
+          void _exhaustive;
+          return EXPLAINER_HE.stable();
+        }
       }
+    }
   }
 }
 

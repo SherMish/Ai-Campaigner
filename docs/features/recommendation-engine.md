@@ -56,6 +56,19 @@ expires on the next tick, with zero special-case code. See
 [RULES.md](../RULES.md#comparability--the-add_creatives_for_comparison-advisory-aic-8586)
 for the full design.
 
+
+### `expires_at` is inert — expiry is staleness, not time
+
+The `recommendations` table has an `expires_at` column and `RecommendationRecord`
+carries it, but **nothing reads it and nothing ever sets it**: `generation.ts`
+passes `expiresAt: null` unconditionally. There is no TTL.
+
+A recommendation expires for exactly one reason: the next tick re-derived the
+campaign and the fresh draft no longer matches it (`stillSupported` compares
+type + targetMetaId). That is deliberate — a recommendation should live exactly
+as long as the condition that produced it — but the dead column invites the
+assumption that a time-based expiry exists. Stated here so nobody builds on it.
+
 ## Deterministic rules (AIC-9)
 
 A campaign is evaluated by pure rules over `insight_snapshot`-derived evidence,
@@ -117,7 +130,7 @@ wired into the same scheduler as ingestion (`index.ts`), and generation runs
 **after** ingestion in each tick so it evaluates the freshest snapshots:
 
 ```
-engine tick → ingest snapshots (+ connection health) → generate recommendations
+engine tick → ingest snapshots (+ connection health) → generate recommendations → measure outcomes
 ```
 
 - `listEligibleForGeneration(pool)` selects campaigns that are `status = 'active'`,
@@ -129,7 +142,8 @@ engine tick → ingest snapshots (+ connection health) → generate recommendati
   (the staleness tick above) — so one function both creates fresh proposals and
   expires ones the rules no longer support. A campaign whose live budget can't be
   read is **skipped, never guessed**. It returns a summary
-  (`evaluated / created / expired / skipped`) that the tick logs.
+  (`evaluated / created / expired / skipped / deliveryProblems / trackingProblems`
+  — six fields; the first four were documented until 2026-08-22) that the tick logs.
 - `buildGenerationTick(pool)` returns `null` when no System-User token is set, so
   the loop stays inert until Meta is wired up — same contract as ingestion.
 - It only **proposes**. A recommendation becomes a real Meta change solely when the

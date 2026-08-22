@@ -49,6 +49,17 @@ having actually fired (see [Cooldown](#cooldown-aic-77b) below):
 | --- | --- | --- |
 | `delivery_blocked` | An ad set was excluded from evidence (AIC-39) — checked FIRST, even if the gate would otherwise pass, since a delivery problem is usually the root cause of thin data | fix the delivery problem |
 | `tracking_broken` | The campaign's declared `lead_event_types` doesn't match what its ad sets are configured on Meta to optimize for (AIC-88) — checked SECOND, before even the pre-gate AIC-86 advisory: the lead count itself is structurally wrong (not thin, WRONG), so nothing may act on it, including advice | fix the lead-definition mismatch (see [tracking-health.md](features/tracking-health.md)) |
+
+> **`tracking_broken` was unreachable on the dashboard until 2026-08-22.** The
+> reason was wired end to end — classifier, customer copy, ops label — but
+> `managed_campaigns.no_rec_reason`'s CHECK constraint was last widened in
+> migration 035, before this reason existed. `recordNoRecReason`'s write is
+> wrapped in a swallowing try/catch, so every attempt raised a constraint
+> violation, was logged, and the column stayed stale. A campaign with broken
+> tracking could never say so. Fixed in migration 042 — and it is exactly the
+> silent-failure class this document warns about below, which had already
+> happened without anyone noticing.
+
 | `budget_below_threshold` | `dailyBudgetAgorot × 7 < MIN_CREATIVE_SPEND_AGOROT` — the campaign's own 7-day rolling window can never reach the cheapest rule's spend gate, so no amount of *time* fixes it | raise the budget |
 | `collecting` | Below the minimum-evidence gate (days/delivery-days/leads), but the budget COULD reach it with more time | wait |
 | `cooling_down` | Gate passed and a rule genuinely WOULD have fired, but its class executed successfully within `COOLDOWN_DAYS` — reported ONLY when something would have fired and was suppressed, never as a placeholder | wait for the cooldown to elapse |
@@ -216,13 +227,37 @@ Targeted creative fixes come before blunt budget moves; scaling comes last.
 2. **replace_creative** — a creative's own CPL decayed ≥ `REPLACE_DECAY_MULTIPLIER`
    (1.5×) vs its previous window (distinct from "weak vs peers"). Needs previous-
    window per-creative data.
-3. **decrease_budget** — campaign CPL rose ≥ `BUDGET_CPL_RISE_PCT` (25%) window-
+3. **pause_underperforming_audience** — corrected 2026-08-22: this list used to
+   jump from `replace_creative` straight to the budget rules, describing the
+   audience rule only in its own subsection below. In `RULES` (`rules.ts`) it
+   sits **here**, at index 2 — between `replace_creative` and `decrease_budget`.
+   The prose further down ("targeted fixes → the audience fix → blunt budget
+   moves") always had the order right; this numbered list did not, and reading
+   only the list would mis-order the engine. Conditions in the subsection below.
+4. **decrease_budget** — campaign CPL rose ≥ `BUDGET_CPL_RISE_PCT` (25%) window-
    over-window. Proposes −`BUDGET_DECREASE_STEP` (20%).
-4. **increase_budget** — CPL not worse **and** leads not fewer window-over-window,
+5. **increase_budget** — CPL not worse **and** leads not fewer window-over-window,
    with a strict improvement on at least one axis (a flat campaign is `no_action`,
    not a manufactured scale-up). Proposes +`BUDGET_INCREASE_STEP` (15%).
 
-All thresholds are named constants in `RULE_THRESHOLDS` (one place). Budget changes
+   **Refused outright for engagement campaigns (AIC-107, undocumented until
+   2026-08-22).** `rules.ts` opens this rule with `if (ev.isEngagement) return
+   null`, derived from `isEngagementResult(lead_event_types)`. An engagement
+   campaign's "results" are post interactions, not leads, so a CPL-based
+   scale-up would be reasoning about a number that does not mean what the rule
+   assumes.
+
+**Rule 0, outside this list:** `add_creatives_for_comparison` is evaluated
+*before* all of the above and, uniquely, **below the evidence gate** — it fires
+from day one, because "you only have one ad, we cannot compare anything" is
+true immediately and does not need data to establish. It is advisory: no Meta
+write, no approval, the UI routes to add-content instead.
+
+All thresholds are named constants in `RULE_THRESHOLDS` (one place) — with one
+exception worth knowing: **`DORMANT_SHARE_THRESHOLD` (10%) is a private module
+constant in `rules.ts`, not a `RULE_THRESHOLDS` key**, so unlike the 14 real
+keys it is **not** per-account overridable. Noted 2026-08-22, because this
+document elsewhere states that every threshold resolves per campaign. Budget changes
 are only *proposed* here; the agreed-budget safety clamp is enforced at execution
 (AIC-13), and every change needs customer approval.
 

@@ -6,6 +6,42 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-22 — Engine docs corrected against the code; cooling_down no longer claims "stable"
+Found while mapping the recommendation engine end to end. One was a live code
+inconsistency, the rest were docs asserting things the code does not do.
+
+**`cooling_down` claimed the campaign was stable.** `explainer.ts`'s `no_action`
+switch had no case for it, so it fell to `default: stable()` — "הקמפיין יציב" —
+while the web surface said "עוקבים אחרי השינוי האחרון" for the same state. Two
+copy sources contradicting each other.
+
+Root cause was weaker than a missing case: `rec.evidence` is a loose
+`Record<string, unknown>`, so the switch was **never type-protected**. It now
+narrows to `NoActionReason` and ends in a `never` exhaustiveness guard —
+verified by temporarily adding a reason and confirming `tsc` fails. The web side
+already had this discipline (`Record<NoActionReason, NoRecCopy>`); the server
+did not, which is precisely how this slipped.
+
+**`RULES.md`'s numbered rule list omitted `pause_adset`.** It jumped from
+`replace_creative` to the budget rules; in `RULES` the audience rule sits at
+index 2, between them. The prose elsewhere had the order right — the list did
+not, and reading only the list would mis-order the engine. Also added: rule 0
+(`add_creatives_for_comparison`, the one rule that fires below the evidence
+gate) and AIC-107's engagement refusal on `increase_budget`, which was
+implemented but undocumented.
+
+**`recommendation-engine.md` described a 2-step tick.** It runs three —
+ingest → generate → **measure outcomes**. Its `GenerationSummary` was also
+listed with four fields; it has six.
+
+**`expires_at` documented as inert.** The column exists and `generation.ts`
+unconditionally writes `null`; nothing reads it. Expiry is staleness only. Said
+plainly so nobody builds on a TTL that does not exist.
+
+**`DORMANT_SHARE_THRESHOLD` flagged as non-overridable** — a private module
+constant, not one of the 14 `RULE_THRESHOLDS` keys, in a document that
+elsewhere says every threshold resolves per campaign.
+
 ### 2026-08-22 — Two truth bugs found while mapping the recommendation engine
 **1. The activity feed credited us for the customer's own actions.** User
 report: every entry read "בוצע על ידינו" ("done by us") — including ad sets the
