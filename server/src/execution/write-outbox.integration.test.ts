@@ -18,7 +18,19 @@ async function makeCampaign(): Promise<{ campaignId: string; customerId: string 
 }
 
 d("WriteOutbox (DB)", () => {
-  afterAll(async () => { await pool.end(); });
+  afterAll(async () => {      // Safety net, added 2026-08-22. Cleanup used to live on the LAST LINE of
+      // each test body, so any test that threw first leaked its customer row
+      // permanently. That is not hypothetical: the failing drain-once test in
+      // this suite leaked one row EVERY run, which is how 30 `__it_outbox`
+      // customers accumulated in the shared production database — showing up
+      // in the ops console as real customers, and feeding the unscoped drain
+      // that poisoned a live customer's build.
+      //
+      // afterAll runs regardless of test outcome, so this cannot leak again.
+      // Scoped to THIS file's own prefixes: suites run in parallel, and a
+      // broader LIKE would delete a concurrently-running suite's rows.
+      await pool.query(`DELETE FROM customers WHERE business_name LIKE ANY($1::text[])`, [["__it_outbox%"]]);
+ await pool.end(); });
 
   it("enqueue is idempotent on the key (a repeat is a no-op)", async () => {
     const { campaignId, customerId } = await makeCampaign();
