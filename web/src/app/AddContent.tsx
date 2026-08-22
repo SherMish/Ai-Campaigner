@@ -248,7 +248,25 @@ export function AddContent() {
       {missingConfigFields.length > 0 && (
         <div className="card" style={{ marginBottom: 24 }}>
           <b style={{ fontSize: "1.05rem", display: "block", marginBottom: 8 }}>{s.incompleteConfigTitle}</b>
-          <p className="muted" style={{ marginBottom: 12 }}>{s.incompleteConfigBody}</p>
+          <p style={{ marginBottom: 6 }}>{s.incompleteConfigIntro}</p>
+          {/* Name the actual field(s). The list was always on the client and
+              was being thrown away for a generic sentence, which is what made
+              the message unactionable. */}
+          <ul style={{ margin: "0 0 12px", paddingInlineStart: 20 }}>
+            {missingConfigFields.map((f) => (
+              <li key={f}><b>{s.incompleteConfigFields[f] ?? f}</b></li>
+            ))}
+          </ul>
+          {/* Ask the person who can actually answer. A landing-page URL or a
+              WhatsApp number is the customer's to give; a Pixel id or the
+              lead-event definition is ours. The old copy claimed BOTH cases
+              were handled by us, which is why one sat unresolved for weeks. */}
+          <p className="muted" style={{ marginBottom: 12 }}>
+            {missingConfigFields.some((f) => f === "website_url" || f === "whatsapp_destination")
+              ? s.incompleteConfigAskYou
+              : s.incompleteConfigAskUs}
+          </p>
+          <p className="muted" style={{ marginBottom: 12 }}>{s.incompleteConfigMeanwhile}</p>
           <a className="btn btn-wa btn-sm" href={WA}>{strings.he.app.talkWa}</a>
         </div>
       )}

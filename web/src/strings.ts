@@ -1548,8 +1548,36 @@ export const strings = {
       // they have no surface for. Existing-post additions are unaffected and
       // stay available, so the copy says so rather than implying the whole
       // screen is broken.
-      incompleteConfigTitle: "עוד משהו קטן להשלים אצלנו",
-      incompleteConfigBody: "יש לנו עוד כמה פרטים להשלים בקמפיין הזה לפני שאפשר להוסיף תוכן חדש (העלאת תמונה/וידאו). אנחנו כבר על זה — אין צורך לעשות כלום. אפשר בינתיים להוסיף מודעה מפוסט קיים בעמוד. דחוף? דברו איתנו.",
+      // Rewritten 2026-08-22, user report: "completely useless, actions-less
+      // message". It was worse than useless — it was FALSE.
+      //
+      // The old copy read "יש לנו עוד כמה פרטים להשלים… אנחנו כבר על זה — אין
+      // צורך לעשות כלום": vague about WHICH field, and claiming work was in
+      // progress when none was. Verified on the real campaign: exactly ONE
+      // field was missing (`website_url`), it had been missing for weeks, and
+      // nobody was "on it" — because the answer has to come from a person, and
+      // for a landing-page URL or a WhatsApp number that person is the
+      // CUSTOMER. Telling them there was nothing to do is what kept it stuck.
+      //
+      // The client already receives `missingConfigFields`; it just discarded
+      // the list. Now it names the field, and the ask matches who can answer.
+      incompleteConfigTitle: "חסר לנו פרט אחד כדי לאפשר העלאת תוכן חדש",
+      // Rendered ABOVE the named field list, so it never stands alone.
+      incompleteConfigIntro: "כדי להעלות תמונה או וידאו חדשים לקמפיין הזה חסר לנו:",
+      // Per-field, in the customer's language — never the column name.
+      incompleteConfigFields: {
+        website_url: "כתובת הדף באתר שאליו המודעה מפנה",
+        whatsapp_destination: "מספר הוואטסאפ שאליו מגיעות הפניות",
+        tracking_pixel_id: "מזהה הפיקסל שמודד את הפניות באתר",
+        lead_event_types: "הגדרה של איזו פעולה נחשבת פנייה",
+      } as Record<string, string>,
+      // Split by who can actually answer, instead of one blanket claim.
+      // A URL or a phone number is the customer's to give; a Pixel id and the
+      // lead-event definition are ours to configure.
+      incompleteConfigAskYou: "את הפרט הזה רק אתם יכולים לתת לנו. שלחו לנו אותו ונשלים תוך זמן קצר.",
+      incompleteConfigAskUs: "זה פרט טכני שבאחריותנו להשלים. אם זה תקוע, כתבו לנו ונטפל.",
+      // Unchanged in substance and still true — this is the real workaround.
+      incompleteConfigMeanwhile: "בינתיים אפשר להוסיף מודעה מפוסט קיים בעמוד — זה עובד כרגיל.",
       modeAd: "הוספת מודעה",
       modeAdSet: "הוספת קבוצת מודעות",
 

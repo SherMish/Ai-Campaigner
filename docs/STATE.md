@@ -6,6 +6,36 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-22 — The add-content blocker message named nothing and claimed work nobody was doing
+User report: "completely useless, actions-less message". It was worse than
+useless — it was **false**.
+
+The old copy: *"יש לנו עוד כמה פרטים להשלים בקמפיין הזה… **אנחנו כבר על זה — אין
+צורך לעשות כלום**."*
+
+Checked against the real campaign. Exactly **one** field was missing —
+`website_url` — it had been missing for weeks, and **nobody was "on it"**,
+because the answer has to come from a person. For a landing-page URL that
+person is the **customer**. Telling them there was nothing to do is precisely
+what kept it stuck.
+
+The client already received `missingConfigFields` and discarded the list for a
+generic sentence. Now it:
+- names the missing field in the customer's language ("כתובת הדף באתר שאליו
+  המודעה מפנה"), never the column name;
+- asks **whoever can actually answer** — a URL or WhatsApp number is the
+  customer's to give, a Pixel id or lead-event definition is ours — instead of
+  one blanket "we're handling it";
+- keeps the genuinely useful part: adding an ad from an existing post still
+  works.
+
+Verified in the browser against the real blocked campaign, not just
+typechecked.
+
+**The pattern, again:** copy that was reassuring instead of true. "Nothing for
+you to do" is the most expensive sentence in the product when it is wrong — it
+converts a one-message fix into weeks of silence.
+
 ### 2026-08-22 — Engine docs corrected against the code; cooling_down no longer claims "stable"
 Found while mapping the recommendation engine end to end. One was a live code
 inconsistency, the rest were docs asserting things the code does not do.
