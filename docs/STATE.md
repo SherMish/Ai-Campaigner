@@ -18,8 +18,14 @@ which is `UNIQUE (customer_id)` and — unlike the shell-row insert — has **no
 `ON CONFLICT`**. The only possible outcome was an opaque constraint violation.
 The wizard was inviting an operator into an error, mid-call.
 
-Step 4 now shows "הרשומות כבר קיימות — אין מה ליצור" instead of the
-provisioning form once a campaign is linked.
+Step 4 now shows "הרשומות כבר קיימות — אין מה ליצור" **in place of the entire
+form** once a campaign is linked — not just in place of the button. The first
+pass hid only the submit and left the whole form rendered: destination radio,
+four pickers, name, budget, WhatsApp number. A form that cannot do anything is
+not neutral — it invites an operator to fill it in mid-call and then fails.
+
+Regression-checked in the browser against an unprovisioned customer (`Pisga`):
+the full form and the provisioning button still render there.
 
 **Getting the signal right took two passes, and the first was wrong.**
 `metaCampaignId` is not on the customer DTO at all, so the initial guard

@@ -796,6 +796,29 @@ export function AdminOnboarding() {
       <div className="card" style={{ marginTop: 12 }}>
         <b>{w.step4Title}</b>
         <p className="muted" style={{ fontSize: "0.85rem" }}>{w.step4Sub}</p>
+
+        {/* Found live 2026-08-23, straight after the first end-to-end build:
+            the operator was returned here and step 4 still presented the whole
+            provisioning form — destination radio, four pickers, name, budget,
+            WhatsApp number — plus a "יצירת הרשומות" button that could only
+            ever fail. managed_campaigns is UNIQUE(customer_id) and that INSERT
+            has no ON CONFLICT, so pressing it produced an opaque constraint
+            violation.
+            The builder already wrote every record. A form that cannot do
+            anything is not neutral: it invites an operator to fill it in
+            mid-call and then fails. Show what is true instead. */}
+        {alreadyProvisioned ? (
+          <div
+            style={{
+              marginTop: 12, padding: "12px 14px", borderRadius: 8,
+              border: "1px solid var(--line)", background: "var(--cream-2, #f7f2ea)",
+            }}
+          >
+            <b style={{ display: "block", marginBottom: 6 }}>✓ {w.alreadyProvisionedTitle}</b>
+            <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>{w.alreadyProvisionedBody}</p>
+          </div>
+        ) : (
+        <>
         <p className="muted" style={{ fontSize: "0.8rem", marginTop: 8 }}>ℹ️ {w.pageGateNote}</p>
 
         {/* AIC-103: asked explicitly, in customer-facing language, so the
@@ -999,25 +1022,7 @@ export function AdminOnboarding() {
           )}
         </div>
 
-        {/* Found live 2026-08-23: after building a campaign through the
-            builder, the operator is returned here — and step 4 still offered
-            "יצירת הרשומות", which would have INSERTed a second
-            managed_campaigns row. That table is UNIQUE(customer_id) and this
-            INSERT has no ON CONFLICT, so the click could only ever produce an
-            opaque constraint violation. The wizard was inviting an operator
-            into an error, mid-call.
-            The records already exist — the builder wrote them. Say so. */}
-        {alreadyProvisioned ? (
-          <div
-            style={{
-              marginTop: 14, padding: "12px 14px", borderRadius: 8,
-              border: "1px solid var(--line)", background: "var(--cream-2, #f7f2ea)",
-            }}
-          >
-            <b style={{ display: "block", marginBottom: 6 }}>✓ {w.alreadyProvisionedTitle}</b>
-            <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>{w.alreadyProvisionedBody}</p>
-          </div>
-        ) : !noCampaignsForSelectedAccount && (
+        {!noCampaignsForSelectedAccount && (
           <>
             <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={provisioning || pageIdUnverified() || instagramIdUnverified()} onClick={submitProvision}>
               {w.provisionSubmit}
@@ -1034,6 +1039,8 @@ export function AdminOnboarding() {
           </div>
         )}
         {provisionResult && <p className="muted" style={{ marginTop: 10, fontSize: "0.85rem" }}>{provisionResult}</p>}
+        </>
+        )}
       </div>
 
       {/* Step 5 — the same check the recommendation engine relies on. */}
