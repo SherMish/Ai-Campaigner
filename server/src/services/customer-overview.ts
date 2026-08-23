@@ -327,8 +327,13 @@ export async function buildCustomerOverview(
     ? await getLeadQualityStatus(pool, campaign.id, campRes.rows[0].leads_to_date ?? 0, ref)
     : null;
 
+  // This is the feed the customer actually reads on Home. Passing the current
+  // Meta campaign id lets condense drop "campaign created" entries for
+  // campaigns that no longer exist — found live 2026-08-23, where three failed
+  // builds left a real customer seeing four creations for one campaign.
   const recentActivity = condense(
     await listCustomerActionHistory(pool, customerId),
+    campRes.rows[0]?.meta_campaign_id ?? null,
   ).slice(0, 8);
 
   // Fetches the row(s), not just a count, so the dashboard teaser can show

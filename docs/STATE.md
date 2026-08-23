@@ -6,6 +6,35 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-23 — The customer's activity feed showed campaigns that no longer exist
+Seen on a real customer's dashboard after their first successful build. Two
+separate falsehoods, both from this session's own work.
+
+**Rollback was reported as an automatic campaign change.** `rollback_build` has
+no `SUMMARY_HE` entry, so it fell through to the generic fallback and rendered
+as *"שינוי בקמפיין · בוצע אוטומטית"* — telling a customer we automatically
+changed their campaign, when what happened was cleanup of something that never
+became real. It is internal bookkeeping and is now filtered out entirely.
+
+**Four "campaign created" entries for one campaign.** Three failed builds each
+logged a creation before being rolled back or cleaned up by hand. `condense`
+now drops:
+
+- rows a `rollback_build` explicitly names in its `deleted` list, and
+- `create_campaign` rows whose `target_meta_id` is not the campaign's current
+  one — a precise DB-only signal, since there is one managed campaign per
+  customer, and it also covers cleanups that predate rollback and therefore
+  have no `rollback_build` row naming them.
+
+Both filters are deliberately narrow: only rows provably describing something
+that no longer exists are hidden, so a genuine action always survives.
+
+Measured on the real campaign: **25 raw rows → 4 shown** — created, one
+audience, two ads. Which is what actually happened.
+
+The principle, stated because it keeps recurring: the customer's feed is a
+record of what happened to *their campaign*, not of our retries.
+
 ### 2026-08-23 — Step 4 no longer offers to create records that already exist
 Reported live, straight after the first successful end-to-end build: the
 operator was returned to the wizard and asked whether "יצירת הרשומות" and

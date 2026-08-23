@@ -74,6 +74,49 @@ d("action history surface (DB + HTTP)", () => {
     await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
   });
 
+  // Found live 2026-08-23 on a real customer's dashboard. Three failed builds
+  // had each created a campaign + ad set and then rolled them back, and the
+  // customer's activity feed showed:
+  //   • "יצירת הקמפיין" FOUR times, though only one campaign exists — the
+  //     other three were deleted seconds after being created; and
+  //   • "שינוי בקמפיין · בוצע אוטומטית" for each rollback_build row, because
+  //     that action type has no SUMMARY_HE entry and hit the generic
+  //     fallback. Telling a customer we automatically changed their campaign,
+  //     when what happened was cleanup of something that never became real.
+  //
+  // Both are internal churn from a failed attempt. The customer's feed is a
+  // record of what happened to THEIR campaign, not of our retries.
+  it("hides rolled-back creations and the rollback itself from the customer feed", async () => {
+    const { campaignId, customerId } = await makeCampaign();
+    const doomed = "meta_doomed_1";
+    const kept = "meta_kept_1";
+
+    await pool.query(
+      `INSERT INTO action_history (campaign_id, what, action_type, target_meta_id, why, human_involved, result, occurred_at)
+       VALUES ($1,'created','create_campaign',$2,'build', true, 'success', now() - interval '3 minute')`,
+      [campaignId, doomed],
+    );
+    await pool.query(
+      `INSERT INTO action_history (campaign_id, what, action_type, new_state, why, human_involved, result, occurred_at)
+       VALUES ($1,'rolled back','rollback_build',$2,'build failed', false, 'success', now() - interval '2 minute')`,
+      [campaignId, JSON.stringify({ deleted: [doomed], undeleted: [] })],
+    );
+    // The retry that actually worked.
+    await pool.query(
+      `INSERT INTO action_history (campaign_id, what, action_type, target_meta_id, why, human_involved, result, occurred_at)
+       VALUES ($1,'created','create_campaign',$2,'build', true, 'success', now() - interval '1 minute')`,
+      [campaignId, kept],
+    );
+
+    const condensed = condense(await listCampaignActionHistory(pool, campaignId));
+
+    // The rollback itself is internal — never shown.
+    expect(condensed.some((c) => c.summary === "שינוי בקמפיין")).toBe(false);
+    // Exactly ONE campaign creation, the one that survived.
+    expect(condensed.filter((c) => c.summary === "יצירת הקמפיין")).toHaveLength(1);
+    await pool.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
+  });
+
   it("lists newest-first, distinguishes automated vs human, condenses jargon-free", async () => {
     const { campaignId, customerId } = await makeCampaign();
 

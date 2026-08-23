@@ -87,15 +87,15 @@ export async function listCustomerRecommendations(
   const [proposed, campaignRow] = await Promise.all([
     store.listProposed(campaignId),
     pool
-      .query<{ customer_id: string; no_rec_reason: string | null; no_rec_detail: Record<string, unknown> | null }>(
-        `SELECT customer_id, no_rec_reason, no_rec_detail FROM managed_campaigns WHERE id = $1`,
+      .query<{ customer_id: string; meta_campaign_id: string | null; no_rec_reason: string | null; no_rec_detail: Record<string, unknown> | null }>(
+        `SELECT customer_id, meta_campaign_id, no_rec_reason, no_rec_detail FROM managed_campaigns WHERE id = $1`,
         [campaignId],
       )
       .then((r) => r.rows[0] ?? null),
   ]);
   const customerId = campaignRow?.customer_id ?? null;
   const history = customerId
-    ? condense(await listCustomerActionHistory(pool, customerId)).slice(0, 12)
+    ? condense(await listCustomerActionHistory(pool, customerId), campaignRow?.meta_campaign_id ?? null).slice(0, 12)
     : [];
 
   return {

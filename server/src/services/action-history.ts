@@ -150,9 +150,57 @@ export async function getLatestEngineActionByType(
   return Object.fromEntries(rows.map((r) => [r.action_type, r.occurred_at]));
 }
 
+// Internal bookkeeping the customer must never be shown. `rollback_build` is
+// our cleanup of a build that failed — it has no SUMMARY_HE entry, so it used
+// to render through the generic fallback as "שינוי בקמפיין · בוצע אוטומטית":
+// telling a customer we automatically changed their campaign, when what
+// happened was that something which never became real got removed.
+const INTERNAL_ACTION_TYPES = new Set(["rollback_build"]);
+
 // Jargon-free projection for the customer surface (P0.5 reuse).
-export function condense(entries: ActionHistoryEntry[]): CondensedEntry[] {
-  return entries.map((e) => ({
+//
+// Found live 2026-08-23: after three failed builds, a real customer's feed
+// showed "יצירת הקמפיין" FOUR times while only one campaign existed — the
+// other three were created and deleted seconds later. The feed is a record of
+// what happened to THEIR campaign, not of our retries, so a creation that was
+// rolled back is not history: it is churn from an attempt that left no trace
+// on Meta.
+//
+// Both filters are precise rather than blanket: only rows a rollback
+// explicitly names as deleted are dropped, so a genuine creation always
+// survives.
+export function condense(
+  entries: ActionHistoryEntry[],
+  // The campaign's CURRENT Meta id, when the caller knows it. One managed
+  // campaign per customer, so a create_campaign row naming a different id
+  // describes a campaign that no longer exists — a failed build that was
+  // rolled back, or cleaned up by hand before rollback existed (which is
+  // exactly the case that survived the filters below on a real customer:
+  // three defunct "campaign created" entries for one live campaign).
+  //
+  // Optional so callers that do not know it behave exactly as before.
+  currentMetaCampaignId?: string | null,
+): CondensedEntry[] {
+  const rolledBackIds = new Set<string>();
+  for (const e of entries) {
+    if (e.actionType !== "rollback_build") continue;
+    const deleted = (e.newState as { deleted?: unknown }).deleted;
+    if (Array.isArray(deleted)) for (const id of deleted) rolledBackIds.add(String(id));
+  }
+
+  return entries
+    .filter((e) => !INTERNAL_ACTION_TYPES.has(e.actionType))
+    .filter((e) => !(e.targetMetaId && rolledBackIds.has(e.targetMetaId)))
+    .filter(
+      (e) =>
+        !(
+          currentMetaCampaignId &&
+          e.actionType === "create_campaign" &&
+          e.targetMetaId &&
+          e.targetMetaId !== currentMetaCampaignId
+        ),
+    )
+    .map((e) => ({
     when: e.occurredAt.toISOString(),
     summary: SUMMARY_HE[e.actionType] ?? "שינוי בקמפיין",
     automated: !e.humanInvolved,
