@@ -127,36 +127,23 @@ export function AppHeader({ recCount = 0, userName }: { recCount?: number; userN
 }
 
 // Auth split layout: form on one side, dark reassurance panel on the other.
+// AIC-125: a single centered column. This used to be a 1fr/1fr grid with a dark
+// marketing aside — "what happens after signup" plus a mock dashboard reading
+// 18 leads / ₪41 CPL / ₪734 spend. Those were invented numbers rendered in the
+// product's own dashboard styling, on the page where someone decides whether to
+// trust the product's numbers; the rest of this session was spent making real
+// figures say what they mean, and this was the one screen asserting figures
+// that never existed.
+//
+// The aside was ALREADY hidden below the mobile breakpoint, so the centered
+// single column was a shipped, known-good layout — this makes it the only one.
 export function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="auth">
-      <div className="form-side">
-        <div className="form-box">
-          <Brand />
-          {children}
-        </div>
+      <div className="form-box">
+        <Brand />
+        {children}
       </div>
-      <aside className="aside">
-        <div className="eyebrow" style={{ color: "var(--orange)" }}>{a.auth.afterSignup}</div>
-        <div className="stack gap16">
-          {a.auth.steps.map((s, i) => (
-            <div className="step-line" key={i}>
-              <span className="num">{String(i + 1).padStart(2, "0")}</span>
-              <span style={{ fontWeight: 600 }}>{s}</span>
-            </div>
-          ))}
-        </div>
-        <div className="mini-dash">
-          <div className="row between" style={{ marginBottom: 10 }}>
-            <b>{strings.he.app.home.summaryTitle}</b>
-            <StatusPill variant="ok">{a.home.states.ok.badge}</StatusPill>
-          </div>
-          <div className="row-k"><span className="muted">{a.home.kpiLeads}</span><b>18</b></div>
-          <div className="row-k"><span className="muted">{a.home.kpiCpl}</span><b>₪41</b></div>
-          <div className="row-k"><span className="muted">{a.home.kpiSpend}</span><b>₪734</b></div>
-        </div>
-        <p style={{ color: "rgba(247,242,234,0.7)", fontSize: "0.9rem" }}>{a.auth.previewNote}</p>
-      </aside>
     </div>
   );
 }

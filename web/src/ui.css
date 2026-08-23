@@ -190,16 +190,25 @@ button { font-family: inherit; }
 .userpill .av { width: 30px; height: 30px; border-radius: 50%; background: var(--ink); color: var(--cream); display: grid; place-items: center; font-size: 0.8rem; }
 
 /* auth split */
-.auth { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; }
-.auth .form-side { display: flex; flex-direction: column; justify-content: center; padding: 48px clamp(24px, 6vw, 90px); }
-.auth .aside { background: var(--ink); color: var(--cream); padding: 48px clamp(24px, 5vw, 70px); display: flex; flex-direction: column; justify-content: center; gap: 26px; }
-.auth .form-box { width: 100%; max-width: 400px; margin: 0 auto; }
+/* AIC-125: one centered column. Was a 1fr/1fr grid with a dark marketing aside
+   (.aside, .mini-dash, .step-line) — all deleted with it rather than left to
+   rot, since nothing else referenced them.
+
+   FLEX, not `display: grid; place-items: center` — which is what this was for
+   one commit, and it broke /forgot: `justify-items: center` stops the item
+   stretching, so the track sizes to the item's max-content and the child's
+   `width: 100%` then resolves against that content-sized track. The short
+   forgot-password form collapsed the column to 214px, pushed the box to
+   left: -238px, and made the whole page scroll sideways. Caught by measuring
+   computed style, not by looking — the taller signup/login forms have enough
+   content that they still looked centered.
+
+   A flex container keeps its full width regardless of the item, so
+   `width: 100%` + `max-width` resolves against the viewport and
+   justify/align-center do the centering. */
+.auth { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
+.auth .form-box { width: 100%; max-width: 400px; }
 .auth .form-box .brand { margin-bottom: 34px; }
-.mini-dash { background: rgba(247, 242, 234, 0.06); border: 1px solid rgba(247, 242, 234, 0.16); border-radius: 18px; padding: 20px; }
-.mini-dash .row-k { display: flex; justify-content: space-between; padding: 8px 0; }
-.mini-dash b { font-weight: 800; }
-.aside .step-line { display: flex; align-items: center; gap: 14px; }
-.aside .num { width: 30px; height: 30px; border-radius: 50%; background: rgba(247,242,234,0.12); display: grid; place-items: center; font-family: var(--mono); font-size: 0.8rem; }
 
 /* content layout */
 /* AIC-120: padding-block, not the `padding` shorthand. `.wrap` is the ONLY
@@ -268,8 +277,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 @keyframes skpulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.9; } }
 
 @media (max-width: 860px) {
-  .auth { grid-template-columns: 1fr; }
-  .auth .aside { display: none; }
   .grid-2 { grid-template-columns: 1fr; }
   .grid-3 { grid-template-columns: 1fr; }
   .appnav { display: none; }

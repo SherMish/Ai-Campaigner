@@ -196,6 +196,28 @@ Ads Agent palette (orange `#FF5A36`, cream `#F7F2EA`/`#EDE6DA`, ink `#171717`, g
 `ui.css` provides `.btn* .card .pill .kpi .stepper .field .appbar` etc. reused by
 every screen; responsive at ≤860px (grids collapse, nav hides).
 
+**The auth screens are one centered column (AIC-125).** `AuthLayout` — used by
+signup, login, forgot and reset — was a `1fr 1fr` grid: the form on one side, a
+dark marketing aside on the other carrying "what happens after signup" and a
+**mock dashboard reading 18 leads / ₪41 CPL / ₪734 spend**. Those were invented
+figures rendered in the product's own dashboard styling, on the screen where
+someone decides whether to trust the product's numbers. Removed, along with
+`.aside`/`.mini-dash`/`.step-line` and the three strings that fed it — nothing
+else referenced any of them, and an unused string reads as live copy to whoever
+greps for it next.
+
+The aside was already `display: none` below the 860px breakpoint, so the
+centered single column was a shipped, known-good layout; this makes it the only
+one, and the breakpoint rule that existed solely to collapse the grid went with
+it.
+
+`.auth` centers with **flex**, not `display: grid; place-items: center`. The
+grid form is a trap here: `justify-items: center` stops the item stretching, so
+the track sizes to the item's max-content and the child's `width: 100%` resolves
+against a content-sized track rather than the viewport. A flex container keeps
+its full width regardless of the item, so `width: 100%` + `max-width: 400px` +
+`justify-content: center` behaves.
+
 ## What's NOT wired (backend, per ticket)
 - **Auth** (AIC-21): ✅ **now wired** — email+password signup/login + JWT sessions,
   see [customer-auth.md](customer-auth.md). Forgot/reset still frontend-only. `WA`

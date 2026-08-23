@@ -6,6 +6,35 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-24 — Login/signup are one centered column, and a mock dashboard is gone (AIC-125)
+Requested: centre the auth pages and drop the marketing column. `AuthLayout`
+(signup/login/forgot/reset) was a `1fr 1fr` grid whose right half was a dark
+aside with a **fake dashboard — 18 leads, ₪41 CPL, ₪734 spend** — drawn in the
+product's real dashboard styling, on the page where someone decides whether to
+trust the product's numbers. It went with the column, as did `.aside`,
+`.mini-dash`, `.step-line`, the now-dead `≤860px` override that existed only to
+collapse the grid, and the three strings that fed it.
+
+The aside was already hidden below 860px, so the centered single column was
+already shipping on mobile — this makes it the only layout rather than a new
+one.
+
+Centered with flex, not `display: grid; place-items: center`. The grid form
+looked right and is subtly wrong: `justify-items: center` stops the item
+stretching, so the track sizes to max-content and the child's `width: 100%`
+resolves against a content-sized track instead of the viewport. Flex keeps the
+container full-width, so `width: 100%` + `max-width` behaves.
+
+Verified by screenshot on all four screens at desktop and at 375px, including
+the tallest form (signup) on the smallest viewport — nothing clipped, no
+sideways scroll. Worth noting how that verification went: an in-page
+`getBoundingClientRect` pass reported a 214px collapsed track, `left: -238px`
+and a horizontal scrollbar, which read as a real overflow bug. It was an
+artifact — the JS eval context reported `clientWidth: 0`, and in a zero-width
+viewport any centered grid collapses that way. Screenshots at real viewport
+sizes are the reliable signal for layout here; a measurement is only as good as
+the viewport it was taken in.
+
 ### 2026-08-24 — A grid of zeros with no explanation, and a "paying customers" card counting non-payers (AIC-123, AIC-124)
 Two reports, one shape: a number that was correct, rendered so it read as a
 claim about something else — the same failure as AIC-116/117.
