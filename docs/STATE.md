@@ -6,6 +6,43 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-23 — Ops notifications: a Telegram channel for changes, failures and errors (AIC-118)
+The infrastructure, built dark: it is fully wired and tested, and does nothing
+until `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` are set on Railway. Setup steps
+are in [features/notifications.md](features/notifications.md).
+
+**Two paths, one channel.** A relay polls `action_history` and
+`ops_queue_items` every minute — every campaign/ad/ad-set change, every failed
+attempt, every ops alert — and an error forwarder wraps `console.error`/`warn`
+plus uncaught exceptions for everything that never reaches the database.
+
+**It reads the tables instead of adding notifier calls.** Seven places write
+`action_history` today; calling a notifier from each would be seven chances to
+forget and an eighth next time. Reading covers every action type by
+construction, including ones added later and including `rollback_build`, which
+`condense()` deliberately hides from the CUSTOMER's feed and which an operator
+most wants to see. Labels come from the existing `SUMMARY_HE` map rather than a
+parallel copy — the copy is exactly the artifact that goes stale.
+
+**A column, not a timestamp watermark** (migration 043). A watermark loses
+events: `occurred_at` is stamped at INSERT but the row is only visible at
+COMMIT, so a row can surface already behind the watermark and never be seen.
+Per-row `notified_at` has no such window. The migration backfills every existing
+row as sent, and the relay skips anything older than an hour — otherwise turning
+the channel on replays months of history and it gets muted the same day.
+
+**The test suite found a production hazard.** The relay's own integration test
+failed claiming 20 rows written by other test files running concurrently — and
+since local, CI and production share one database, that is not a test artifact:
+a single `vitest run` would have posted fixture rows into the live channel. The
+relay now claims but never sends rows belonging to `is_test` customers, and its
+tests are scoped to their own rows and drain the way production does rather than
+asserting on global counts.
+
+Delivery is at-most-once and says so: a failed send is logged, not retried, so a
+Telegram outage costs those messages. The channel is a convenience, never the
+system of record.
+
 ### 2026-08-23 — "רצה מודעה אחת בלבד" — told to a customer with two ads running (AIC-117)
 Reported by the customer immediately after AIC-116 made their campaign visible:
 *"wrong status. we have 2 ads running"*. The AIC-86 advisory fired and its copy

@@ -54,7 +54,15 @@ export function actorOf(humanInvolved: boolean, approvedBy: string | null): Acti
   return approvedBy === "customer" ? "customer" : "us";
 }
 
-const SUMMARY_HE: Record<string, string> = {
+// Exported for the ops notification relay (AIC-118), which labels the same
+// action types for the Telegram channel. Deliberately shared rather than
+// mirrored: a parallel copy is exactly the artifact that goes stale the first
+// time someone adds an action type and updates only one of them.
+//
+// The relay reuses this map ONLY. It must not reuse condense() below, which
+// hides rows the CUSTOMER shouldn't see (internal rollbacks, defunct
+// campaigns) — those are precisely the rows the ops channel most needs.
+export const SUMMARY_HE: Record<string, string> = {
   pause_creative: "עצירת מודעה",
   increase_budget: "העלאת תקציב",
   decrease_budget: "הורדת תקציב",

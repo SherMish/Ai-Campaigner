@@ -6,6 +6,12 @@ import { buildGenerationTick } from "./recommendations/generation.js";
 import { buildOutcomeTick } from "./services/outcome-measurement.js";
 import { startScheduler } from "./services/scheduler.js";
 import { consoleLogger } from "./services/logger.js";
+import { buildNotificationRelay } from "./notify/relay.js";
+import { installErrorForwarder } from "./notify/error-forwarder.js";
+
+// AIC-118: before anything else can throw, so a boot-time crash is reported
+// rather than only landing in Railway's logs. No-ops when Telegram is unset.
+installErrorForwarder();
 
 const PORT = Number(process.env.PORT) || 4000;
 
@@ -106,6 +112,28 @@ if (ingestTick || generationTick) {
         }
       } catch (e) {
         consoleLogger.error(`outcome tick crashed — ${(e as Error).message}`);
+      }
+    },
+  });
+}
+
+// AIC-118: the ops notification relay. Its own loop, not the engine's — the
+// engine runs hourly, and "the customer just paused an ad" is worth knowing in
+// the next minute, not the next hour. Builds to null when Telegram is not
+// configured, so nothing claims rows it can't deliver.
+const notificationRelay = buildNotificationRelay(pool, consoleLogger);
+if (notificationRelay) {
+  startScheduler({
+    intervalMs: Number(process.env.NOTIFY_INTERVAL_MS) || 60 * 1000,
+    label: "notify",
+    tick: async () => {
+      const r = await notificationRelay();
+      // Silent when there was nothing to do — this runs every minute, and an
+      // "0 sent" line every minute would bury the lines that matter.
+      if (r.claimed > 0) {
+        consoleLogger.info(
+          `notify tick: ${r.claimed} claimed, ${r.sent} sent, ${r.skipped} too old, ${r.failed} failed`,
+        );
       }
     },
   });
