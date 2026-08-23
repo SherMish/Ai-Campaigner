@@ -7,9 +7,16 @@ owning doc under [features/](features/), not here.
 ## Changelog
 
 ### 2026-08-23 — Ops notifications: a Telegram channel for changes, failures and errors (AIC-118)
-The infrastructure, built dark: it is fully wired and tested, and does nothing
-until `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` are set on Railway. Setup steps
-are in [features/notifications.md](features/notifications.md).
+**Live.** Bot `@ads_agent_il_bot` posts to the "Ads Agent Updates" channel;
+Railway logs `notify started (every 60000ms)` on boot. Built dark first, then
+configured and verified end-to-end the same day — both paths, against the real
+channel: three relayed events (a customer pausing an ad, a failed create, a
+high-severity ops item) and the error forwarder (an error, a warning, and a
+duplicate error correctly suppressed). The verification used a throwaway
+customer rather than a real one, so no real customer's audit trail gained an
+event that never happened — the exact class of bug fixed earlier today — and the
+same run confirmed the default path would have skipped those rows (2 claimed,
+0 sent) because they belong to a test account. Fixture deleted afterwards.
 
 **Two paths, one channel.** A relay polls `action_history` and
 `ops_queue_items` every minute — every campaign/ad/ad-set change, every failed

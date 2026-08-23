@@ -1,9 +1,11 @@
 # Ops notifications (Telegram)
 
-**Status:** live in code, **dark until configured** — the relay builds to `null`
-and the error forwarder no-ops while `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`
-are unset, which is the case on every dev machine, in CI, and in production
-until the variables are added. See *Setup* below.
+**Status:** **live in production since 2026-08-23** — bot `@ads_agent_il_bot`
+("Ads Agent Updates") posting to the channel of the same name; Railway logs
+`notify started (every 60000ms)` on boot. Still inert anywhere
+`TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` are unset, which is every dev machine
+and CI: the relay builds to `null` and the error forwarder no-ops. See *Setup*
+if the channel or bot is ever replaced.
 
 **Source of truth:**
 `server/src/notify/telegram.ts` (transport),
@@ -122,6 +124,10 @@ as a claim about another.
 
 The code is live but dark until these are set. Steps 1–3 are yours — creating a
 bot and reading a chat id can't be automated from here.
+
+> Already done for the current channel — the values live in Railway's
+> production variables, and nowhere in this repo. Follow these only to move to a
+> different bot or channel, or to rotate the token (`/revoke` in BotFather).
 
 1. **Create the bot.** Message [@BotFather](https://t.me/BotFather) → `/newbot`
    → copy the HTTP API token.
