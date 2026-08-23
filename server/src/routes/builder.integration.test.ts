@@ -262,7 +262,8 @@ d("guided builder routes (DB + HTTP)", () => {
     // AIC-106 made creation the launch, so the campaign is live here, and the
     // status has to say so or the engine skips it (generation.ts filters on
     // status='active') and the customer's dashboard shows no ads at all.
-    expect(camp.rows[0].status).toBe("active"); (AIC-53's job)
+    // (Activating the Meta objects themselves was AIC-53's job.)
+    expect(camp.rows[0].status).toBe("active");
 
     // A customer already has a campaign now — the builder is done with them.
     const again = await request(app).get("/api/app/builder/context").set("Authorization", `Bearer ${token}`);
