@@ -3,6 +3,7 @@ import { strings, connectionMessage } from "../strings";
 import {
   shekels, recheckConnection, requestBudgetChange, changePassword,
   ApiError, type AccessHealth,
+  adAccountLabel,
 } from "../api";
 import { StatusPill, SupportCard, Field, WA } from "./components";
 import { useSharedOverview } from "./overview-store";
@@ -78,7 +79,7 @@ export function Settings() {
                   {health.healthy ? a.connect.connected : a.connect.missing}
                 </StatusPill>
               </div>
-              <div className="summary-row"><span className="k">{a.connect.adAccount}</span><b>{conn?.adAccount?.name || L.none}</b></div>
+              <div className="summary-row"><span className="k">{a.connect.adAccount}</span><b>{adAccountLabel(conn?.adAccount) || L.none}</b></div>
               <div className="summary-row"><span className="k">{a.connect.fbPage}</span><b>{conn?.pageId || L.none}</b></div>
               <div className="summary-row"><span className="k">{a.connect.instagram}</span><b>{conn?.instagramId || L.none}</b></div>
               {conn?.adAccount && (

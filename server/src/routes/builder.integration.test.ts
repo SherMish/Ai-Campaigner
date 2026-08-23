@@ -212,7 +212,7 @@ d("guided builder routes (DB + HTTP)", () => {
     expect(build.body.code).toBe("budget_over_ceiling");
   });
 
-  it("full happy path: start → existing-post creative → build, all PAUSED and idempotent", async () => {
+  it("full happy path: start → existing-post creative → build, all ACTIVE and idempotent", async () => {
     vi.stubGlobal("fetch", mockMetaFetch());
     const { customerId, token } = await seedReadyCustomer("happy");
 
@@ -257,7 +257,12 @@ d("guided builder routes (DB + HTTP)", () => {
 
     const camp = await pool.query(`SELECT meta_campaign_id, status FROM managed_campaigns WHERE id = $1`, [localCampaignId]);
     expect(camp.rows[0].meta_campaign_id).toBe(build.body.metaCampaignId);
-    expect(camp.rows[0].status).toBe("under_review"); // building never activates (AIC-53's job)
+    // AIC-116: was 'under_review' — "building never activates" was true only
+    // while the build created everything PAUSED for a separate launch step.
+    // AIC-106 made creation the launch, so the campaign is live here, and the
+    // status has to say so or the engine skips it (generation.ts filters on
+    // status='active') and the customer's dashboard shows no ads at all.
+    expect(camp.rows[0].status).toBe("active"); (AIC-53's job)
 
     // A customer already has a campaign now — the builder is done with them.
     const again = await request(app).get("/api/app/builder/context").set("Authorization", `Bearer ${token}`);

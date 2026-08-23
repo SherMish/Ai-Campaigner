@@ -6,6 +6,7 @@ import { pool } from "../db/pool.js";
 import { FIXED_DESTINATION, WEBSITE_DESTINATION } from "@aic/shared";
 import { startBuilderCampaign, buildCampaignOnMeta, type BuildCampaignInput } from "./campaign-create.js";
 import { FakeBuilderWriter } from "./types.js";
+import { listEligibleForGeneration } from "../recommendations/generation.js";
 
 const HAS_DB = !!process.env.DATABASE_URL;
 const d = HAS_DB ? describe : describe.skip;
@@ -86,6 +87,40 @@ d("campaign builder create-writes (DB)", () => {
 
     const { rows } = await pool.query(`SELECT launch_approved_at FROM managed_campaigns WHERE id = $1`, [localCampaignId]);
     expect(rows[0].launch_approved_at).not.toBeNull();
+  });
+
+  // AIC-116, the same AIC-106 leftover one field over. `launch_approved_at` was
+  // caught; `status` was not. A built campaign stayed 'under_review' forever,
+  // because the only thing that clears that status is an AIC-18 review — and an
+  // AIC-18 review is for campaigns we did NOT build (is this imported structure
+  // manageable at all?). Nobody reviews our own output, so nobody ever submits
+  // one, so the status never moved.
+  //
+  // Asserting the eligibility rather than the string, because the string is not
+  // the point: listEligibleForGeneration is the only writer of ad_meta and
+  // ad_set_meta, so an ineligible campaign renders as a dashboard with no ads
+  // and no audience breakdown while it spends real money. That is the failure
+  // this test exists to prevent, so that is what it checks.
+  it("leaves the built campaign visible to the recommendation engine", async () => {
+    const { customerId, adAccountId } = await makeCustomer("eligible");
+    const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
+    const writer = new FakeBuilderWriter();
+
+    await buildCampaignOnMeta(pool, writer, baseInput(localCampaignId, adAccountId));
+
+    // The other three eligibility gates, stated explicitly rather than inherited
+    // from the fixture: automation_enabled and meta_campaign_id the build itself
+    // satisfies, but meta_connections.access_health defaults to
+    // 'needs_reconnect' and only a real OAuth round-trip clears it. Setting it
+    // here keeps the test pinned to the one gate it is about — status — instead
+    // of failing for an unrelated reason if a default changes.
+    await pool.query(
+      `UPDATE meta_connections SET access_health = 'ok' WHERE customer_id = $1`,
+      [customerId],
+    );
+
+    const eligible = await listEligibleForGeneration(pool);
+    expect(eligible.map((c) => c.id)).toContain(localCampaignId);
   });
 
   // AIC-105 Branch A gap, found 2026-08-19. AIC-103 enforces the per-destination
@@ -296,7 +331,7 @@ d("campaign builder create-writes (DB)", () => {
     expect(rows[0].meta_campaign_id).toBeNull();
   });
 
-  it("creates every object PAUSED, logs action_history for each, and links the campaign on success", async () => {
+  it("creates every object ACTIVE, logs action_history for each, and links + activates the campaign on success", async () => {
     const { customerId, adAccountId } = await makeCustomer("happy");
     const { id: localCampaignId } = await startProvisioned(customerId, adAccountId);
     const writer = new FakeBuilderWriter();
@@ -307,16 +342,27 @@ d("campaign builder create-writes (DB)", () => {
     expect(result.adSets).toHaveLength(1);
     expect(result.adSets[0].ads).toHaveLength(2);
 
-    // (The created-PAUSED invariant is enforced inside GraphCampaignAdapter,
-    // where status=PAUSED is hardcoded into every create call — see
+    // (The created-ACTIVE invariant is enforced inside GraphCampaignAdapter,
+    // where status=ACTIVE is hardcoded into every create call — see
     // campaign-adapter.test.ts. FakeBuilderWriter's params don't carry status
-    // at all, since real customers/tests can't ever override it.)
+    // at all, since real customers/tests can't ever override it. This comment
+    // said PAUSED until AIC-116: it was written when creation was followed by a
+    // separate launch step, and AIC-106 removed that step without revisiting it.)
     expect(writer.adSetCalls).toHaveLength(1);
     expect(writer.adCalls).toHaveLength(2);
 
     const camp = await pool.query(`SELECT meta_campaign_id, status, name, agreed_budget_agorot FROM managed_campaigns WHERE id = $1`, [localCampaignId]);
     expect(camp.rows[0].meta_campaign_id).toBe(result.metaCampaignId);
-    expect(camp.rows[0].status).toBe("under_review"); // building never activates
+    // AIC-116: this asserted 'under_review' with the comment "building never
+    // activates" — true when written, because the build created every object
+    // PAUSED and a separate launch step went live. AIC-106 made creation the
+    // launch, so the campaign is live and spending the moment this UPDATE runs.
+    // Leaving it 'under_review' hid it from listEligibleForGeneration
+    // (generation.ts: WHERE mc.status = 'active'), which is the only writer of
+    // ad_meta/ad_set_meta — so a real customer's dashboard showed no ads and no
+    // audience breakdown for a campaign that was live. The status must describe
+    // Meta reality, not a launch step that no longer exists.
+    expect(camp.rows[0].status).toBe("active");
     // AIC-106: this line used to assert 4000 — i.e. that after a build the
     // agreed ceiling equals whatever the BUILDER proposed. That assertion was
     // codifying the bug, which is a large part of why it survived: the

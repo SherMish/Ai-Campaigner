@@ -193,7 +193,13 @@ result or the failure.
 `startBuilderCampaign(pool, customerId, adAccountId)` creates (or, if one
 already exists unlinked, reuses) the **local `managed_campaigns` shell row**
 every create-write anchors to — `status='under_review'`,
-`meta_campaign_id=NULL` until every step lands. `buildCampaignOnMeta(pool,
+`meta_campaign_id=NULL` until every step lands. The final UPDATE that links the
+row also moves it to **`status='active'`**: reaching that line means every
+object is live on Meta, and `listEligibleForGeneration` filters on
+`status='active'`, so a built campaign that kept the shell status was invisible
+to the engine — no recommendations, and (because that tick is the only writer
+of `ad_meta`/`ad_set_meta`) a customer dashboard showing no ads and no audience
+breakdown for a campaign that was spending. See AIC-116 below. `buildCampaignOnMeta(pool,
 writer, input)` walks campaign → each ad set → each ad, computing a
 deterministic `builderKey(localCampaignId, kind, clientKey)` idempotency key
 per object, logging an `action_history` row per successful create
@@ -801,6 +807,16 @@ for; that is the whole point of the control.
 still exists and still moves the local row `under_review → active`. It no
 longer sits between creation and spend, because the Meta objects are live from
 creation. Treat it as a management record, not a spend gate.
+
+**It applies to IMPORTED campaigns, not built ones** (AIC-116). The review asks
+"is this structure manageable at all?" — wrong objective, no destination, an
+unwieldy sprawl of ad sets. That question only has content for a campaign we
+found on Meta and connected (`customer-onboarding.ts`). For one the builder
+created, we chose the objective, the destination and the ad-set shape
+ourselves, so there is nothing to review and nobody ever submits one. Until
+AIC-116 a built campaign therefore sat `under_review` **forever**, which is how
+it stayed hidden from the engine. Built campaigns are now `active` on
+completion; imported ones still start `under_review` and still need the review.
 
 **The launch-approval path still exists in code** (`launch/activate.ts`,
 `services/customer-launch.ts`, `/app/launch`), and is deliberately retained

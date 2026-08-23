@@ -319,6 +319,17 @@ export async function buildCampaignOnMeta(
          -- spending campaign prompting for approval is the dashboard
          -- contradicting reality.
          launch_approved_at = COALESCE(launch_approved_at, now()),
+         -- AIC-116: and the same is true of status, which AIC-106 missed.
+         -- The shell row starts 'under_review' (startBuilderCampaign), and the
+         -- ONLY thing that clears that is an AIC-18 review — which exists to
+         -- judge campaigns we did NOT build ("is this imported structure
+         -- manageable at all?"). Nobody reviews our own output, so the status
+         -- never moved, and listEligibleForGeneration (WHERE mc.status =
+         -- 'active') skipped the campaign forever. That tick is the only writer
+         -- of ad_meta/ad_set_meta, so the customer saw a dashboard with no ads
+         -- and no audience breakdown while the campaign spent real money.
+         -- Reaching this line means every object is live on Meta, so say so.
+         status = 'active',
          whatsapp_destination = $4, budget_period = 'daily',
          website_url = $5, tracking_pixel_id = $6,
          lead_event_types = COALESCE($7::text[], lead_event_types)

@@ -786,3 +786,17 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
   return res.json() as Promise<T>;
 }
+
+// The ad account's display label. `name` is NOT NULL with a '' default, and the
+// admin wizard never sends one (customer-onboarding accepts `adAccountName`, but
+// no caller in web/ passes it), so for every wizard-provisioned customer the
+// name is the empty string. Rendering `name || "—"` then showed a dash in the
+// connection panel while the technical line directly beneath it printed the very
+// id we were pretending not to have. Fall back to the id: it is what identifies
+// the account to a customer on the phone with Meta support anyway.
+export function adAccountLabel(
+  a: { metaAdAccountId: string; name: string } | null | undefined,
+): string {
+  if (!a) return "";
+  return a.name.trim() || a.metaAdAccountId;
+}

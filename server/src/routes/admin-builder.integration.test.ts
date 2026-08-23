@@ -97,7 +97,7 @@ d("admin builder routes — AIC-105 Branch A (DB + HTTP)", () => {
     expect(ok.body.category).toBe("beautician");
   });
 
-  it("full happy path: start → existing-post creative → build, all PAUSED, and it's logged to the admin audit trail", async () => {
+  it("full happy path: start → existing-post creative → build, all ACTIVE, and it's logged to the admin audit trail", async () => {
     vi.stubGlobal("fetch", mockMetaFetch());
     const id = await seedReadyCustomer("happy");
 
@@ -135,7 +135,11 @@ d("admin builder routes — AIC-105 Branch A (DB + HTTP)", () => {
 
     const camp = await pool.query(`SELECT meta_campaign_id, status FROM managed_campaigns WHERE id = $1`, [localCampaignId]);
     expect(camp.rows[0].meta_campaign_id).toBe(build.body.metaCampaignId);
-    expect(camp.rows[0].status).toBe("under_review");
+    // AIC-116: was 'under_review'. AIC-106 made creation the launch, so the
+    // campaign is live on Meta here — and a status that says otherwise hides it
+    // from the engine (generation.ts filters on status='active'), which is why
+    // a real customer's dashboard showed no ads for a campaign that was running.
+    expect(camp.rows[0].status).toBe("active");
 
     // The consequential write is logged — "which operator built this, for
     // which customer" has to be answerable later.

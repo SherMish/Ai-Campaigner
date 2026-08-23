@@ -48,11 +48,3 @@ const BY_STATUS: Record<string, AdState> = {
 export function classifyAdState(effectiveStatus: string): AdState {
   return BY_STATUS[effectiveStatus] ?? "unknown";
 }
-
-// An ad in one of these states has no data yet and may never get any, so its
-// absence from an insight-derived list is EXPECTED — it must be merged in from
-// the ad cache instead, or the customer sees a list missing the ad they just
-// made.
-export function hasNoDataYet(state: AdState): boolean {
-  return state === "in_review" || state === "rejected";
-}

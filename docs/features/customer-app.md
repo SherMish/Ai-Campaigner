@@ -44,10 +44,16 @@ Two states make this permanent rather than a delay:
 **How it works now.** `ad_meta` (migration 041) caches per-ad
 `effective_status`, upserted with the same prune discipline as `ad_set_meta`
 (AIC-65 — without the prune a deleted ad stays listed forever).
-`campaign-audiences` merges in cached ads that have no insight row, but only
-for states that *explain* the missing data (`hasNoDataYet`). An ACTIVE ad with
-no rows in the selected window is a different, already-handled case —
-`moreCreativesCount` covers it, and merging both would double-count.
+`campaign-audiences` merges in cached ads that have no insight row. The gate is
+the **data, not the status**: an ad with no rows in any period has never been
+measured, so nothing else in the view will ever mention it. An ad with rows in
+another period is a different, already-handled case — `moreCreativesCount`
+covers it, and merging both would double-count.
+
+(That gate was originally the ad's *status* — only `PENDING_REVIEW`/
+`DISAPPROVED`, via a `hasNoDataYet` helper since deleted. AIC-116 found the hole
+it left: the commonest case of all is an **`ACTIVE` ad created minutes ago**
+that Meta hasn't reported on yet, and it was excluded. See the section below.)
 
 `hasData: false` is carried separately from the zeroes on purpose: rendering
 "₪0 · 0 leads" for a brand-new ad would be a claim of zero **results** for
@@ -58,6 +64,39 @@ and its explanation instead.
 AIC-71 applied to pause/resume and the launch flow, for the same reason: the
 dashboard must not contradict what we just told the customer. Waiting for the
 hourly tick would have left the original bug in place for up to an hour.
+
+## The ad list needs an ad SET to hang ads on (AIC-116, 2026-08-23)
+
+The 2026-08-22 fix above merges a data-less ad into an ad set **that has data**.
+Every test for it seeded exactly such an ad set, which is why the remaining hole
+survived a full green suite.
+
+A campaign built minutes ago has no ad set with data either — Meta has not
+reported a single insight row. The audience list was itself built from insight
+rows, so there was no row to merge into and the whole panel collapsed to "no
+data yet". A real customer built a campaign, watched it go live, and opened a
+dashboard reading `מודעות —` and *"עדיין אין מספיק נתונים לפירוט לפי קהל"*.
+
+The panel is now built from the ad sets we manage (the `ad_set_meta` cache) with
+performance attached where it exists — see
+[customer-overview.md](customer-overview.md)'s audience-details section for the
+exact inclusion rules. Two separate causes had to be fixed for the customer to
+see anything at all; the other one was the campaign's own `status` never leaving
+`under_review`, in [campaign-builder.md](campaign-builder.md).
+
+## The connection panel shows the ad account id when it has no name (AIC-116)
+
+`ad_accounts.name` is `NOT NULL` with a `''` default, and the admin wizard never
+sent one — `provisionConnection` has accepted `adAccountName` all along, but no
+caller in `web/` passed it. So every wizard-provisioned account stored an empty
+name, and `Connect.tsx`/`Settings.tsx` rendered `name || "—"`: a dash, directly
+above a technical line printing the very id we were pretending not to have.
+
+Both now use `adAccountLabel()` (`web/src/api.ts`), which falls back to the
+`act_…` id — the thing that identifies the account to a customer on the phone
+with Meta support anyway. The wizard also sends `adAccountName` and `currency`
+from the picker (which already had both) for accounts provisioned from now on;
+an id typed by hand still sends null and takes the column defaults, as before.
 
 ## Routes & screens
 

@@ -240,6 +240,7 @@ export function AdminOnboarding() {
   // Page that the new account can't promote — leaving a stale one selected
   // is precisely the cross-customer mix-up this scoping exists to stop.
   const pageScopeAccount = form.metaAdAccountId || (acctId.trim() ? `${ACT_PREFIX}${acctId.trim()}` : "");
+  const pickedAdAccount = adAccounts?.find((a) => a.id === form.metaAdAccountId) ?? null;
   useEffect(() => {
     loadPages(pageScopeAccount);
     loadInstagram(pageScopeAccount);
@@ -485,6 +486,13 @@ export function AdminOnboarding() {
         method: "POST",
         body: JSON.stringify({
           metaAdAccountId: form.metaAdAccountId.trim(),
+          // The picker already knows both; not sending them is why every
+          // wizard-provisioned ad account stored name='' and rendered as a dash
+          // in the customer's connection panel. Null when the id was typed by
+          // hand rather than picked — the server COALESCEs to the column
+          // defaults, exactly as before.
+          adAccountName: pickedAdAccount?.name ?? null,
+          currency: pickedAdAccount?.currency ?? null,
           pageId: form.pageIdForm.trim() || null,
           instagramId: form.instagramId.trim() || null,
           metaCampaignId: form.metaCampaignId.trim(),
@@ -561,6 +569,13 @@ export function AdminOnboarding() {
         method: "POST",
         body: JSON.stringify({
           metaAdAccountId: form.metaAdAccountId.trim(),
+          // The picker already knows both; not sending them is why every
+          // wizard-provisioned ad account stored name='' and rendered as a dash
+          // in the customer's connection panel. Null when the id was typed by
+          // hand rather than picked — the server COALESCEs to the column
+          // defaults, exactly as before.
+          adAccountName: pickedAdAccount?.name ?? null,
+          currency: pickedAdAccount?.currency ?? null,
           pageId: form.pageIdForm.trim() || null,
           instagramId: form.instagramId.trim() || null,
           agreedBudgetAgorot: Math.round(Number(newCampaignBudgetShekels) * 100),

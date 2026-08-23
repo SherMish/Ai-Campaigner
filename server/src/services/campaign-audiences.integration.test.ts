@@ -101,6 +101,49 @@ d("campaign audiences (DB + HTTP)", () => {
       expect(byId.get("cr_old")!.spendAgorot).toBe(10000);
     });
 
+    // AIC-116, found live 2026-08-23. The 2026-08-22 fix above merges an ad
+    // that has no data INTO an ad set that does — and every test here seeds one
+    // such ad set, which is exactly why the remaining hole survived. On a
+    // freshly built campaign there is no ad set with data either: Meta has not
+    // reported a single insight row yet, so `adsetStats` is empty, so
+    // `managedAdsetStats` is empty, so there is no row for the merge to attach
+    // to and the whole view collapses to "no data yet".
+    //
+    // The customer had just built a campaign, watched it go live on Meta, and
+    // opened a dashboard that said "מודעות —". The ad sets are not hypothetical
+    // — we created them ourselves minutes earlier and cached them. The view
+    // must be built from the ad sets we know exist, with performance attached
+    // where it exists, not the other way round.
+    it("shows the ads of a brand-new campaign that has no insight rows at all", async () => {
+      const { userId, campaignId } = await seedChain("coldstart");
+      // Deliberately NO store.upsert — not a single snapshot row, which is the
+      // real state of a campaign built minutes ago.
+      await upsertAdSetMeta(pool, campaignId, [
+        { adSetId: "as_new", name: "Ads Agent — קהל 1", ageMin: 18, ageMax: 45, genders: "all", geoSummary: "ישראל", isDynamicCreative: false },
+      ]);
+      await upsertAdMeta(pool, campaignId, [
+        { adId: "ad_1", adSetId: "as_new", name: "מודעה 1", effectiveStatus: "ACTIVE", createdTime: null },
+        { adId: "ad_2", adSetId: "as_new", name: "מודעה 2", effectiveStatus: "ACTIVE", createdTime: null },
+      ]);
+
+      const result = await buildCampaignAudiences(pool, userId);
+
+      expect(result!.empty).toBeUndefined();
+      expect(result!.audiences).toHaveLength(1);
+      const row = result!.audiences[0];
+      // Labelled from the cached targeting, not the raw Meta ad-set name.
+      expect(row.label).toContain("18");
+      // Zeroes on the ad set are the honest total of no data, and the ads
+      // carry hasData:false so the UI says "no results yet" rather than "₪0".
+      expect(row.spendAgorot).toBe(0);
+      expect(row.leads).toBe(0);
+      expect(row.creatives.map((c) => c.metaObjectId).sort()).toEqual(["ad_1", "ad_2"]);
+      expect(row.creatives.every((c) => c.hasData === false)).toBe(true);
+      // Not double-counted as "N more from another period" — they have no data
+      // in any period, which is a different thing from data outside the window.
+      expect(row.moreCreativesCount).toBe(0);
+    });
+
     it("shows a REJECTED ad, which would otherwise never appear at all", async () => {
       const { userId, campaignId } = await seedChain("rejected");
       const store = new PgSnapshotStore(pool);

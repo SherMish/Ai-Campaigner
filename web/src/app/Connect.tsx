@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { strings } from "../strings";
-import { getOverview, getConfig, recheckConnection, type CustomerOverview } from "../api";
+import { getOverview, getConfig, recheckConnection, adAccountLabel, type CustomerOverview } from "../api";
 import { Brand, StatusPill, WA } from "./components";
 
 const a = strings.he.app;
@@ -96,7 +96,7 @@ export function Connect() {
               <>
                 <StatusPill variant="ok">✓ {c.connectedTitle}</StatusPill>
                 <div style={{ marginTop: 16 }}>
-                  <div className="summary-row"><span className="k">{c.adAccount}</span><b>{conn?.adAccount?.name || "—"}</b></div>
+                  <div className="summary-row"><span className="k">{c.adAccount}</span><b>{adAccountLabel(conn?.adAccount) || "—"}</b></div>
                   <div className="summary-row"><span className="k">{c.fbPage}</span><b>{conn?.pageId || "—"}</b></div>
                   <div className="summary-row"><span className="k">{c.instagram}</span><b>{conn?.instagramId || "—"}</b></div>
                 </div>

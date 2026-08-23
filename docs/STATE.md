@@ -6,6 +6,59 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-23 — A live campaign was invisible to the engine and to its own customer (AIC-116)
+The customer's dashboard showed `מודעות —` and "not enough data for an audience
+breakdown" for a campaign that was live on Meta and spending. Three causes, one
+root, all three fixed here.
+
+**1. The campaign never left `under_review`.** `startBuilderCampaign` creates
+the shell row with that status, and the only thing that clears it is the AIC-18
+first-campaign review — which exists to judge campaigns we did *not* build ("is
+this imported structure manageable at all?"). Nobody reviews our own output, so
+nobody submits one, so the status never moved. `listEligibleForGeneration`
+filters on `status = 'active'`, and that tick is the only writer of `ad_meta`
+and `ad_set_meta`, so the campaign got no recommendations and both caches stayed
+empty. This is the same AIC-106 leftover as `launch_approved_at` one field over:
+"building never activates" was true when written, and stopped being true when
+creation became the launch. The build's final UPDATE now sets `status='active'`.
+Ingestion was never affected (it gates on `status <> 'unmanaged'`) — only
+generation. Imported campaigns still start `under_review` and still need the
+review.
+
+**2. The audience panel was built from performance, not from ad sets.** Even
+with the caches filled, the panel starts from `adsetRangeStats` — insight rows —
+which quietly made it a list of ad sets that *have data*. A campaign built
+minutes ago has none, so there was no row for the 2026-08-22 data-less-ad merge
+to attach to, and it collapsed to `no_data_yet`. The spine is now the
+`ad_set_meta` cache with stats attached where they exist. An ad set with data
+outside the window is still excluded, so `no_data_in_range` keeps its meaning.
+
+**3. The data-less-ad merge excluded the commonest case.** It was gated on an
+ad's *status* (`PENDING_REVIEW`/`DISAPPROVED` — the states that "explain"
+missing data) and so skipped an `ACTIVE` ad created minutes ago that Meta simply
+hasn't reported on yet. The gate is now the data: no rows in any period → merged
+with `hasData:false`. `hasNoDataYet` had no callers left and was deleted.
+
+**Also fixed, spotted in the same panel:** the connection card rendered the ad
+account as `—` directly above a technical line printing its `act_…` id.
+`ad_accounts.name` defaults to `''` and the admin wizard never sent one, though
+`provisionConnection` has accepted `adAccountName` all along — no caller in
+`web/` passed it. Display falls back to the id (`adAccountLabel`), and the
+wizard now sends the name and currency its picker already had.
+
+**Verified on the real customer, not just in tests:** one real generation tick
+took `evaluated` from 1 to 2, wrote both ads (`ACTIVE`) and the ad set to the
+caches, set `delivering_ad_count = 2`, and `buildCampaignAudiences` for their
+user id now returns the audience "18–45 · ישראל" with both ads at
+`hasData:false`. Their stranded row was repaired in place; a scan found it was
+the only one.
+
+**Four stale test artifacts fixed rather than worked around** — two assertions
+of `under_review` commented "building never activates", and two test titles
+claiming "all PAUSED", all true when written and quietly false since AIC-106.
+The 2026-08-22 tests all seeded an ad set that already had data, which is
+exactly why cause 2 survived a green suite; the new test seeds none.
+
 ### 2026-08-23 — The customer's activity feed showed campaigns that no longer exist
 Seen on a real customer's dashboard after their first successful build. Two
 separate falsehoods, both from this session's own work.

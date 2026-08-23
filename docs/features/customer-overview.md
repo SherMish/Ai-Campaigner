@@ -259,6 +259,39 @@ distinct copy for each (`D.emptyStartedToday`/`D.emptyNoDataInRange`/
 `D.empty`) rather than a silent blank card — see CLAUDE.md's "never blank
 when the reason is known" house rule, of which this is the origin case.
 
+**The panel is built from the ad sets that EXIST, not the ones with data
+(AIC-116).** The list used to start from `adsetRangeStats` — insight rows — and
+attach cached metadata to them, which quietly made it a list of ad sets that
+have *performance*. A campaign built minutes ago has no insight rows at all, so
+it had no rows to show and collapsed to `no_data_yet`: the customer watched
+their campaign go live and then read `מודעות —`. The spine is now
+`listAdSetMeta` (the cache of ad sets we manage), with stats attached where
+they exist. AIC-65's rule — never render an ad set we don't manage — still
+holds, now by construction rather than by filtering.
+
+Which cached ad sets appear is deliberately two cases, not one:
+
+| Ad set | Shown? | Why |
+| --- | --- | --- |
+| has stats in the selected window | yes, with its numbers | unchanged |
+| has no recorded data in **any** period | yes, at zero | it is new, not dead |
+| has data, but outside the window | no | keeps `no_data_in_range` meaningful rather than rendering last quarter as a wall of zeroes |
+
+"Any period" is measured at **ad-set grain** (`adsetRangeStats` over the
+all-time window), not derived from the all-time creative rows: an ad set can
+have adset-grain history with no creative rows, and treating that as "never had
+data" would resurrect a long-dead ad set as a zero row on every narrow range.
+
+The same correction applies one level down, to the ads. The 2026-08-22 merge
+(ads that exist on Meta but have no insight row) was gated on an ad's *status*
+— only `PENDING_REVIEW`/`DISAPPROVED`, the states that "explain" missing data.
+That omitted the commonest case of all: an `ACTIVE` ad created minutes ago that
+Meta simply hasn't reported on yet. The gate is now the **data**, not the
+status — an ad with no rows in any period is merged in with `hasData:false`,
+whatever its status. An ad with rows in another period stays with
+`moreCreativesCount`, so the two can't double-count, and the now-callerless
+`hasNoDataYet` helper was deleted rather than left to look authoritative.
+
 **AIC-73 fixed the actual root cause of the raw-name leak.**
 `deriveAudienceLabels` used to label a dimension only when it DIFFERED across
 sibling ad sets — with exactly one ad set (the common shape for a small
