@@ -566,6 +566,34 @@ needs anyway — and the picker replaces the field entirely; there is no manual
 fallback, deliberately, since a fallback text box would reintroduce the exact
 transcription error this exists to remove.
 
+**Step 4 has two forms, and neither shows until we know which applies
+(AIC-119).** The step does two different jobs depending on the ad account:
+
+| Account | Fields shown | Who collects the rest |
+| --- | --- | --- |
+| has **no** campaigns | the agreed daily ceiling, plus "צור קמפיין חדש" | the builder asks for name, destination and WhatsApp number afterwards |
+| **has** campaigns | שם הקמפיין, תקציב, מספר וואטסאפ, plus "יצירת הרשומות" | nobody — we are recording a campaign that already exists on Meta |
+
+Which one renders is `step4Branch()` (`web/src/admin/onboarding-step4.ts`), a
+pure function over (ad account, loading, error, campaign list) returning
+`pick_account | loading | error | new_campaign | adopt_existing`. It is a
+separate module purely so it can be unit-tested — the repo has no
+component-test tooling, so extracting the decision is how any of this gets
+locked in.
+
+The reason it is five states and not a boolean: it *was* a boolean —
+`!loadingCampaigns && !campaignsError && !!adAccountId && campaigns?.length
+=== 0` for the build branch, with the adopt branch rendering on its plain
+negation. That negation is **true before an ad account is chosen at all**, so
+a customer with no Meta connection was shown the adopt-an-existing form —
+name, WhatsApp number, "יצירת הרשומות" — with nothing to adopt and a button
+that could only fail. Found live. The rule now: absence of a loaded list is
+not evidence that a campaign exists; each branch needs its own positive
+evidence, and the three in-between states say so instead of defaulting into a
+form. A failed load is its own state for the same reason — silently treating
+it as "no campaigns" would offer to build a second campaign for an account
+that already has one.
+
 **An ad account already provisioned to a different customer is annotated, not
 blocked.** AIC-87's migration 038 deliberately allows one Meta ad account to
 back more than one customer (Pisga's own two rows are the real example), so

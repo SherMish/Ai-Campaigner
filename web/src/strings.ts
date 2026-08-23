@@ -561,6 +561,11 @@ export const strings = {
       // (its old label) was misleading for the build-a-new-campaign path.
       pageRequirementNote: "לחיבור קמפיין קיים — לא חובה. לבניית קמפיין חדש — חובה, כי כל מודעה רצה דרך עמוד.",
       pickCampaignEmpty: "לא נמצאו קמפיינים בחשבון הפרסום הזה.",
+      // AIC-119: shown in place of BOTH provisioning forms until we know which
+      // one applies. Before this, the adopt-an-existing-campaign form rendered
+      // by default — for a customer with no Meta connection at all.
+      pickCampaignNeedsAccount: "בוחרים קודם חשבון פרסום — מה שצריך למלא כאן תלוי בשאלה אם כבר יש בו קמפיין.",
+      pickCampaignFailedNoBranch: "לא הצלחנו לטעון את רשימת הקמפיינים, ולכן אי אפשר לדעת אם יש בחשבון קמפיין קיים. מנסים שוב לפני שממשיכים.",
       // AIC-107: engagement is DETECTED from Meta's own objective, never
       // chosen by hand here — so it is stated, not offered as a radio the
       // operator could set against what Meta actually reports.

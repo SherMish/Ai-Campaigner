@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FIXED_DESTINATION, WEBSITE_DESTINATION, missingRequiredFields } from "@aic/shared";
 import { api, ApiError } from "../api";
+import { step4Branch } from "./onboarding-step4";
 import { strings } from "../strings";
 import { diagnosisCopy, type AccessDiagnosis } from "./onboarding-copy";
 
@@ -609,8 +610,21 @@ export function AdminOnboarding() {
 
   // AIC-105 Branch A: a picked ad account with a confirmed-empty campaign
   // list — the precondition for "צור קמפיין חדש" instead of the picker.
-  const noCampaignsForSelectedAccount =
-    !loadingCampaigns && !campaignsError && !!form.metaAdAccountId && campaigns?.length === 0;
+  // AIC-119: which of step 4's two forms applies. Derived by a pure function so
+  // it can be tested — see onboarding-step4.ts for why the old boolean was
+  // wrong (its negation rendered the adopt-an-existing form by default, before
+  // an ad account was even chosen).
+  const branch = step4Branch({
+    adAccountId: form.metaAdAccountId,
+    loading: loadingCampaigns,
+    error: campaignsError,
+    campaigns: campaigns?.map((c) => ({ supported: c.destination.supported })) ?? null,
+  });
+  // Kept as a name only for the build-a-new-campaign block below; every other
+  // site now names its branch directly. The old NEGATION of this flag was the
+  // bug — it rendered the adopt-existing form in the three states where we
+  // simply don't know yet.
+  const noCampaignsForSelectedAccount = branch === "new_campaign";
 
   return (
     <div>
@@ -842,10 +856,10 @@ export function AdminOnboarding() {
             meaningful once there's an actual campaign to attach it to
             (Branch A's "no campaigns yet" path asks this inside the builder
             instead — asking twice would be redundant). */}
-        {!noCampaignsForSelectedAccount && form.destinationType === "engagement" && (
+        {branch === "adopt_existing" && form.destinationType === "engagement" && (
           <p className="muted" style={{ fontSize: "0.85rem", marginTop: 12 }}>ℹ️ {w.destinationEngagementDetected}</p>
         )}
-        {!noCampaignsForSelectedAccount && form.destinationType !== "engagement" && (
+        {branch === "adopt_existing" && form.destinationType !== "engagement" && (
           <div style={{ marginTop: 12 }}>
             <label style={{ display: "block", marginBottom: 6, fontSize: "0.9rem" }}>{w.fieldDestinationType}</label>
             <div className="row gap12">
@@ -1000,7 +1014,13 @@ export function AdminOnboarding() {
               <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickCampaignDetectedNote}</p>
             )}
           </div>
-          {!noCampaignsForSelectedAccount && (
+          {branch === "pick_account" && (
+            <p className="muted" style={{ fontSize: "0.8rem" }}>{w.pickCampaignNeedsAccount}</p>
+          )}
+          {branch === "error" && (
+            <p className="muted" style={{ fontSize: "0.8rem" }}>{w.pickCampaignFailedNoBranch}</p>
+          )}
+          {branch === "adopt_existing" && (
             <>
               <div className="field"><label>{w.fieldCampaignName}</label>
                 <input value={form.campaignName} onChange={(e) => setForm({ ...form, campaignName: e.target.value })} /></div>
@@ -1037,7 +1057,7 @@ export function AdminOnboarding() {
           )}
         </div>
 
-        {!noCampaignsForSelectedAccount && (
+        {branch === "adopt_existing" && (
           <>
             <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={provisioning || pageIdUnverified() || instagramIdUnverified()} onClick={submitProvision}>
               {w.provisionSubmit}

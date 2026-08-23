@@ -6,6 +6,35 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-23 — Step 4 showed the wrong form to a customer with no connection (AIC-119)
+Reported from the wizard for a customer with **no Meta connection and no
+campaign**: it asked for שם הקמפיין, תקציב יומי שסוכם and מספר וואטסאפ, and
+offered "יצירת הרשומות". Those fields belong to the *adopt an existing Meta
+campaign* branch. For a customer we are going to build a campaign FOR, the
+builder collects the name and WhatsApp number — provisioning only needs the
+agreed ceiling.
+
+The branch was a boolean: `!loading && !error && !!adAccountId &&
+campaigns?.length === 0` selected the build-new form, and the adopt form
+rendered on its plain negation. That negation is true **before an ad account is
+picked at all**, so the adopt form was the default for a customer with nothing
+to adopt, behind a button that could only fail. Same class as the step-4 fix
+two days earlier: a form that cannot succeed, inviting an operator to fill it in
+mid-call.
+
+Now a pure `step4Branch()` returning `pick_account | loading | error |
+new_campaign | adopt_existing`, with all four render sites naming their branch
+positively — no negations left in the file. A failed load is its own state
+rather than collapsing into "no campaigns", which would offer to build a second
+campaign for an account that already has one. Extracted as a module because the
+repo has no component-test tooling, so a pure function is the only way to lock
+this in; 6 tests.
+
+Verified in the browser on the reported customer (both branches): with no
+account picked, all four fields are gone and a "pick an account first" line
+shows; selecting an account that has a campaign brings the adopt form back with
+the real campaign in the picker.
+
 ### 2026-08-23 — Ops notifications: a Telegram channel for changes, failures and errors (AIC-118)
 **Live.** Bot `@ads_agent_il_bot` posts to the "Ads Agent Updates" channel;
 Railway logs `notify started (every 60000ms)` on boot. Built dark first, then
