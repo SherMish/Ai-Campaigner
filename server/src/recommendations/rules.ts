@@ -447,15 +447,34 @@ function addCreativesForComparison(
   const creatives = comparableCreatives(ev, thresholds);
   if (creatives.comparableCount >= 2) return null;
 
-  // AIC-117: ...and don't fire when the ads simply have no data YET. The rule
-  // skips the evidence gates on the argument that "there is only one creative"
-  // is a count rather than a comparative claim — but `comparableCount` counts
-  // creatives with DATA, so on a campaign built hours ago it reads 0 and the
-  // rule told a customer with two running ads to add more. `liveCreativeCount`
-  // is the count the argument actually refers to. When it is unavailable
-  // (undefined) nothing changes, so this can only ever suppress a false claim,
-  // never invent a new one.
-  if ((ev.liveCreativeCount ?? 0) >= 2) return null;
+  // AIC-117: this rule's whole licence to skip the evidence gates is that
+  // "there is only one creative" is a COUNT — so it must only speak when it
+  // actually HAS that count. `comparableCount` is not it: it counts creatives
+  // with measured DATA, which on a campaign built hours ago reads 0 while two
+  // ads run. That is how a real customer with two ads was told one was running.
+  //
+  // So: fire only on positive evidence of exactly one ad, never on the absence
+  // of evidence.
+  //   liveCreativeCount === 1  → exactly one ad delivering. The case this rule
+  //                              is for, and exactly what its copy says.
+  //   liveCreativeCount >= 2   → they already have what it would ask for.
+  //   liveCreativeCount === 0  → nothing delivering: a paused campaign with
+  //                              five ads looks identical to one with none.
+  //                              Advising creative changes on a stopped
+  //                              campaign would be wrong anyway.
+  //   unknown                  → fall back to the original evidence-based case
+  //                              (exactly one creative with data — a flexible
+  //                              ad, or a genuine single-creative campaign).
+  //                              Not "0 comparable", which is the blind spot
+  //                              above, and which a Meta read failure lands on:
+  //                              caught live when delivery-health was rate-
+  //                              limited and an earlier version of this fix
+  //                              treated the missing count as zero and fired.
+  const oneAdRunning =
+    ev.liveCreativeCount === undefined || ev.liveCreativeCount === null
+      ? creatives.comparableCount === 1
+      : ev.liveCreativeCount === 1;
+  if (!oneAdRunning) return null;
 
   const adsets = comparableAdsets(ev, thresholds);
   // Names the AIC-36 flexible-ad case explicitly: Meta collapses N assets

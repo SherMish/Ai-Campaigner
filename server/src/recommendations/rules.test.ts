@@ -102,9 +102,40 @@ describe("add_creatives_for_comparison (AIC-86)", () => {
       current: { spendAgorot: 0, leads: 0, cplAgorot: null, days: 0 },
       deliveryDays: 0,
       creatives: [],
+      // AIC-117: this used to omit the live count, which made the test assert
+      // that the rule fires knowing NOTHING about how many ads exist — the
+      // blind spot that let it tell a two-ad customer they had one. Production
+      // always has this number on day one (delivery-health runs every tick), so
+      // the fixture now models that rather than the degraded case. The point of
+      // the test is unchanged: zero leads and zero days do not hold it back.
+      liveCreativeCount: 1,
     });
     const d = evaluateCampaign(ev);
     expect(d.type).toBe("add_creatives_for_comparison");
+  });
+
+  // The degraded case, split out from the above because it is a different
+  // claim: when delivery-health is unavailable (a Meta read failure — observed
+  // live as rate-limit code 17) and nothing has data yet, the rule knows
+  // nothing about the ad count and must stay silent rather than guess. An
+  // earlier version of this fix treated the missing count as zero and fired.
+  it("stays silent when the live count is unavailable and nothing has data yet", () => {
+    const ev = baseEvidence({
+      current: { spendAgorot: 0, leads: 0, cplAgorot: null, days: 0 },
+      deliveryDays: 0,
+      creatives: [],
+    });
+    expect(evaluateCampaign(ev).type).not.toBe("add_creatives_for_comparison");
+  });
+
+  // ...but a single creative WITH data is still positive evidence of one ad,
+  // so the original evidence-based case survives a missing live count.
+  it("still fires with no live count when exactly one creative has data", () => {
+    const ev = baseEvidence({
+      current: { spendAgorot: 4629, leads: 5, cplAgorot: 926, days: 7 },
+      creatives: [cr("cr_only", 4394, 5, 879)],
+    });
+    expect(evaluateCampaign(ev).type).toBe("add_creatives_for_comparison");
   });
 
   it("does NOT fire once 2 real (non-dormant) creatives exist", () => {

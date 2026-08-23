@@ -128,7 +128,23 @@ describe("runGenerationTick", () => {
       snap({ grain: "campaign", metaObjectId: "camp", spendAgorot: 200, leads: 0, cplAgorot: null }),
     ]);
     const recs = new InMemoryRecommendationStore();
-    const res = await tick([CAMP], okReader(), snapshots, recs);
+    // AIC-117: with a delivery reader, because that is where the honest count
+    // of running ads comes from and production always has one. Without it the
+    // rule now stays silent rather than guess how many ads exist — which is the
+    // whole fix: it once told a customer with two ads that one was running.
+    const res = await runGenerationTick({
+      campaigns: [CAMP],
+      reader: okReader(),
+      snapshotStore: snapshots,
+      recommendationStore: recs,
+      recommendationService: new RecommendationService(recs),
+      deliveryReader: {
+        getDeliveryHealth: async () => [
+          { adSetId: "as_1", name: "as_1", state: "delivering", reason: null, deliveringAdCount: 1 },
+        ],
+      },
+      ref: REF,
+    });
     expect(res).toMatchObject({ evaluated: 1, created: 1 });
     const rec = [...recs.records.values()][0];
     expect(rec.type).toBe("add_creatives_for_comparison");

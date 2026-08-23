@@ -147,8 +147,21 @@ advised to add more.
 `CampaignEvidence.liveCreativeCount` carries the honest number:
 delivery-health's `deliveringAdCount`, computed in the same tick from real
 ad/ad-set status, and previously used only for the "מודעות פעילות" figure on
-Home. The advisory returns null at `>= 2`. It is optional throughout — when
-absent nothing changes, so it can only suppress a false claim, never invent one.
+Home. **The advisory now fires only on positive evidence of exactly one ad**,
+never on the absence of evidence:
+
+| `liveCreativeCount` | Fires? | Why |
+| --- | --- | --- |
+| `1` | yes | exactly one ad delivering — the case the rule is for, and what its copy says |
+| `>= 2` | no | they already have what it would ask for |
+| `0` | no | nothing delivering: a paused campaign with five ads is indistinguishable from one with none, and creative advice on a stopped campaign is wrong anyway |
+| unknown | only if exactly one creative has data | the original evidence-based case (a flexible ad, or a genuine single-creative campaign) |
+
+The last row matters more than it looks. The first version of this fix treated a
+missing count as zero, and a live tick immediately proved it wrong: delivery-health
+was rate-limited (Meta code 17), the count came back `null`, and the rule fired
+again on the very customer it was written for. Absence of evidence is not
+evidence of one ad.
 The customer-facing sentence "כרגע רצה מודעה אחת בלבד" is likewise now
 conditional on that count actually being 1; otherwise the copy makes no claim
 about how many ads run. Recommendation rows written before AIC-117 carry no

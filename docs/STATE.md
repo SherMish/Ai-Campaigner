@@ -21,9 +21,17 @@ comparable.
 
 `deliveringAdCount` is the honest count, delivery-health computes it in the same
 tick from real ad/ad-set status, and it already said 2 — the rules were simply
-never given it. `CampaignEvidence.liveCreativeCount` now carries it and the
-advisory returns null at `>= 2`. Optional throughout, so where it is absent
-nothing changes: it can only suppress a false claim, never invent one.
+never given it. `CampaignEvidence.liveCreativeCount` now carries it, and the
+advisory fires only on **positive evidence of exactly one ad** — not at `>= 2`,
+and not at `0` either (a paused campaign with five ads reports zero delivering,
+identical to one with none).
+
+The first version of this fix got that wrong and a live tick caught it within
+minutes: it treated a missing count as zero, delivery-health was rate-limited
+(Meta code 17), and the rule fired again on the very customer it was written
+for. Absence of evidence is not evidence of one ad. Where the count is genuinely
+unavailable the rule falls back to the original evidence-based case (exactly one
+creative WITH data) and otherwise stays silent.
 
 The copy was a second, separate defect. "כרגע רצה מודעה אחת בלבד" was
 unconditional — it would have been false at a live count of 0 as well as 2. It
@@ -32,8 +40,13 @@ no claim about how many ads run, while staying just as actionable. Rows written
 before this carry no live count and keep the phrasing they were generated with.
 
 Both defects are the same shape as AIC-116's: a number that means one thing
-being rendered as a statement about another. Verified the customer's own
-recommendation is no longer live.
+being rendered as a statement about another.
+
+The customer's recommendation is expired, so they no longer see it. Proving it
+does not regenerate on a live tick is still outstanding: that ad account is
+rate-limited by Meta from my own repeated probing today, so the tick skips
+before it evaluates. The hourly production tick will exercise it once the limit
+clears.
 
 ### 2026-08-23 — A live campaign was invisible to the engine and to its own customer (AIC-116)
 The customer's dashboard showed `מודעות —` and "not enough data for an audience
