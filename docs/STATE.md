@@ -6,6 +6,39 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-23 — /admin gets four analytics blocks (AIC-122)
+Requested: a statistics-rich `/admin`. Picked from a 10-option shortlist:
+fleet spend/leads trend, automation rate, queue health, fleet health — the four
+whose data was already being written, so none needed new instrumentation.
+
+**The one real hazard was the trend query.** Migration 030 established a hard
+rule — *any SUM over time reads `insight_snapshot_daily`, never
+`insight_snapshots`* — because the table mixes disjoint per-day rows with
+overlapping rolling-window rows, and summing across both double-counts. That
+bug had already shipped twice (a real lead read as 3; the engine reading 2× its
+own evidence). The trend is exactly such a query, so it reads the view, with a
+regression test that inserts both row kinds for one date and asserts the trend
+moves by only the per-day amount.
+
+That test also had to be rewritten once: it first asserted an absolute value and
+read 4245 instead of 1000, because a fleet-wide aggregate over the shared
+production database legitimately includes real data. It now asserts the delta
+its own rows cause — the same shared-database lesson as AIC-118's relay tests.
+
+Charts are inline SVG, no charting dependency, geometry in a tested pure module.
+Two stacked charts rather than one dual-axis chart (two y-scales can manufacture
+any correlation), and a day with no ingested row breaks the line rather than
+being drawn through — missing data is not zero spend. Status colors carry a
+visible count and label in every case, which the palette validator requires
+here: amber measures 2.68:1 against white (below the 3:1 floor) and green↔amber
+ΔE 6.6 under protanopia.
+
+Verified in the browser against real production data: 8 polylines across the two
+charts (the gap-splitting working — not one continuous line each), automation
+15% (7 of 47 actions), queue 9 high / 1 medium, fleet health 3/3 on both
+delivery and tracking, and the hover crosshair reading "15.08 · ₪34.66" against
+the 3466 agorot actually recorded for that date.
+
 ### 2026-08-23 — The needs-attention queue is now grouped, dated and filterable (AIC-121)
 Reported live from a real 11-item queue: a plain table, every row showing raw
 severity + raw type + the full Meta error text unconditionally — no date/time,

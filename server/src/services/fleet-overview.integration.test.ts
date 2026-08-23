@@ -72,6 +72,101 @@ d("fleet overview (DB + HTTP)", () => {
     expect(res.body.spendAgorot).toBeGreaterThanOrEqual(5000);
   });
 
+  // AIC-122: the four analytics blocks added to /admin.
+  it("trend: sums PER-DAY rows only, never the overlapping rolling windows", async () => {
+    const { campaignId } = await seed("trend");
+    // This is a FLEET-WIDE aggregate over a database shared with production, so
+    // absolute assertions are meaningless here — the first version of this test
+    // asserted `=== 1000` and read 4245, because real production data for the
+    // same date is legitimately in the sum. Measure the DELTA our own rows
+    // cause instead, which is what the query semantics actually claim.
+    const DAY = "2026-08-20";
+    const before = (await buildFleetOverview(pool)).trend.find((d) => d.date === DAY);
+    const baseSpend = before?.spendAgorot ?? 0;
+    const baseLeads = before?.leads ?? 0;
+
+    // A per-day row AND a rolling-window row covering the same day. Summing
+    // both double-counts — the exact production bug migration 030 exists for
+    // ("1 real lead read as 3"), which is why the view, not the table, is the
+    // only correct source for any SUM over time.
+    await pool.query(
+      `INSERT INTO insight_snapshots (campaign_id, grain, meta_object_id, period_start, period_end, spend_agorot, leads)
+       VALUES ($1,'campaign','m_day',$2,$2,1000,2)`,
+      [campaignId, DAY],
+    );
+    await pool.query(
+      `INSERT INTO insight_snapshots (campaign_id, grain, meta_object_id, period_start, period_end, spend_agorot, leads)
+       VALUES ($1,'campaign','m_roll','2026-08-14',$2,9999,99)`,
+      [campaignId, DAY],
+    );
+
+    const day = (await buildFleetOverview(pool)).trend.find((d) => d.date === DAY);
+    expect(day).toBeDefined();
+    // Exactly the per-day row's contribution. If the rolling row leaked in the
+    // delta would be 10999/101 — the double-count this guards against.
+    expect(day!.spendAgorot - baseSpend).toBe(1000);
+    expect(day!.leads - baseLeads).toBe(2);
+  });
+
+  it("automation: counts engine-run vs human actions", async () => {
+    const { campaignId } = await seed("automation");
+    const ins = (human: boolean, type: string) => pool.query(
+      `INSERT INTO action_history (campaign_id, what, action_type, human_involved, result)
+       VALUES ($1,'x',$2,$3,'success')`,
+      [campaignId, type, human],
+    );
+    await ins(false, "pause_creative");
+    await ins(false, "increase_budget");
+    await ins(true, "pause_ad");
+
+    const ov = await buildFleetOverview(pool);
+    expect(ov.automation.total).toBeGreaterThanOrEqual(3);
+    expect(ov.automation.automated).toBeGreaterThanOrEqual(2);
+    expect(ov.automation.human).toBeGreaterThanOrEqual(1);
+    // A rate, not a raw count, is the headline — and it must be a real
+    // fraction of the total, never a divide-by-zero NaN.
+    expect(ov.automation.rate).toBeGreaterThan(0);
+    expect(ov.automation.rate).toBeLessThanOrEqual(1);
+  });
+
+  it("queue health: open backlog by severity and the top recurring types", async () => {
+    const { customerId } = await seed("queue");
+    const add = (type: string, sev: string, status = "open") => pool.query(
+      `INSERT INTO ops_queue_items (customer_id, type, severity, detail, status)
+       VALUES ($1,$2,$3,'x',$4)`,
+      [customerId, type, sev, status],
+    );
+    await add("meta_connection_failure", "high");
+    await add("meta_connection_failure", "high");
+    await add("support_request", "low");
+    await add("campaign_rejected", "medium", "resolved"); // resolved: excluded from open counts
+
+    const ov = await buildFleetOverview(pool);
+    expect(ov.queueHealth.openBySeverity.high).toBeGreaterThanOrEqual(2);
+    expect(ov.queueHealth.openBySeverity.low).toBeGreaterThanOrEqual(1);
+    const top = ov.queueHealth.topTypes.find((t) => t.type === "meta_connection_failure");
+    expect(top!.count).toBeGreaterThanOrEqual(2);
+    // topTypes is ordered by count desc — the point of a "top" list.
+    const counts = ov.queueHealth.topTypes.map((t) => t.count);
+    expect([...counts].sort((a, b) => b - a)).toEqual(counts);
+  });
+
+  it("health: counts delivery and tracking separately, ignoring unmanaged campaigns", async () => {
+    await seed("health_ok", { campStatus: "active", deliveryOk: true });
+    const bad = await seed("health_bad", { campStatus: "active", deliveryOk: false });
+    await pool.query(`UPDATE managed_campaigns SET tracking_ok = false WHERE id = $1`, [bad.campaignId]);
+    // An unmanaged campaign is not part of the book we are responsible for.
+    await seed("health_unmanaged", { campStatus: "unmanaged", deliveryOk: false });
+
+    const ov = await buildFleetOverview(pool);
+    expect(ov.health.managed).toBeGreaterThanOrEqual(2);
+    expect(ov.health.deliveryOk).toBeGreaterThanOrEqual(1);
+    expect(ov.health.deliveryBroken).toBeGreaterThanOrEqual(1);
+    expect(ov.health.trackingBroken).toBeGreaterThanOrEqual(1);
+    // managed excludes the unmanaged one, so the two halves always reconcile.
+    expect(ov.health.deliveryOk + ov.health.deliveryBroken).toBe(ov.health.managed);
+  });
+
   it("rejects the route without an admin credential", async () => {
     const res = await request(createApp()).get("/api/admin/overview");
     expect(res.status).toBe(401);

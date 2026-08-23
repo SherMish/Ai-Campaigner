@@ -76,8 +76,55 @@ customer list (business name + campaign name) client-side and links to
 `/admin/customers?focus=<id>`, which `AdminCustomers` reads on mount to
 auto-select and open that customer's drill-down.
 
+### Analytics blocks (AIC-122)
+
+Four blocks on the same payload, all from data already being written — no new
+instrumentation, no new tables:
+
+| Block | Source | Answers |
+| --- | --- | --- |
+| Spend & leads trend, 30d | `insight_snapshot_daily` | is the book growing? |
+| Automation rate | `action_history.human_involved` | what share runs without a human? |
+| Queue health | `ops_queue_items` (open, by severity + top types) | is operational load rising? |
+| Fleet health | `managed_campaigns.delivery_ok` / `tracking_ok` | how much of the book is broken right now? |
+
+**The trend query reads the VIEW, not the table.** `insight_snapshots` mixes
+disjoint per-day rows with *overlapping* rolling-window rows, so any `SUM` over
+time across both double-counts — migration 030's stated rule, written after that
+bug shipped twice (a real lead read as 3; the engine reading 2× its own
+evidence). A regression test inserts a per-day row **and** an overlapping rolling
+row for the same date and asserts the trend moves by exactly the per-day amount.
+It asserts the *delta*, not an absolute: this is a fleet-wide aggregate over a
+database shared with production, so absolute assertions are meaningless (the
+first version read 4245 instead of 1000 because real production data for that
+date is legitimately in the sum).
+
+**Charts are inline SVG with no charting dependency** — four small fixed shapes
+whose geometry is a tested pure module (`web/src/admin/chart-geometry.ts`); a
+library would cost more bundle than the charts. Components:
+`web/src/admin/AdminCharts.tsx`.
+
+Two deliberate choices, both from `dataviz`'s rules:
+
+- **Two stacked charts, never one dual-axis chart.** Spend (agorot) and leads
+  (single digits) differ by orders of magnitude; two y-scales let any
+  correlation be manufactured by choosing the scales.
+- **A day with no ingested row breaks the line rather than being drawn
+  through.** Missing data is not zero spend, and joining across the hole would
+  assert continuity never measured — the same class of "a value meaning one
+  thing rendered as a claim about another" that AIC-116/117 were. `splitIntoRuns`
+  does this; lone points render as dots so a one-day island isn't invisible.
+
+Status colors ship with a visible count **and** text label, never color alone:
+the validated palette flags amber at 2.68:1 (below the 3:1 floor) and
+green↔amber at ΔE 6.6 for protanopia, both of which require exactly that relief.
+The plot is `dir="ltr"` (time reads left→right even on an RTL page) scoped to
+the SVG only, so the Hebrew labels around it stay RTL.
+
 Tests: `fleet-overview.integration.test.ts` (aggregation across statuses/
-delivery/spend/queue; test-customer exclusion from conversion; auth).
+delivery/spend/queue; test-customer exclusion from conversion; the four
+analytics blocks incl. the double-count regression; auth) and
+`chart-geometry.test.ts` (gap-splitting, axis bounds, projection).
 
 ---
 

@@ -498,3 +498,31 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 .dash .card.lq-card .stepper-inline { background: rgba(247, 242, 234, 0.1); }
 .dash .card.lq-card .stepper-inline button { background: rgba(247, 242, 234, 0.14); color: var(--cream); border: 0; }
 .dash .card.lq-card .stepper-inline .v { color: var(--cream); }
+
+/* /admin analytics charts (AIC-122). Inline SVG, no charting library — four
+   fixed shapes whose geometry is a tested pure module (chart-geometry.ts). */
+.ac-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.ac-chart { margin-top: 14px; }
+.ac-chart:first-child { margin-top: 6px; }
+.ac-chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 2px; }
+.ac-chart-label { display: inline-flex; align-items: center; gap: 7px; font-size: 0.85rem; font-weight: 600; }
+.ac-chart-max { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+.ac-swatch { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; display: inline-block; }
+.ac-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.ac-grid { stroke: var(--line); stroke-width: 1; }
+.ac-crosshair { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.ac-axis { font-family: var(--mono); font-size: 10px; fill: var(--muted); }
+/* Reserves its own line so the layout doesn't jump as the pointer moves. */
+.ac-tip { min-height: 1.2em; font-family: var(--mono); font-size: 0.74rem; color: var(--muted); text-align: center; }
+.ac-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--cream-2); margin-top: 10px; gap: 2px; }
+.ac-bar-seg { display: block; height: 100%; }
+.ac-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 0.82rem; color: var(--muted); }
+.ac-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.ac-legend-item b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.ac-hero { font-size: 2.1rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.ac-rows { margin-top: 12px; display: flex; flex-direction: column; gap: 9px; }
+.ac-row { display: flex; align-items: center; gap: 10px; font-size: 0.85rem; }
+.ac-row-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ac-row-track { width: 96px; height: 8px; border-radius: 999px; background: var(--cream-2); overflow: hidden; flex-shrink: 0; }
+.ac-row-fill { display: block; height: 100%; border-radius: 999px; }
+.ac-row-n { font-family: var(--mono); font-size: 0.78rem; min-width: 2.2em; text-align: end; font-variant-numeric: tabular-nums; }
