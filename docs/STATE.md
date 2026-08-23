@@ -42,11 +42,16 @@ before this carry no live count and keep the phrasing they were generated with.
 Both defects are the same shape as AIC-116's: a number that means one thing
 being rendered as a statement about another.
 
-The customer's recommendation is expired, so they no longer see it. Proving it
-does not regenerate on a live tick is still outstanding: that ad account is
-rate-limited by Meta from my own repeated probing today, so the tick skips
-before it evaluates. The hourly production tick will exercise it once the limit
-clears.
+**Verified live, on the degraded path** — which is the one that actually bit. A
+real tick evaluated the campaign (`evaluated: 1`) while delivery-health was
+still rate-limited, so the live count was unavailable, and the rule stayed
+silent (`created: 0`). The previous commit created a false recommendation under
+exactly those conditions. The customer's existing recommendations are expired,
+so they see nothing.
+
+Not yet verified live: the `>= 2` path itself, which needs delivery-health to
+succeed and is covered by unit tests only. The hourly production tick will
+exercise it once the rate limit clears.
 
 ### 2026-08-23 — A live campaign was invisible to the engine and to its own customer (AIC-116)
 The customer's dashboard showed `מודעות —` and "not enough data for an audience
