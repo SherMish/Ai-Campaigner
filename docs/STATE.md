@@ -6,6 +6,40 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-24 — The guides section: static, SEO-first, Markdown-authored (AIC-126)
+A blog at `/guides`, linked from the homepage nav and footer, with the sticky
+quick-jump sidebar from the requested reference design.
+
+**Static HTML, not React — the decisive call.** `app.ts` serves the SPA shell for
+every non-API route, so a React blog would hand crawlers an empty document with
+the SPA's generic title and no article text until JS runs. For a surface whose
+whole purpose is organic search, the content has to be IN the HTML. Each guide is
+now a real file with its own title, description, canonical, OG/Twitter and
+JSON-LD — the same pattern the landing, privacy and terms pages already use.
+
+Authoring is one Markdown file in `content/guides/`; five required frontmatter
+fields (missing any FAILS the build, because a guide with no description ships an
+empty meta tag), and optional `seoTitle`, `slug`, `image`, `keywords`, `faq`.
+`faq` emits FAQPage schema — the expandable Q&A block in Google results — and
+only when the post genuinely has questions. Length limits are warnings, never
+failures: a good title three characters over beats a bad one that fits.
+
+**Two routing details cost real crawl traffic, and both were got wrong before
+they were got right.** `extensions: ["html"]` makes `/guides/<slug>` serve the
+file rather than falling through to the SPA. And `GET /guides` had to become an
+explicit route: serve-static resolves it against the `guides/` DIRECTORY and
+never reaches the extensions fallback — with the default redirect it 301s to
+`/guides/` (canonical never equals the URL served), and with `redirect: false` it
+fell through to the SPA, which is what the first iteration shipped. A probe
+showed `/guides` returning 782 bytes of `<div id="root">`; the integration test
+now asserts the response is NOT the SPA shell, which is the only way that
+regression is visible — it looks fine in a browser.
+
+The TOC ids are stamped on the RENDERED headings and read back out of the same
+HTML, so a sidebar link can never point at an id the body lacks, and repeated
+headings are deduped (a duplicate id silently sends the second link to the
+first section).
+
 ### 2026-08-24 — Login/signup are one centered column, and a mock dashboard is gone (AIC-125)
 Requested: centre the auth pages and drop the marketing column. `AuthLayout`
 (signup/login/forgot/reset) was a `1fr 1fr` grid whose right half was a dark

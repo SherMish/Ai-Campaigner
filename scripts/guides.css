@@ -1,0 +1,135 @@
+/* /guides styling (AIC-126). Standalone by design: these pages must render with
+   zero JS and without the SPA bundle, so they carry their own copy of the
+   design tokens from landing/index.html rather than importing web/src/ui.css
+   (which is bundled by Vite and unavailable to a static file). */
+:root {
+  --cream: #f7f2ea; --cream-2: #ede6da; --page: #efe9de; --ink: #171717;
+  --orange: #ff5a36; --indigo: #665cff;
+  --line: rgba(23,23,23,0.12); --muted: rgba(23,23,23,0.58);
+  --mono: "IBM Plex Mono", ui-monospace, monospace; --maxw: 1180px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--page); color: var(--ink); line-height: 1.7;
+  font-family: Rubik, system-ui, "Segoe UI", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+
+/* header / footer */
+.g-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  max-width: var(--maxw); margin: 0 auto; padding: 20px 24px;
+}
+.g-brand { font-weight: 800; font-size: 1.1rem; }
+.g-nav { display: flex; align-items: center; gap: 18px; font-size: 0.95rem; font-weight: 600; }
+.g-cta { background: var(--orange); color: #fff; padding: 9px 18px; border-radius: 999px; }
+.g-foot {
+  max-width: var(--maxw); margin: 60px auto 0; padding: 24px; border-top: 1px solid var(--line);
+  color: var(--muted); font-size: 0.85rem;
+}
+.g-foot a:hover { color: var(--ink); }
+
+.g-wrap { max-width: var(--maxw); margin: 0 auto; padding: 8px 24px 40px; }
+
+/* breadcrumbs + heads */
+.g-crumbs { font-size: 0.82rem; color: var(--muted); margin-bottom: 22px; }
+.g-crumbs a:hover { color: var(--ink); text-decoration: underline; }
+.g-crumbs .sep { margin: 0 8px; }
+.g-eyebrow {
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--orange); margin: 0 0 10px;
+}
+h1 { font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 18px; }
+.g-lede { font-size: 1.15rem; color: var(--muted); margin: 0 0 26px; max-width: 62ch; }
+
+/* byline */
+.g-byline {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  padding: 16px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
+.g-author { font-weight: 700; }
+.g-role { color: var(--muted); font-size: 0.85rem; margin-inline-start: 10px; }
+.g-meta { color: var(--muted); font-size: 0.85rem; font-family: var(--mono); }
+.g-hero { width: 100%; height: auto; border-radius: 18px; margin: 26px 0; border: 1px solid var(--line); }
+
+/* article + sticky quick-jump. The sidebar is a real <aside> AFTER the article
+   in source order, so a screen reader and a crawler both meet the content
+   first; `order` puts it visually to the side. */
+.g-body { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 48px; align-items: start; margin-top: 30px; }
+.g-body article { min-width: 0; max-width: 68ch; }
+.g-body h2 { font-size: 1.6rem; line-height: 1.2; margin: 42px 0 14px; scroll-margin-top: 24px; }
+.g-body h3 { font-size: 1.2rem; margin: 28px 0 10px; scroll-margin-top: 24px; }
+.g-body p { margin: 0 0 16px; }
+.g-body ul, .g-body ol { margin: 0 0 18px; padding-inline-start: 22px; }
+.g-body li { margin: 6px 0; }
+.g-body img { max-width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line); }
+.g-body a { color: var(--orange); font-weight: 600; text-decoration: underline; }
+.g-body blockquote {
+  margin: 20px 0; padding: 14px 18px; background: var(--cream);
+  border-inline-start: 3px solid var(--orange); border-radius: 0 12px 12px 0;
+}
+.g-body code { font-family: var(--mono); font-size: 0.88em; background: var(--cream-2); padding: 2px 6px; border-radius: 6px; }
+.g-body pre { background: var(--ink); color: var(--cream); padding: 16px; border-radius: 14px; overflow-x: auto; }
+.g-body pre code { background: none; color: inherit; padding: 0; }
+.g-body table { width: 100%; border-collapse: collapse; margin: 0 0 18px; font-size: 0.92rem; }
+.g-body th, .g-body td { border: 1px solid var(--line); padding: 9px 12px; text-align: start; }
+.g-body th { background: var(--cream); font-weight: 700; }
+
+.g-toc { position: sticky; top: 24px; align-self: start; max-height: calc(100vh - 48px); overflow-y: auto; }
+.g-toc-title {
+  font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 12px;
+}
+.g-toc nav { display: flex; flex-direction: column; border-inline-start: 2px solid var(--line); }
+.g-toc a {
+  font-size: 0.85rem; color: var(--muted); padding: 7px 14px; line-height: 1.4;
+  border-inline-start: 2px solid transparent; margin-inline-start: -2px;
+}
+.g-toc a:hover { color: var(--ink); }
+.g-toc a.lvl3 { padding-inline-start: 26px; font-size: 0.8rem; }
+/* :target styles the section the reader jumped to — the "you are here" cue,
+   with no JS and no scroll listener. */
+.g-toc a:target, .g-body h2:target, .g-body h3:target { color: var(--ink); }
+
+/* faq — <details> so it works without JS and the answer text is still in the
+   DOM for crawlers reading the FAQPage schema. */
+.g-faq { margin-top: 46px; }
+.g-faq details { border-bottom: 1px solid var(--line); padding: 14px 0; }
+.g-faq summary { cursor: pointer; font-weight: 700; }
+.g-faq p { margin: 10px 0 0; color: var(--muted); }
+
+/* cards */
+.g-count { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); margin: 30px 0 14px; }
+.g-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 22px; }
+.g-card {
+  display: flex; flex-direction: column; background: var(--cream); border: 1px solid var(--line);
+  border-radius: 18px; padding: 20px; transition: transform .15s ease, border-color .15s ease;
+}
+.g-card:hover { transform: translateY(-2px); border-color: rgba(23,23,23,0.28); }
+.g-card img { width: 100%; height: auto; border-radius: 12px; margin-bottom: 14px; }
+.g-card h2 { font-size: 1.15rem; line-height: 1.3; margin: 0 0 8px; }
+.g-card p { color: var(--muted); font-size: 0.92rem; margin: 0 0 14px; flex: 1; }
+.g-card .g-eyebrow { margin-bottom: 8px; }
+.g-empty { color: var(--muted); }
+
+.g-related { margin-top: 56px; }
+.g-related h2 { font-size: 1.4rem; margin-bottom: 18px; }
+
+.g-cta-box {
+  margin-top: 56px; padding: 30px; background: var(--ink); color: var(--cream);
+  border-radius: 22px; text-align: center;
+}
+.g-cta-box h2 { margin: 0 0 10px; font-size: 1.5rem; }
+.g-cta-box p { margin: 0 0 20px; color: rgba(247,242,234,0.75); }
+.g-btn { display: inline-block; background: var(--orange); color: #fff; font-weight: 700; padding: 13px 28px; border-radius: 999px; }
+
+@media (max-width: 900px) {
+  /* The sidebar becomes a collapsed jump-list ABOVE the body — on a phone a
+     sticky rail would eat the screen, but the quick jump is still the point. */
+  .g-body { grid-template-columns: 1fr; gap: 24px; }
+  .g-toc { position: static; order: -1; max-height: none; background: var(--cream); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .g-toc nav { border: 0; }
+  .g-toc a { padding: 5px 0; }
+}

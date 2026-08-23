@@ -285,6 +285,10 @@
             <a href="#what">מה מקבלים</a>
             <a href="#price">מחיר</a>
             <a href="#faq">שאלות</a>
+            <!-- AIC-126: the guides section. A real href, not an in-page
+                 anchor — it is a separate indexable surface, and internal
+                 links from the homepage are how it gets crawled. -->
+            <a href="/guides">מדריכים</a>
           </nav>
         </div>
         <div class="nav-right">
@@ -570,6 +574,10 @@
           <p class="tag">ניהול קמפיינים פשוט יותר לעסקים קטנים.</p>
         </div>
         <nav class="foot-links">
+          <!-- AIC-126: also in the footer, because .nav-links is display:none
+               below the mobile breakpoint — without this the guides section
+               would be unreachable from the homepage on a phone. -->
+          <a href="/guides">מדריכים</a>
           <a href="https://wa.me/972500000000">וואטסאפ</a>
           <a href="#contact">צרו קשר</a>
           <a href="/terms.html">תקנון</a>

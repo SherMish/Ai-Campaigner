@@ -85,7 +85,29 @@ export function createApp() {
   // Assets serve directly; `/` serves the landing; any other non-API GET falls
   // back to the SPA so client-side routes (/admin/*, /login, …) resolve.
   if (WEB_DIST) {
-    app.use(express.static(WEB_DIST, { index: false }));
+    // AIC-126: `extensions: ["html"]` makes GET /guides/<slug> serve
+    // guides/<slug>.html. Without it the request falls through to the SPA
+    // catch-all below and a crawler gets the empty app shell instead of the
+    // article — which would defeat the entire point of generating the guides
+    // as static HTML. It also makes /privacy and /terms work without the
+    // extension. Only matches files that actually exist, so SPA routes
+    // (/login, /admin/*) are unaffected.
+    // `redirect: false` because a request for /guides matches the guides/
+    // DIRECTORY, and serve-static's directory redirect fires BEFORE
+    // `extensions` is consulted — so /guides would 301 to /guides/ and the
+    // canonical URL would never be the URL actually served. With the redirect
+    // off, the directory is skipped and guides.html resolves directly.
+    app.use(express.static(WEB_DIST, { index: false, extensions: ["html"], redirect: false }));
+    // AIC-126: the guides index, before the static middleware — serve-static
+    // would resolve /guides against the guides/ directory and (with
+    // redirect:false) fall through to the SPA, which is what shipped for one
+    // iteration of this change and returned the empty app shell to crawlers.
+    // Same shape as the landing handler below.
+    app.get(["/guides", "/guides/"], (_req, res, next) => {
+      const idx = path.join(WEB_DIST, "guides", "index.html");
+      if (fs.existsSync(idx)) res.sendFile(idx);
+      else next();
+    });
     app.get("/", (_req, res, next) => {
       const landing = path.join(WEB_DIST, "index.html");
       if (fs.existsSync(landing)) res.sendFile(landing);
