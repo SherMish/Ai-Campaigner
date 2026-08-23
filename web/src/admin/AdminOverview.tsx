@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { formatShekel, type OpsQueueType, type OpsSeverity } from "@aic/shared";
 import { api } from "../api";
 import { strings } from "../strings";
+import { billingState } from "./billing-state";
 import { TimeSeries, ProportionBar } from "./AdminCharts";
 import type { DayPoint } from "./chart-geometry";
 
@@ -254,10 +255,17 @@ export function AdminOverview() {
 
       <div className="card">
         <b style={{ fontSize: "1.05rem" }}>{f.billingTitle}</b>
-        {ov.conversion.customers === 0 ? (
+        {/* AIC-123: three states, not two. The old check was
+            `customers === 0`, so "nobody is paying" was only ever admitted when
+            there were no real customers AT ALL — and two real customers who had
+            paid nothing rendered under a payment heading as a bare "2". */}
+        {billingState(ov.conversion) === "no_real_customers" ? (
           <p className="muted" style={{ marginTop: 10 }}>{f.noRealCustomers}</p>
         ) : (
           <div style={{ marginTop: 12 }}>
+            {billingState(ov.conversion) === "none_paying" && (
+              <p className="muted" style={{ marginBottom: 10 }}>{f.nonePaying}</p>
+            )}
             <div className="summary-row"><span className="k">{f.realCustomers}</span><b>{ov.conversion.customers}</b></div>
             <div className="summary-row"><span className="k">{f.setupPaid}</span><b>{ov.conversion.setupPaid}</b></div>
             <div className="summary-row"><span className="k">{f.subscribed}</span><b>{ov.conversion.subscribed}</b></div>

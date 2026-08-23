@@ -383,6 +383,30 @@ one operator on 1–2 accounts — "fine for few operators," the ticket's own
 framing. Read-only: any change still goes through the safe-execute pipeline
 (AIC-12), never from here.
 
+**The data disclaimer (AIC-124).** The page carries a permanent four-line
+`.data-note` under the period line, stating what the numbers are and are not.
+Added after a live "why all 0s?": a campaign whose ads were created that
+morning showed a full grid of ₪0/0, because the window is
+`rollingPeriods().current` — **the 7 complete days ending yesterday**, which
+ended the day before those ads existed. Every number was correct; nothing said
+what the window was or why today was absent from it, so the grid read as "this
+campaign is dead" instead of "this window predates it". The four points, each
+covering a distinct way these numbers get misread:
+
+1. the window is 7 complete days, and **today is deliberately excluded** as an
+   incomplete day (the same rule the engine's evidence gates follow);
+2. therefore a campaign or ad created today or yesterday shows all zeros — that
+   means *"no measurement in this window,"* not *"nothing happened"*;
+3. **Meta revises conversion figures retroactively** for days afterwards, so the
+   same period re-fetched later can legitimately differ;
+4. the read is live and unstored, reflecting what Meta reported at the "נשלף"
+   timestamp.
+
+Styled as info (indigo), not warning (amber/red): it explains how to read the
+data, and nothing is wrong. This is CLAUDE.md's "never blank when the reason is
+known" applied to a grid of zeros, which is the same failure as a blank — a
+true value that reads as a claim about something else.
+
 **Flexible/dynamic creatives.** A creative can be a fixed single image/video
 (`object_story_spec`) or a "flexible"/dynamic one (`asset_feed_spec`, several
 images/videos/bodies/titles Meta mixes per impression) — `normalizeCreative`

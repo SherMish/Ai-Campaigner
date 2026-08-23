@@ -278,6 +278,19 @@ export function AdminMeta() {
           <p className="muted" style={{ fontSize: "0.82rem", marginTop: 4 }}>
             {m.period}: {result.tree.period.start} – {result.tree.period.end} · {m.fetchedAt}: {new Date(result.tree.fetchedAt).toLocaleString("he-IL")}
           </p>
+          {/* AIC-124: sits directly under the period line, because that line is
+              what the zeros below have to be read against. Not collapsible —
+              the whole point is that it is visible before the grid of numbers
+              is misread, and it is four short lines, not a wall. */}
+          <div className="data-note">
+            <b>{m.dataNoteTitle}</b>
+            <ul>
+              <li>{m.dataNoteWindow}</li>
+              <li>{m.dataNoteNew}</li>
+              <li>{m.dataNoteRevision}</li>
+              <li>{m.dataNoteLive}</li>
+            </ul>
+          </div>
           <div className="row" style={{ gap: 22, flexWrap: "wrap", margin: "10px 0", fontSize: "0.85rem" }}>
             <span><b>{m.dailyBudget}:</b> {money(result.tree.dailyBudgetAgorot)}</span>
             <span><b>{m.lifetimeBudget}:</b> {money(result.tree.lifetimeBudgetAgorot)}</span>

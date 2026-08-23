@@ -276,6 +276,17 @@ export const strings = {
       refreshing: "מרענן…",
       fetchedAt: "נשלף",
       period: "תקופה",
+      // AIC-124: added after a live "why all 0s?" — a campaign whose ads were
+      // created that morning showed a full grid of ₪0/0 for a window that ended
+      // the previous day. Every number was correct; nothing on the page said
+      // what the window was or why today was missing from it, so it read as
+      // "this campaign is dead" instead of "this window predates it".
+      // House rule (CLAUDE.md): never blank when the reason is known.
+      dataNoteTitle: "על הנתונים בעמוד הזה",
+      dataNoteWindow: "המספרים הם עבור 7 הימים המלאים האחרונים בלבד (התקופה המצוינת למעלה). היום הנוכחי אינו נכלל — הוא עדיין יום חלקי, ומדידה של יום חלקי מטעה.",
+      dataNoteNew: "לכן קמפיין או מודעה שנוצרו היום או אתמול יציגו ₪0 ו-0 בכל השדות. זה אומר \"אין מדידה בתקופה הזו\", לא \"לא קרה כלום\".",
+      dataNoteRevision: "מטא מעדכנת נתוני המרות רטרואקטיבית במשך כמה ימים. מספר שנשלף עכשיו עשוי להשתנות מאוחר יותר עבור אותה תקופה עצמה.",
+      dataNoteLive: "הנתונים נשלפים חיים ממטא בזמן הצפייה ואינם נשמרים אצלנו — הם משקפים את מה שמטא דיווחה ברגע שמופיע ב\"נשלף\".",
       noMetaCampaign: "הקמפיין הזה עוד לא מקושר לקמפיין ב-Meta.",
       noToken: "החיבור ל-Meta אינו מוגדר כרגע — אי אפשר לשלוף נתונים חיים.",
       metaError: "שגיאה בשליפה מ-Meta:",
@@ -696,12 +707,20 @@ export const strings = {
       leadsThisPeriod: "פניות בתקופה הנוכחית",
       openQueue: "פריטים פתוחים בתור",
       viewQueue: "למעבר לתור",
-      billingTitle: "לקוחות משלמים",
-      realCustomers: "לקוחות אמיתיים",
+      // AIC-123: this card was titled "לקוחות משלמים" (paying customers) while
+      // its first row showed the count of NON-TEST customers — paying or not.
+      // Two real customers who had paid nothing rendered as a paying-customers
+      // card headlining 2. The title now names the funnel it actually shows.
+      billingTitle: "המרה לתשלום",
+      realCustomers: "לקוחות אמיתיים (לא פנימיים)",
       setupPaid: "שילמו הקמה",
       subscribed: "מנויים פעילים",
       conversionRate: "שיעור המרה",
-      noRealCustomers: "אין עדיין לקוחות משלמים אמיתיים — התיק כרגע כולל רק חשבונות פנימיים/דוגמנות.",
+      noRealCustomers: "אין עדיין לקוחות אמיתיים — התיק כרגע כולל רק חשבונות פנימיים/דוגמנות.",
+      // The state that was missing entirely: real customers exist, none has
+      // paid. Says so outright rather than letting a non-zero customer count
+      // sit under a payment heading and read as revenue.
+      nonePaying: "אף לקוח עדיין לא שילם — לא הקמה ולא מנוי.",
       viewCustomers: "לצפייה בלקוחות",
       statusLabels: {
         under_review: "בבדיקה",

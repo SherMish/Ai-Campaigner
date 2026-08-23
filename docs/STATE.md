@@ -6,6 +6,40 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-24 — A grid of zeros with no explanation, and a "paying customers" card counting non-payers (AIC-123, AIC-124)
+Two reports, one shape: a number that was correct, rendered so it read as a
+claim about something else — the same failure as AIC-116/117.
+
+**AIC-124 — "why all 0s?" on /admin/meta.** A campaign whose two ads were
+created that morning showed ₪0 and 0 across every field. Correct: the explorer's
+window is `rollingPeriods().current`, the 7 complete days ending yesterday
+(2026-08-16 – 08-22), and the ads did not exist on any of them. Meanwhile the
+campaign had genuinely spent ₪10.62 that day. Nothing on the page said what the
+window was or why today was excluded, so the grid read as a dead campaign. The
+page now carries a permanent four-point data note: the window and today's
+deliberate exclusion, that a new campaign therefore reads all-zero (which means
+"not measured here", not "nothing happened"), that Meta revises conversion
+figures retroactively, and that the read is live and unstored. Styled info, not
+warning — nothing is wrong.
+
+Worth recording because it nearly produced a wrong answer: the raw
+`period_start` values read as `2026-08-22T21:00:00Z` and were about to be
+reported as spend landing on the 22nd. They are `DATE` columns rendered through
+UTC+3; cast to text they are `2026-08-23`. Same column, two different-looking
+answers — check the cast before reasoning about a date.
+
+**AIC-123 — the billing card counted non-payers as paying.** `/admin`'s card was
+headed "לקוחות משלמים" while its first row showed `conversion.customers`, the
+count of NON-TEST customers whether or not any had paid. Two real customers with
+zero payments rendered as a paying-customers card headlining 2. Every number was
+true; the heading was the lie. The old empty state fired only at
+`customers === 0`, so "nobody is paying" was admitted only when there were no
+customers at all — never in the ordinary early-stage case. Now a pure
+`billingState()` with three states (`no_real_customers` / `none_paying` /
+`converting`), the card retitled "המרה לתשלום", and the missing state says so
+outright. `none_paying` deliberately checks both `setupPaid` and `subscribed`,
+so a subscription without a recorded setup payment still counts as revenue.
+
 ### 2026-08-23 — /admin gets four analytics blocks (AIC-122)
 Requested: a statistics-rich `/admin`. Picked from a 10-option shortlist:
 fleet spend/leads trend, automation rate, queue health, fleet health — the four
