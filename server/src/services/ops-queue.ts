@@ -13,6 +13,15 @@ export interface OpsItem {
   detail: string;
   claimedBy: string | null;
   resolutionNote: string | null;
+  // AIC-121: found live — the queue showed severity/type/detail but never
+  // WHICH customer or campaign, so several near-identical items (repeated
+  // connection-health flaps on one account) were indistinguishable at a
+  // glance. Same join shape the notification relay already does for
+  // Telegram (AIC-118's campaignNames helper) — kept separate rather than
+  // shared, since that one batches many campaign ids and this is a single
+  // list query.
+  businessName: string | null;
+  campaignName: string | null;
 }
 
 export interface CreateOpsItem {
@@ -35,6 +44,13 @@ function rowToItem(r: Record<string, unknown>): OpsItem {
     detail: (r.detail as string) ?? "",
     claimedBy: (r.claimed_by as string) ?? null,
     resolutionNote: (r.resolution_note as string) ?? null,
+    // Present only on rows from list()'s joined query; claim()/resolve()'s
+    // plain UPDATE...RETURNING never selects these, so they're undefined
+    // there — normalized to null either way. Callers of claim/resolve
+    // (AdminCustomers.tsx) discard the response and reload the full list
+    // anyway, so this never surfaces stale/missing names.
+    businessName: (r.business_name as string) ?? null,
+    campaignName: (r.campaign_name as string) ?? null,
   };
 }
 
@@ -59,11 +75,18 @@ export class OpsQueue {
   }
 
   async list(opts: { includeResolved?: boolean } = {}): Promise<OpsItem[]> {
-    const where = opts.includeResolved ? "" : "WHERE status <> 'resolved'";
+    const where = opts.includeResolved ? "" : "WHERE oq.status <> 'resolved'";
+    // LEFT JOINs (not JOIN): customer_id and campaign_id are both nullable on
+    // ops_queue_items — an item can exist with no linked campaign at all
+    // (e.g. support_request before a campaign is provisioned).
     const { rows } = await this.pool.query(
-      `SELECT * FROM ops_queue_items ${where}
-       ORDER BY CASE severity WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
-                created_at ASC`,
+      `SELECT oq.*, c.business_name, mc.name AS campaign_name
+       FROM ops_queue_items oq
+       LEFT JOIN customers c ON c.id = oq.customer_id
+       LEFT JOIN managed_campaigns mc ON mc.id = oq.campaign_id
+       ${where}
+       ORDER BY CASE oq.severity WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
+                oq.created_at ASC`,
     );
     return rows.map(rowToItem);
   }

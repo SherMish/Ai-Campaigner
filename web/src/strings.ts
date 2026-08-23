@@ -1,3 +1,4 @@
+import type { OpsQueueType } from "@aic/shared";
 // Our Meta Business Portfolio ID used to live here as a hardcoded literal.
 // AIC-101 moved it to server config (server/src/config/meta-identity.ts,
 // served unauthenticated at GET /api/config) — the exact "read from config,
@@ -51,6 +52,36 @@ export const strings = {
       none: "אין",
       claim: "לקיחה לטיפול",
       resolve: "סגירה",
+      // AIC-121: the queue used to show every item as raw severity + raw
+      // type + full detail text, with no date/time, no customer, and no way
+      // to collapse or filter — 11 near-identical connection-flap items were
+      // indistinguishable at a glance. Exhaustive over OPS_QUEUE_TYPE
+      // (shared/src/domain.ts) — a type that falls through to the raw key is
+      // a silent regression the next time a type is added there.
+      // Record<OpsQueueType, string>, not Record<string, string> — TypeScript
+      // itself now requires every OPS_QUEUE_TYPE key present, so a type added
+      // there without a label here is a COMPILE error, not just a caught-by-
+      // test one. The runtime test (ops-queue-copy.test.ts) stays as
+      // documentation and a guard against this ever being loosened back.
+      queueTypeLabel: {
+        meta_connection_failure: "כשל בחיבור ל-Meta",
+        campaign_not_delivering: "הקמפיין לא מתפרסם",
+        campaign_rejected: "הקמפיין נדחה על ידי Meta",
+        unusual_performance: "ביצועים חריגים",
+        recommendation_review: "המלצה דורשת בדיקה",
+        support_request: "פנייה מהלקוח",
+        missing_creative: "חסר קריאייטיב",
+        account_restriction: "הגבלה על החשבון",
+        campaign_tracking_broken: "מדידת הלידים שגויה",
+      } satisfies Record<OpsQueueType, string> as Record<OpsQueueType, string>,
+      queueSeverityAll: "הכל",
+      queueTypeAll: "כל הסוגים",
+      queueFilterSeverity: "חומרה",
+      queueFilterType: "סוג",
+      queueNoBusiness: "לקוח לא ידוע",
+      queueShowDetail: "הצגת פרטים",
+      queueHideDetail: "הסתרת פרטים",
+      queueNoMatches: "אין פריטים התואמים לסינון.",
       review: "בדיקת קמפיין ראשונה",
       approve: "אישור",
       requestChanges: "בקשת שינויים",

@@ -945,11 +945,43 @@ campaigns and correctly disabling the three non-lead ones (2026-08-18).
 accounts — high severity first, then oldest; resolved items fall away.
 `create` is the canonical entry point (support intake, delivery checks; the
 connection-health and execution paths already raise items), logging high-severity
-ones for the alert hook (Telegram later). Operators triage: `claim` → in_progress
-+ claimed_by; `resolve(note)` → resolved + note. Routes: `GET /api/admin/ops-queue`
-(`?all=true` includes resolved), `POST /ops-queue`, `POST /ops-queue/:id/claim`,
-`POST /ops-queue/:id/resolve`. Source: `server/src/services/ops-queue.js`. Tests:
-`ops-queue.integration.test.ts`.
+ones to console — the Telegram ops channel (AIC-118) now separately relays
+every item this creates, so "alert hook (Telegram later)" is no longer
+accurate; that line was stale from before the relay shipped. Operators triage:
+`claim` → in_progress + claimed_by; `resolve(note)` → resolved + note. Routes:
+`GET /api/admin/ops-queue` (`?all=true` includes resolved), `POST /ops-queue`,
+`POST /ops-queue/:id/claim`, `POST /ops-queue/:id/resolve`. Source:
+`server/src/services/ops-queue.js`. Tests: `ops-queue.integration.test.ts`.
+
+`list()` also joins in `businessName`/`campaignName` (`c.business_name`,
+`mc.name` — `LEFT JOIN`, both nullable) for the admin UI's own use; `claim`/
+`resolve` don't bother, since the frontend discards their response and
+reloads the full list anyway.
+
+**The admin view (AIC-121).** `AdminCustomers.tsx`'s queue card used to be a
+plain `<table>`: every row showed raw severity + raw type + the full `detail`
+text unconditionally, with no date/time and no indication of which customer
+or campaign it was about. Found live: 11 near-identical connection-health
+transitions on one account, indistinguishable at a glance, with a real
+`support_request` from a different customer buried among them.
+
+Now: grouped by type (Hebrew label from `strings.ts`'s `queueTypeLabel` —
+`Record<OpsQueueType, string>`, so a type added to `OPS_QUEUE_TYPE` without a
+label here is a **compile** error, backed by a runtime exhaustiveness test,
+`ops-queue-copy.test.ts`, for when that typing is ever loosened). Each row
+shows date/time, severity, business name, campaign name (when linked), and a
+one-line truncated preview of `detail` — collapsed by default; a click (row or
+chevron) expands the full text below. Severity + type filters sit above the
+list, operating client-side over the already-loaded queue (no new fetch — the
+route already returns the whole unresolved backlog); the type filter only
+ever offers types actually present, never an empty option.
+
+The filter/group decision is a pure function, `filterAndGroup` +
+`presentTypes` (`web/src/admin/ops-queue-view.ts`), extracted — as
+`onboarding-step4.ts` and `user-row-status.ts` were — because this repo has no
+component-test tooling, so a pure function is the only way to unit-test the
+logic at all. It preserves the server's own ordering (severity, then oldest
+first) as the group order; it does not re-sort.
 
 ## First-campaign review (AIC-18)
 

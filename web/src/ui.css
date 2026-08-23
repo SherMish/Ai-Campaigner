@@ -339,6 +339,51 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 .op-sev-medium { color: #a05a12; font-weight: 700; }
 .op-sev-low { color: var(--muted); font-weight: 700; }
 
+/* Ops queue (AIC-121): grouped-by-type, filterable, collapsed-by-default rows.
+   Replaces a plain <table> where every row showed its full raw detail text
+   unconditionally, with no date/time and no customer name — unreadable once
+   more than a couple of items shared a type (found live: 11 near-identical
+   connection-flap items on one account). */
+.oq-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0 6px; }
+.oq-chip {
+  font: inherit; font-size: 0.82rem; padding: 5px 12px; border-radius: 999px;
+  border: 1.5px solid var(--line); background: none; color: var(--muted); cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.oq-chip:hover { background: var(--cream-2); }
+.oq-chip.active { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+.oq-group { margin-top: 18px; }
+.oq-group:first-of-type { margin-top: 12px; }
+.oq-group-head {
+  font-size: 0.78rem; font-weight: 700; color: var(--muted); letter-spacing: 0.01em;
+  padding-bottom: 6px; margin-bottom: 2px; border-bottom: 1px solid var(--line);
+}
+.oq-row { border-bottom: 1px solid var(--line); }
+.oq-row:last-child { border-bottom: 0; }
+.oq-row-top {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 2px; cursor: pointer; transition: background .1s;
+}
+.oq-row-top:hover { background: var(--cream-2); }
+.oq-when { font-family: var(--mono); font-size: 0.76rem; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+.oq-biz { font-weight: 600; white-space: nowrap; }
+.oq-camp { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+.oq-preview {
+  flex: 1; min-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.85rem; color: var(--ink);
+}
+.oq-status { font-size: 0.76rem; color: var(--muted); white-space: nowrap; }
+.oq-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.oq-toggle {
+  background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.7rem;
+  padding: 4px 6px; flex-shrink: 0; border-radius: 6px;
+}
+.oq-toggle:hover { background: var(--cream-2); color: var(--ink); }
+.oq-detail {
+  margin: 0 2px 10px; padding: 10px 12px; background: var(--cream-2); border-radius: 10px;
+  font-size: 0.82rem; white-space: pre-wrap; word-break: break-word; color: var(--ink);
+}
+
 /* Customer CRUD (AIC-44): create/edit form grid + delete confirm-to-type modal. */
 .op-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin: 14px 0; }
 .op-form-grid .field.span-2 { grid-column: 1 / -1; }

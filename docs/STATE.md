@@ -6,6 +6,36 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-23 — The needs-attention queue is now grouped, dated and filterable (AIC-121)
+Reported live from a real 11-item queue: a plain table, every row showing raw
+severity + raw type + the full Meta error text unconditionally — no date/time,
+no indication of which customer or campaign. All 11 items looked identical at
+a glance; a real `support_request` from a different customer was buried among
+10 repeated connection-health flaps on one already-known-dead account
+(Pisga's archived connection).
+
+**Server**: `OpsQueue.list()` now LEFT JOINs `business_name`/campaign `name`
+into every item — genuinely absent before, not just unrendered. `createdAt`
+was already flowing to the client (the service always selected it) but the
+frontend's `OpsItem` type didn't declare it, so it silently went unused the
+whole time.
+
+**Admin UI**: grouped by type (exhaustive Hebrew label map — `Record<OpsQueueType,
+string>`, so a type added to the shared enum without a label is now a compile
+error), each row collapsed to date/time + severity + business + campaign + a
+one-line preview, full detail on click. Severity and type filters operate
+client-side over the already-loaded backlog; the type filter only offers types
+actually present. The filter/group logic is `filterAndGroup`/`presentTypes`
+(`web/src/admin/ops-queue-view.ts`), a pure function extracted for the same
+reason as `onboarding-step4.ts` — no component-test tooling here, so a pure
+function is the only way to unit-test a UI decision at all.
+
+Verified in the browser against the real 11-item queue: grouped into "כשל
+בחיבור ל-Meta (10)" / "פנייה מהלקוח (1)"; expand/collapse confirmed on one row
+without affecting the rest; the severity filter correctly showed the empty-
+match state (all 11 are `high`); the type filter correctly isolated the one
+real customer request, previously invisible in the noise.
+
 ### 2026-08-23 — No horizontal padding against the sidebar, on every page in the product (AIC-120)
 Reported as a screenshot: a red warning box on /admin/onboarding touching the
 sidebar with no gap. My first attempt only added `className="wrap page dash"`

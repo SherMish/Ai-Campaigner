@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, type FormEvent } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { formatShekel } from "@aic/shared";
+import { formatShekel, type OpsQueueType, type OpsSeverity } from "@aic/shared";
 import {
   api,
   createCustomer, updateCustomer, deactivateCustomer, reactivateCustomer, deleteCustomer, getCustomerAudit,
   type CustomerWriteFields, type AuditEntry,
 } from "../api";
 import { strings } from "../strings";
+import { filterAndGroup, presentTypes, type SeverityFilter, type TypeFilter } from "./ops-queue-view";
 
 const t = strings.he.ops;
 const a = strings.he.admin;
@@ -76,11 +77,19 @@ interface CustomerDetail extends CustomerRow {
 
 interface OpsItem {
   id: string;
-  type: string;
-  severity: string;
+  createdAt: string;
+  type: OpsQueueType;
+  severity: OpsSeverity;
   status: string;
   detail: string;
   claimedBy: string | null;
+  // AIC-121: was already flowing to the client (server's OpsItem.createdAt
+  // is a Date, JSON-serialized fine) but never declared here, so createdAt
+  // silently went unused. businessName/campaignName needed a server-side
+  // JOIN (server/src/services/ops-queue.ts) since they weren't queried at
+  // all before this.
+  businessName: string | null;
+  campaignName: string | null;
 }
 
 interface Readout {
@@ -164,6 +173,13 @@ export function AdminCustomers() {
   const [params] = useSearchParams();
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [queue, setQueue] = useState<OpsItem[]>([]);
+  // AIC-121: severity/type filters over the queue, and which rows have their
+  // full detail text expanded (collapsed by default — the 11-item screenshot
+  // that motivated this was almost entirely full Meta error text, unreadable
+  // at a glance).
+  const [queueSeverity, setQueueSeverity] = useState<SeverityFilter>("all");
+  const [queueType, setQueueType] = useState<TypeFilter>("all");
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "deactivated" | "attention">("all");
@@ -249,6 +265,13 @@ export function AdminCustomers() {
 
   const claim = async (id: string) => { await api(`/admin/ops-queue/${id}/claim`, { method: "POST", body: "{}" }); load(); };
   const resolve = async (id: string) => { await api(`/admin/ops-queue/${id}/resolve`, { method: "POST", body: JSON.stringify({ note: "resolved" }) }); load(); };
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
   const review = async (campaignId: string, outcome: string) => {
     await api(`/admin/campaigns/${campaignId}/review`, { method: "POST", body: JSON.stringify({ reviewer: "operator", outcome }) });
     if (selected) reselect(selected.id); else load();
@@ -375,22 +398,79 @@ export function AdminCustomers() {
       <div className="card" style={{ marginBottom: 16 }}>
         <b style={{ fontSize: "1.05rem" }}>{t.queue} ({queue.length})</b>
         {queue.length === 0 ? <p className="muted" style={{ marginTop: 10 }}>{t.empty}</p> : (
-          <table className="op-table">
-            <tbody>
-              {queue.map((i) => (
-                <tr key={i.id}>
-                  <td><span className={`op-sev-${i.severity}`}>{i.severity}</span></td>
-                  <td>{i.type}</td>
-                  <td>{i.detail}</td>
-                  <td>{i.status}{i.claimedBy ? ` · ${i.claimedBy}` : ""}</td>
-                  <td>
-                    <button className="btn btn-outline btn-sm" style={{ marginInlineEnd: 6 }} onClick={() => claim(i.id)}>{t.claim}</button>
-                    <button className="btn btn-outline btn-sm" onClick={() => resolve(i.id)}>{t.resolve}</button>
-                  </td>
-                </tr>
+          <>
+            {/* AIC-121: severity chips + a type <select> restricted to types
+                actually present (presentTypes) — never an option with zero
+                matching items. Both operate client-side over the already-
+                loaded queue; no new fetch needed since list() returns the
+                full unresolved backlog already. */}
+            <div className="oq-filters">
+              <span className="muted" style={{ fontSize: "0.78rem" }}>{t.queueFilterSeverity}:</span>
+              {(["all", "high", "medium", "low"] as const).map((sev) => (
+                <button
+                  key={sev}
+                  type="button"
+                  className={`oq-chip${queueSeverity === sev ? " active" : ""}`}
+                  onClick={() => setQueueSeverity(sev)}
+                >
+                  {sev === "all" ? t.queueSeverityAll : sev}
+                </button>
               ))}
-            </tbody>
-          </table>
+              <span className="muted" style={{ fontSize: "0.78rem", marginInlineStart: 10 }}>{t.queueFilterType}:</span>
+              <select
+                value={queueType}
+                onChange={(e) => setQueueType(e.target.value as TypeFilter)}
+                style={{ font: "inherit", fontSize: "0.82rem", padding: "5px 10px", borderRadius: 999, border: "1.5px solid var(--line)" }}
+              >
+                <option value="all">{t.queueTypeAll}</option>
+                {presentTypes(queue).map((ty) => (
+                  <option key={ty} value={ty}>{t.queueTypeLabel[ty]}</option>
+                ))}
+              </select>
+            </div>
+
+            {(() => {
+              const groups = filterAndGroup(queue, { severity: queueSeverity, type: queueType });
+              if (groups.length === 0) return <p className="muted" style={{ marginTop: 10 }}>{t.queueNoMatches}</p>;
+              return groups.map((g) => (
+                <div className="oq-group" key={g.type}>
+                  <div className="oq-group-head">{t.queueTypeLabel[g.type]} ({g.items.length})</div>
+                  {g.items.map((i) => {
+                    const expanded = expandedIds.has(i.id);
+                    return (
+                      <div className="oq-row" key={i.id}>
+                        <div className="oq-row-top" onClick={() => toggleExpanded(i.id)}>
+                          <span className="oq-when">
+                            {new Date(i.createdAt).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                          <span className={`pill ${i.severity === "high" ? "attn" : i.severity === "medium" ? "warn" : "neutral"}`} style={{ padding: "2px 10px", fontSize: "0.72rem" }}>
+                            {i.severity}
+                          </span>
+                          <span className="oq-biz">{i.businessName ?? t.queueNoBusiness}</span>
+                          {i.campaignName && <span className="oq-camp">· {i.campaignName}</span>}
+                          {!expanded && <span className="oq-preview">{i.detail}</span>}
+                          <span className="oq-status">{i.status}{i.claimedBy ? ` · ${i.claimedBy}` : ""}</span>
+                          <span className="oq-actions" onClick={(e) => e.stopPropagation()}>
+                            <button className="btn btn-outline btn-sm" onClick={() => claim(i.id)}>{t.claim}</button>
+                            <button className="btn btn-outline btn-sm" onClick={() => resolve(i.id)}>{t.resolve}</button>
+                          </span>
+                          <button
+                            type="button"
+                            className="oq-toggle"
+                            onClick={(e) => { e.stopPropagation(); toggleExpanded(i.id); }}
+                            aria-label={expanded ? t.queueHideDetail : t.queueShowDetail}
+                          >
+                            {expanded ? "▲" : "▼"}
+                          </button>
+                        </div>
+                        {expanded && <div className="oq-detail">{i.detail}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              ));
+            })()}
+          </>
         )}
       </div>
 
