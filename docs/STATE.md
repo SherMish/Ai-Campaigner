@@ -6,6 +6,32 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-23 — The builder's success screen now speaks to the operator who built it
+Reported live: after an operator launched a customer's campaign they saw
+"הקמפיין עלה לאוויר… אפשר לעקוב אחרי התוצאות מהדף הראשי" and a button reading
+"למעבר לדף הראשי", then asked whether step 5's finish button still needed
+clicking and how to get back there.
+
+Two separate problems, one visible:
+
+**The routing was already right.** `AdminBuilder` passes
+`onExit={() => nav('/admin/onboarding/:id')}`, so the button does return to the
+wizard. But the copy was customer framing shown to an operator — "go to the main
+page" — which gave no hint of that. A screen that does the right thing while
+describing something else is indistinguishable from one that does the wrong
+thing.
+
+**And the answer to their actual question was undocumented.** Step 5's
+"אימות והשלמה" is **not required**: nothing gates on
+`customer_onboarding.completed_at` — it is written by `finalize` and read in
+exactly one place, to render a pill. The campaign is live either way. What
+finalize does buy is a final end-to-end `ConnectionService.verify()`, which is
+worth running before leaving a call.
+
+The success screen now branches on `customerId`: operators get a button naming
+where it goes ("חזרה לאשף — לאימות הסופי") and copy stating that the final check
+is worth doing but not load-bearing. Customer copy is unchanged.
+
 ### 2026-08-23 — Existing-post creatives now carry the campaign's CTA (AIC-115)
 A real build failed at the last step: *"The ad's creative is incompatible with
 the objective of the campaign the ad belongs to."*

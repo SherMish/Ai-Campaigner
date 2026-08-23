@@ -668,6 +668,26 @@ started requiring a Page to BUILD one, which is exactly the contradiction an
 operator hit live. The label now carries both cases explicitly rather than
 picking whichever is true more often.
 
+**Step 5's "אימות והשלמה" is not required for the campaign to run.** Nothing
+gates on `customer_onboarding.completed_at` — it is written by `finalize` and
+read in exactly one place, to show a completed pill in the wizard. A campaign
+built in step 4 is live on Meta whether or not an operator ever returns to
+step 5.
+
+What finalize *does* buy is a final `ConnectionService.verify()` end to end,
+which is worth running before leaving a call. So it is recommended, not
+mandatory, and the copy now says exactly that rather than implying either
+extreme.
+
+**The builder's success screen is operator-aware.** When `customerId` is set
+(an operator building on a customer's behalf) `exit` returns to
+`/admin/onboarding/:id`, not `/app` — that routing was always correct, but the
+copy read "למעבר לדף הראשי" ("go to the main page") in both cases. Customer
+framing shown to an operator, and it gave no hint the button comes back to the
+wizard. Reported live 2026-08-23 as "does the finish button need to be
+clicked?" — a question the screen should have answered by itself. It now names
+the destination and states that the final verification is optional-but-worth-it.
+
 **Step 1 opens with the two prerequisites the wizard cannot check.** Every
 access check here verifies OUR access to the customer's assets. Neither of
 these is about our access, so all five steps can pass green and the build

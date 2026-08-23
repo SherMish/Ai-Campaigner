@@ -1519,6 +1519,15 @@ export const strings = {
         confirmStartsNow: "אין שלב אישור נוסף — ברגע שלוחצים, הקמפיין עולה לאוויר ומתחיל להוציא תקציב.",
         successTitle: "הקמפיין פעיל",
         successBody: "הקמפיין עלה לאוויר ומתחיל להגיע לאנשים. אפשר לעקוב אחרי התוצאות מהדף הראשי.",
+        // Operator-facing variant. The customer copy ("follow the results from
+        // the main page") is meaningless to an operator who built this on a
+        // customer's behalf, and it hid the fact that the button returns to
+        // the onboarding wizard. Says what is left to do instead: the final
+        // verification in step 5, which is NOT required for the campaign to
+        // run — nothing gates on it — but does re-check the connection end to
+        // end, which is worth doing before leaving the call.
+        successBodyOperator: "הקמפיין של הלקוח עלה לאוויר ורץ. נשאר רק לחזור לאשף ולהריץ את האימות הסופי (שלב 5) — הקמפיין יעבוד גם בלעדיו, אבל זו הבדיקה שמוודאת שהחיבור תקין מקצה לקצה.",
+        backToWizard: "חזרה לאשף — לאימות הסופי",
         goHome: "למעבר לדף הראשי",
         errorGeneric: "משהו השתבש ביצירת הקמפיין. אפשר לנסות שוב — מה שכבר נוצר לא ייווצר פעמיים.",
       },

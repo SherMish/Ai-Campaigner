@@ -282,8 +282,21 @@ export function Builder({ customerId, onExit }: Props = {}) {
         <div className="card">
           <StatusPill variant="ok">✓</StatusPill>
           <b style={{ fontSize: "1.3rem", display: "block", margin: "14px 0 10px" }}>{rv.successTitle}</b>
-          <p className="muted" style={{ marginBottom: 20 }}>{rv.successBody}</p>
-          <button className="btn btn-primary" onClick={exit}>{rv.goHome}</button>
+          {/* Operator vs customer. `customerId` set means an operator built
+              this on a customer's behalf, and `exit` returns them to the
+              onboarding wizard — NOT to "/app". The copy used to say
+              "למעבר לדף הראשי" ("go to the main page") in both cases, which
+              is customer framing shown to an operator and gave no hint the
+              button comes back here. Reported live 2026-08-23: "in the wizard
+              step 5 there's a finish button, does it need to be clicked?" —
+              the answer was invisible because the button did not say where it
+              went. */}
+          <p className="muted" style={{ marginBottom: 20 }}>
+            {customerId ? rv.successBodyOperator : rv.successBody}
+          </p>
+          <button className="btn btn-primary" onClick={exit}>
+            {customerId ? rv.backToWizard : rv.goHome}
+          </button>
         </div>
       </div>
     );
