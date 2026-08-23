@@ -272,6 +272,36 @@ enforcement. This is AIC-105's first error rule ("validate inline, at the
 field, before submit is possible; never a post-submit toast") applied to the
 one field where getting it wrong wastes the most of an operator's call.
 
+### An existing-post creative carries the campaign's CTA (AIC-115)
+
+Found live 2026-08-23: a click-to-WhatsApp build failed at the LAST step
+(`create_ad`) with *"The ad's creative is incompatible with the objective of the
+campaign the ad belongs to."*
+
+`createCreativeFromExistingPost` sent **only** `object_story_id`. The post was a
+plain photo with no call-to-action, so the creative had no WhatsApp button and
+could not serve the objective.
+
+**The comment that caused this is worth remembering.** It read: *"Meta reuses
+whatever CTA/link the original Page post already has."* That is an accurate
+description of what happens when you send nothing — and it was read as a
+**limit**, which is why nobody tried sending one. Probed against a real ad
+account: Meta accepts `call_to_action` alongside `object_story_id`, and it
+persists (read back as `call_to_action_type: WHATSAPP_MESSAGE`). The post never
+needed its own CTA; we needed to attach one.
+
+The adapter now resolves the destination shape and attaches its CTA, exactly as
+the upload path already did. Engagement campaigns send none — they have no
+`ctaType` by design, because the interaction happens on the post itself and
+imposing a button would change what the customer chose to run.
+
+**Best-effort in the additions path, deliberately.** If a campaign's destination
+is BLOCKED (e.g. a website campaign with no `website_url` on file) the CTA is
+omitted and the post is used as-is, rather than refusing. `free_beta_signups_leads`
+is exactly that shape — its posts are link shares carrying their own CTA, and
+adding an ad from one works today. Requiring a destination there would have
+broken a working path in order to fix a different one.
+
 ### A failed build leaves nothing behind (rollback)
 
 **Shipped 2026-08-19.** Replaces AIC-50's resume-point design.

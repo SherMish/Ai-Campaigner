@@ -5,7 +5,7 @@
 // reversible dogfood test instead; this one gets a unit test too because the
 // paused-invariant is safety-critical and cheap to pin down here directly).
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { FIXED_DESTINATION, FIXED_CTA, WEBSITE_DESTINATION, WEBSITE_CTA } from "@aic/shared";
+import { FIXED_DESTINATION, FIXED_CTA, WEBSITE_DESTINATION, WEBSITE_CTA, ENGAGEMENT_DESTINATION } from "@aic/shared";
 import { GraphCampaignAdapter, GraphWriteError } from "./campaign-adapter.js";
 
 function fakeFetch(respond: { id: string }) {
@@ -544,6 +544,78 @@ describe("GraphCampaignAdapter creative handling (AIC-51)", () => {
     const body = new URLSearchParams(String(init.body));
     expect(body.get("object_story_id")).toBe("page_1_post_9");
     expect(body.has("object_story_spec")).toBe(false);
+  });
+
+  // Found live 2026-08-23: a real build failed at create_ad with "The ad's
+  // creative is incompatible with the objective of the campaign the ad belongs
+  // to." This path sent ONLY object_story_id, so the creative carried no CTA,
+  // and a click-to-WhatsApp campaign requires one.
+  //
+  // The code comment here read "Meta reuses whatever CTA/link the original Page
+  // post already has" — true of what happens when you send nothing, but it was
+  // mistaken for a LIMIT. Probed against the real ad account: Meta accepts
+  // `call_to_action` alongside `object_story_id`, and it persists
+  // (`call_to_action_type: WHATSAPP_MESSAGE` read back). The post never needed
+  // its own CTA — we needed to attach one.
+  it("attaches the destination's CTA so the creative matches the campaign objective", async () => {
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ id: "crea_wa" }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await adapter.createCreativeFromExistingPost({
+      adAccountId: "act_123", pageId: "page_1", name: "Ad", postId: "post_9",
+      destination: FIXED_DESTINATION, whatsappNumber: "972500000000",
+    });
+
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    const cta = JSON.parse(new URLSearchParams(String(init.body)).get("call_to_action") ?? "{}");
+    expect(cta.type).toBe(FIXED_CTA);
+    expect(cta.value.whatsapp_number).toBe("972500000000");
+  });
+
+  it("uses the WEBSITE cta shape for a website campaign", async () => {
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ id: "crea_web" }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await adapter.createCreativeFromExistingPost({
+      adAccountId: "act_123", pageId: "page_1", name: "Ad", postId: "post_9",
+      destination: WEBSITE_DESTINATION, destinationUrl: "https://example.com/x",
+    });
+
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    const cta = JSON.parse(new URLSearchParams(String(init.body)).get("call_to_action") ?? "{}");
+    expect(cta.type).toBe(WEBSITE_CTA);
+    expect(cta.value.link).toBe("https://example.com/x");
+  });
+
+  // Engagement promotes the post AS IS — the interaction happens on the post
+  // itself, so imposing a CTA would change what the customer chose to run.
+  it("sends NO call_to_action for an engagement campaign", async () => {
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ id: "crea_eng" }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await adapter.createCreativeFromExistingPost({
+      adAccountId: "act_123", pageId: "page_1", name: "Ad", postId: "post_9",
+      destination: ENGAGEMENT_DESTINATION,
+    });
+
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(new URLSearchParams(String(init.body)).has("call_to_action")).toBe(false);
+  });
+
+  // Unchanged behaviour for callers that pass no destination (older call
+  // sites): send object_story_id alone, exactly as before.
+  it("omits the CTA entirely when no destination is given", async () => {
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ id: "crea_bare" }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await adapter.createCreativeFromExistingPost({ adAccountId: "act_123", pageId: "page_1", name: "Ad", postId: "post_9" });
+
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(new URLSearchParams(String(init.body)).has("call_to_action")).toBe(false);
   });
 });
 

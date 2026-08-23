@@ -174,7 +174,17 @@ adminBuilderRouter.post("/customers/:id/builder/creative", async (req, res) => {
 
     let spec: CreativeSpec;
     if (body.postId) {
-      spec = { kind: "existing_post", adAccountId: ctx.metaAdAccountId, pageId: ctx.pageId, name: body.name, postId: body.postId };
+      spec = {
+        kind: "existing_post", adAccountId: ctx.metaAdAccountId, pageId: ctx.pageId,
+        name: body.name, postId: body.postId,
+        // AIC-115 (2026-08-23): the CTA must ride along here too, or Meta
+        // refuses the AD as "incompatible with the objective". Same
+        // destination resolution as the upload branch below — an engagement
+        // destination has no ctaType, so the adapter omits it.
+        destination: body.destination ?? FIXED_DESTINATION,
+        whatsappNumber: body.whatsappNumber ?? "",
+        destinationUrl: body.destinationUrl,
+      };
     } else {
       const validation = validateCreativeCopy({
         headline: body.headline ?? "",

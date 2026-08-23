@@ -837,11 +837,40 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     });
   }
 
+  // The comment that used to sit here said Meta "reuses whatever CTA/link the
+  // original Page post already has". True of what happens when you send
+  // nothing — but it was mistaken for a LIMIT, and that cost a real build.
+  //
+  // Found live 2026-08-23: a click-to-WhatsApp build failed at create_ad with
+  // "The ad's creative is incompatible with the objective of the campaign the
+  // ad belongs to", because this path sent ONLY object_story_id and the post
+  // (a plain photo) carried no CTA. Probed against the real ad account: Meta
+  // accepts `call_to_action` alongside `object_story_id` and it persists
+  // (read back as call_to_action_type: WHATSAPP_MESSAGE). The post never
+  // needed its own CTA — we needed to attach one, exactly as the upload path
+  // already does.
   async createCreativeFromExistingPost(params: CreatePostCreativeParams): Promise<string> {
-    return this.postCreate(params.adAccountId, "adcreatives", {
+    const fields: Record<string, unknown> = {
       name: params.name,
       object_story_id: `${params.pageId}_${params.postId}`,
-    });
+    };
+
+    // No destination given → post as is, byte-identical to the old behaviour.
+    if (params.destination) {
+      const shape = resolveDestinationShape(params.destination);
+      // Engagement has no ctaType by design: the interaction happens on the
+      // post itself, so imposing a button would change what the customer
+      // chose to run. resolveDestinationShape already encodes that, so this
+      // needs no engagement special-case of its own.
+      if (shape.ctaType) {
+        fields.call_to_action =
+          shape.destinationType === "WEBSITE"
+            ? { type: shape.ctaType, value: { link: params.destinationUrl } }
+            : { type: shape.ctaType, value: { whatsapp_number: params.whatsappNumber } };
+      }
+    }
+
+    return this.postCreate(params.adAccountId, "adcreatives", fields);
   }
 
   // ── Launch gate (AIC-53) ────────────────────────────────────────────────

@@ -47,6 +47,14 @@ export interface CreatePostCreativeParams {
   pageId: string;
   name: string;
   postId: string; // an id from listPromotablePosts
+  // Found live 2026-08-23: without a CTA this creative cannot serve a
+  // click-to-WhatsApp (or website) objective, and Meta refuses the AD with
+  // "The ad's creative is incompatible with the objective of the campaign".
+  // Optional so existing callers are unchanged — omitted means "post as is",
+  // which is right for engagement and was the only behaviour before.
+  destination?: string;
+  whatsappNumber?: string; // whatsapp destinations
+  destinationUrl?: string; // website destinations
 }
 
 export interface CreativeWriter {

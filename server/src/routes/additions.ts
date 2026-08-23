@@ -195,12 +195,31 @@ additionsRouter.post("/creative", requireAuth, async (req, res) => {
 
     let spec: CreativeSpec;
     if (body.postId) {
-      // AIC-102: an existing-post creative carries NO destination fields at
-      // all — createCreativeFromExistingPost just references the post's own
-      // object_story_id, and Meta reuses whatever CTA/link that post already
-      // has. So this path needs no WhatsApp-vs-website decision and was never
-      // the thing the old blanket refusal should have blocked.
-      spec = { kind: "existing_post", adAccountId: ctx.metaAdAccountId, pageId: ctx.pageId, name: body.name, postId: body.postId };
+      // AIC-102 said this path "carries NO destination fields at all" because
+      // Meta reuses whatever CTA the post already has. That is what happens
+      // when you send nothing — but AIC-115 (2026-08-23) showed it was
+      // mistaken for a LIMIT: a plain photo post has no CTA, so a
+      // click-to-WhatsApp ad built from it is refused as "incompatible with
+      // the objective". Meta does accept a call_to_action alongside
+      // object_story_id (probed live; it persists).
+      //
+      // Best-effort on purpose. If the campaign's destination is resolvable we
+      // attach its CTA; if it is BLOCKED (e.g. a website campaign with no
+      // website_url on file) we fall back to today's post-as-is behaviour
+      // rather than refusing. That matters: free_beta_signups_leads is exactly
+      // that shape, its posts are link shares carrying their own CTA, and
+      // adding an ad from one works today. Requiring a destination here would
+      // break a working path to fix a different one.
+      const postDestination = resolveCreativeDestination(ctx);
+      spec = {
+        kind: "existing_post", adAccountId: ctx.metaAdAccountId, pageId: ctx.pageId,
+        name: body.name, postId: body.postId,
+        ...(postDestination.kind === "whatsapp"
+          ? { destination: FIXED_DESTINATION, whatsappNumber: postDestination.number }
+          : postDestination.kind === "website"
+            ? { destination: WEBSITE_DESTINATION, destinationUrl: postDestination.url }
+            : {}),
+      };
     } else {
       // The new-content path DOES need a destination — refused BEFORE any
       // Meta call if this campaign has neither a WhatsApp number nor a

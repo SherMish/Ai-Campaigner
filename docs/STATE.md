@@ -6,6 +6,36 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-23 — Existing-post creatives now carry the campaign's CTA (AIC-115)
+A real build failed at the last step: *"The ad's creative is incompatible with
+the objective of the campaign the ad belongs to."*
+
+`createCreativeFromExistingPost` sent only `object_story_id`, so a creative built
+from a plain photo post had no CTA and could not serve a click-to-WhatsApp
+objective.
+
+**My first diagnosis was wrong and the user caught it.** I concluded a WhatsApp
+campaign simply cannot use an existing post, and filed a ticket to *filter* the
+picker. Asked "whatsapp campaign cant use existing post?", I probed the real ad
+account instead of reasoning: Meta accepts `call_to_action` alongside
+`object_story_id`, and it persists (`call_to_action_type: WHATSAPP_MESSAGE` read
+back; probe creative deleted). The post never needed its own CTA — we needed to
+attach one.
+
+The misleading artifact was a code comment: *"Meta reuses whatever CTA/link the
+original Page post already has."* True of what happens when you send nothing,
+read as a limit on what Meta accepts. Filtering the picker would have hidden
+usable options behind a restriction that does not exist.
+
+Fixed at the adapter, with the destination threaded from all three call sites.
+Engagement sends no CTA (no `ctaType` by design — the interaction is on the post).
+The additions path is **best-effort**: a blocked destination falls back to
+post-as-is rather than refusing, because `free_beta_signups_leads` (website
+campaign, no `website_url`, posts that are link shares) currently works that way
+and must keep working.
+
+857 server tests pass; the 2 failures are the known pre-existing pair.
+
 ### 2026-08-22 — Removed the dead wizard step indicator, and three claims that were false
 All from one user question ("aint it wrong status") and one instruction ("these
 do nothing, remove them"). Every item is the same shape: state or copy that was

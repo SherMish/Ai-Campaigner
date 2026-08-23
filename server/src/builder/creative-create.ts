@@ -32,7 +32,11 @@ export async function uploadCreativeMedia(
 
 export type CreativeSpec =
   | { kind: "upload"; adAccountId: string; pageId: string; name: string; headline: string; primaryText: string; whatsappNumber: string; destinationUrl?: string; media: CreativeMedia; destination: string }
-  | { kind: "existing_post"; adAccountId: string; pageId: string; name: string; postId: string };
+  // AIC-115 fix (2026-08-23): an existing-post creative needs the campaign's
+  // CTA too, or Meta refuses the AD as "incompatible with the objective".
+  // Optional so an engagement campaign (no ctaType) simply omits them.
+  | { kind: "existing_post"; adAccountId: string; pageId: string; name: string; postId: string;
+      destination?: string; whatsappNumber?: string; destinationUrl?: string };
 
 function asCreatingWriter(writer: CreativeWriter, spec: CreativeSpec): CreatingWriter {
   return {
@@ -59,7 +63,8 @@ export async function createCreativeIdempotent(
   const payload: Record<string, unknown> =
     spec.kind === "upload"
       ? { adAccountId: spec.adAccountId, pageId: spec.pageId, name: spec.name, headline: spec.headline, primaryText: spec.primaryText, whatsappNumber: spec.whatsappNumber, destinationUrl: spec.destinationUrl, media: spec.media, destination: spec.destination }
-      : { adAccountId: spec.adAccountId, pageId: spec.pageId, name: spec.name, postId: spec.postId };
+      : { adAccountId: spec.adAccountId, pageId: spec.pageId, name: spec.name, postId: spec.postId,
+          destination: spec.destination, whatsappNumber: spec.whatsappNumber, destinationUrl: spec.destinationUrl };
 
   return outbox.applyIdempotent(
     {
