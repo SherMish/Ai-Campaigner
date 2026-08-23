@@ -616,6 +616,12 @@ export const strings = {
       campaignUnsupportedUnrecognizedObjective: "המטרה של הקמפיין הזה לא נתמכת עדיין (לא לידים)",
       campaignUnsupportedMixedAdSets: "קבוצות המודעות בקמפיין הזה מוגדרות ליעדים שונים — לא נתמך עדיין",
 
+      // Shown instead of the provisioning form once a campaign is linked —
+      // most often right after the builder created one and returned the
+      // operator here. Without it, step 4 offered an action whose only
+      // possible outcome was a unique-constraint error.
+      alreadyProvisionedTitle: "הרשומות כבר קיימות — אין מה ליצור",
+      alreadyProvisionedBody: "הקמפיין, חשבון הפרסום והחיבור כבר רשומים אצלנו ומקושרים ל-Meta. אם הקמפיין נבנה דרך אשף הבנייה — הוא כבר עשה את זה. נשאר רק האימות הסופי בשלב 5.",
       provisionSubmit: "יצירת הרשומות",
       provisionSuccess: "נוצר בהצלחה.",
       // AIC-69: the hard constraint the wizard enforces, not just documents.

@@ -6,6 +6,37 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-23 — Step 4 no longer offers to create records that already exist
+Reported live, straight after the first successful end-to-end build: the
+operator was returned to the wizard and asked whether "יצירת הרשומות" and
+"אימות והשלמה" still needed clicking.
+
+**"יצירת הרשומות" would have failed.** The builder had already written every
+record — `meta_campaign_id`, name, agreed budget, WhatsApp destination,
+`launch_approved_at`. Provisioning again INSERTs into `managed_campaigns`,
+which is `UNIQUE (customer_id)` and — unlike the shell-row insert — has **no
+`ON CONFLICT`**. The only possible outcome was an opaque constraint violation.
+The wizard was inviting an operator into an error, mid-call.
+
+Step 4 now shows "הרשומות כבר קיימות — אין מה ליצור" instead of the
+provisioning form once a campaign is linked.
+
+**Getting the signal right took two passes, and the first was wrong.**
+`metaCampaignId` is not on the customer DTO at all, so the initial guard
+silently never fired — caught by checking in the browser rather than trusting
+the typecheck. `campaignId` alone is also wrong: a builder shell row has one
+too, which is precisely the state this must distinguish. The correct signal is
+`connectionReadiness !== "not_launched"`, since `classifyConnectionReadiness`
+returns exactly that when `meta_campaign_id` is null.
+
+**"אימות והשלמה" is not required** — documented rather than left to be asked
+again. Nothing gates on `customer_onboarding.completed_at`; it is read in one
+place to render a pill. What finalize buys is a last end-to-end
+`ConnectionService.verify()`, worth running before ending a call.
+
+Verified in the browser against the real customer: provision button gone,
+message shown, finalize still available.
+
 ### 2026-08-23 — The builder's success screen now speaks to the operator who built it
 Reported live: after an operator launched a customer's campaign they saw
 "הקמפיין עלה לאוויר… אפשר לעקוב אחרי התוצאות מהדף הראשי" and a button reading

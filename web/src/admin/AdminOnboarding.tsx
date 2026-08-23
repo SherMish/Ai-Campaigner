@@ -37,7 +37,20 @@ interface OnboardingState {
   updatedAt: string;
   completedAt: string | null;
 }
-interface CustomerBasics { id: string; businessName: string }
+interface CustomerBasics {
+  id: string;
+  businessName: string;
+  // Both already returned by GET /admin/customers/:id and previously
+  // discarded. Needed so step 4 can tell "no records yet" from "records
+  // already exist" — see the alreadyProvisioned guard below.
+  //
+  // campaignId ALONE is not the signal: a builder shell row has one too, with
+  // no Meta campaign behind it. `connectionReadiness === "not_launched"` is
+  // exactly that shell-row state (classifyConnectionReadiness returns it when
+  // meta_campaign_id is null), so it is what distinguishes them.
+  campaignId: string | null;
+  connectionReadiness: string | null;
+}
 
 // AIC-105 — mirrors server/src/meta/campaign-discovery.ts.
 interface AdAccountOption {
@@ -112,6 +125,10 @@ export function AdminOnboarding() {
   const { id } = useParams<{ id: string }>();
   const nav = useNavigate();
   const [customer, setCustomer] = useState<CustomerBasics | null>(null);
+  // A linked Meta campaign means provisioning already happened — whether via
+  // this form or via the builder (AIC-105 Branch A). Either way there is
+  // nothing left to create, and trying would violate UNIQUE(customer_id).
+  const alreadyProvisioned = !!customer?.campaignId && customer.connectionReadiness !== "not_launched";
   const [state, setState] = useState<OnboardingState | null>(null);
   const [portfolioId, setPortfolioId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -982,7 +999,25 @@ export function AdminOnboarding() {
           )}
         </div>
 
-        {!noCampaignsForSelectedAccount && (
+        {/* Found live 2026-08-23: after building a campaign through the
+            builder, the operator is returned here — and step 4 still offered
+            "יצירת הרשומות", which would have INSERTed a second
+            managed_campaigns row. That table is UNIQUE(customer_id) and this
+            INSERT has no ON CONFLICT, so the click could only ever produce an
+            opaque constraint violation. The wizard was inviting an operator
+            into an error, mid-call.
+            The records already exist — the builder wrote them. Say so. */}
+        {alreadyProvisioned ? (
+          <div
+            style={{
+              marginTop: 14, padding: "12px 14px", borderRadius: 8,
+              border: "1px solid var(--line)", background: "var(--cream-2, #f7f2ea)",
+            }}
+          >
+            <b style={{ display: "block", marginBottom: 6 }}>✓ {w.alreadyProvisionedTitle}</b>
+            <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>{w.alreadyProvisionedBody}</p>
+          </div>
+        ) : !noCampaignsForSelectedAccount && (
           <>
             <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={provisioning || pageIdUnverified() || instagramIdUnverified()} onClick={submitProvision}>
               {w.provisionSubmit}
