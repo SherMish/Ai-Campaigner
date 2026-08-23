@@ -131,6 +131,24 @@ button on the right. Shell CSS is `.ap-*` classes in `ui.css`. The old top
 `AppHeader` is retired from the app screens (onboarding/connect keep their own
 minimal header). `lucide-react` provides the icons.
 
+**Horizontal padding against the sidebar is owned by `.wrap` alone
+(AIC-120).** `.ap-content` (the shell's own content slot) deliberately has
+none — every routed page supplies its own via `className="wrap page"` (or
+`"wrap page dash"` on a dashboard-shaped page). Found live, reported as "no
+gap between content and the sidebar" on an admin screen: `.page`/`.dash` exist
+only for VERTICAL rhythm, but both declared it with the `padding` shorthand
+(`padding: 40px 0 90px`), which sets all four sides — so their `0` for
+left/right silently overrode `.wrap`'s `padding: 0 24px` at equal specificity,
+by source order. This was true of **every** page that combines the classes,
+not one screen: the entire customer app (`Home`, `Builder`, `AddContent`,
+`Settings`, `Recommendations`, `Connect`, `Checkout`, `Onboarding`, `Review`)
+and the entire admin console. It read as fine almost everywhere because most
+content sits inside a `.card`, whose own padding/border/shadow reads as a gap
+even with none from the page itself — it took a full-bleed colored box (a
+warning banner) touching the sidebar directly to make it visible. Fixed by
+switching `.page`/`.dash` to `padding-block`, which only ever touches
+top/bottom and can't collide with `.wrap`'s horizontal value again.
+
 **Dashboard layout (AIC-41):** Home (`/app`) is a two-column **rail + main** grid
 (`.dash*` in `ui.css`) — left rail = the campaign at-a-glance card; main = status
 hero + KPI row + recommendation nudge + weekly feedback + activity. Tighter type +

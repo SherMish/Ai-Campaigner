@@ -627,7 +627,14 @@ export function AdminOnboarding() {
   const noCampaignsForSelectedAccount = branch === "new_campaign";
 
   return (
-    <div>
+    // AIC-120: every other admin page (AdminCustomers, AdminOverview,
+    // AdminUsers, AdminMeta, AdminRecommendations, AdminOperators) wraps its
+    // root in "wrap page dash" — `.wrap` is what supplies horizontal padding
+    // against `.ap-side` (`.ap-content` itself has none, by design, so every
+    // routed page owns its own margins). This page used a bare `<div>` and
+    // rendered flush against the sidebar. Found live from a screenshot: the
+    // step-1 warning box touched the sidebar edge with no gap at all.
+    <div className="wrap page dash">
       <Link className="link" to={`/admin/customers`}>{w.backToCustomer}</Link>
       <h1 style={{ margin: "12px 0 4px" }}>{w.title}</h1>
       <p className="muted">{customer?.businessName ?? id} — {w.subtitle}</p>

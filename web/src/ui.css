@@ -202,7 +202,23 @@ button { font-family: inherit; }
 .aside .num { width: 30px; height: 30px; border-radius: 50%; background: rgba(247,242,234,0.12); display: grid; place-items: center; font-family: var(--mono); font-size: 0.8rem; }
 
 /* content layout */
-.page { padding: 40px 0 90px; }
+/* AIC-120: padding-block, not the `padding` shorthand. `.wrap` is the ONLY
+   class meant to own horizontal spacing (`padding: 0 24px`) — `.page`/`.dash`
+   exist purely for vertical rhythm. But every real usage combines them
+   (`className="wrap page dash"`), and the `padding` shorthand always sets
+   all four sides — so `.page`'s `0` for left/right SILENTLY OVERRODE `.wrap`'s
+   24px, because .page (this rule) sits later in the cascade at equal
+   specificity. Same collision, same fix, applies to `.dash` below.
+   Found live: a full-bleed red warning box on /admin/onboarding touched the
+   sidebar with zero gap. Confirmed via computed style before this fix:
+   `.wrap.page.dash`'s resolved paddingRight was "0px" on EVERY page that
+   combines them — not just admin, the entire customer app too (Home,
+   Builder, AddContent, Settings, Recommendations, Connect, Checkout,
+   Onboarding, Review all use `wrap page[, dash]`). It read as fine almost
+   everywhere else only because most content sits inside a `.card` (its own
+   padding/border/shadow reads as a gap even with none); a full-bleed colored
+   box has nothing to hide behind. */
+.page { padding-block: 40px 90px; }
 .page h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 800; }
 .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
@@ -366,7 +382,8 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 }
 
 /* ── Dashboard: two-column rail + main, tighter type (AIC-41) ────────────── */
-.dash { padding: 26px 0 64px; }
+/* AIC-120: see .page above — same shorthand collision, same fix. */
+.dash { padding-block: 26px 64px; }
 .dash-title { font-size: 1.55rem; font-weight: 800; margin-bottom: 18px; }
 .dash-grid { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(228px, 1fr); gap: 18px; align-items: start; }
 .dash-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }

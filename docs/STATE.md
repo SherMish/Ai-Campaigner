@@ -6,6 +6,38 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-23 — No horizontal padding against the sidebar, on every page in the product (AIC-120)
+Reported as a screenshot: a red warning box on /admin/onboarding touching the
+sidebar with no gap. My first attempt only added `className="wrap page dash"`
+to that one component — matching its siblings — and changed NOTHING visually,
+which is what actually surfaced the real bug: measuring the computed style
+showed `paddingRight: 0px` on every admin page already using those classes,
+not just the one I'd just touched.
+
+Root cause: `.page`/`.dash` (`ui.css`) exist only for VERTICAL rhythm, but both
+declared it with the `padding` SHORTHAND (`padding: 40px 0 90px`), which sets
+all four sides at once — so their `0` for left/right silently overrode `.wrap`'s
+`padding: 0 24px` (the class that is actually supposed to own horizontal
+spacing), at equal specificity, by source order. `.dash` (line 369) comes after
+`.wrap` (line 36) in the stylesheet, so it always won.
+
+This was every page combining the classes, not an admin-only bug: the entire
+customer app (Home, Builder, AddContent, Settings, Recommendations, Connect,
+Checkout, Onboarding, Review) and the entire admin console. It read as fine
+almost everywhere because most content sits inside a `.card`, whose own
+padding/border/shadow reads as a gap even with none from the page itself —
+confirmed by screenshotting `/admin/customers` (a table, looked "close but
+fine") right after `/admin/onboarding` (a full-bleed red box, unmistakably
+wrong) with the identical `paddingRight: 0px` on both. It took a colored box
+with nothing to hide behind to make a product-wide bug visible on one screen.
+
+Fixed by switching `.page`/`.dash` to `padding-block`, which only ever touches
+top/bottom and structurally cannot collide with `.wrap`'s horizontal value
+again — not a one-off shorthand reorder, which would just relocate the next
+collision. Verified via computed style AND screenshot on an admin page (table),
+the reported page (warning box), and a customer page (`/app`) — all three now
+resolve `paddingRight: 24px`.
+
 ### 2026-08-23 — Step 4 showed the wrong form to a customer with no connection (AIC-119)
 Reported from the wizard for a customer with **no Meta connection and no
 campaign**: it asked for שם הקמפיין, תקציב יומי שסוכם and מספר וואטסאפ, and
