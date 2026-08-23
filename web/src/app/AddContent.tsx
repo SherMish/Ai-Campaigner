@@ -219,7 +219,10 @@ export function AddContent() {
     }
     const content =
       notReadyReason === "not_launched"
-        ? { title: s.notLaunchedTitle, body: s.notLaunchedBody, cta: s.goToHome, to: "/app" }
+        // CTA follows the corrected meaning: an unfinished BUILD is resumed in
+        // the builder, not "approved" on the home page (that step is gone —
+        // AIC-106). Sending them home offered nothing to act on.
+        ? { title: s.notLaunchedTitle, body: s.notLaunchedBody, cta: s.goToBuilder, to: "/app/builder" }
         : notReadyReason === "connection_issue"
           ? { title: s.connectionIssueTitle, body: s.connectionIssueBody, cta: s.goToSettings, to: "/app/settings" }
           : { title: s.notReadyTitle, body: s.notReadyBody, cta: s.goToBuilder, to: "/app/builder" };

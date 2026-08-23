@@ -6,6 +6,43 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-22 — Removed the dead wizard step indicator, and three claims that were false
+All from one user question ("aint it wrong status") and one instruction ("these
+do nothing, remove them"). Every item is the same shape: state or copy that was
+true once and quietly stopped being true.
+
+**The step indicator is gone.** Its five buttons called `goToStep(n)`, which
+only wrote `current_step` — the sections never hid or scrolled, so clicking did
+nothing visible. `current_step` turned out to be **write-only**: carried through
+the DTO, never read to decide anything, with the indicator as its sole consumer.
+It was also actively harmful — it is what made the wizard announce "step 3 of 5"
+for `free_beta test`, a customer whose connection is healthy and whose campaign
+has been live for a week. Indicator, `goToStep`, the post-provision `goToStep(5)`
+write and the orphaned `stepOf` string all removed. The column and its route are
+left in place but are now unwritten; worth a follow-up to drop them.
+
+**`resumedNote` reworded.** It said "ממשיכים מהשלב האחרון שנשמר" — there is no
+saved step any more. Now states what is actually true and useful on a call: this
+customer has been worked on before, and the per-step checks show what is
+verified.
+
+**`not_launched` was false in both halves.** It read "קמפיין קיים, לא מקושר
+ל-Meta" ("a campaign exists, not linked to Meta"). Traced every writer of
+`managed_campaigns`: a row with `meta_campaign_id = NULL` can ONLY be the
+builder's shell row, because provisioning an existing campaign always supplies
+the Meta id. So this reason can never mean "a real campaign that isn't linked" —
+**the state the copy described does not exist.** It only ever means an
+unfinished build. Relabelled accordingly.
+
+**And its customer-facing copy still instructed a deleted step.** It said
+"אשרו את ההפעלה בדף הבית" — approve the launch on the home page — a step AIC-106
+removed earlier the same day. A fourth AIC-106 leftover, missed when the gate
+came out. Rewritten, and its CTA now points at the builder (resume the build)
+rather than home (nothing to do there).
+
+Verified in the browser: indicator gone, all five sections still render, the
+prerequisites warning intact.
+
 ### 2026-08-22 — The add-content blocker message named nothing and claimed work nobody was doing
 User report: "completely useless, actions-less message". It was worse than
 useless — it was **false**.

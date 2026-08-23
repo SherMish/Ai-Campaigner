@@ -246,13 +246,6 @@ export function AdminOnboarding() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pages]);
 
-  function goToStep(n: number) {
-    if (!id) return;
-    api<{ state: OnboardingState }>(`/admin/customers/${id}/onboarding/step`, {
-      method: "POST", body: JSON.stringify({ step: n }),
-    }).then((r) => setState(r.state)).catch(() => {});
-  }
-
   // AIC-105 Branch B — step 4's pickers. Loaded eagerly (every wizard section
   // renders at once, per this component's own convention) rather than only
   // once the operator scrolls to step 4, so the list is already there by the
@@ -488,7 +481,14 @@ export function AdminOnboarding() {
         }),
       },
     )
-      .then(() => { setProvisionResult(w.provisionSuccess); goToStep(5); })
+      // `goToStep(5)` used to run here. Removed 2026-08-22 with the step
+      // indicator: `current_step` is WRITE-ONLY — carried through the DTO but
+      // never read to decide anything, since the indicator was its only
+      // consumer. It was also actively misleading, because it is what made the
+      // wizard announce "step 3 of 5" for a customer whose connection is
+      // healthy and whose campaign has been live for a week. Write-only state
+      // that nobody reads is exactly what decays into a lie.
+      .then(() => { setProvisionResult(w.provisionSuccess); })
       .catch((e) => {
         // A 409 refusal (AIC-69's gate) carries the diagnosis on the body —
         // rendered as its own known reason, not a generic failure message.
@@ -575,7 +575,6 @@ export function AdminOnboarding() {
 
   if (!id) return null;
 
-  const step = state?.currentStep ?? 1;
   // AIC-105 Branch A: a picked ad account with a confirmed-empty campaign
   // list — the precondition for "צור קמפיין חדש" instead of the picker.
   const noCampaignsForSelectedAccount =
@@ -593,19 +592,6 @@ export function AdminOnboarding() {
         <div className="pill ok" style={{ marginTop: 10, padding: "4px 12px" }}><span className="dot" />{w.finalizeOk}</div>
       )}
       {error && <p style={{ color: "#c0362c", fontSize: "0.85rem", marginTop: 8 }}>{error}</p>}
-
-      {/* Step indicator — persists progress, doesn't hide sections */}
-      <div className="row gap8" style={{ marginTop: 16, marginBottom: 8, flexWrap: "wrap" }}>
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button
-            key={n}
-            className={`btn btn-sm ${n === step ? "btn-primary" : "btn-outline"}`}
-            onClick={() => goToStep(n)}
-          >
-            {w.stepOf.replace("{n}", String(n))}
-          </button>
-        ))}
-      </div>
 
       {/* Step 1 — customer grants partner access */}
       <div className="card" style={{ marginTop: 12 }}>

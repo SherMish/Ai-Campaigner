@@ -78,7 +78,16 @@ export const strings = {
       // it can name the technical gap directly.
       connectionReadinessReason: {
         no_campaign: "אין קמפיין מנוהל",
-        not_launched: "קמפיין קיים, לא מקושר ל-Meta",
+        // Corrected 2026-08-22. This read "קמפיין קיים, לא מקושר ל-Meta" —
+        // "a campaign exists, not linked to Meta" — which is false in BOTH
+        // halves. Traced every writer of managed_campaigns: a row with
+        // meta_campaign_id = NULL can ONLY come from the builder's shell row
+        // (startBuilderCampaign, or a connect-only provision). Provisioning an
+        // existing campaign always supplies the Meta id. So this reason can
+        // never mean "a real campaign that isn't linked" — the state the old
+        // copy described does not exist. It only ever means an unfinished
+        // build, which is resumable, not broken.
+        not_launched: "בנייה שלא הושלמה — אין עדיין קמפיין ב-Meta",
         missing_page: "חסרה גישה לעמוד הפייסבוק",
         connection_issue: "בעיית חיבור ל-Meta",
         // AIC-103: the ops-console health check's own reason — a campaign
@@ -400,8 +409,12 @@ export const strings = {
       title: "אשף חיבור Meta",
       subtitle: "תסריט לשיחה עם הלקוח, עם אימות חי בכל שלב — לא רק הוראות.",
       backToCustomer: "חזרה לכרטיס הלקוח",
-      resumedNote: "ממשיכים מהשלב האחרון שנשמר.",
-      stepOf: "שלב {n} מתוך 5",
+      // Reworded 2026-08-22 with the step indicator's removal: there is no
+      // "last saved step" any more (current_step was write-only and is no
+      // longer written). What IS true and useful on a call is that this
+      // customer has been worked on before — the per-step checks below show
+      // exactly what is already verified.
+      resumedNote: "כבר עבדנו על הלקוח הזה — הבדיקות למטה מראות מה כבר אומת.",
 
       step1Title: "שלב 1 — הלקוח משתף גישה",
       step1Sub: "בשיחה, עם הלקוח מול המסך שלו.",
@@ -1532,8 +1545,14 @@ export const strings = {
       notReadyTitle: "עוד אין קמפיין להוסיף לו תוכן",
       notReadyBody: "צריך קודם ליצור את הקמפיין הראשון שלכם.",
       goToBuilder: "ליצירת הקמפיין",
-      notLaunchedTitle: "הקמפיין שלכם עדיין לא פעיל",
-      notLaunchedBody: "יש לכם קמפיין, אבל הוא עדיין לא אושר להפעלה מול Meta. אשרו את ההפעלה בדף הבית לפני שמוסיפים תוכן.",
+      // Corrected 2026-08-22, twice over:
+      //  1. "יש לכם קמפיין" was false — the only state that reaches here is an
+      //     unfinished BUILD (an empty shell row), not a campaign.
+      //  2. "אשרו את ההפעלה בדף הבית" instructed a launch-approval step that
+      //     AIC-106 REMOVED earlier the same day. It told the customer to do
+      //     something that no longer exists anywhere in the product.
+      notLaunchedTitle: "עוד לא סיימנו להקים את הקמפיין",
+      notLaunchedBody: "התחלנו להקים את הקמפיין אבל התהליך לא הושלם, ולכן עוד אין קמפיין פעיל ב-Meta. אפשר להמשיך מהמקום שבו עצרנו — ואז להוסיף תוכן.",
       goToHome: "לדף הבית",
       connectionIssueTitle: "יש בעיה בחיבור לחשבון הפרסום",
       connectionIssueBody: "הקמפיין שלכם קיים ופעיל, אבל כרגע אי אפשר להוסיף לו תוכן בגלל בעיה בחיבור ל-Meta. בדקו את החיבור בהגדרות, או דברו איתנו ונטפל בזה.",
