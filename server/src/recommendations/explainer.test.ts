@@ -41,6 +41,26 @@ describe("add_creatives_for_comparison (AIC-86) — with-data vs day-one vs flex
     expect(noData).toContain("גמישה");
   });
 
+  // AIC-117, reported by a real customer: "wrong status. we have 2 ads running".
+  // The sentence "כרגע רצה מודעה אחת בלבד" was unconditional, printed off a
+  // count of ads WITH DATA. On a young campaign that is 0 while two ads run.
+  it("never claims one ad is running when the live count says otherwise", () => {
+    const two = explain(rec({ type: "add_creatives_for_comparison", evidence: { currentLeads: 0, currentCplAgorot: null, isFlexibleAd: false, liveCreativeCount: 2 } }));
+    expect(two).not.toContain("מודעה אחת בלבד");
+    expect(two).toContain("להוסיף"); // still actionable, just not a false count
+
+    const none = explain(rec({ type: "add_creatives_for_comparison", evidence: { currentLeads: 0, currentCplAgorot: null, isFlexibleAd: false, liveCreativeCount: 0 } }));
+    expect(none).not.toContain("מודעה אחת בלבד");
+
+    const one = explain(rec({ type: "add_creatives_for_comparison", evidence: { currentLeads: 0, currentCplAgorot: null, isFlexibleAd: false, liveCreativeCount: 1 } }));
+    expect(one).toContain("מודעה אחת בלבד"); // true here, so still said
+  });
+
+  it("falls back to the comparable count for rows written before the live count existed", () => {
+    const legacy = explain(rec({ type: "add_creatives_for_comparison", evidence: { currentLeads: 0, currentCplAgorot: null, isFlexibleAd: false, comparableCreativeCount: 1 } }));
+    expect(legacy).toContain("מודעה אחת בלבד");
+  });
+
   it("requiredFigures: no leads yet → no figures to guard; with leads → leads + CPL guarded", () => {
     expect(requiredFigures(rec({ type: "add_creatives_for_comparison", evidence: { currentLeads: 0, currentCplAgorot: null } }))).toEqual([]);
     const figures = requiredFigures(rec({ type: "add_creatives_for_comparison", evidence: { currentLeads: 5, currentCplAgorot: 1390 } }));

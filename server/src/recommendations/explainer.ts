@@ -68,19 +68,27 @@ export const EXPLAINER_HE = {
   // the day-one case where there isn't one yet, and whether the sole
   // creative is a flexible ad (AIC-36: Meta collapses several designs into
   // one comparable object, so "add creatives" really means "split it").
-  addCreativesWithData: (leads: string, avgCpl: string, isFlexibleAd: boolean) =>
+  // AIC-117: `oneAdRunning` gates the "כרגע רצה מודעה אחת בלבד" clause, which
+  // used to be unconditional. It is a claim about how many ads are RUNNING, and
+  // it was being printed off `comparableCreativeCount` — a count of ads with
+  // measured DATA. On a young campaign that reads 0 while two ads run, so a real
+  // customer was told one ad was running when two were. When we can't establish
+  // the count, the copy now makes no claim about it rather than guessing.
+  addCreativesWithData: (leads: string, avgCpl: string, isFlexibleAd: boolean, oneAdRunning: boolean) =>
     `הקמפיין רץ יפה — ${leads} פניות בעלות ממוצעת של ${avgCpl}. ` +
     (isFlexibleAd
       ? `המודעה שרצה היא מודעה גמישה שמשלבת כמה עיצובים וטקסטים יחד, ולכן אין לנו איך לדעת איזה שילוב ` +
         `הכי טוב. עם כמה מודעות נפרדות נוכל לזהות מה עובד, לעצור את החלש ולהעביר את התקציב למה שמביא תוצאות.`
-      : `כרגע רצה מודעה אחת בלבד, ולכן אין לנו מה להשוות — אנחנו לא יכולים לדעת איזה עיצוב מביא את הפניות ` +
+      : (oneAdRunning ? `כרגע רצה מודעה אחת בלבד, ולכן אין לנו מה להשוות` : `אין לנו מספיק מודעות להשוואה`) +
+        ` — אנחנו לא יכולים לדעת איזה עיצוב מביא את הפניות ` +
         `הזולות ביותר. עם 3–4 מודעות במקביל נוכל לזהות מה עובד, לעצור את החלשות ולהעביר את התקציב למה שמביא תוצאות.`),
-  addCreativesNoData: (isFlexibleAd: boolean) =>
+  addCreativesNoData: (isFlexibleAd: boolean, oneAdRunning: boolean) =>
     `הקמפיין רק התחיל לרוץ. ` +
     (isFlexibleAd
       ? `המודעה שרצה היא מודעה גמישה שמשלבת כמה עיצובים וטקסטים יחד — כדי שבעתיד נוכל לדעת איזה שילוב ` +
         `עובד הכי טוב, כדאי כבר עכשיו לפצל אותה למספר מודעות נפרדות.`
-      : `כרגע רצה מודעה אחת בלבד — כדי שבעתיד נוכל לדעת איזה עיצוב עובד הכי טוב, כדאי כבר עכשיו להוסיף ` +
+      : (oneAdRunning ? `כרגע רצה מודעה אחת בלבד — ` : ``) +
+        `כדי שבעתיד נוכל לדעת איזה עיצוב עובד הכי טוב, כדאי כבר עכשיו להוסיף ` +
         `עוד 2–3 מודעות, כך שברגע שיהיו תוצאות יהיה עם מה להשוות.`),
   weeklyStable: (leads: string, avgCpl: string) =>
     `השבוע התקבלו ${leads} פניות בעלות ממוצעת של ${avgCpl}. הביצועים יציבים ואין כרגע צורך בשינוי.`,
@@ -152,9 +160,15 @@ export function explain(rec: RecommendationRecord): string {
     case "add_creatives_for_comparison": {
       const leads = n(rec.evidence.currentLeads);
       const isFlexibleAd = rec.evidence.isFlexibleAd === true;
+      // Prefer the live count of running ads; fall back to the comparable count
+      // only for rows written before AIC-117, which carry no live count — those
+      // keep exactly the phrasing they were generated with.
+      const live = rec.evidence.liveCreativeCount;
+      const oneAdRunning =
+        typeof live === "number" ? live === 1 : n(rec.evidence.comparableCreativeCount) === 1;
       return leads > 0
-        ? EXPLAINER_HE.addCreativesWithData(String(leads), formatShekel(n(rec.evidence.currentCplAgorot)), isFlexibleAd)
-        : EXPLAINER_HE.addCreativesNoData(isFlexibleAd);
+        ? EXPLAINER_HE.addCreativesWithData(String(leads), formatShekel(n(rec.evidence.currentCplAgorot)), isFlexibleAd, oneAdRunning)
+        : EXPLAINER_HE.addCreativesNoData(isFlexibleAd, oneAdRunning);
     }
     case "no_action": {
       // `evidence` is a loose bag (Record<string, unknown>), so this switch was

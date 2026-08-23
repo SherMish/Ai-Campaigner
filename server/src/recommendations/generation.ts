@@ -219,11 +219,18 @@ export async function runGenerationTick(deps: {
     // are dropped from the health check entirely — a deleted ad set not
     // delivering is expected, never a needs-attention item (AIC-65).
     let deliveryProblemAdSetIds: Set<string> | undefined;
+    // AIC-117: delivery-health already computes the honest count of ads that
+    // are actually running. The AIC-86 advisory was reasoning from
+    // `comparableCount` (ads with measured DATA) instead, which reads 0 on a
+    // young campaign — so a customer with two live ads was told only one was
+    // running. Captured here and handed to the rules below.
+    let liveCreativeCount: number | undefined;
     if (deps.deliveryReader) {
       try {
         const health = await deps.deliveryReader.getDeliveryHealth(campaign.metaCampaignId);
         const realHealth = health.filter((h) => !unmanagedAdSetIds.has(h.adSetId));
         const del = summarize(realHealth);
+        liveCreativeCount = del.deliveringAdCount;
         if (!del.ok) {
           summary.deliveryProblems++;
           deliveryProblemAdSetIds = new Set(del.problemAdSetIds);
@@ -302,6 +309,7 @@ export async function runGenerationTick(deps: {
       trackingBroken,
       adSetLabels,
       flexibleCreativeAdSetIds,
+      liveCreativeCount,
       adStatuses,
       adSetStatuses,
       now: deps.ref,

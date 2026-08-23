@@ -134,6 +134,26 @@ half the real delivery in a ₪50/week one). **10% is a chosen, scale-free
 number — provisional, same treatment as `BUDGET_CPL_RISE_PCT`**, meant to be
 recalibrated once AIC-76 has produced real outcomes to look at.
 
+**Comparable ≠ EXISTING either — the third question, added AIC-117.** Both
+counts above are derived from insight rows, so both answer questions about ads
+that have *measured data*. Neither answers "how many ads are actually running",
+and on a campaign built hours ago the two diverge completely: two ads live, zero
+comparable. The advisory skips the evidence gates on the argument that *"there
+is only one creative" is a COUNT, and no amount of additional data makes a count
+more true* — sound, but it was reading `comparableCount`, which is not that
+count. A real customer with two running ads was told only one was running and
+advised to add more.
+
+`CampaignEvidence.liveCreativeCount` carries the honest number:
+delivery-health's `deliveringAdCount`, computed in the same tick from real
+ad/ad-set status, and previously used only for the "מודעות פעילות" figure on
+Home. The advisory returns null at `>= 2`. It is optional throughout — when
+absent nothing changes, so it can only suppress a false claim, never invent one.
+The customer-facing sentence "כרגע רצה מודעה אחת בלבד" is likewise now
+conditional on that count actually being 1; otherwise the copy makes no claim
+about how many ads run. Recommendation rows written before AIC-117 carry no
+live count and keep the phrasing they were generated with.
+
 **Comparable ≠ evidence-sufficient — two independent questions, on purpose:**
 - *comparable* (relative) — is Meta actually delivering to this object at
   all? Answers "can we even ask the question."

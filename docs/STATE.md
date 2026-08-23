@@ -6,6 +6,35 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-23 — "רצה מודעה אחת בלבד" — told to a customer with two ads running (AIC-117)
+Reported by the customer immediately after AIC-116 made their campaign visible:
+*"wrong status. we have 2 ads running"*. The AIC-86 advisory fired and its copy
+claimed one ad was running.
+
+The rule counts COMPARABLE creatives — ones with enough measured data to judge
+against each other. On a campaign built hours earlier that is 0, and 0 < 2, so
+it fired. Its own comment defends skipping the evidence gates on the grounds
+that *"there is only one creative" is a COUNT, and no amount of additional data
+makes a count more true* — the argument is right, but the code was counting
+creatives WITH DATA, which is a different number entirely. Two ads running, zero
+comparable.
+
+`deliveringAdCount` is the honest count, delivery-health computes it in the same
+tick from real ad/ad-set status, and it already said 2 — the rules were simply
+never given it. `CampaignEvidence.liveCreativeCount` now carries it and the
+advisory returns null at `>= 2`. Optional throughout, so where it is absent
+nothing changes: it can only suppress a false claim, never invent one.
+
+The copy was a second, separate defect. "כרגע רצה מודעה אחת בלבד" was
+unconditional — it would have been false at a live count of 0 as well as 2. It
+is now conditional on the count actually being 1; otherwise the sentence makes
+no claim about how many ads run, while staying just as actionable. Rows written
+before this carry no live count and keep the phrasing they were generated with.
+
+Both defects are the same shape as AIC-116's: a number that means one thing
+being rendered as a statement about another. Verified the customer's own
+recommendation is no longer live.
+
 ### 2026-08-23 — A live campaign was invisible to the engine and to its own customer (AIC-116)
 The customer's dashboard showed `מודעות —` and "not enough data for an audience
 breakdown" for a campaign that was live on Meta and spending. Three causes, one

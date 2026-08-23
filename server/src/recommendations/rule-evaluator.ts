@@ -67,6 +67,10 @@ export async function buildCampaignEvidence(
   // configured to optimize for, so its `leads` are structurally wrong (zero) —
   // every rule that reasons over leads or CPL would be reasoning over a lie.
   trackingBroken?: boolean,
+  // AIC-117: ads actually running right now (delivery-health's
+  // deliveringAdCount), as distinct from ads with measured data. Only the
+  // AIC-86 advisory reads it — see addCreativesForComparison.
+  liveCreativeCount?: number,
 ): Promise<CampaignEvidence> {
   const [curTotals, prevTotals, curCreatives, prevCreatives, curAdsets, curDaily, prevDaily] = await Promise.all([
     store.campaignTotals(campaign.id, current.start, current.end),
@@ -108,6 +112,7 @@ export async function buildCampaignEvidence(
       return d.size > 0 ? [...d] : undefined;
     })(),
     trackingBroken,
+    liveCreativeCount,
   };
 }
 

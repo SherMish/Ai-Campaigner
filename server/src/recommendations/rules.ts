@@ -117,6 +117,12 @@ export interface CampaignEvidence {
   // level CPL these ad sets report is still real, only the per-creative
   // breakdown within them isn't).
   flexibleCreativeAdSetIds?: Set<string>;
+  // AIC-117: how many ads actually EXIST and are deliverable right now, from
+  // delivery-health's `deliveringAdCount` (real ad/ad-set status, same tick) —
+  // NOT ads with measured data. The two diverge completely on a young campaign:
+  // two ads running, zero comparable. Optional so every existing caller and
+  // test keeps today's behaviour; only addCreativesForComparison reads it.
+  liveCreativeCount?: number;
   // AIC-107: an engagement campaign counts engagements, not leads. Creative
   // comparison ports unchanged (cost-per-result is cost-per-result), but
   // budget increases are DELIBERATELY excluded — see increaseBudget. Optional
@@ -441,6 +447,16 @@ function addCreativesForComparison(
   const creatives = comparableCreatives(ev, thresholds);
   if (creatives.comparableCount >= 2) return null;
 
+  // AIC-117: ...and don't fire when the ads simply have no data YET. The rule
+  // skips the evidence gates on the argument that "there is only one creative"
+  // is a count rather than a comparative claim — but `comparableCount` counts
+  // creatives with DATA, so on a campaign built hours ago it reads 0 and the
+  // rule told a customer with two running ads to add more. `liveCreativeCount`
+  // is the count the argument actually refers to. When it is unavailable
+  // (undefined) nothing changes, so this can only ever suppress a false claim,
+  // never invent a new one.
+  if ((ev.liveCreativeCount ?? 0) >= 2) return null;
+
   const adsets = comparableAdsets(ev, thresholds);
   // Names the AIC-36 flexible-ad case explicitly: Meta collapses N assets
   // inside one flexible ad into a single comparable object, so "add creatives"
@@ -458,6 +474,11 @@ function addCreativesForComparison(
     // even though the customer-facing copy only ever mentions creatives.
     evidence: {
       comparableCreativeCount: creatives.comparableCount,
+      // AIC-117: the count of ads actually RUNNING, kept alongside the
+      // comparable count rather than replacing it — they answer different
+      // questions and the explainer needs the first one to avoid claiming
+      // "one ad is running" off a number that means "one ad has data".
+      liveCreativeCount: ev.liveCreativeCount ?? null,
       isFlexibleAd,
       comparableAdsetCount: adsets.comparableCount,
       dormantAdsetIds: adsets.dormantIds,

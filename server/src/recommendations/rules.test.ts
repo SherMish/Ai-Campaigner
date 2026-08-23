@@ -113,6 +113,39 @@ describe("add_creatives_for_comparison (AIC-86)", () => {
     expect(d.type).not.toBe("add_creatives_for_comparison");
   });
 
+  // AIC-117, found live 2026-08-23. A real customer with TWO ads running was
+  // told "כרגע רצה מודעה אחת בלבד" and advised to add 2–3 more.
+  //
+  // The rule counts COMPARABLE creatives — ones with enough measured data to
+  // judge against each other. On a campaign built hours earlier that is 0, and
+  // 0 < 2, so the rule fired. Its own comment argues it may skip the evidence
+  // gates because "'there is only one creative' is a COUNT, and no amount of
+  // additional data makes a count more true" — correct, but the code was
+  // counting creatives WITH DATA, which is not that count at all.
+  //
+  // `deliveringAdCount` is the honest number (delivery-health computes it in
+  // the same tick, from real ad/ad-set status) and it already said 2. The rule
+  // simply was never given it.
+  it("does NOT fire when the ads exist but have no data yet — the count is of ADS, not of data", () => {
+    const ev = baseEvidence({
+      current: { spendAgorot: 0, leads: 0, cplAgorot: null, days: 0 },
+      deliveryDays: 0,
+      creatives: [], // nothing measured yet — Meta hasn't reported
+      liveCreativeCount: 2, // ...but two ads are genuinely running
+    });
+    expect(evaluateCampaign(ev).type).not.toBe("add_creatives_for_comparison");
+  });
+
+  it("still fires on day one when only ONE ad actually exists", () => {
+    const ev = baseEvidence({
+      current: { spendAgorot: 0, leads: 0, cplAgorot: null, days: 0 },
+      deliveryDays: 0,
+      creatives: [],
+      liveCreativeCount: 1,
+    });
+    expect(evaluateCampaign(ev).type).toBe("add_creatives_for_comparison");
+  });
+
   it("names the flexible-ad case explicitly (AIC-36) instead of the generic phrasing", () => {
     const ev = baseEvidence({
       current: { spendAgorot: 4629, leads: 5, cplAgorot: 926, days: 7 },
