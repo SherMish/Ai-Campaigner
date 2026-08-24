@@ -13,7 +13,7 @@ import {
 import { ControlService, PgControlStore } from "../execution/control-service.js";
 import { listCampaignActionHistory, condense } from "../services/action-history.js";
 import { listCustomers, getCustomerDetail } from "../services/customers.js";
-import { listAppUsers, ensureCustomerForUser } from "../services/users-admin.js";
+import { listAppUsers, ensureCustomerForUser, deleteUserRecords, type DeleteUserMode } from "../services/users-admin.js";
 import { createCustomer, updateCustomer, deactivateCustomer, reactivateCustomer, deleteCustomer } from "../services/customer-admin.js";
 import { listAuditLog, logAdminAction, type Actor } from "../services/admin-audit.js";
 import { listOperators, addOperator, setOperatorRole, removeOperator } from "../services/operator-accounts.js";
@@ -254,6 +254,28 @@ adminRouter.post("/users/:id/customer", async (req, res) => {
     res.json(r);
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : "failed to provision customer for user" });
+  }
+});
+
+// AIC-127: reset/delete a signup from the Users view, for putting an account
+// back to a known state so the onboarding wizard can be walked again. Two
+// modes ("business" keeps the login, "all" removes it); confirm-to-type the
+// EMAIL, verified server-side because this is irreversible and the client can
+// be bypassed. Never touches Meta — see deleteUserRecords.
+//
+// DELETE with a body: the confirmation text has to travel with the request and
+// must not end up in a URL or an access log. Same shape as
+// DELETE /customers/:id above.
+adminRouter.delete("/users/:id", async (req, res) => {
+  const actor = await actorFor(req as AuthedRequest);
+  const mode = req.body?.mode === "all" ? "all" : "business";
+  const confirmText = String(req.body?.confirmText ?? "");
+  try {
+    const r = await deleteUserRecords(pool, actor, req.params.id, mode as DeleteUserMode, confirmText);
+    if (!r.ok) { res.status(r.error === "user not found" ? 404 : 400).json({ error: r.error }); return; }
+    res.json(r);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : "failed to delete user records" });
   }
 });
 

@@ -126,3 +126,133 @@ export async function ensureCustomerForUser(
     client.release();
   }
 }
+
+// ── Reset / delete from the Users view (AIC-127) ─────────────────────────────
+//
+// Purpose is TESTING: put a signup back to a known state so the onboarding
+// wizard can be walked again from the top. Two modes, deliberately distinct:
+//
+//   "business" — delete the customers row. Cascades to meta_connections,
+//     managed_campaigns and everything under them, and app_users.customer_id
+//     goes NULL by its own ON DELETE SET NULL (migration 011). The LOGIN
+//     SURVIVES, so the same person can be taken through the wizard again —
+//     which is the point.
+//   "all" — the above, plus the app_users row itself. The signup is gone.
+//
+// NEITHER TOUCHES META. We delete our records; the Meta campaign, ad sets and
+// ads keep existing — and if they were live, keep spending — because they are
+// the customer's assets, not ours. Same rule deleteCustomer already follows
+// (customer-admin.ts). The UI states this outright rather than leaving an
+// operator to assume "delete" stopped the spend.
+export type DeleteUserMode = "business" | "all";
+
+export interface DeleteUserResult {
+  ok: boolean;
+  error?: string;
+  deleted?: { customer: boolean; user: boolean };
+}
+
+async function remainingFullAdmins(pool: pg.Pool, excludingUserId: string): Promise<number> {
+  const { rows } = await pool.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM app_users
+     WHERE is_admin = true AND admin_role = 'full_admin' AND id <> $1`,
+    [excludingUserId],
+  );
+  return rows[0].n;
+}
+
+export async function deleteUserRecords(
+  pool: pg.Pool,
+  actor: Actor,
+  userId: string,
+  mode: DeleteUserMode,
+  confirmText: string,
+): Promise<DeleteUserResult> {
+  const { rows } = await pool.query(
+    `SELECT id, email, name, customer_id, is_admin, admin_role FROM app_users WHERE id = $1`,
+    [userId],
+  );
+  const user = rows[0];
+  if (!user) return { ok: false, error: "user not found" };
+
+  // Confirm-to-type against the EMAIL, not the business name: this view's rows
+  // are identified by email, a user may have no business at all, and the
+  // operator should be retyping the thing they actually picked. Enforced
+  // server-side as well as in the UI — the client can be bypassed, and this is
+  // an irreversible delete (same reasoning as deleteCustomer's check).
+  if (confirmText.trim().toLowerCase() !== String(user.email).toLowerCase()) {
+    return { ok: false, error: "confirmation text does not match the user's email" };
+  }
+
+  // Deleting yourself would end your own session mid-action and, if you were
+  // the last admin, lock the console permanently.
+  if (mode === "all" && user.id === actor.userId) {
+    return { ok: false, error: "you can't delete your own account" };
+  }
+  // Mirrors removeOperator's guard: never leave the console with zero
+  // full_admins, or nobody can administer operators again — including undoing
+  // this.
+  if (mode === "all" && user.is_admin && user.admin_role === "full_admin") {
+    if ((await remainingFullAdmins(pool, userId)) === 0) {
+      return { ok: false, error: "can't delete the last full admin" };
+    }
+  }
+
+  const customerId: string | null = user.customer_id ?? null;
+  if (mode === "business" && !customerId) {
+    return { ok: false, error: "this user has no business to delete" };
+  }
+
+  // Snapshot before anything cascades, so the audit row stays legible once the
+  // records are gone — it is the only thing that survives.
+  let snapshot: Record<string, unknown> = { user };
+  if (customerId) {
+    const [cust, subs, conn, camp] = await Promise.all([
+      pool.query(`SELECT * FROM customers WHERE id = $1`, [customerId]),
+      pool.query(`SELECT * FROM subscriptions WHERE customer_id = $1`, [customerId]),
+      pool.query(`SELECT * FROM meta_connections WHERE customer_id = $1`, [customerId]),
+      pool.query(`SELECT * FROM managed_campaigns WHERE customer_id = $1`, [customerId]),
+    ]);
+    snapshot = {
+      user,
+      customer: cust.rows[0] ?? null,
+      subscription: subs.rows[0] ?? null,
+      connection: conn.rows[0] ?? null,
+      campaign: camp.rows[0] ?? null,
+      // Recorded explicitly so a later reader of the audit trail knows the Meta
+      // objects were left running rather than assuming a delete cleaned up.
+      metaCampaignIdLeftOnMeta: camp.rows[0]?.meta_campaign_id ?? null,
+    };
+  }
+
+  // One transaction: a half-applied "all" would leave a login pointing at a
+  // deleted business, which is the state this feature exists to clear.
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    if (customerId) await client.query(`DELETE FROM customers WHERE id = $1`, [customerId]);
+    if (mode === "all") await client.query(`DELETE FROM app_users WHERE id = $1`, [userId]);
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+
+  await logAdminAction(pool, {
+    actorUserId: actor.userId,
+    actorLabel: actor.label,
+    action: mode === "all" ? "user.delete_all" : "user.delete_business",
+    entityType: "app_user",
+    entityId: userId,
+    entityLabel: user.email,
+    beforeState: snapshot,
+    detail:
+      mode === "all"
+        ? `Deleted the signup "${user.email}" and its business records. Meta assets were NOT touched — any live campaign keeps running and spending.`
+        : `Deleted the business records behind "${user.email}"; the login survives and can be onboarded again. Meta assets were NOT touched — any live campaign keeps running and spending.`,
+  });
+
+  return { ok: true, deleted: { customer: !!customerId, user: mode === "all" } };
+}

@@ -6,6 +6,37 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-24 — Reset/delete a signup from the Users view (AIC-127)
+Requested for testing: a bin on every `/admin/users` row, opening a red confirm
+modal with two irreversible choices — delete the **business only** (the login
+survives and can be taken through the onboarding wizard again, which is the
+point) or the **signup too**.
+
+`business` mode needed no new deletion logic: `app_users.customer_id` is
+`ON DELETE SET NULL` (migration 011), so deleting the customer leaves the login
+in exactly the state a fresh signup is in. `all` mode adds the `app_users` row,
+in the same transaction — a half-applied `all` would leave a login pointing at a
+deleted business, the very state this clears.
+
+**Neither touches Meta**, and the modal says so in its loudest element rather
+than its red chrome: a live campaign keeps running and spending afterwards. An
+operator who deletes a business and assumes the spend stopped is the actual
+hazard. The audit snapshot records `metaCampaignIdLeftOnMeta` so a later reader
+knows which objects were left running.
+
+Confirm-to-type is the **email** (this view's row identity; a user may have no
+business at all), verified server-side as well as in the UI. Three refusals,
+all tested: your own account, the last `full_admin` (mirroring
+`removeOperator`), and `business` mode on a user with no business — refused
+rather than silently succeeding, with the radio disabled and the reason shown so
+the modal never opens on an option the server would reject.
+
+Verified through the real HTTP endpoint on a throwaway row: wrong confirm text
+400s and deletes nothing; business mode leaves the login with `customer_id`
+NULL and cascades the connection and campaign; the no-business refusal fires;
+`all` mode removes the login. Fixture cleaned up, and no existing account was
+touched.
+
 ### 2026-08-24 — The guides section: static, SEO-first, Markdown-authored (AIC-126)
 A blog at `/guides`, linked from the homepage nav and footer, with the sticky
 quick-jump sidebar from the requested reference design.

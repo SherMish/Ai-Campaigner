@@ -164,6 +164,25 @@ export const strings = {
       colConnection: "חיבור",
       colCampaign: "קמפיין",
       noBusiness: "טרם קושר לעסק",
+      // AIC-127: the reset/delete modal. The copy carries two facts an operator
+      // must not have to infer: that we do NOT touch Meta (a live campaign
+      // keeps running and spending after this), and which of the two modes
+      // keeps the login.
+      deleteTitle: "מחיקת נתונים",
+      deleteIntro: "פעולה בלתי הפיכה. בוחרים מה למחוק:",
+      deleteMetaWarning: "⚠️ הנתונים נמחקים אצלנו בלבד. הקמפיין, קבוצות המודעות והמודעות נשארים ב-Meta — ואם הם פעילים, הם ימשיכו לרוץ ולהוציא תקציב. עוצרים אותם ב-Meta בנפרד.",
+      deleteModeBusinessTitle: "מחיקת העסק בלבד",
+      deleteModeBusinessBody: "מוחק את החיבור ל-Meta, הקמפיין המנוהל וההגדרות — אצלנו. המשתמש נשאר ויכול לעבור את אשף החיבור מהתחלה. זו האפשרות לבדיקות.",
+      deleteModeAllTitle: "מחיקת העסק וגם המשתמש",
+      deleteModeAllBody: "כמו למעלה, ובנוסף מוחק את ההרשמה עצמה. המשתמש לא יוכל להתחבר יותר.",
+      deleteNoBusiness: "למשתמש הזה אין עסק מקושר — אפשר רק למחוק את ההרשמה.",
+      deleteConfirmLabel: "לאישור, הקלידו את האימייל:",
+      deleteConfirmMismatch: "האימייל לא תואם.",
+      deleteSubmitBusiness: "מחיקת העסק",
+      deleteSubmitAll: "מחיקת העסק והמשתמש",
+      deleteBusy: "מוחק…",
+      deleteCancel: "ביטול",
+      deleteRowTitle: "מחיקת נתונים",
       startOnboarding: "התחלת קליטה ←",
       // Shown instead of "start onboarding" once the connection is already
       // fully working — re-running the wizard would only create a duplicate

@@ -416,6 +416,36 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
   width: 100%; max-width: 460px; max-height: 86vh; overflow-y: auto;
   box-shadow: 0 24px 64px rgba(0,0,0,0.3);
 }
+/* AIC-127: the Users-table bin + its danger modal. */
+.op-bin {
+  background: none; border: 0; cursor: pointer; color: var(--muted);
+  padding: 6px; border-radius: 8px; display: inline-flex; line-height: 0;
+  transition: color .12s, background .12s;
+}
+.op-bin:hover { color: #c0362c; background: #fbe4de; }
+.op-bin:focus-visible { outline: 2px solid #c0362c; outline-offset: 1px; }
+
+.op-modal-danger { border-top: 4px solid #c0362c; }
+.op-danger-title { font-size: 1.1rem; color: #c0362c; }
+/* The Meta warning, not the modal chrome, is the loudest element: the real
+   hazard is an operator assuming a delete stopped the spend. */
+.op-danger-note {
+  margin: 14px 0 0; padding: 11px 13px; background: #fdf3f2;
+  border: 1px solid #f0c8c2; border-radius: 12px;
+  font-size: 0.84rem; line-height: 1.55; color: #8a2c20;
+}
+.op-choice {
+  display: flex; gap: 10px; align-items: flex-start; cursor: pointer;
+  border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-top: 8px;
+  transition: border-color .12s, background .12s;
+}
+.op-choice:hover { border-color: rgba(23,23,23,0.3); }
+.op-choice.active { border-color: #c0362c; background: #fdf3f2; }
+.op-choice.disabled { opacity: 0.5; cursor: not-allowed; }
+.op-choice input { margin-top: 4px; accent-color: #c0362c; flex-shrink: 0; }
+.op-choice b { display: block; font-size: 0.92rem; }
+.op-choice em { display: block; font-style: normal; font-size: 0.8rem; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+
 .op-audit-item { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 0.85rem; }
 .op-audit-item:last-child { border-bottom: 0; }
 .op-audit-item .who { color: var(--muted); font-size: 0.78rem; }

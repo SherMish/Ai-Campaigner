@@ -273,6 +273,16 @@ export const deleteCustomer = (id: string, confirmText: string) =>
 export const getCustomerAudit = (id: string) =>
   api<{ entries: AuditEntry[] }>(`/admin/customers/${id}/audit`);
 
+// AIC-127: reset/delete a signup from the Users view. `mode: "business"` keeps
+// the login (customer_id goes NULL, so the onboarding wizard can be walked
+// again); `"all"` removes the signup too. Neither touches Meta.
+export type DeleteUserMode = "business" | "all";
+export const deleteUserRecords = (id: string, mode: DeleteUserMode, confirmText: string) =>
+  api<{ ok: true; deleted: { customer: boolean; user: boolean } }>(`/admin/users/${id}`, {
+    method: "DELETE",
+    body: JSON.stringify({ mode, confirmText }),
+  });
+
 // ── Admin: full Meta data explorer (AIC-45) ─────────────────────────────────
 export interface ExplorerMetrics {
   spendAgorot: number;

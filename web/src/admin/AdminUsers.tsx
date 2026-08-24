@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../api";
+import { api, deleteUserRecords, type DeleteUserMode } from "../api";
 import { strings } from "../strings";
 import { offersOnboarding } from "./user-row-status";
 
@@ -35,13 +35,47 @@ export function AdminUsers() {
   const [search, setSearch] = useState("");
   const [provisioningId, setProvisioningId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // AIC-127: the delete modal. `deleteRow` doubles as "is the modal open".
+  const [deleteRow, setDeleteRow] = useState<UserRow | null>(null);
+  const [deleteMode, setDeleteMode] = useState<DeleteUserMode>("business");
+  const [deleteText, setDeleteText] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = () =>
     api<{ users: UserRow[] }>("/admin/users")
       .then((r) => setUsers(r.users))
       .catch(() => setError(u.provisionError))
       .finally(() => setLoading(false));
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function openDelete(row: UserRow) {
+    setDeleteRow(row);
+    // A user with no business can only have the signup deleted — defaulting to
+    // "business" would open the modal on an option the server would refuse.
+    setDeleteMode(row.customerId ? "business" : "all");
+    setDeleteText("");
+    setDeleteError(null);
+  }
+
+  async function submitDelete() {
+    if (!deleteRow) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await deleteUserRecords(deleteRow.id, deleteMode, deleteText.trim());
+      setDeleteRow(null);
+      await load();
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : u.provisionError);
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
 
   const filtered = users.filter((row) => {
     const q = search.trim().toLowerCase();
@@ -101,6 +135,7 @@ export function AdminUsers() {
                 <th>{u.colSubscription}</th>
                 <th>{u.colConnection}</th>
                 <th>{u.colCampaign}</th>
+                <th aria-label={u.deleteRowTitle}></th>
               </tr>
             </thead>
             <tbody>
@@ -129,12 +164,99 @@ export function AdminUsers() {
                     )}
                   </td>
                   <td>{row.campaignStatus ?? t.none}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="op-bin"
+                      title={u.deleteRowTitle}
+                      aria-label={`${u.deleteRowTitle} — ${row.email}`}
+                      onClick={(e) => { e.stopPropagation(); openDelete(row); }}
+                    >
+                      {/* Inline SVG, not an emoji or an icon dependency: it
+                          inherits currentColor so it can turn red on hover,
+                          and it renders identically on every platform. */}
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                        <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" />
+                      </svg>
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {/* AIC-127: the reset/delete modal. Red-bordered and red-headed because
+          it is irreversible — but the loudest thing in it is the Meta warning,
+          not the styling: an operator who deletes a business and assumes the
+          spend stopped is the actual danger here. */}
+      {deleteRow && (
+        <div className="op-modal-backdrop" onClick={() => setDeleteRow(null)}>
+          <div className="op-modal op-modal-danger" onClick={(e) => e.stopPropagation()}>
+            <b className="op-danger-title">{u.deleteTitle}</b>
+            <p className="muted" style={{ margin: "8px 0 0", fontSize: "0.9rem" }}>
+              {deleteRow.email}
+            </p>
+
+            <p className="op-danger-note">{u.deleteMetaWarning}</p>
+
+            <p style={{ margin: "16px 0 8px", fontSize: "0.9rem", fontWeight: 600 }}>{u.deleteIntro}</p>
+
+            {/* Radios, not two submit buttons: the operator picks, re-reads what
+                they picked, then types the email. Two buttons would let a
+                mis-aimed click delete the login when only the business was
+                meant. */}
+            <label className={`op-choice${deleteMode === "business" ? " active" : ""}${!deleteRow.customerId ? " disabled" : ""}`}>
+              <input
+                type="radio" name="delmode" value="business"
+                checked={deleteMode === "business"}
+                disabled={!deleteRow.customerId}
+                onChange={() => setDeleteMode("business")}
+              />
+              <span>
+                <b>{u.deleteModeBusinessTitle}</b>
+                <em>{u.deleteModeBusinessBody}</em>
+              </span>
+            </label>
+            <label className={`op-choice${deleteMode === "all" ? " active" : ""}`}>
+              <input
+                type="radio" name="delmode" value="all"
+                checked={deleteMode === "all"}
+                onChange={() => setDeleteMode("all")}
+              />
+              <span>
+                <b>{u.deleteModeAllTitle}</b>
+                <em>{u.deleteModeAllBody}</em>
+              </span>
+            </label>
+            {!deleteRow.customerId && (
+              <p className="muted" style={{ fontSize: "0.8rem", marginTop: 8 }}>{u.deleteNoBusiness}</p>
+            )}
+
+            <div className="field" style={{ marginTop: 16 }}>
+              <label>{u.deleteConfirmLabel} <b dir="ltr">{deleteRow.email}</b></label>
+              <input value={deleteText} onChange={(e) => setDeleteText(e.target.value)} dir="ltr" autoFocus />
+            </div>
+            {deleteText.length > 0 && deleteText.trim().toLowerCase() !== deleteRow.email.toLowerCase() && (
+              <p style={{ color: "#c0362c", fontSize: "0.82rem", marginTop: 6 }}>{u.deleteConfirmMismatch}</p>
+            )}
+            {deleteError && <p style={{ color: "#c0362c", fontSize: "0.85rem", marginTop: 8 }}>{deleteError}</p>}
+
+            <div style={{ marginTop: 18, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                className="btn btn-sm"
+                style={{ background: "#c0362c", color: "#fff" }}
+                disabled={deleteBusy || deleteText.trim().toLowerCase() !== deleteRow.email.toLowerCase()}
+                onClick={submitDelete}
+              >
+                {deleteBusy ? u.deleteBusy : deleteMode === "all" ? u.deleteSubmitAll : u.deleteSubmitBusiness}
+              </button>
+              <button className="btn btn-outline btn-sm" onClick={() => setDeleteRow(null)}>{u.deleteCancel}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

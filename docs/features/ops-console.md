@@ -1054,6 +1054,56 @@ component-test tooling, so a pure function is the only way to unit-test the
 logic at all. It preserves the server's own ordering (severity, then oldest
 first) as the group order; it does not re-sort.
 
+## Reset / delete a signup from the Users view (AIC-127)
+
+A bin icon on every row of `/admin/users` opens a red confirm modal offering two
+irreversible modes. Its purpose is **testing**: putting an account back to a
+known state so the onboarding wizard can be walked again from the top.
+
+| Mode | What it deletes | The login |
+| --- | --- | --- |
+| `business` | the `customers` row — cascading to `meta_connections`, `managed_campaigns` and everything under them | **survives**, with `customer_id` back to NULL |
+| `all` | the above, plus the `app_users` row | gone |
+
+`business` mode is the one the feature exists for. `app_users.customer_id` is
+`ON DELETE SET NULL` (migration 011), so the login lands in exactly the state a
+fresh signup is in — and clicking its row runs `ensureCustomerForUser` and opens
+the wizard at step 1 again.
+
+**Neither mode touches Meta**, the same rule `deleteCustomer` already follows:
+we delete our records; the campaign, ad sets and ads are the customer's assets,
+not ours. The consequence is stated in the modal in the loudest element on it —
+**a live campaign keeps running and spending after this.** An operator who
+deletes a business and assumes the spend stopped is the real hazard here, which
+is why that warning outranks the modal's own red chrome.
+
+**Confirm-to-type is the email**, not the business name: this view's rows are
+identified by email, a user may have no business at all, and the operator should
+retype the thing they actually clicked. Verified **server-side** as well as in
+the UI — the client can be bypassed and this cannot be undone. Matched
+case-insensitively, since the operator is retyping rather than pasting.
+
+Three refusals, all server-enforced and tested:
+
+- **your own account** (`mode: all`) — it would end your session mid-action, and
+  if you were the last admin, lock the console permanently;
+- **the last `full_admin`** — mirrors `removeOperator`'s guard: with none left
+  nobody can administer operators again, including undoing this;
+- **`business` mode on a user with no business** — refused rather than silently
+  succeeding. The UI disables that radio and says why, so the modal never opens
+  on an option the server would reject.
+
+Everything happens in one transaction (a half-applied `all` would leave a login
+pointing at a deleted business — the exact state this feature clears), and a
+full snapshot of the customer, subscription, connection and campaign is written
+to `admin_audit_log` **before** the delete, including
+`metaCampaignIdLeftOnMeta` so a later reader knows which Meta objects were left
+running. That audit row is the only surviving record.
+
+Source: `server/src/services/users-admin.ts` (`deleteUserRecords`),
+`DELETE /api/admin/users/:id`, `web/src/admin/AdminUsers.tsx`.
+Tests: `server/src/services/users-admin-delete.integration.test.ts`.
+
 ## First-campaign review (AIC-18)
 
 The mandatory human gate before a campaign becomes managed. `submitReview` records
