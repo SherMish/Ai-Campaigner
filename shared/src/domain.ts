@@ -94,6 +94,9 @@ export const OPS_QUEUE_TYPE = [
   // no payment method) — every campaign on it is dead regardless of its own
   // config. Must stay in sync with the CHECK in migration 045.
   "ad_account_cannot_spend",
+  // AIC-91: the campaign's lead event stopped firing on the pixel while the
+  // pixel itself stayed alive. Must stay in sync with the CHECK in migration 046.
+  "lead_event_stopped",
 ] as const;
 export type OpsQueueType = (typeof OPS_QUEUE_TYPE)[number];
 

@@ -324,6 +324,28 @@ describe("no_action reason classification (AIC-64)", () => {
   // disabled or unfunded account is the CAUSE of the not-delivering it would
   // otherwise be reported as, and "delivery blocked" would send an operator to
   // inspect ad sets that are perfectly configured.
+  // AIC-91: leads ARE arriving, we just stopped counting them. Same class as
+  // tracking_broken — the number is wrong, not thin — so nothing may fire.
+  it("lead_event_stopped suppresses a rule that would otherwise have fired", () => {
+    const d = evaluateCampaign(baseEvidence({
+      creatives: [cr("cr_a", 25000, 10, 2500), cr("cr_b", 25000, 1, 25000)],
+      leadEventStopped: true,
+    }));
+    expect(d.type).toBe("no_action");
+    expect(d.evidence.reason).toBe("lead_event_stopped");
+  });
+
+  // tracking_broken wins when both are set: a misconfigured lead TYPE is the
+  // more fundamental error — a stopped event at least means the definition was
+  // right.
+  it("ranks below tracking_broken when both are true", () => {
+    const d = evaluateCampaign(baseEvidence({
+      creatives: [cr("cr_a", 25000, 10, 2500)],
+      leadEventStopped: true, trackingBroken: true,
+    }));
+    expect(d.evidence.reason).toBe("tracking_broken");
+  });
+
   it("account_cannot_spend suppresses everything, and outranks delivery_blocked", () => {
     const control = evaluateCampaign(baseEvidence({ creatives: [cr("cr_a", 25000, 10, 2500), cr("cr_b", 25000, 1, 25000)] }));
     expect(control.type).not.toBe("no_action");

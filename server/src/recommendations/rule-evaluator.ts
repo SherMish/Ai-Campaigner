@@ -76,6 +76,8 @@ export async function buildCampaignEvidence(
   // AIC-72: the ad account is disabled/unsettled/unfunded — nothing on it can
   // deliver, whatever each campaign says.
   accountCannotSpend?: boolean,
+  // AIC-91: the lead event stopped firing while the pixel stayed alive.
+  leadEventStopped?: boolean,
 ): Promise<CampaignEvidence> {
   const [curTotals, prevTotals, curCreatives, prevCreatives, curAdsets, curDaily, prevDaily] = await Promise.all([
     store.campaignTotals(campaign.id, current.start, current.end),
@@ -120,6 +122,7 @@ export async function buildCampaignEvidence(
     liveCreativeCount,
     ctaBroken,
     accountCannotSpend,
+    leadEventStopped,
   };
 }
 

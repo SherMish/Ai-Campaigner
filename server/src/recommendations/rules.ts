@@ -131,6 +131,9 @@ export interface CampaignEvidence {
   // method. Dominates every per-campaign verdict — nothing on the account can
   // deliver. Optional; absent means "not checked", never "fine".
   accountCannotSpend?: boolean;
+  // AIC-91: the lead event stopped firing on the pixel while the pixel stayed
+  // alive, so the lead count is under-reporting reality.
+  leadEventStopped?: boolean;
   // AIC-107: an engagement campaign counts engagements, not leads. Creative
   // comparison ports unchanged (cost-per-result is cost-per-result), but
   // budget increases are DELIBERATELY excluded — see increaseBudget. Optional
@@ -235,6 +238,7 @@ export type NoActionReason =
   | "tracking_broken" // AIC-88 — the lead count itself is wrong; see classifyNoAction
   | "cta_broken" // AIC-128 — the ads' button goes nowhere; see classifyNoAction
   | "account_cannot_spend" // AIC-72 — the ad account itself can't pay
+  | "lead_event_stopped" // AIC-91 — leads arrive but stopped being counted
   | "no_comparable_audiences" // AIC-85, replaces single_ad_set — see classifyNoAction
   | "cooling_down"
   | "below_object_evidence_floor" // AIC-85
@@ -416,6 +420,17 @@ function classifyNoAction(
     return {
       reason: "tracking_broken",
       rationale: "declared lead definition doesn't match the ad sets' Meta configuration — leads are not being counted",
+      detail: {},
+    };
+  }
+  // AIC-91, immediately beside tracking for the same reason: both mean the lead
+  // count is WRONG rather than thin. tracking_broken is checked first because a
+  // misconfigured lead type is the more fundamental error — a stopped event at
+  // least means the definition was right.
+  if (ev.leadEventStopped) {
+    return {
+      reason: "lead_event_stopped",
+      rationale: "the campaign's lead event stopped firing on the pixel while the pixel stayed alive — leads are being under-counted",
       detail: {},
     };
   }
@@ -812,7 +827,7 @@ export function evaluateCampaign(
   // wrong advice when the ads that exist have a button that goes nowhere —
   // it would produce more broken ads and bury the actual fix. Both conditions
   // describe a campaign that cannot convert at all, not one lacking evidence.
-  if (ev.trackingBroken || ev.ctaBroken || ev.accountCannotSpend) {
+  if (ev.trackingBroken || ev.ctaBroken || ev.accountCannotSpend || ev.leadEventStopped) {
     const t = classifyNoAction(ev, thresholds);
     return noAction(ev.campaignId, t.reason, t.rationale, t.detail);
   }

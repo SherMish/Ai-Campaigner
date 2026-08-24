@@ -75,6 +75,7 @@ export const strings = {
         campaign_tracking_broken: "מדידת הלידים שגויה",
         campaign_cta_broken: "כפתור המודעה לא מוביל לשום מקום",
         ad_account_cannot_spend: "חשבון הפרסום לא יכול להוציא תקציב",
+        lead_event_stopped: "אירוע הפנייה הפסיק להירשם בפיקסל",
       } satisfies Record<OpsQueueType, string> as Record<OpsQueueType, string>,
       queueSeverityAll: "הכל",
       queueSeverityHigh: "גבוהה",
@@ -106,6 +107,7 @@ export const strings = {
         tracking_broken: "מדידת הפניות לא תואמת את הגדרות Meta", // AIC-88
         cta_broken: "כפתור המודעה בלי יעד — הקליקים לא מגיעים לשום מקום", // AIC-128
         account_cannot_spend: "חשבון הפרסום במטא חסום או ללא אמצעי תשלום", // AIC-72
+        lead_event_stopped: "אירוע הפנייה הפסיק להירשם — הפניות לא נספרות", // AIC-91
         no_comparable_audiences: "קהל אחד בלבד — אין השוואה", // AIC-85, was single_ad_set
         cooling_down: "בתקופת צינון לאחר שינוי אחרון", // AIC-77b
         below_object_evidence_floor: "יש מה להשוות, אבל עדיין לא מספיק נתונים", // AIC-85
@@ -1229,6 +1231,13 @@ export const strings = {
           accountCannotSpend: {
             title: "חשבון הפרסום לא יכול להוציא תקציב",
             body: "מטא חסמה את חשבון הפרסום או שאין בו אמצעי תשלום תקין, ולכן אף מודעה לא מתפרסמת. צריך להיכנס למנהל המודעות של מטא ולעדכן את אמצעי התשלום — עד אז אין טעם בשינויים בקמפיין.",
+          },
+          // AIC-91. Ours to fix — the pixel event lives on the customer's site
+          // but we own the integration, and telling them to debug it would be
+          // both useless and an evasion.
+          leadEventStopped: {
+            title: "הפניות שלכם לא נספרות כרגע",
+            body: "אירוע הפנייה הפסיק להירשם בפיקסל, בזמן שהפיקסל עצמו ממשיך לעבוד — כלומר ייתכן שמגיעות פניות שאנחנו לא רואים, והמספרים כאן נמוכים מהמציאות. אנחנו בודקים; לא נמליץ על שינויים עד שהמדידה תחזור, כדי לא להסתמך על מספר חסר.",
           },
           // AIC-77b: after an executed change, the engine waits a few days
           // before proposing another change of the same kind — long enough

@@ -44,6 +44,7 @@ export async function refreshRecommendations(deps: {
   trackingBroken?: boolean; // lead definition doesn't match Meta's config (AIC-88)
   ctaBroken?: boolean; // an ad's button has no destination (AIC-128)
   accountCannotSpend?: boolean; // the ad account itself can't spend (AIC-72)
+  leadEventStopped?: boolean; // the lead event stopped firing (AIC-91)
   liveCreativeCount?: number; // ads actually running now, from delivery-health (AIC-117)
   adStatuses?: Record<string, "active" | "paused">; // live per-ad status (AIC-77b)
   adSetStatuses?: Record<string, "active" | "paused">; // live per-ad-set status (AIC-77b)
@@ -54,7 +55,7 @@ export async function refreshRecommendations(deps: {
   const evidence = await buildCampaignEvidence(
     snapshotStore, campaign, deps.current, deps.previous,
     deps.excludeAdSetIds, deps.adSetLabels, deps.flexibleCreativeAdSetIds, deps.deliveryProblemAdSetIds,
-    deps.adStatuses, deps.adSetStatuses, deps.trackingBroken, deps.liveCreativeCount, deps.ctaBroken, deps.accountCannotSpend,
+    deps.adStatuses, deps.adSetStatuses, deps.trackingBroken, deps.liveCreativeCount, deps.ctaBroken, deps.accountCannotSpend, deps.leadEventStopped,
   );
   const thresholds = resolveThresholds(campaign.thresholdOverrides, campaign.currentBudgetAgorot);
   const cooldownClasses = resolveCooldownClasses(campaign.lastActionAtByType, thresholds.COOLDOWN_DAYS, deps.now ?? new Date());

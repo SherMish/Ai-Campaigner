@@ -15,9 +15,12 @@ import { recordCampaignDelivery } from "../services/delivery-monitor.js";
 import { summarizeTracking, type TrackingReader, type TrackingSummary } from "../meta/tracking-health.js";
 import { summarizeCta, type CtaReader, type CtaSummary } from "../meta/cta-health.js";
 import { summarizeAccount, type AccountHealthReader, type AccountSummary } from "../meta/account-health.js";
+import { summarizeEventVolume, type EventVolumeReader, type EventVolumeSummary } from "../meta/event-volume.js";
+import { standardEventForAction } from "../meta/tracking-health.js";
 import { recordCampaignTracking } from "../services/tracking-monitor.js";
 import { recordCampaignCta } from "../services/cta-monitor.js";
 import { recordAccountHealth } from "../services/account-monitor.js";
+import { recordLeadEventVolume } from "../services/event-volume-monitor.js";
 import { LEAD_ACTION_PRIORITY } from "../meta/insights.js";
 import { deriveAudienceLabels, type AdSetMeta } from "../meta/audience-label.js";
 import { upsertAdSetMeta } from "../services/audience-meta-cache.js";
@@ -74,6 +77,8 @@ export interface GenCampaign {
   // is cached on. Optional so existing callers and tests are untouched.
   connectionId?: string | null;
   metaAdAccountId?: string | null;
+  // AIC-91: the pixel to read event volume from (managed_campaigns.tracking_pixel_id).
+  trackingPixelId?: string | null;
 }
 
 export interface GenerationSummary {
@@ -84,7 +89,8 @@ export interface GenerationSummary {
   deliveryProblems: number; // campaigns with a not-delivering ad set (AIC-39)
   trackingProblems: number;
   ctaProblems: number;
-  accountProblems: number; // campaigns whose lead definition doesn't match Meta (AIC-88)
+  accountProblems: number;
+  leadEventProblems: number; // campaigns whose lead definition doesn't match Meta (AIC-88)
 }
 
 // Campaigns eligible for generation: actively managed, automation on, linked to a
@@ -99,12 +105,13 @@ export async function listEligibleForGeneration(pool: pg.Pool): Promise<GenCampa
     lead_event_types: string[];
     connection_id: string;
     meta_ad_account_id: string | null;
+    tracking_pixel_id: string | null;
   }>(
     // AIC-72 needs the ad account (to ask Meta if it can spend) and the
     // connection id (where that verdict is cached — one account backs N
     // campaigns, so it is a connection-level fact, not a campaign one).
     `SELECT mc.id, mc.meta_campaign_id, mc.customer_id, mc.threshold_overrides, mc.lead_event_types,
-            conn.id AS connection_id, aa.meta_ad_account_id
+            conn.id AS connection_id, aa.meta_ad_account_id, mc.tracking_pixel_id
      FROM managed_campaigns mc
      JOIN meta_connections conn ON conn.customer_id = mc.customer_id
      LEFT JOIN ad_accounts aa ON aa.id = mc.ad_account_id
@@ -121,6 +128,7 @@ export async function listEligibleForGeneration(pool: pg.Pool): Promise<GenCampa
     leadEventTypes: r.lead_event_types,
     connectionId: r.connection_id,
     metaAdAccountId: r.meta_ad_account_id ?? null,
+    trackingPixelId: r.tracking_pixel_id ?? null,
   }));
 }
 
@@ -145,9 +153,11 @@ export async function runGenerationTick(deps: {
   trackingReader?: TrackingReader;
   ctaReader?: CtaReader;
   accountReader?: AccountHealthReader;
+  eventVolumeReader?: EventVolumeReader;
   recordTracking?: (campaign: GenCampaign, summary: TrackingSummary) => Promise<void>;
   recordCta?: (campaign: GenCampaign, summary: CtaSummary) => Promise<void>;
   recordAccount?: (campaign: GenCampaign, summary: AccountSummary) => Promise<void>;
+  recordLeadEvent?: (campaign: GenCampaign, summary: EventVolumeSummary) => Promise<void>;
   // AIC-37: ad-set metadata (name + targeting), used to derive human audience
   // labels and cache them (via recordAudienceMeta) for the customer surface.
   audienceMetaReader?: AudienceMetaReader;
@@ -176,7 +186,7 @@ export async function runGenerationTick(deps: {
     rollingPeriods(deps.ref);
   const log = deps.logger;
 
-  const summary: GenerationSummary = { evaluated: 0, created: 0, expired: 0, skipped: 0, deliveryProblems: 0, trackingProblems: 0, ctaProblems: 0, accountProblems: 0 };
+  const summary: GenerationSummary = { evaluated: 0, created: 0, expired: 0, skipped: 0, deliveryProblems: 0, trackingProblems: 0, ctaProblems: 0, accountProblems: 0, leadEventProblems: 0 };
 
   for (const campaign of campaigns) {
     let currentBudgetAgorot: number;
@@ -347,6 +357,32 @@ export async function runGenerationTick(deps: {
       }
     }
 
+    // AIC-91: is the campaign's lead event still firing on the pixel? Only
+    // meaningful for a Pixel-based campaign — a Click-to-WhatsApp one has no
+    // pixel event, and summarizeEventVolume reports not_applicable rather than
+    // a silent pass.
+    let leadEventStopped = false;
+    if (deps.eventVolumeReader && campaign.trackingPixelId) {
+      try {
+        const since = Math.floor((deps.ref ?? new Date()).getTime() / 1000) - 30 * 86400;
+        const counts = await deps.eventVolumeReader.getPixelEventCounts(campaign.trackingPixelId, since);
+        // The campaign's declared lead action → the standard Meta event name
+        // that produces it. Shared with tracking-health so "which event is the
+        // lead" has exactly one definition.
+        const leadAction = (campaign.leadEventTypes ?? [])[0] ?? null;
+        const leadEvent = leadAction ? standardEventForAction(leadAction) : null;
+        const ev = summarizeEventVolume({ counts, leadEvent, ref: deps.ref });
+        if (ev.state === "broken") {
+          leadEventStopped = true;
+          summary.leadEventProblems++;
+          log?.info(`[generation] ${campaign.id}: lead event stopped — ${ev.reason}`);
+        }
+        await deps.recordLeadEvent?.(campaign, ev);
+      } catch (e) {
+        log?.error(`[generation] ${campaign.id}: event-volume read failed — ${(e as Error).message}`);
+      }
+    }
+
     let lastActionAtByType: Record<string, Date> | undefined;
     if (deps.cooldownReader) {
       try {
@@ -382,6 +418,7 @@ export async function runGenerationTick(deps: {
       trackingBroken,
       ctaBroken,
       accountCannotSpend,
+      leadEventStopped,
       adSetLabels,
       flexibleCreativeAdSetIds,
       liveCreativeCount,
@@ -450,6 +487,10 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
       ctaReader: adapter,
       recordCta: async (campaign, cta) => {
         await recordCampaignCta({ pool, ops, campaignId: campaign.id, customerId: campaign.customerId, summary: cta });
+      },
+      eventVolumeReader: adapter,
+      recordLeadEvent: async (campaign, ev) => {
+        await recordLeadEventVolume({ pool, ops, campaignId: campaign.id, customerId: campaign.customerId, summary: ev });
       },
       accountReader: adapter,
       recordAccount: async (campaign, acct) => {

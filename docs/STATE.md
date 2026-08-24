@@ -6,6 +6,32 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-24 — Lead-event volume: the pixel is alive but the lead event stopped (AIC-91)
+The gap tracking-health explicitly deferred. That check catches a WRONG or
+MISSING lead type; it cannot catch a correctly declared one whose event silently
+stopped — a deploy that dropped the pixel call, a consent-banner change, a broken
+form.
+
+AIC-88's review rejected a stats-based signal because "the lead event hasn't
+fired" is indistinguishable from "nobody converted yet". True for a bare zero.
+What makes it real is that it is comparative and needs BOTH halves: the pixel is
+demonstrably alive right now (other events firing), AND the lead event did fire
+in the earlier window. Missing either, the verdict is `unknown`, never `broken`.
+
+The window length is the whole design, and was chosen against real data rather
+than picked: on the live pixel, CompleteRegistration fired 2/2/8/6 on Aug 18–22
+then went quiet on the 23rd and 24th while PageView kept firing. A 2-day window
+calls that broken; 3 complete days stays quiet. The test pins that exact
+sequence AND asserts a 2-day window would have cried wolf, so the reasoning
+survives someone later tuning the constant. Today is always excluded — a partial
+day under-reads by construction.
+
+Verified with the real adapter over 30 days of the real pixel: `ok`, with
+recentLead 14 and recentOther 540. The adapter sums per (day, event) because
+`/stats?aggregation=event` returns buckets finer than a day and repeats an event
+within one — reading one bucket as a day's total would make a healthy pixel look
+stopped.
+
 ### 2026-08-24 — Ad-account health: the account that cannot pay (AIC-72)
 The third variant of one shape, after tracking-health and cta-health: every
 signal green while the campaign is worthless. Here it is the ACCOUNT — a

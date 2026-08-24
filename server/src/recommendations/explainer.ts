@@ -58,6 +58,8 @@ export const EXPLAINER_HE = {
   // "we're on it"; it says what to do, because waiting for us would be waiting
   // forever.
   accountCannotSpend: () => `יש בעיה בחשבון הפרסום עצמו במטא — אמצעי תשלום שנדחה, חוב פתוח או חשבון מושבת — ולכן שום מודעה בחשבון הזה לא יכולה להתפרסם. צריך להיכנס למנהל המודעות של מטא ולעדכן את אמצעי התשלום. עד שזה מסודר אין טעם בשינויים בקמפיין.`,
+  // AIC-91.
+  leadEventStopped: () => `אירוע הפנייה של הקמפיין הפסיק להירשם בפיקסל, בזמן שהפיקסל עצמו ממשיך לפעול — כלומר ייתכן שמגיעות פניות שאינן נספרות, והמספרים כאן נמוכים מהמציאות. אנחנו בודקים את המדידה, ולא נמליץ על שינויים עד שתחזור.`,
   // AIC-85: replaces singleAdSet — same content, renamed to match the fixed
   // comparableAdsets() check (a dormant ad set no longer silently counts).
   noComparableAudiences: () => `הקמפיין יציב. יש כרגע קהל אחד פעיל, כך שאין עם מה להשוות כדי להמליץ על שינוי קהל.`,
@@ -198,6 +200,8 @@ export function explain(rec: RecommendationRecord): string {
           return EXPLAINER_HE.ctaBroken();
         case "account_cannot_spend":
           return EXPLAINER_HE.accountCannotSpend();
+        case "lead_event_stopped":
+          return EXPLAINER_HE.leadEventStopped();
         case "no_comparable_audiences":
           return EXPLAINER_HE.noComparableAudiences();
         case "no_comparable_creatives":

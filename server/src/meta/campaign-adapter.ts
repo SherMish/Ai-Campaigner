@@ -77,6 +77,7 @@ import { normalizeAdMedia, type AdMedia, type AdMediaReader, type RawAdMedia } f
 import { detectDestination, type AdSetTrackingConfig, type TrackingReader } from "./tracking-health.js";
 import type { AdCreativeDestination, CtaReader } from "./cta-health.js";
 import type { AdAccountHealth, AccountHealthReader } from "./account-health.js";
+import type { EventDayCount, EventVolumeReader } from "./event-volume.js";
 import type { AdAccountOption, PageOption, InstagramOption, DiscoveredCampaign, CampaignDiscoveryReader } from "./campaign-discovery.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
@@ -88,7 +89,7 @@ import type { AdAccountOption, PageOption, InstagramOption, DiscoveredCampaign, 
 // one, so setDailyBudget targets the right object.
 const BASE = "https://graph.facebook.com";
 
-export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter, AdditionWriter, ControlWriter, AdMediaReader, TrackingReader, CtaReader, AccountHealthReader, CampaignDiscoveryReader {
+export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter, AdditionWriter, ControlWriter, AdMediaReader, TrackingReader, CtaReader, AccountHealthReader, EventVolumeReader, CampaignDiscoveryReader {
   private budgetObj = new Map<string, string>(); // campaignId → budget object id
 
   constructor(
@@ -468,6 +469,35 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       hasFundingSource: !!funding,
       fundingSourceLabel: funding?.display_string ?? null,
     };
+  }
+
+  // AIC-91: per-event daily counts for a pixel.
+  //
+  // `/stats?aggregation=event` returns buckets that are finer than a day and
+  // repeat an event within one — the live pixel returns several buckets per
+  // date — so counts are summed per (day, event) rather than taken as given.
+  // Reading one bucket as a day's total would under-report and make a healthy
+  // pixel look like it had stopped.
+  async getPixelEventCounts(pixelId: string, sinceUnix: number): Promise<EventDayCount[]> {
+    const body = await this.get(`${pixelId}/stats?aggregation=event&start_time=${sinceUnix}`);
+    type Bucket = { start_time?: string; data?: Array<{ value?: string; count?: number | string }> };
+    const totals = new Map<string, number>();
+    for (const b of ((body.data as Bucket[]) ?? [])) {
+      const day = String(b.start_time ?? "").slice(0, 10);
+      if (!day) continue;
+      for (const e of b.data ?? []) {
+        const event = String(e.value ?? "");
+        if (!event) continue;
+        const key = `${day}\u0000${event}`;
+        totals.set(key, (totals.get(key) ?? 0) + Number(e.count ?? 0));
+      }
+    }
+    return [...totals.entries()]
+      .map(([key, count]) => {
+        const [day, event] = key.split("\u0000");
+        return { day, event, count };
+      })
+      .sort((a, b) => a.day.localeCompare(b.day));
   }
 
   // AIC-105 Branch B — every ad account the System User can currently manage

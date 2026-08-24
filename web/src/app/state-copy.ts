@@ -72,6 +72,7 @@ export const NO_REC_COPY: Record<NoActionReason, NoRecCopy> = {
   tracking_broken: h.noRec.trackingBroken,
   cta_broken: h.noRec.ctaBroken,
   account_cannot_spend: h.noRec.accountCannotSpend,
+  lead_event_stopped: h.noRec.leadEventStopped,
   no_comparable_audiences: h.noRec.noComparableAudiences,
   cooling_down: h.noRec.coolingDown,
   below_object_evidence_floor: h.noRec.belowObjectEvidenceFloor,
