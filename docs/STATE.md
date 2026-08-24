@@ -18,6 +18,21 @@ WRITE. That is not hypothetical: sharing one database with production leaked
 `__it_*` customers into the real ops console, and let one file's rows be claimed
 by another file's code mid-run.
 
+**Correction, same day:** the first attempt at this shipped a database and
+nothing else, and CI still ran 540 of 930 tests. The `DATABASE_URL` self-skip was
+only the second layer. The real gate is that `server/vitest.config.ts`
+**excludes** `**/*.integration.test.ts` outright, and they run from their own
+config via a `test:integration` script CI never invoked. Providing the database
+was necessary and not sufficient; CI now runs that script too.
+
+**And they could not simply be switched on.** Run in parallel against a fresh
+database, `customer-recommendations.integration.test.ts` fails — and passes
+alone. Every one of these files talks to the same database, so parallel
+execution lets one file's rows land inside another's query and a cleanup DELETE
+race a concurrent INSERT. `fileParallelism: false` makes them sequential, which
+is correctness rather than a performance concession. This is also the mechanism
+behind several failures written off this week as "known pre-existing".
+
 A `postgres:16` service container fixes both halves at once — empty at the start
 of every run, unreachable from production by construction, no secrets, dies with
 the job. `pool.ts` already skipped SSL for localhost, so nothing else changed.
@@ -26,7 +41,8 @@ apply to an empty database now fails CI** — i.e. production being rebuildable
 from scratch is continuously verified rather than assumed.
 
 **The two "known pre-existing failures" were never broken tests.** Against a
-fresh isolated database the suite is **930/930**. `customer-overview`'s
+fresh isolated database, run sequentially, the integration suite is **390/390
+across 46 files** and the unit suite is green. `customer-overview`'s
 lead-quality test and `operator-accounts`' last-full-admin test fail only
 because of contention and residue in the shared production database — every
 report of them in this changelog as "known pre-existing" was describing an

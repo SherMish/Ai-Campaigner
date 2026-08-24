@@ -21,7 +21,8 @@
     "release": "npm --workspace server run db:migrate:prod",
     "db:migrate": "npm --workspace server run db:migrate",
     "typecheck": "npm --workspace shared run typecheck && npm --workspace server run typecheck && npm --workspace web run typecheck",
-    "test:unit": "npm --workspace shared run test && npm --workspace server run test && npm --workspace web run test"
+    "test:unit": "npm --workspace shared run test && npm --workspace server run test && npm --workspace web run test",
+    "test:integration": "npm --workspace server run test:integration"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

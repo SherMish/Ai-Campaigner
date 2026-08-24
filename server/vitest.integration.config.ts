@@ -4,9 +4,13 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Integration tests hit a real Postgres via DATABASE_URL. Run locally against a
-// throwaway/dev database; they self-skip when DATABASE_URL is unset (so CI stays
-// green until a Neon dev-branch URL is wired in as a secret).
+// Integration tests hit a real Postgres via DATABASE_URL. They self-skip when it
+// is unset, so a developer without a database still gets a green run.
+//
+// AIC-109: CI now provides that database itself (a throwaway postgres:16 service
+// container — see .github/workflows/ci.yml), so these are no longer invisible.
+// The old note here said CI stayed green "until a Neon dev-branch URL is wired
+// in as a secret"; no secret turned out to be needed.
 export default defineConfig({
   resolve: {
     alias: {
@@ -18,5 +22,16 @@ export default defineConfig({
     include: ["src/**/*.integration.test.ts"],
     hookTimeout: 30_000,
     testTimeout: 30_000,
+    // SEQUENTIAL, and this is not a performance concession — it is correctness.
+    // Every one of these files talks to the SAME database. Run in parallel they
+    // interfere: one file's rows land inside another file's query, a global
+    // aggregate sees a neighbour's fixtures, and a cleanup DELETE races a
+    // concurrent INSERT. That produced failures that vanish when the file is run
+    // alone — which is exactly what "flaky" means, and why several were written
+    // off this week as "known pre-existing" rather than investigated.
+    //
+    // Verified: customer-recommendations.integration.test.ts fails under
+    // parallel execution against a FRESH database and passes on its own.
+    fileParallelism: false,
   },
 });

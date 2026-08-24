@@ -63,3 +63,10 @@ jobs:
       - run: npm run db:migrate
 
       - run: npm run test:unit
+
+      # THE ACTUAL FIX. `test:unit` never ran these: server/vitest.config.ts
+      # EXCLUDES **/*.integration.test.ts outright, and they live behind their
+      # own config + script that CI simply never invoked. Providing a database
+      # alone changed nothing — the first attempt at this ticket did exactly
+      # that and CI still ran 540 of 930 tests.
+      - run: npm run test:integration
