@@ -6,6 +6,33 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-24 — Ad-account health: the account that cannot pay (AIC-72)
+The third variant of one shape, after tracking-health and cta-health: every
+signal green while the campaign is worthless. Here it is the ACCOUNT — a
+declined card, an unsettled balance, a risk review, a disabled account, or no
+payment method at all (which Meta still reports as `account_status: 1`). Campaign
+ACTIVE, ad sets ACTIVE, ads ACTIVE, delivery-health content — and nothing
+delivers, with Insights simply going quiet.
+
+Cached on `meta_connections`, not `managed_campaigns`: the account belongs to the
+connection and backs N campaigns, so a per-campaign cache would store one fact
+N times and let the copies disagree. The ops item carries no `campaign_id` for
+the same reason — naming one campaign would imply the others are fine.
+
+Ranked ABOVE `delivery_blocked` in `classifyNoAction`, deliberately: an unfunded
+account is the CAUSE of the not-delivering it would otherwise be reported as, and
+"delivery blocked" would send an operator to inspect ad sets that are perfectly
+configured.
+
+It is also the one no-rec reason whose fix is genuinely the CUSTOMER's — they own
+the account and the card — so its copy says what to do rather than "we're on it",
+which would be false and would leave them waiting.
+
+Verified with the real adapter against both live ad accounts: `act_1573023157816786`
+→ ACTIVE, Mastercard *1459 → `ok`; `act_2181076988590009` → ACTIVE, VISA *5347 →
+`ok`. (Worth noting אבשלום's account now has a card — the payment-method gap from
+onboarding is closed.)
+
 ### 2026-08-24 — CI now runs the integration tests, against its own database (AIC-84, AIC-109)
 CI ran `test:unit` with no `DATABASE_URL`, so every DB integration test
 self-skipped: **542 of 930 tests ran and 388 did not** — 45 whole files,

@@ -74,6 +74,7 @@ export const strings = {
         account_restriction: "הגבלה על החשבון",
         campaign_tracking_broken: "מדידת הלידים שגויה",
         campaign_cta_broken: "כפתור המודעה לא מוביל לשום מקום",
+        ad_account_cannot_spend: "חשבון הפרסום לא יכול להוציא תקציב",
       } satisfies Record<OpsQueueType, string> as Record<OpsQueueType, string>,
       queueSeverityAll: "הכל",
       queueSeverityHigh: "גבוהה",
@@ -104,6 +105,7 @@ export const strings = {
         delivery_blocked: "קבוצת מודעות לא מתפרסמת",
         tracking_broken: "מדידת הפניות לא תואמת את הגדרות Meta", // AIC-88
         cta_broken: "כפתור המודעה בלי יעד — הקליקים לא מגיעים לשום מקום", // AIC-128
+        account_cannot_spend: "חשבון הפרסום במטא חסום או ללא אמצעי תשלום", // AIC-72
         no_comparable_audiences: "קהל אחד בלבד — אין השוואה", // AIC-85, was single_ad_set
         cooling_down: "בתקופת צינון לאחר שינוי אחרון", // AIC-77b
         below_object_evidence_floor: "יש מה להשוות, אבל עדיין לא מספיק נתונים", // AIC-85
@@ -1220,6 +1222,13 @@ export const strings = {
           ctaBroken: {
             title: "כפתור המודעה לא מוביל לשום מקום",
             body: "באחת המודעות חסר היעד של הכפתור (מספר הוואטסאפ או הקישור), כך שלחיצות לא מגיעות אליכם והתקציב מתבזבז. זו תקלה אצלנו, אנחנו מתקנים — ולא נמליץ על שינויים עד שהכפתור עובד.",
+          },
+          // AIC-72. The only no-rec reason the CUSTOMER must act on — they own
+          // the ad account and the card. Says what to do rather than "we're on
+          // it", which would be false and would leave them waiting.
+          accountCannotSpend: {
+            title: "חשבון הפרסום לא יכול להוציא תקציב",
+            body: "מטא חסמה את חשבון הפרסום או שאין בו אמצעי תשלום תקין, ולכן אף מודעה לא מתפרסמת. צריך להיכנס למנהל המודעות של מטא ולעדכן את אמצעי התשלום — עד אז אין טעם בשינויים בקמפיין.",
           },
           // AIC-77b: after an executed change, the engine waits a few days
           // before proposing another change of the same kind — long enough

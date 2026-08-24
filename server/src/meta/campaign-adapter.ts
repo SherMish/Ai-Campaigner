@@ -76,6 +76,7 @@ import type { RawAdMetaRow } from "./ad-meta-types.js";
 import { normalizeAdMedia, type AdMedia, type AdMediaReader, type RawAdMedia } from "./ad-media.js";
 import { detectDestination, type AdSetTrackingConfig, type TrackingReader } from "./tracking-health.js";
 import type { AdCreativeDestination, CtaReader } from "./cta-health.js";
+import type { AdAccountHealth, AccountHealthReader } from "./account-health.js";
 import type { AdAccountOption, PageOption, InstagramOption, DiscoveredCampaign, CampaignDiscoveryReader } from "./campaign-discovery.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
@@ -87,7 +88,7 @@ import type { AdAccountOption, PageOption, InstagramOption, DiscoveredCampaign, 
 // one, so setDailyBudget targets the right object.
 const BASE = "https://graph.facebook.com";
 
-export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter, AdditionWriter, ControlWriter, AdMediaReader, TrackingReader, CtaReader, CampaignDiscoveryReader {
+export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter, AdditionWriter, ControlWriter, AdMediaReader, TrackingReader, CtaReader, AccountHealthReader, CampaignDiscoveryReader {
   private budgetObj = new Map<string, string>(); // campaignId → budget object id
 
   constructor(
@@ -444,6 +445,29 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
         link: cta?.value?.link ?? null,
       };
     });
+  }
+
+  // AIC-72: can this AD ACCOUNT actually spend? Every object-level check can be
+  // green while the account is disabled, unsettled, in risk review, or simply
+  // has no card — and then nothing delivers and Insights just go quiet.
+  //
+  // `funding_source_details` is requested rather than the bare `funding_source`
+  // id: an account with no payment method omits the object entirely, which is
+  // the signal, and the display string ("Mastercard *1459") is what lets an
+  // operator tell the customer WHICH card to fix.
+  async getAdAccountHealth(metaAdAccountId: string): Promise<AdAccountHealth> {
+    const body = await this.get(
+      `${metaAdAccountId}?fields=id,name,account_status,disable_reason,funding_source_details`,
+    );
+    const funding = body.funding_source_details as { display_string?: string } | undefined;
+    return {
+      adAccountId: String(body.id ?? metaAdAccountId),
+      name: (body.name as string) ?? null,
+      accountStatus: typeof body.account_status === "number" ? body.account_status : null,
+      disableReason: typeof body.disable_reason === "number" ? body.disable_reason : null,
+      hasFundingSource: !!funding,
+      fundingSourceLabel: funding?.display_string ?? null,
+    };
   }
 
   // AIC-105 Branch B — every ad account the System User can currently manage

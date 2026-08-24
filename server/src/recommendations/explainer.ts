@@ -53,6 +53,11 @@ export const EXPLAINER_HE = {
   // nothing, so the budget buys clicks that cannot arrive — and that the fix is
   // ours, because it is: they cannot repair a creative we built.
   ctaBroken: () => `בכפתור של אחת המודעות חסר היעד (מספר הוואטסאפ או הקישור), כך שלחיצה עליו לא מגיעה לשום מקום — והתקציב מבוזבז. זו תקלה אצלנו ואנחנו מתקנים אותה; עד אז לא נמליץ על שינויים, כי אין טעם לייעל קמפיין שאי אפשר לפנות דרכו.`,
+  // AIC-72. The one no-rec reason whose fix is genuinely the CUSTOMER's — they
+  // own the ad account and the card. So unlike tracking/CTA this does NOT say
+  // "we're on it"; it says what to do, because waiting for us would be waiting
+  // forever.
+  accountCannotSpend: () => `יש בעיה בחשבון הפרסום עצמו במטא — אמצעי תשלום שנדחה, חוב פתוח או חשבון מושבת — ולכן שום מודעה בחשבון הזה לא יכולה להתפרסם. צריך להיכנס למנהל המודעות של מטא ולעדכן את אמצעי התשלום. עד שזה מסודר אין טעם בשינויים בקמפיין.`,
   // AIC-85: replaces singleAdSet — same content, renamed to match the fixed
   // comparableAdsets() check (a dormant ad set no longer silently counts).
   noComparableAudiences: () => `הקמפיין יציב. יש כרגע קהל אחד פעיל, כך שאין עם מה להשוות כדי להמליץ על שינוי קהל.`,
@@ -191,6 +196,8 @@ export function explain(rec: RecommendationRecord): string {
           return EXPLAINER_HE.trackingBroken();
         case "cta_broken":
           return EXPLAINER_HE.ctaBroken();
+        case "account_cannot_spend":
+          return EXPLAINER_HE.accountCannotSpend();
         case "no_comparable_audiences":
           return EXPLAINER_HE.noComparableAudiences();
         case "no_comparable_creatives":

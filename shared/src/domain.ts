@@ -90,6 +90,10 @@ export const OPS_QUEUE_TYPE = [
   // ad's creative carries no number/link — Meta renders a dead button. Must
   // stay in sync with the CHECK in migration 044.
   "campaign_cta_broken",
+  // AIC-72: the ad ACCOUNT cannot spend (disabled, unsettled, risk review, or
+  // no payment method) — every campaign on it is dead regardless of its own
+  // config. Must stay in sync with the CHECK in migration 045.
+  "ad_account_cannot_spend",
 ] as const;
 export type OpsQueueType = (typeof OPS_QUEUE_TYPE)[number];
 

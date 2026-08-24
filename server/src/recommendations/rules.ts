@@ -127,6 +127,10 @@ export interface CampaignEvidence {
   // deliver (no whatsapp_number / no link), so the button is dead. Optional —
   // absent means "not checked", never "fine".
   ctaBroken?: boolean;
+  // AIC-72: the ad ACCOUNT is disabled, unsettled, in review, or has no payment
+  // method. Dominates every per-campaign verdict — nothing on the account can
+  // deliver. Optional; absent means "not checked", never "fine".
+  accountCannotSpend?: boolean;
   // AIC-107: an engagement campaign counts engagements, not leads. Creative
   // comparison ports unchanged (cost-per-result is cost-per-result), but
   // budget increases are DELIBERATELY excluded — see increaseBudget. Optional
@@ -230,6 +234,7 @@ export type NoActionReason =
   | "delivery_blocked"
   | "tracking_broken" // AIC-88 — the lead count itself is wrong; see classifyNoAction
   | "cta_broken" // AIC-128 — the ads' button goes nowhere; see classifyNoAction
+  | "account_cannot_spend" // AIC-72 — the ad account itself can't pay
   | "no_comparable_audiences" // AIC-85, replaces single_ad_set — see classifyNoAction
   | "cooling_down"
   | "below_object_evidence_floor" // AIC-85
@@ -387,6 +392,18 @@ function classifyNoAction(
   ev: CampaignEvidence,
   thresholds: RuleThresholds = RULE_THRESHOLDS,
 ): { reason: NoActionReason; rationale: string; detail: Record<string, unknown> } {
+  // AIC-72, ABOVE delivery on purpose: a disabled or unfunded ad account is the
+  // CAUSE of the not-delivering it would otherwise be reported as. Naming
+  // "delivery blocked" there sends an operator to inspect ad sets that are
+  // perfectly configured, while the real fix is a card on the account.
+  if (ev.accountCannotSpend) {
+    return {
+      reason: "account_cannot_spend",
+      rationale: "the ad account itself can't spend (disabled, unsettled, or no payment method) — nothing on it can deliver",
+      detail: {},
+    };
+  }
+
   if (ev.deliveryProblemAdSetIds?.length) {
     return { reason: "delivery_blocked", rationale: "ad set(s) excluded from evidence — not delivering", detail: deliveryDetail(ev) };
   }
@@ -795,7 +812,7 @@ export function evaluateCampaign(
   // wrong advice when the ads that exist have a button that goes nowhere —
   // it would produce more broken ads and bury the actual fix. Both conditions
   // describe a campaign that cannot convert at all, not one lacking evidence.
-  if (ev.trackingBroken || ev.ctaBroken) {
+  if (ev.trackingBroken || ev.ctaBroken || ev.accountCannotSpend) {
     const t = classifyNoAction(ev, thresholds);
     return noAction(ev.campaignId, t.reason, t.rationale, t.detail);
   }

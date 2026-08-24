@@ -320,6 +320,29 @@ describe("no_action reason classification (AIC-64)", () => {
   // had a CTA type but no whatsapp_number — Meta rendered a dead button, every
   // click was wasted, and delivery/tracking both reported healthy. Nothing may
   // fire while the funnel is broken at the click.
+  // AIC-72: the account itself can't pay. Ranked ABOVE delivery on purpose — a
+  // disabled or unfunded account is the CAUSE of the not-delivering it would
+  // otherwise be reported as, and "delivery blocked" would send an operator to
+  // inspect ad sets that are perfectly configured.
+  it("account_cannot_spend suppresses everything, and outranks delivery_blocked", () => {
+    const control = evaluateCampaign(baseEvidence({ creatives: [cr("cr_a", 25000, 10, 2500), cr("cr_b", 25000, 1, 25000)] }));
+    expect(control.type).not.toBe("no_action");
+
+    const d = evaluateCampaign(baseEvidence({
+      creatives: [cr("cr_a", 25000, 10, 2500), cr("cr_b", 25000, 1, 25000)],
+      accountCannotSpend: true,
+      deliveryProblemAdSetIds: ["as_1"],
+    }));
+    expect(d.type).toBe("no_action");
+    expect(d.evidence.reason).toBe("account_cannot_spend");
+  });
+
+  it("account_cannot_spend also suppresses the AIC-86 advisory", () => {
+    const ev = baseEvidence({ creatives: [cr("cr_a", 46000, 0, null)], current: { spendAgorot: 46000, leads: 0, cplAgorot: null, days: 7 } });
+    expect(evaluateCampaign(ev).type).toBe("add_creatives_for_comparison");
+    expect(evaluateCampaign({ ...ev, accountCannotSpend: true }).evidence.reason).toBe("account_cannot_spend");
+  });
+
   it("cta_broken suppresses a rule that WOULD otherwise have fired", () => {
     const control = evaluateCampaign(baseEvidence({ creatives: [cr("cr_a", 25000, 10, 2500), cr("cr_b", 25000, 1, 25000)] }));
     expect(control.type).not.toBe("no_action");

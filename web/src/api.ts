@@ -57,6 +57,7 @@ export type NoActionReason =
   | "delivery_blocked"
   | "tracking_broken"
   | "cta_broken" // AIC-128
+  | "account_cannot_spend" // AIC-72
   | "no_comparable_audiences"
   | "cooling_down"
   | "below_object_evidence_floor"

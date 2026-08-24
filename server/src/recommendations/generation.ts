@@ -14,8 +14,10 @@ import { summarize, type DeliveryReader, type DeliverySummary } from "../meta/de
 import { recordCampaignDelivery } from "../services/delivery-monitor.js";
 import { summarizeTracking, type TrackingReader, type TrackingSummary } from "../meta/tracking-health.js";
 import { summarizeCta, type CtaReader, type CtaSummary } from "../meta/cta-health.js";
+import { summarizeAccount, type AccountHealthReader, type AccountSummary } from "../meta/account-health.js";
 import { recordCampaignTracking } from "../services/tracking-monitor.js";
 import { recordCampaignCta } from "../services/cta-monitor.js";
+import { recordAccountHealth } from "../services/account-monitor.js";
 import { LEAD_ACTION_PRIORITY } from "../meta/insights.js";
 import { deriveAudienceLabels, type AdSetMeta } from "../meta/audience-label.js";
 import { upsertAdSetMeta } from "../services/audience-meta-cache.js";
@@ -68,6 +70,10 @@ export interface GenCampaign {
   thresholdOverrides?: Record<string, number> | null;
   // AIC-87: this campaign's own lead definition (managed_campaigns.lead_event_types).
   leadEventTypes?: readonly string[] | null;
+  // AIC-72: the ad account to health-check, and the connection row its verdict
+  // is cached on. Optional so existing callers and tests are untouched.
+  connectionId?: string | null;
+  metaAdAccountId?: string | null;
 }
 
 export interface GenerationSummary {
@@ -77,7 +83,8 @@ export interface GenerationSummary {
   skipped: number; // eligible but couldn't read live budget
   deliveryProblems: number; // campaigns with a not-delivering ad set (AIC-39)
   trackingProblems: number;
-  ctaProblems: number; // campaigns whose lead definition doesn't match Meta (AIC-88)
+  ctaProblems: number;
+  accountProblems: number; // campaigns whose lead definition doesn't match Meta (AIC-88)
 }
 
 // Campaigns eligible for generation: actively managed, automation on, linked to a
@@ -90,10 +97,17 @@ export async function listEligibleForGeneration(pool: pg.Pool): Promise<GenCampa
     customer_id: string | null;
     threshold_overrides: Record<string, number>;
     lead_event_types: string[];
+    connection_id: string;
+    meta_ad_account_id: string | null;
   }>(
-    `SELECT mc.id, mc.meta_campaign_id, mc.customer_id, mc.threshold_overrides, mc.lead_event_types
+    // AIC-72 needs the ad account (to ask Meta if it can spend) and the
+    // connection id (where that verdict is cached — one account backs N
+    // campaigns, so it is a connection-level fact, not a campaign one).
+    `SELECT mc.id, mc.meta_campaign_id, mc.customer_id, mc.threshold_overrides, mc.lead_event_types,
+            conn.id AS connection_id, aa.meta_ad_account_id
      FROM managed_campaigns mc
      JOIN meta_connections conn ON conn.customer_id = mc.customer_id
+     LEFT JOIN ad_accounts aa ON aa.id = mc.ad_account_id
      WHERE mc.status = 'active'
        AND mc.automation_enabled = true
        AND mc.meta_campaign_id IS NOT NULL
@@ -105,6 +119,8 @@ export async function listEligibleForGeneration(pool: pg.Pool): Promise<GenCampa
     customerId: r.customer_id,
     thresholdOverrides: r.threshold_overrides,
     leadEventTypes: r.lead_event_types,
+    connectionId: r.connection_id,
+    metaAdAccountId: r.meta_ad_account_id ?? null,
   }));
 }
 
@@ -128,8 +144,10 @@ export async function runGenerationTick(deps: {
   // real conversion counts as zero.
   trackingReader?: TrackingReader;
   ctaReader?: CtaReader;
+  accountReader?: AccountHealthReader;
   recordTracking?: (campaign: GenCampaign, summary: TrackingSummary) => Promise<void>;
   recordCta?: (campaign: GenCampaign, summary: CtaSummary) => Promise<void>;
+  recordAccount?: (campaign: GenCampaign, summary: AccountSummary) => Promise<void>;
   // AIC-37: ad-set metadata (name + targeting), used to derive human audience
   // labels and cache them (via recordAudienceMeta) for the customer surface.
   audienceMetaReader?: AudienceMetaReader;
@@ -158,7 +176,7 @@ export async function runGenerationTick(deps: {
     rollingPeriods(deps.ref);
   const log = deps.logger;
 
-  const summary: GenerationSummary = { evaluated: 0, created: 0, expired: 0, skipped: 0, deliveryProblems: 0, trackingProblems: 0, ctaProblems: 0 };
+  const summary: GenerationSummary = { evaluated: 0, created: 0, expired: 0, skipped: 0, deliveryProblems: 0, trackingProblems: 0, ctaProblems: 0, accountProblems: 0 };
 
   for (const campaign of campaigns) {
     let currentBudgetAgorot: number;
@@ -279,6 +297,28 @@ export async function runGenerationTick(deps: {
       }
     }
 
+    // AIC-72: can the AD ACCOUNT spend at all? Checked FIRST among the health
+    // checks, because it dominates them: a disabled or unfunded account makes
+    // every campaign on it dead regardless of how well each one is configured.
+    // Reporting "the button is broken" on an account that cannot pay would send
+    // an operator to fix the wrong thing.
+    let accountCannotSpend = false;
+    if (deps.accountReader && campaign.metaAdAccountId) {
+      try {
+        const h = await deps.accountReader.getAdAccountHealth(campaign.metaAdAccountId);
+        const acct = summarizeAccount(h);
+        if (acct.state === "broken") {
+          accountCannotSpend = true;
+          summary.accountProblems++;
+          log?.info(`[generation] ${campaign.id}: ad account cannot spend — ${acct.reason}`);
+        }
+        await deps.recordAccount?.(campaign, acct);
+      } catch (e) {
+        // Unreadable is `unknown`, never "broken" — never flag on a read failure.
+        log?.error(`[generation] ${campaign.id}: account-health read failed — ${(e as Error).message}`);
+      }
+    }
+
     // AIC-128: does every ad's CREATIVE carry the destination its AD SET
     // promises? Found live — a Click-to-WhatsApp campaign whose creatives had
     // a CTA *type* (Meta derives it from the ad set) but no whatsapp_number,
@@ -341,6 +381,7 @@ export async function runGenerationTick(deps: {
       deliveryProblemAdSetIds: deliveryProblemAdSetIds ?? new Set(),
       trackingBroken,
       ctaBroken,
+      accountCannotSpend,
       adSetLabels,
       flexibleCreativeAdSetIds,
       liveCreativeCount,
@@ -409,6 +450,11 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
       ctaReader: adapter,
       recordCta: async (campaign, cta) => {
         await recordCampaignCta({ pool, ops, campaignId: campaign.id, customerId: campaign.customerId, summary: cta });
+      },
+      accountReader: adapter,
+      recordAccount: async (campaign, acct) => {
+        if (!campaign.connectionId) return;
+        await recordAccountHealth({ pool, ops, connectionId: campaign.connectionId, customerId: campaign.customerId, summary: acct });
       },
       recordNoRecReason: async (campaign, draft) => {
         await recordNoRecReason({ pool, campaignId: campaign.id, draft });

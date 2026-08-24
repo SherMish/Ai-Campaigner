@@ -73,6 +73,9 @@ export async function buildCampaignEvidence(
   liveCreativeCount?: number,
   // AIC-128: an ad promises a click destination its creative can't deliver.
   ctaBroken?: boolean,
+  // AIC-72: the ad account is disabled/unsettled/unfunded — nothing on it can
+  // deliver, whatever each campaign says.
+  accountCannotSpend?: boolean,
 ): Promise<CampaignEvidence> {
   const [curTotals, prevTotals, curCreatives, prevCreatives, curAdsets, curDaily, prevDaily] = await Promise.all([
     store.campaignTotals(campaign.id, current.start, current.end),
@@ -116,6 +119,7 @@ export async function buildCampaignEvidence(
     trackingBroken,
     liveCreativeCount,
     ctaBroken,
+    accountCannotSpend,
   };
 }
 
