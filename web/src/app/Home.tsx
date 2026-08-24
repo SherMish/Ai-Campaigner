@@ -9,9 +9,11 @@ import {
   getControlState,
   getAdMedia,
   setObjectPaused,
+  setAdRemoved,
   ApiError,
   type ControlState,
   type AdMedia,
+  type AudienceCreativeRow,
   shekels,
   type CustomerOverview,
   type HomeState,
@@ -535,14 +537,16 @@ export function Home() {
 // lands rather than half-building a bespoke one here.
 // The customer's own pause/resume (AIC-66). Pausing your own ad IS the
 // authorization — no approval step, unlike an engine recommendation. There is
-// deliberately no delete here; destructive actions are operator-only.
+// no META delete here; a real archive/delete stays operator-only. AIC-128 adds
+// a second action on a PAUSED ad — remove from view — which writes nothing to
+// Meta and is reversible.
 //
 // AIC-73 round 2: DEMOTED from a large outline pill to a quiet text link. It's
 // a secondary, mildly destructive action and was previously the most prominent
 // element in the row after the title. Reading order should be
 // "what is this → how is it doing → (quietly) what can I do".
 function PauseLink({
-  kind, metaObjectId, paused, busy, justSucceeded, onToggle, alreadyNotDelivering,
+  kind, metaObjectId, paused, busy, justSucceeded, onToggle, onRemove, alreadyNotDelivering,
 }: {
   kind: "ad" | "ad_set";
   metaObjectId: string;
@@ -552,6 +556,11 @@ function PauseLink({
   // confirmation instead of silence (which read as "did my click work?").
   justSucceeded: boolean;
   onToggle: (kind: "ad" | "ad_set", id: string, pause: boolean) => void;
+  // AIC-128: offered ONLY on a paused ad, which is the user-visible half of a
+  // rule the server enforces anyway. A running ad removed from view would be
+  // invisible and still spending — the one expensive mistake this surface
+  // could otherwise allow.
+  onRemove?: (id: string) => void;
   // AIC-100: the ad's own switch is on, but it isn't actually showing (a
   // parent is paused) — offering "השהיית המודעה" here isn't a no-op (it sets
   // the ad's own intent so it stays paused once the parent resumes), but
@@ -584,6 +593,19 @@ function PauseLink({
       >
         {busy ? CT.working : label}
       </button>
+      {/* The paused row's second action. Quiet, not red: this is reversible
+          and touches nothing on Meta, so dressing it as a destructive control
+          would overstate what it does. */}
+      {onRemove && paused && (
+        <button
+          className="link"
+          disabled={busy}
+          style={{ background: "none", border: "none", padding: "6px 2px", fontSize: "0.82rem", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}
+          onClick={(e) => { e.stopPropagation(); onRemove(metaObjectId); }}
+        >
+          {CT.removeAd}
+        </button>
+      )}
     </span>
   );
 }
@@ -664,6 +686,11 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
   // AIC-70: which row just succeeded, so the confirmation renders right where
   // the change happened. Cleared as soon as another action starts.
   const [successId, setSuccessId] = useState<string | null>(null);
+  // AIC-128: which ad sets have their removed-ads list expanded, the ad
+  // awaiting confirmation, and the server's refusal if it comes.
+  const [removedOpen, setRemovedOpen] = useState<Set<string>>(new Set());
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
 
   function fetchAudiences(r: RangeKey) {
     setLoading(true);
@@ -748,6 +775,30 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
     }
   }
 
+  // AIC-128. Both directions refetch rather than patching local state: a
+  // removal moves a row between two lists AND changes the reconciliation line
+  // under the ad set, so guessing the new shape client-side would be a second
+  // implementation of the server's rules, free to drift from it.
+  async function onRemoveToggle(adId: string, remove: boolean) {
+    setBusyId(adId);
+    setRemoveError(null);
+    setSuccessId(null);
+    try {
+      await setAdRemoved(adId, remove);
+      setConfirmRemove(null);
+      fetchAudiences(range);
+      setSuccessId(adId);
+    } catch (e) {
+      // The server refuses to remove an ad that is still ACTIVE (409). The
+      // button isn't offered in that state, so this means our view of the
+      // status was stale — say so plainly rather than failing silently.
+      setRemoveError(e instanceof ApiError && e.status === 409 ? CT.removeNeedsPause : CT.failed);
+      setConfirmRemove(null);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const adaptive = (data?.audiences.length ?? 0) > ADAPTIVE_COLLAPSE_ABOVE;
 
   return (
@@ -775,6 +826,7 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
               this panel now reads the exact same still-updating window. */}
           {range === "day" && <p className="muted" style={{ fontSize: "0.8rem", marginBottom: 10 }}>{h.provisional}</p>}
           {ctlFailed && <p className="muted" style={{ color: "var(--orange)", marginBottom: 10 }}>{CT.failed}</p>}
+          {removeError && <p className="muted" style={{ color: "var(--orange)", marginBottom: 10 }}>{removeError}</p>}
           {readUnavailable && (
             <p className="muted" style={{ marginBottom: 10 }}>
               {CT.readUnavailable} <Link className="link" to="/app/settings">{CT.goToSettings}</Link>
@@ -896,6 +948,7 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
                                         kind="ad" metaObjectId={c.metaObjectId}
                                         paused={adPaused} busy={busyId === c.metaObjectId}
                                         justSucceeded={successId === c.metaObjectId} onToggle={onToggle}
+                                        onRemove={(id) => { setRemoveError(null); setConfirmRemove(id); }}
                                         alreadyNotDelivering={adDelivery === "blocked_by_adset" || adDelivery === "blocked_by_campaign"}
                                       />
                                     )}
@@ -945,6 +998,52 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
                             })}
                           </div>
                         )}
+
+                        {/* AIC-128: removed ads, behind a toggle rather than on
+                            a separate screen — they belong next to the total
+                            they still count toward. Two ways in, one bucket:
+                            the customer removed it here, or an operator
+                            archived/deleted it at Meta. */}
+                        {aud.removedCreativesCount > 0 && (
+                          <div style={{ marginTop: 12 }}>
+                            <button
+                              className="link"
+                              style={{ background: "none", border: "none", padding: "6px 0", fontSize: "0.82rem", cursor: "pointer" }}
+                              aria-expanded={removedOpen.has(aud.adSetId)}
+                              onClick={() => setRemovedOpen((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(aud.adSetId)) next.delete(aud.adSetId); else next.add(aud.adSetId);
+                                return next;
+                              })}
+                            >
+                              {removedOpen.has(aud.adSetId) ? D.removedHide : D.removedShow} ({aud.removedCreativesCount})
+                            </button>
+                            {/* THE LINE THAT KEEPS THE PANEL HONEST. A removed
+                                ad keeps every insight row it produced, so its
+                                spend and leads are still inside the audience
+                                total above — without saying so, the visible
+                                rows simply fail to add up and it reads as
+                                money going missing. Only shown when there IS
+                                money to explain. */}
+                            {aud.removedSpendAgorot > 0 && (
+                              <p className="muted" style={{ fontSize: "0.78rem", margin: "2px 0 0" }}>
+                                {D.removedAccountsFor} {shekels(aud.removedSpendAgorot)} · {aud.removedLeads} {D.leadsCol}
+                              </p>
+                            )}
+                            {removedOpen.has(aud.adSetId) && (
+                              <div className="stack gap8" style={{ marginTop: 8, opacity: 0.75 }}>
+                                {aud.removedCreatives.map((c) => (
+                                  <RemovedAdRow
+                                    key={c.metaObjectId} c={c}
+                                    busy={busyId === c.metaObjectId}
+                                    justRestored={successId === c.metaObjectId}
+                                    onRestore={() => onRemoveToggle(c.metaObjectId, false)}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -952,6 +1051,79 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* A light confirm, deliberately NOT the confirm-to-type the admin
+          console demands for a real Meta archive/delete. This is reversible and
+          Meta never sees it, so that bar would be theatre — but the body copy
+          still has to say plainly what does and doesn't happen, because the
+          button says "מחיקה" and the ad is not being deleted. */}
+      {confirmRemove && (
+        <div className="op-modal-backdrop" onClick={() => setConfirmRemove(null)}>
+          <div className="op-modal" onClick={(e) => e.stopPropagation()}>
+            <b style={{ fontSize: "1.05rem" }}>{CT.removeConfirm}</b>
+            <p className="muted" style={{ margin: "10px 0" }}>{CT.removeConfirmBody}</p>
+            <div className="row gap12" style={{ marginTop: 12 }}>
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={busyId === confirmRemove}
+                onClick={() => onRemoveToggle(confirmRemove, true)}
+              >
+                {busyId === confirmRemove ? CT.working : CT.removeConfirmCta}
+              </button>
+              <button className="btn btn-outline btn-sm" onClick={() => setConfirmRemove(null)}>{CT.removeCancel}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// AIC-128. One removed ad. The restore button appears only for by_customer —
+// gone_at_meta means the object no longer exists in the ad account, and Meta
+// has no un-archive through any API, so a restore button there would be a
+// button that cannot work. It gets a plain explanation instead.
+function RemovedAdRow({ c, busy, justRestored, onRestore }: {
+  c: AudienceCreativeRow;
+  busy: boolean;
+  justRestored: boolean;
+  onRestore: () => void;
+}) {
+  const restorable = c.removed === "by_customer";
+  return (
+    <div>
+      <div className="row between" style={{ gap: 10, alignItems: "flex-start" }}>
+        <div className="row gap8" style={{ flexWrap: "wrap", alignItems: "center" }}>
+          <RowStatus label={restorable ? D.removedByYou : D.removedAtMeta} tone="neutral" />
+          <b style={{ fontSize: "0.85rem" }}><bdi>{c.creativeName ?? c.metaObjectId}</bdi></b>
+        </div>
+        {restorable && (
+          <span className="row gap8" style={{ alignItems: "center" }}>
+            {justRestored && !busy && (
+              <span className="muted" style={{ fontSize: "0.78rem", color: "var(--green)" }}>{CT.restoredNow}</span>
+            )}
+            <button
+              className="link" disabled={busy}
+              style={{ background: "none", border: "none", padding: "6px 2px", fontSize: "0.82rem", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}
+              onClick={onRestore}
+            >
+              {busy ? CT.working : CT.restoreAd}
+            </button>
+          </span>
+        )}
+      </div>
+      {!restorable && (
+        <p className="muted" style={{ fontSize: "0.78rem", marginTop: 2 }}>{D.removedAtMetaNote}</p>
+      )}
+      {/* Its numbers stay visible: they are still inside the audience total, so
+          hiding them here would make the reconciliation line unverifiable. */}
+      {c.hasData && (
+        <div className="row gap12" style={{ flexWrap: "wrap", marginTop: 4 }}>
+          <Metric label={D.spendCol} value={shekels(c.spendAgorot)} small />
+          <Metric label={D.leadsCol} value={String(c.leads)} small />
+          <Metric label={D.cplCol} value={c.cplAgorot === null ? L.none : shekels(c.cplAgorot)} small />
         </div>
       )}
     </div>

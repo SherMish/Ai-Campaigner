@@ -27,6 +27,7 @@ See also: [STATE.md](STATE.md) (dated changelog) · [POSTMORTEM-2026-08-19.md](P
 | Outcome measurement — did an executed recommendation actually help? | [features/outcome-measurement.md](features/outcome-measurement.md) |
 | Approval & safe execution — budget safety, outbox, pipeline | [features/safe-execution.md](features/safe-execution.md) |
 | Manual object controls — pause/resume (all users), archive/delete (admin) | [features/manual-controls.md](features/manual-controls.md) |
+| Removed ads — the customer's "delete", and Meta's (AIC-128) | [features/removed-ads.md](features/removed-ads.md) |
 | Action history surface (audit trail + condensed projection) | [features/action-history.md](features/action-history.md) |
 | Ops console — customers, needs-attention, review, billing | [features/ops-console.md](features/ops-console.md) |
 | Ops notifications — Telegram relay for changes, failures and errors | [features/notifications.md](features/notifications.md) |

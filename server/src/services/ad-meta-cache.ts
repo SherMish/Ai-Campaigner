@@ -16,6 +16,9 @@ export interface CachedAdMeta {
   name: string | null;
   effectiveStatus: string;
   createdTime: Date | null;
+  // AIC-128: when Meta stopped reporting this ad — i.e. an operator archived or
+  // deleted it. Null while it is still a live object. See the prune below.
+  goneAt: Date | null;
 }
 
 export async function upsertAdMeta(
@@ -33,19 +36,32 @@ export async function upsertAdMeta(
          name = EXCLUDED.name,
          effective_status = EXCLUDED.effective_status,
          created_time = COALESCE(ad_meta.created_time, EXCLUDED.created_time),
+         -- Meta is reporting it again, so it is not gone. This is what makes
+         -- the tombstone self-healing after a transient miss.
+         gone_at = NULL,
          updated_at = now()`,
       [a.adId, campaignId, a.adSetId, a.name, a.effectiveStatus, a.createdTime],
     );
   }
 
-  // Prune ads Meta no longer reports — otherwise a deleted ad stays in the
-  // customer's list forever. Mirrors upsertAdSetMeta's prune for the same
-  // reason it was added there (AIC-65, found live).
+  // Ads Meta no longer reports are TOMBSTONED, not deleted (AIC-128).
+  //
+  // AIC-65's rule still holds — a dead ad must not stay in the customer's list
+  // — but it is now enforced by filtering on gone_at rather than by throwing
+  // the row away. Deleting it destroyed the only evidence the ad was gone, so
+  // the customer's panel (built from snapshots, which outlive the object) kept
+  // rendering it with the stale status frozen in its last snapshot. Keeping the
+  // tombstone is what lets the panel say "this one was archived at Meta"
+  // instead of quietly showing a corpse as a live ad.
+  //
+  // Set once: `gone_at IS NULL` keeps the first observation's timestamp rather
+  // than bumping it on every tick, so "when did this disappear" stays true.
   const keep = ads.map((a) => a.adId);
   await pool.query(
     keep.length > 0
-      ? `DELETE FROM ad_meta WHERE campaign_id = $1 AND meta_ad_id <> ALL($2::text[])`
-      : `DELETE FROM ad_meta WHERE campaign_id = $1`,
+      ? `UPDATE ad_meta SET gone_at = now()
+          WHERE campaign_id = $1 AND gone_at IS NULL AND meta_ad_id <> ALL($2::text[])`
+      : `UPDATE ad_meta SET gone_at = now() WHERE campaign_id = $1 AND gone_at IS NULL`,
     keep.length > 0 ? [campaignId, keep] : [campaignId],
   );
 }
@@ -57,8 +73,9 @@ export async function listAdMeta(pool: pg.Pool, campaignId: string): Promise<Cac
     name: string | null;
     effective_status: string;
     created_time: Date | null;
+    gone_at: Date | null;
   }>(
-    `SELECT meta_ad_id, meta_ad_set_id, name, effective_status, created_time
+    `SELECT meta_ad_id, meta_ad_set_id, name, effective_status, created_time, gone_at
        FROM ad_meta WHERE campaign_id = $1`,
     [campaignId],
   );
@@ -68,6 +85,7 @@ export async function listAdMeta(pool: pg.Pool, campaignId: string): Promise<Cac
     name: r.name,
     effectiveStatus: r.effective_status,
     createdTime: r.created_time,
+    goneAt: r.gone_at,
   }));
 }
 

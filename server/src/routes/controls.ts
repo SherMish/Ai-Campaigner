@@ -3,6 +3,7 @@ import { pool } from "../db/pool.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { resolveAdditionContext, resolveAdditionAvailability, buildAdditionWriter } from "../additions/session.js";
 import { setObjectStatus, assertOwnedByCampaign } from "../controls/manual-controls.js";
+import { hideAd, unhideAd, listHiddenAds } from "../controls/hidden-ads.js";
 import type { ControlObjectKind, ControlWriter } from "../controls/types.js";
 import type { DeliveryReader } from "../meta/delivery-health.js";
 import type { AdMediaReader } from "../meta/ad-media.js";
@@ -19,9 +20,14 @@ const ops = new OpsQueue(pool);
 // That keeps the product promise intact ("nothing changes without approval")
 // rather than weakening it.
 //
-// PAUSE/RESUME ONLY on this surface. Archive/delete are destructive and
-// irreversible, and live exclusively in the admin console (routes/admin.ts) —
-// there is deliberately no customer-facing delete anywhere.
+// PAUSE/RESUME, plus AIC-128's REMOVE-FROM-VIEW. Meta's own archive/delete are
+// destructive and irreversible, and still live exclusively in the admin console
+// (routes/admin.ts) — there is deliberately no customer-facing write to Meta
+// beyond pause/resume.
+//
+// /hide and /unhide never touch Meta at all. They record a presentation
+// preference, so the customer gets the tidy-up they asked for without being
+// handed a one-way door: Meta has no un-archive, at all, through any API.
 export const controlsRouter = Router();
 
 const KINDS: ControlObjectKind[] = ["ad", "ad_set"];
@@ -139,6 +145,86 @@ for (const action of ["pause", "resume"] as const) {
       }
 
       res.json({ outcome: result.outcome, status: result.newStatus });
+    } catch (e) {
+      console.error(`[controls] ${action} failed`, e);
+      res.status(502).json({ error: "failed to apply the change" });
+    }
+  });
+}
+
+
+// ── AIC-128: remove from view / restore ──────────────────────────────────────
+//
+// Neither route writes to Meta. Both are ownership-checked exactly like
+// pause/resume — a client-supplied ad id is never trusted — and both are
+// idempotent, so a double-tap on a slow connection cannot produce a wrong
+// answer.
+
+// GET /hidden — the removed-ads screen. Returns ids + when/who; the screen
+// pairs them with the stats and thumbnails it already fetches elsewhere.
+controlsRouter.get("/hidden", requireAuth, async (req, res) => {
+  try {
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    if (!ctx) {
+      res.status(409).json({ error: "no managed campaign" });
+      return;
+    }
+    const ads = await listHiddenAds(pool, ctx.localCampaignId);
+    res.json({ ads: ads.map((a) => ({ metaAdId: a.metaAdId, hiddenAt: a.hiddenAt.toISOString() })) });
+  } catch (e) {
+    console.error("[controls] hidden failed", e);
+    res.status(502).json({ error: "failed to read removed ads" });
+  }
+});
+
+for (const action of ["hide", "unhide"] as const) {
+  controlsRouter.post(`/${action}`, requireAuth, async (req, res) => {
+    const metaObjectId = String(req.body?.metaObjectId ?? "");
+    if (!metaObjectId) {
+      res.status(400).json({ error: "metaObjectId is required" });
+      return;
+    }
+    try {
+      const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+      if (!ctx) {
+        res.status(409).json({ error: "no managed campaign" });
+        return;
+      }
+      const writer = buildAdditionWriter() as ControlWriter | null;
+      if (!writer) return unavailable(res);
+
+      // Ownership first, same as pause/resume. Note this also means a customer
+      // cannot hide an ad belonging to somebody else's campaign, which would
+      // otherwise be a way to write rows into another tenant's table.
+      if (!(await assertOwnedByCampaign(writer, ctx.metaCampaignId, "ad", metaObjectId))) {
+        res.status(404).json({ error: "not found" });
+        return;
+      }
+
+      if (action === "unhide") {
+        const outcome = await unhideAd({
+          pool, campaignId: ctx.localCampaignId, metaAdId: metaObjectId, actorLabel: "customer",
+        });
+        res.json({ outcome });
+        return;
+      }
+
+      const outcome = await hideAd({
+        pool, writer, campaignId: ctx.localCampaignId, metaAdId: metaObjectId, actorLabel: "customer",
+      });
+      // PAUSE-FIRST, ENFORCED SERVER-SIDE. The UI only offers remove on a
+      // paused row, but a disabled button is a suggestion, not a rule — and
+      // the failure it prevents is the expensive one: an ad removed from view
+      // while still spending on Meta is invisible AND live at the same time.
+      if (outcome === "not_paused") {
+        res.status(409).json({ outcome, error: "pause the ad before removing it" });
+        return;
+      }
+      if (outcome === "not_found") {
+        res.status(404).json({ outcome });
+        return;
+      }
+      res.json({ outcome });
     } catch (e) {
       console.error(`[controls] ${action} failed`, e);
       res.status(502).json({ error: "failed to apply the change" });

@@ -1068,7 +1068,8 @@ export const strings = {
         // default, never the landing view.
         // AIC-66: the customer's own pause/resume. Pausing your own ad is
         // itself the authorization — no approval step, unlike an engine
-        // recommendation. Deliberately no delete on this surface.
+        // recommendation. No write to META beyond pause/resume on this
+        // surface; AIC-128's remove is ours alone (see removeAd below).
         controls: {
           pauseAd: "השהיית המודעה",
           resumeAd: "הפעלת המודעה",
@@ -1085,6 +1086,25 @@ export const strings = {
           // right where the change happened, not a global toast.
           pausedNow: "הושהה",
           resumedNow: "הופעל",
+          // AIC-128. Offered ONLY on an already-paused ad, so removing it can
+          // never leave something invisible and still spending. The word is
+          // "מחיקה" because that is what the customer means by it; the body
+          // copy is careful to say what actually happens, since the ad really
+          // does keep existing (and keeps its history) on Meta.
+          removeAd: "מחיקה",
+          restoreAd: "שחזור",
+          removedNow: "הוסרה",
+          restoredNow: "שוחזרה",
+          // Light confirm, not confirm-to-type: this is reversible and touches
+          // nothing on Meta, so the bar the admin console sets for a real
+          // archive/delete would be theatre here.
+          removeConfirm: "להסיר את המודעה מהתצוגה?",
+          removeConfirmBody: "המודעה תיעלם מהפירוט אבל תישאר ב-Meta מושהית, וההוצאה והלידים שלה יישארו בסיכומים. אפשר לשחזר אותה בכל רגע.",
+          removeConfirmCta: "הסרה",
+          removeCancel: "ביטול",
+          // 409 from the server. The button shouldn't be reachable on a running
+          // ad, but the rule lives on the server, so the message has to exist.
+          removeNeedsPause: "צריך להשהות את המודעה לפני שמסירים אותה.",
           // Bug fix, 2026-08-15: GET /state and /media used to fail silently
           // (a bare .catch(() => {})) — the pause button and creative images
           // just never appeared, with nothing explaining why, indistinguishable
@@ -1134,6 +1154,18 @@ export const strings = {
           moreCreativesOne: "עוד מודעה אחת עם נתונים מתקופה אחרת.",
           moreCreativesManyPrefix: "עוד",
           moreCreativesManySuffix: "מודעות עם נתונים מתקופה אחרת.",
+          // AIC-128. The toggle that reveals removed ads, and the line that
+          // keeps the arithmetic honest: a removed ad keeps its spend and leads
+          // inside the totals above, so without this the rows visibly fail to
+          // add up and it reads as money going missing.
+          removedShow: "הצגת מודעות שהוסרו",
+          removedHide: "הסתרת מודעות שהוסרו",
+          removedAccountsFor: "ההוצאה והלידים שלהן נספרים בסיכום של הקהל למעלה:",
+          removedByYou: "הוסרה על ידך",
+          // An operator archived or deleted it at Meta. No restore is offered
+          // because none is possible — Meta has no un-archive.
+          removedAtMeta: "הוסרה ב-Meta",
+          removedAtMetaNote: "המודעה כבר לא קיימת בחשבון הפרסום, אז אי אפשר לשחזר אותה. הנתונים שלה נשארים בסיכומים.",
           // AIC-73 round 2: per-row state, so "is this running?" is readable
           // without inferring it from which direction the action button points.
           statusRunning: "מפרסם",

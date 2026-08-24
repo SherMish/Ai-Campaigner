@@ -6,6 +6,48 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-25 — The customer can remove an ad; Meta's archive could not be used (AIC-128)
+Meta's archive was the obvious mechanism and is unusable: "An ARCHIVED object
+has only two fields you can change: name and status. You can also only change
+status to DELETED." **There is no un-archive, through any API** — so a
+customer-facing remove built on it could never offer the restore that is most of
+the point, and would hand a non-expert an irreversible write to their own ad
+account. (Ads Manager hides this: its "delete" button actually archives.)
+
+So the customer's remove is ours alone — a row in `hidden_ads`, with the ad left
+`PAUSED` and untouched on Meta. Offered only on a paused ad, **enforced
+server-side against a live Meta read**, because a running ad removed from view
+would be invisible AND still spending. Restore brings it back paused, which is
+simply what it still is.
+
+The same question from the other side: an ad an operator archived/deleted at
+Meta used to stay in `הצג פירוט` forever, since the per-ad rows come from stored
+snapshots that outlive the Meta object. Worse, `upsertAdMeta` HARD-DELETED the
+cache row the moment Meta stopped reporting it, throwing away the only evidence
+it was gone. The prune is now a tombstone (`ad_meta.gone_at`) — AIC-65's rule
+enforced by filtering rather than deleting — which also makes a transient Meta
+miss self-healing, something the hard delete could not do.
+
+Both land in one "removed" bucket behind a toggle in the panel, differing in
+exactly one place: `by_customer` gets a restore button, `gone_at_meta` gets an
+explanation. `gone_at_meta` wins when both apply — the reason that decides what
+the customer can DO beats the one that explains how the ad left.
+
+**No number moves.** Ingestion is untouched, so campaign KPIs, ad-set rows, the
+admin readout and fleet stats are byte-identical (pinned by tests). The
+consequence is surfaced rather than swallowed: the ad set's total still includes
+the removed ad, so the panel reports removedSpend/removedLeads in the selected
+window and says the money is counted above. Rows that silently fail to add up
+are how a customer stops trusting the numbers.
+
+The operator's view is never filtered — `perCreative` comes from a separate
+read that never consults `hidden_ads`, pinned by a test, because "my ad
+disappeared" is unanswerable if it disappeared for the operator too.
+
+Keyed (campaign_id, meta_ad_id) rather than on the ad id alone: every read here
+is campaign-scoped, and a narrower key reported a cross-campaign collision as
+"already hidden". The integration tests caught it.
+
 ### 2026-08-25 — Over-count detection: the failure that makes the engine spend MORE (AIC-92)
 Every other measurement check assumes under-counting — fewer leads than really
 happened, a cautious engine, bounded damage. Over-counting compounds: inflated

@@ -207,7 +207,14 @@ export interface AudienceCreativeRow {
   adState: AdState;
   // false = "no results yet", which is NOT the same claim as ₪0 / 0 leads.
   hasData: boolean;
+  // AIC-128: why this ad isn't in the default list. Null on a normal row.
+  removed: RemovedReason | null;
 }
+// by_customer  — removed from view here; the ad is untouched and still PAUSED
+//                on Meta, so it can be restored.
+// gone_at_meta — archived or deleted at Meta by an operator. NOT restorable:
+//                Meta has no un-archive through any API.
+export type RemovedReason = "by_customer" | "gone_at_meta";
 export interface AudienceRow {
   adSetId: string;
   label: string;
@@ -218,6 +225,13 @@ export interface AudienceRow {
   // AIC-95 followup: creatives with real historical data outside the selected
   // window (DB-only fact, never a liveness claim) — see campaign-audiences.ts.
   moreCreativesCount: number;
+  // AIC-128: removed ads keep their history, so their spend/leads are still
+  // inside spendAgorot/leads above. Reported so the visible rows and the total
+  // still reconcile instead of silently disagreeing.
+  removedCreativesCount: number;
+  removedSpendAgorot: number;
+  removedLeads: number;
+  removedCreatives: AudienceCreativeRow[];
 }
 // AIC-95: why the panel has nothing for the selected window — never a bare
 // empty array. See campaign-audiences.ts for what each reason means.
@@ -389,6 +403,19 @@ export const setObjectPaused = (kind: ControlKind, metaObjectId: string, paused:
   api<{ outcome: ControlOutcome; status: string }>(`/app/controls/${paused ? "pause" : "resume"}`, {
     method: "POST",
     body: JSON.stringify({ kind, metaObjectId }),
+  });
+
+/** AIC-128. Remove an ad from the customer's own view / put it back.
+ *
+ *  Neither call touches Meta — the ad stays exactly as it is (PAUSED), which is
+ *  what makes the restore possible at all. Meta's own archive is a one-way door
+ *  with no un-archive, so it stays operator-only.
+ *
+ *  Hiding requires the ad to already be paused, enforced server-side (409). */
+export const setAdRemoved = (metaObjectId: string, removed: boolean) =>
+  api<{ outcome: string }>(`/app/controls/${removed ? "hide" : "unhide"}`, {
+    method: "POST",
+    body: JSON.stringify({ metaObjectId }),
   });
 
 /** Operator-side. `confirm` must equal the object id for archive/delete —

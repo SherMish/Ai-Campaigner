@@ -100,6 +100,16 @@ Manual controls are the first legitimate reason for a caller-supplied status,
 because the caller is a human acting on their own object. The adapter says so
 in a comment so a future reader doesn't mistake it for erosion of the rule.
 
+## The customer's "delete" is not Meta's
+
+AIC-128 added a **remove from view** on a paused ad, and it deliberately does
+not go through anything on this page. It writes nothing to Meta, it is
+reversible, and it lives in [removed-ads.md](removed-ads.md).
+
+Meta's archive could not be used for it: an `ARCHIVED` object can only ever move
+to `DELETED`, so there is no un-archive through any API. Everything below —
+archive and delete — therefore stays operator-only, as it always was.
+
 ## Archive vs delete
 
 Archive (`ARCHIVED`) is recoverable and keeps history; delete (`DELETED`) is

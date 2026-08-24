@@ -6,6 +6,7 @@ import { resolveRangeWindow, type RangeKey } from "./readout.js";
 import { resolveCampaignId } from "./customer-recommendations.js";
 import { listAdMeta } from "./ad-meta-cache.js";
 import { classifyAdState, type AdState } from "../meta/ad-state.js";
+import { listHiddenAdIds } from "../controls/hidden-ads.js";
 
 // The opt-in "details" view (AIC-37): per-audience (ad set) breakdown, each with
 // its own per-creative rows. Progressive disclosure — the customer's default Home
@@ -42,7 +43,25 @@ export interface AudienceCreativeRow {
   // about a number.
   adState: AdState;
   hasData: boolean;
+  // AIC-128: why this ad is not in the default list. Null for a normal row.
+  removed: RemovedReason | null;
 }
+
+// Two ways an ad leaves the customer's default view, kept apart because only
+// one of them can be undone.
+//
+//   by_customer  — removed from view HERE, on request. Meta never saw it, the
+//                  ad is still sitting there PAUSED, so restore is a DB delete
+//                  and always works.
+//   gone_at_meta — an operator archived or deleted it at Meta, so Meta stopped
+//                  listing it. There is NO restore: Meta has no un-archive, and
+//                  an archived object can only ever move to deleted. Offering a
+//                  restore button here would be a button that cannot work.
+//
+// Deliberately not split into archived-vs-deleted: once Meta stops listing an
+// object we cannot tell which it was, and inventing the distinction would be
+// guessing at a fact we don't have.
+export type RemovedReason = "by_customer" | "gone_at_meta";
 
 export interface AudienceRow {
   adSetId: string;
@@ -60,6 +79,25 @@ export interface AudienceRow {
   // Meta call, which this view deliberately never makes) — so the UI can say
   // "N more with data from another period" instead of nothing.
   moreCreativesCount: number;
+  // AIC-128. A removed ad — whether the customer hid it here or an operator
+  // archived/deleted it at Meta — keeps every insight row it ever produced, so
+  // its spend and leads are still inside this ad set's spendAgorot/leads above.
+  // That means the visible creative rows no longer sum to this row's own total,
+  // and an unexplained gap in the arithmetic is exactly the kind of thing that
+  // makes a customer stop trusting the numbers.
+  //
+  // So the gap is reported rather than swallowed, in the SELECTED window (the
+  // same window the totals above use) so the two actually reconcile. Same
+  // treatment moreCreativesCount already gets, for the same reason: a row that
+  // silently disappears reads as money going missing.
+  removedCreativesCount: number;
+  removedSpendAgorot: number;
+  removedLeads: number;
+  // The removed rows themselves, so the panel can reveal them behind a toggle
+  // rather than making the customer go somewhere else to find them. Same shape
+  // as `creatives`; each carries its own `removed` reason, which is what
+  // decides whether a restore button is offered.
+  removedCreatives: AudienceCreativeRow[];
 }
 
 // Why the panel has nothing to show for the selected window — never a bare
@@ -97,7 +135,7 @@ export async function buildCampaignAudiences(
   const window = resolveRangeWindow(range, ref);
   const allTimeWindow = resolveRangeWindow("allTime", ref);
   const store = new PgSnapshotStore(pool);
-  const [adsetStats, creativeStats, allTimeCreativeStats, meta, adMeta, allTimeAdsetStats] = await Promise.all([
+  const [adsetStats, creativeStats, allTimeCreativeStats, meta, adMeta, allTimeAdsetStats, hiddenAdIds] = await Promise.all([
     store.adsetRangeStats(campaignId, window.start, window.end),
     store.creativeRangeStats(campaignId, window.start, window.end),
     // Only for moreCreativesCount below — real bug, found live: the campaign
@@ -118,6 +156,10 @@ export async function buildCampaignAudiences(
     range === "allTime"
       ? Promise.resolve<Awaited<ReturnType<typeof store.adsetRangeStats>>>([])
       : store.adsetRangeStats(campaignId, allTimeWindow.start, allTimeWindow.end),
+    // AIC-128: ads the customer removed from their own view. Applied purely as
+    // a presentation filter below — never to the stats themselves, which is
+    // what keeps every total on this page (and everywhere else) unchanged.
+    listHiddenAdIds(pool, campaignId),
   ]);
 
   const metaById = new Map(meta.map((m) => [m.adSetId, m]));
@@ -171,8 +213,53 @@ export async function buildCampaignAudiences(
 
   const creativesByAdSet = new Map<string, AudienceCreativeRow[]>();
   const creativeIdsInWindowByAdSet = new Map<string, Set<string>>();
+  // What the hidden rows were worth, per ad set, in the selected window — so
+  // the panel can account for the difference between an ad set's total and the
+  // rows shown under it.
+  const removedAgg = new Map<string, { count: number; spendAgorot: number; leads: number }>();
+  const removedByAdSet = new Map<string, AudienceCreativeRow[]>();
+  // An ad Meta no longer lists — archived or deleted by an operator. The
+  // tombstone (ad_meta.gone_at) is the only evidence: the snapshot rows that
+  // build this list outlive the Meta object and carry a frozen status, so
+  // without it a deleted ad renders as a live one forever.
+  const goneAdIds = new Set(adMeta.filter((a) => a.goneAt !== null).map((a) => a.adId));
+  // gone_at_meta WINS when both apply, and the order matters. If the customer
+  // removed it here and an operator later archived it at Meta, the object no
+  // longer exists — offering "restore" would put a row back for something that
+  // cannot be shown, run, or resumed. The reason that decides what the customer
+  // can DO takes precedence over the reason that merely explains how it left.
+  const removalReason = (adId: string): RemovedReason | null =>
+    goneAdIds.has(adId) ? "gone_at_meta" : hiddenAdIds.has(adId) ? "by_customer" : null;
+
   for (const c of creativeStats) {
     const key = c.adSetId ?? "";
+    const removed = removalReason(c.metaObjectId);
+    if (removed) {
+      const agg = removedAgg.get(key) ?? { count: 0, spendAgorot: 0, leads: 0 };
+      agg.count++;
+      agg.spendAgorot += c.spendAgorot;
+      agg.leads += c.leads;
+      removedAgg.set(key, agg);
+      const list = removedByAdSet.get(key) ?? [];
+      list.push({
+        metaObjectId: c.metaObjectId,
+        creativeName: c.creativeName,
+        spendAgorot: c.spendAgorot,
+        leads: c.leads,
+        cplAgorot: c.cplAgorot,
+        deliveryStatus: c.deliveryStatus,
+        adState: classifyAdState(adStateById.get(c.metaObjectId) ?? c.deliveryStatus),
+        hasData: true,
+        removed,
+      });
+      removedByAdSet.set(key, list);
+      // Registered as "seen in this window" so the merge loop below cannot add
+      // it a second time as a no-data row.
+      const seen = creativeIdsInWindowByAdSet.get(key) ?? new Set<string>();
+      seen.add(c.metaObjectId);
+      creativeIdsInWindowByAdSet.set(key, seen);
+      continue;
+    }
     const list = creativesByAdSet.get(key) ?? [];
     list.push({
       metaObjectId: c.metaObjectId,
@@ -185,6 +272,7 @@ export async function buildCampaignAudiences(
       // fresh as the last ingestion tick.
       adState: classifyAdState(adStateById.get(c.metaObjectId) ?? c.deliveryStatus),
       hasData: true,
+      removed: null,
     });
     creativesByAdSet.set(key, list);
     const ids = creativeIdsInWindowByAdSet.get(key) ?? new Set<string>();
@@ -212,6 +300,26 @@ export async function buildCampaignAudiences(
   for (const a of adMeta) {
     const state = classifyAdState(a.effectiveStatus);
     if (!spineIds.has(a.adSetId)) continue; // its ad set isn't being shown
+    // AIC-128: an ad removed BEFORE it ever recorded data would otherwise be
+    // merged straight back into the visible list by this loop. It contributes
+    // nothing to removedAgg — with no spend or leads there is no gap in the
+    // arithmetic to explain, and counting it would imply money that never
+    // existed — but it still belongs in the removed list so the customer can
+    // find and restore it.
+    const removedNoData = removalReason(a.adId);
+    if (removedNoData) {
+      const inWin = creativeIdsInWindowByAdSet.get(a.adSetId) ?? new Set<string>();
+      if (inWin.has(a.adId)) continue; // already captured from real data above
+      const everHad = allTimeIdsByAdSet.get(a.adSetId) ?? inWin;
+      if (everHad.has(a.adId)) continue;
+      const list = removedByAdSet.get(a.adSetId) ?? [];
+      list.push({
+        metaObjectId: a.adId, creativeName: a.name, spendAgorot: 0, leads: 0, cplAgorot: null,
+        deliveryStatus: a.effectiveStatus, adState: state, hasData: false, removed: removedNoData,
+      });
+      removedByAdSet.set(a.adSetId, list);
+      continue;
+    }
     const inWindow = creativeIdsInWindowByAdSet.get(a.adSetId) ?? new Set<string>();
     if (inWindow.has(a.adId)) continue; // already listed from real data
     // AIC-116: the gate here was `hasNoDataYet(state)`, i.e. merge only an ad
@@ -236,6 +344,7 @@ export async function buildCampaignAudiences(
       deliveryStatus: a.effectiveStatus,
       adState: state,
       hasData: false,
+      removed: null,
     });
     creativesByAdSet.set(a.adSetId, list);
     inWindow.add(a.adId);
@@ -251,7 +360,10 @@ export async function buildCampaignAudiences(
     const inWindow = creativeIdsInWindowByAdSet.get(m.adSetId) ?? new Set<string>();
     const allTime = allTimeIdsByAdSet.get(m.adSetId) ?? inWindow;
     let moreCreativesCount = 0;
-    for (const id of allTime) if (!inWindow.has(id)) moreCreativesCount++;
+    // Removed ads are excluded here as well: counting one as "N more with data
+    // from another period" would advertise the very row that was removed, and
+    // would double-report it alongside the removed note.
+    for (const id of allTime) if (!inWindow.has(id) && !removalReason(id)) moreCreativesCount++;
     // Absent stats mean no data, not zero results — the ad rows carry
     // hasData:false so the UI can say so rather than printing "₪0 · 0 לידים".
     const a = statsByAdSet.get(m.adSetId);
@@ -263,6 +375,10 @@ export async function buildCampaignAudiences(
       cplAgorot: a?.cplAgorot ?? null,
       creatives: (creativesByAdSet.get(m.adSetId) ?? []).sort((x, y) => y.spendAgorot - x.spendAgorot),
       moreCreativesCount,
+      removedCreativesCount: (removedByAdSet.get(m.adSetId) ?? []).length,
+      removedSpendAgorot: removedAgg.get(m.adSetId)?.spendAgorot ?? 0,
+      removedLeads: removedAgg.get(m.adSetId)?.leads ?? 0,
+      removedCreatives: (removedByAdSet.get(m.adSetId) ?? []).sort((x, y) => y.spendAgorot - x.spendAgorot),
     };
   });
   audiences.sort((a, b) => b.spendAgorot - a.spendAgorot);
