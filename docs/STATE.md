@@ -6,6 +6,37 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-24 — CI now runs the integration tests, against its own database (AIC-84, AIC-109)
+CI ran `test:unit` with no `DATABASE_URL`, so every DB integration test
+self-skipped: **542 of 930 tests ran and 388 did not** — 45 whole files,
+including every check that guards a live customer (delivery, tracking and CTA
+health, the safe-execute outbox, the notification relay). "CI is green" meant
+under 60% of the suite.
+
+It could not simply be given the production `DATABASE_URL`, because the tests
+WRITE. That is not hypothetical: sharing one database with production leaked
+`__it_*` customers into the real ops console, and let one file's rows be claimed
+by another file's code mid-run.
+
+A `postgres:16` service container fixes both halves at once — empty at the start
+of every run, unreachable from production by construction, no secrets, dies with
+the job. `pool.ts` already skipped SSL for localhost, so nothing else changed.
+Migrations run before the tests, which also means **a migration that fails to
+apply to an empty database now fails CI** — i.e. production being rebuildable
+from scratch is continuously verified rather than assumed.
+
+**The two "known pre-existing failures" were never broken tests.** Against a
+fresh isolated database the suite is **930/930**. `customer-overview`'s
+lead-quality test and `operator-accounts`' last-full-admin test fail only
+because of contention and residue in the shared production database — every
+report of them in this changelog as "known pre-existing" was describing an
+artifact of the test environment, not a defect.
+
+Also cleaned: the last leaked production row, `__it_verify_dash@example.com`.
+Worth recording that it was previously described as a test *admin*; it was
+`is_admin: false` with `admin_role` merely at its column default, so it never had
+console access — an orphaned login, not an privileged account.
+
 ### 2026-08-24 — CTA health: catching an ad whose button goes nowhere (AIC-128)
 Reported live: a customer's Click-to-WhatsApp ads were running without a WhatsApp
 button, and they paused both themselves.

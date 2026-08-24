@@ -8,6 +8,45 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+
+    # AIC-84/AIC-109: a throwaway Postgres for THIS run only.
+    #
+    # Before this, CI ran `test:unit` with no DATABASE_URL, so every DB
+    # integration test self-skipped: 542 of 930 tests ran and 388 were silently
+    # invisible — 45 whole files, including every check that guards a live
+    # customer (delivery, tracking, CTA health, the safe-execute outbox, the
+    # notification relay). "CI is green" meant less than 60% of the suite.
+    #
+    # It could not simply be handed the production DATABASE_URL: the tests
+    # WRITE. That is not hypothetical — sharing one database with production
+    # leaked `__it_*` customer rows into the real ops console, and let one test
+    # file's rows be claimed by another file's code mid-run.
+    #
+    # A service container fixes both halves at once. It is empty at the start of
+    # every run, unreachable from production by construction, needs no secrets,
+    # and dies with the job.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aic_test
+        ports: ["5432:5432"]
+        # Without this the first migration can race the server's startup.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # localhost → server/src/db/pool.ts already skips SSL for this host, so
+      # no pool changes were needed.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aic_test
+      # The integration tests only run when this is set; that gate is what made
+      # the blind spot invisible, and is now what makes the coverage real.
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,4 +56,10 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
+
+      # Schema first — the integration tests assume a migrated database, and a
+      # migration that fails to apply to an EMPTY database is itself a bug worth
+      # failing CI for (it means production could not be rebuilt from scratch).
+      - run: npm run db:migrate
+
       - run: npm run test:unit
