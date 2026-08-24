@@ -30,6 +30,7 @@ export const ATTENTION_COPY: Record<AttentionKind, HeroCopy> = {
   connection: { badge: h.states.attention.badge, title: h.states.attention.title, body: h.states.attention.body },
   delivery: { badge: h.states.delivery.badge, title: h.states.delivery.title, body: h.states.delivery.body },
   tracking: { badge: h.states.tracking.badge, title: h.states.tracking.title, body: h.states.tracking.body },
+  cta: { badge: h.states.cta.badge, title: h.states.cta.title, body: h.states.cta.body },
 };
 
 // Badge per home state. `ok`/`collecting` take their title+body from
@@ -69,6 +70,7 @@ export const NO_REC_COPY: Record<NoActionReason, NoRecCopy> = {
   // future refactor can quietly change.
   delivery_blocked: h.noRec.deliveryBlocked,
   tracking_broken: h.noRec.trackingBroken,
+  cta_broken: h.noRec.ctaBroken,
   no_comparable_audiences: h.noRec.noComparableAudiences,
   cooling_down: h.noRec.coolingDown,
   below_object_evidence_floor: h.noRec.belowObjectEvidenceFloor,
@@ -91,7 +93,7 @@ export function noRecCopy(reason: NoActionReason | null): NoRecCopy {
 export type StatusTooltipKey =
   | "ok" | "collecting" | "paused" | "stopped" | "ready_to_launch"
   | "no_campaign_setup" | "no_campaign_ready_to_build"
-  | "attention_connection" | "attention_tracking" | "attention_delivery";
+  | "attention_connection" | "attention_tracking" | "attention_delivery" | "attention_cta";
 
 export function statusTooltipKey(
   state: HomeState,
@@ -110,6 +112,7 @@ export function statusTooltipKey(
       switch (kind) {
         case "connection": return "attention_connection";
         case "tracking": return "attention_tracking";
+        case "cta": return "attention_cta";
         case "delivery": return "attention_delivery";
         default: return assertNever(kind, "AttentionKind");
       }
@@ -142,5 +145,6 @@ export const STATUS_TOOLTIP_COPY: Record<StatusTooltipKey, StatusTooltipCopy> = 
   no_campaign_ready_to_build: st.noCampaignReadyToBuild,
   attention_connection: st.attentionConnection,
   attention_tracking: st.attentionTracking,
+  attention_cta: st.attentionCta,
   attention_delivery: st.attentionDelivery,
 };

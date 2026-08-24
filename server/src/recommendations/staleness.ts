@@ -42,6 +42,7 @@ export async function refreshRecommendations(deps: {
   flexibleCreativeAdSetIds?: Set<string>; // Dynamic/Advantage+ creative ad sets (AIC-36)
   deliveryProblemAdSetIds?: Set<string>; // the real-delivery-problem subset of excludeAdSetIds (AIC-65)
   trackingBroken?: boolean; // lead definition doesn't match Meta's config (AIC-88)
+  ctaBroken?: boolean; // an ad's button has no destination (AIC-128)
   liveCreativeCount?: number; // ads actually running now, from delivery-health (AIC-117)
   adStatuses?: Record<string, "active" | "paused">; // live per-ad status (AIC-77b)
   adSetStatuses?: Record<string, "active" | "paused">; // live per-ad-set status (AIC-77b)
@@ -52,7 +53,7 @@ export async function refreshRecommendations(deps: {
   const evidence = await buildCampaignEvidence(
     snapshotStore, campaign, deps.current, deps.previous,
     deps.excludeAdSetIds, deps.adSetLabels, deps.flexibleCreativeAdSetIds, deps.deliveryProblemAdSetIds,
-    deps.adStatuses, deps.adSetStatuses, deps.trackingBroken, deps.liveCreativeCount,
+    deps.adStatuses, deps.adSetStatuses, deps.trackingBroken, deps.liveCreativeCount, deps.ctaBroken,
   );
   const thresholds = resolveThresholds(campaign.thresholdOverrides, campaign.currentBudgetAgorot);
   const cooldownClasses = resolveCooldownClasses(campaign.lastActionAtByType, thresholds.COOLDOWN_DAYS, deps.now ?? new Date());

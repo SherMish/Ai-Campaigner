@@ -13,7 +13,9 @@ import { rollingPeriods } from "../meta/scheduled-ingestion.js";
 import { summarize, type DeliveryReader, type DeliverySummary } from "../meta/delivery-health.js";
 import { recordCampaignDelivery } from "../services/delivery-monitor.js";
 import { summarizeTracking, type TrackingReader, type TrackingSummary } from "../meta/tracking-health.js";
+import { summarizeCta, type CtaReader, type CtaSummary } from "../meta/cta-health.js";
 import { recordCampaignTracking } from "../services/tracking-monitor.js";
+import { recordCampaignCta } from "../services/cta-monitor.js";
 import { LEAD_ACTION_PRIORITY } from "../meta/insights.js";
 import { deriveAudienceLabels, type AdSetMeta } from "../meta/audience-label.js";
 import { upsertAdSetMeta } from "../services/audience-meta-cache.js";
@@ -74,7 +76,8 @@ export interface GenerationSummary {
   expired: number; // proposed recs the rules no longer support
   skipped: number; // eligible but couldn't read live budget
   deliveryProblems: number; // campaigns with a not-delivering ad set (AIC-39)
-  trackingProblems: number; // campaigns whose lead definition doesn't match Meta (AIC-88)
+  trackingProblems: number;
+  ctaProblems: number; // campaigns whose lead definition doesn't match Meta (AIC-88)
 }
 
 // Campaigns eligible for generation: actively managed, automation on, linked to a
@@ -124,7 +127,9 @@ export async function runGenerationTick(deps: {
   // ad sets are configured on Meta to optimize for. A mismatch means every
   // real conversion counts as zero.
   trackingReader?: TrackingReader;
+  ctaReader?: CtaReader;
   recordTracking?: (campaign: GenCampaign, summary: TrackingSummary) => Promise<void>;
+  recordCta?: (campaign: GenCampaign, summary: CtaSummary) => Promise<void>;
   // AIC-37: ad-set metadata (name + targeting), used to derive human audience
   // labels and cache them (via recordAudienceMeta) for the customer surface.
   audienceMetaReader?: AudienceMetaReader;
@@ -153,7 +158,7 @@ export async function runGenerationTick(deps: {
     rollingPeriods(deps.ref);
   const log = deps.logger;
 
-  const summary: GenerationSummary = { evaluated: 0, created: 0, expired: 0, skipped: 0, deliveryProblems: 0, trackingProblems: 0 };
+  const summary: GenerationSummary = { evaluated: 0, created: 0, expired: 0, skipped: 0, deliveryProblems: 0, trackingProblems: 0, ctaProblems: 0 };
 
   for (const campaign of campaigns) {
     let currentBudgetAgorot: number;
@@ -274,6 +279,34 @@ export async function runGenerationTick(deps: {
       }
     }
 
+    // AIC-128: does every ad's CREATIVE carry the destination its AD SET
+    // promises? Found live — a Click-to-WhatsApp campaign whose creatives had
+    // a CTA *type* (Meta derives it from the ad set) but no whatsapp_number,
+    // so the button opened nothing and rendered as a dead "See more". Every
+    // existing check passed: delivering, tracking matched, real spend. Only a
+    // comparison of the ad set's promise against the creative's payload sees
+    // it. Like tracking, a pure config comparison — no spend or delivery
+    // needed, so a rebuild can be verified before it costs anything.
+    let ctaBroken = false;
+    if (deps.ctaReader) {
+      try {
+        const dests = await deps.ctaReader.getAdCreativeDestinations(campaign.metaCampaignId);
+        // Same AIC-65 filter as delivery/tracking: a dead or draft ad set's
+        // configuration is not a live problem.
+        const realDests = dests.filter((d) => !unmanagedAdSetIds.has(d.adSetId));
+        const cta = summarizeCta(realDests);
+        if (cta.state === "broken") {
+          ctaBroken = true;
+          summary.ctaProblems++;
+          log?.info(`[generation] ${campaign.id}: CTA broken — ${cta.reason}`);
+        }
+        await deps.recordCta?.(campaign, cta);
+      } catch (e) {
+        // Unreadable is `unknown`, never "broken" — never flag on a read failure.
+        log?.error(`[generation] ${campaign.id}: cta-health read failed — ${(e as Error).message}`);
+      }
+    }
+
     let lastActionAtByType: Record<string, Date> | undefined;
     if (deps.cooldownReader) {
       try {
@@ -307,6 +340,7 @@ export async function runGenerationTick(deps: {
       // would wrongly call an unmanaged-only exclusion "delivery_blocked".
       deliveryProblemAdSetIds: deliveryProblemAdSetIds ?? new Set(),
       trackingBroken,
+      ctaBroken,
       adSetLabels,
       flexibleCreativeAdSetIds,
       liveCreativeCount,
@@ -371,6 +405,10 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
       trackingReader: adapter,
       recordTracking: async (campaign, tr) => {
         await recordCampaignTracking({ pool, ops, campaignId: campaign.id, customerId: campaign.customerId, summary: tr });
+      },
+      ctaReader: adapter,
+      recordCta: async (campaign, cta) => {
+        await recordCampaignCta({ pool, ops, campaignId: campaign.id, customerId: campaign.customerId, summary: cta });
       },
       recordNoRecReason: async (campaign, draft) => {
         await recordNoRecReason({ pool, campaignId: campaign.id, draft });

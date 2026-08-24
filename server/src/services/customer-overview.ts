@@ -18,7 +18,7 @@ export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campa
 // map can be Record<AttentionKind, …> — all three wear the same "צריך טיפול"
 // badge, so a fourth silently reusing another's message is the exact failure
 // the exhaustive map exists to prevent.
-export type AttentionKind = "connection" | "delivery" | "tracking";
+export type AttentionKind = "connection" | "delivery" | "tracking" | "cta"; // AIC-128
 
 export interface CustomerOverview {
   account: { name: string; email: string };
@@ -58,6 +58,7 @@ export interface CustomerOverview {
     // AIC-88: false only on a positively-detected lead-definition mismatch.
     // null = never checked / could not determine — never treated as a problem.
     trackingOk: boolean | null;
+    ctaOk: boolean | null;
     // AIC-64: why the engine's last tick had nothing to propose — null before
     // the engine has ever run, or when an acting recommendation exists instead.
     noRecReason: NoActionReason | null;
@@ -121,6 +122,10 @@ function deriveHomeState(
   // doesn't match Meta's config). Explicit === false: null means "never
   // checked / couldn't determine", which must never read as a problem.
   if (campaign.trackingOk === false) return "attention";
+  // AIC-128: the ads' button has no destination, so every click is wasted
+  // budget. Same `=== false` discipline — null means "never checked", which
+  // must never read as a problem.
+  if (campaign.ctaOk === false) return "attention";
   if (campaign.status === "paused") return "paused";
   if (campaign.status === "needs_attention" || campaign.status === "connection_problem")
     return "attention";
@@ -213,6 +218,7 @@ export async function buildCustomerOverview(
       automation_enabled: boolean;
       delivery_ok: boolean;
       tracking_ok: boolean | null;
+      cta_ok: boolean | null;
       launch_approved_at: Date | null;
       meta_campaign_id: string | null;
       // AIC-98: the column is CHECK-constrained to exactly this union
@@ -227,7 +233,7 @@ export async function buildCustomerOverview(
       leads_to_date: number | null;
       was_built_here: boolean;
     }>(
-      `SELECT mc.id, mc.name, mc.status, mc.objective, mc.agreed_budget_agorot, mc.budget_period, mc.automation_enabled, mc.delivery_ok, mc.tracking_ok, mc.launch_approved_at, mc.meta_campaign_id, mc.no_rec_reason, mc.no_rec_detail, mc.live_budget_agorot, mc.delivering, mc.delivering_ad_count, mc.leads_to_date,
+      `SELECT mc.id, mc.name, mc.status, mc.objective, mc.agreed_budget_agorot, mc.budget_period, mc.automation_enabled, mc.delivery_ok, mc.tracking_ok, mc.cta_ok, mc.launch_approved_at, mc.meta_campaign_id, mc.no_rec_reason, mc.no_rec_detail, mc.live_budget_agorot, mc.delivering, mc.delivering_ad_count, mc.leads_to_date,
               EXISTS (
                 SELECT 1 FROM action_history ah
                 WHERE ah.campaign_id = mc.id AND ah.action_type = 'create_campaign' AND ah.result = 'success'
@@ -284,6 +290,7 @@ export async function buildCustomerOverview(
         automationEnabled: campRes.rows[0].automation_enabled,
         deliveryOk: campRes.rows[0].delivery_ok,
         trackingOk: campRes.rows[0].tracking_ok,
+        ctaOk: campRes.rows[0].cta_ok,
         readyToLaunch:
           campRes.rows[0].status === "active" &&
           campRes.rows[0].launch_approved_at === null &&
@@ -362,7 +369,9 @@ export async function buildCustomerOverview(
         ? "delivery"
         : campaign && campaign.trackingOk === false
           ? "tracking"
-          : null;
+          : campaign && campaign.ctaOk === false
+            ? "cta"
+            : null;
 
   return {
     account,

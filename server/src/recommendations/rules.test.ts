@@ -316,6 +316,39 @@ describe("no_action reason classification (AIC-64)", () => {
     expect(d.evidence.reason).toBe("tracking_broken");
   });
 
+  // AIC-128, the live failure: a Click-to-WhatsApp campaign whose creatives
+  // had a CTA type but no whatsapp_number — Meta rendered a dead button, every
+  // click was wasted, and delivery/tracking both reported healthy. Nothing may
+  // fire while the funnel is broken at the click.
+  it("cta_broken suppresses a rule that WOULD otherwise have fired", () => {
+    const control = evaluateCampaign(baseEvidence({ creatives: [cr("cr_a", 25000, 10, 2500), cr("cr_b", 25000, 1, 25000)] }));
+    expect(control.type).not.toBe("no_action");
+
+    const d = evaluateCampaign(
+      baseEvidence({ creatives: [cr("cr_a", 25000, 10, 2500), cr("cr_b", 25000, 1, 25000)], ctaBroken: true }),
+    );
+    expect(d.type).toBe("no_action");
+    expect(d.evidence.reason).toBe("cta_broken");
+  });
+
+  it("cta_broken also suppresses the AIC-86 pre-gate advisory", () => {
+    // "Add 2–3 more ads" would produce MORE ads with the same dead button.
+    const ev = baseEvidence({ creatives: [cr("cr_a", 46000, 0, null)], current: { spendAgorot: 46000, leads: 0, cplAgorot: null, days: 7 } });
+    expect(evaluateCampaign(ev).type).toBe("add_creatives_for_comparison");
+
+    const d = evaluateCampaign({ ...ev, ctaBroken: true });
+    expect(d.type).toBe("no_action");
+    expect(d.evidence.reason).toBe("cta_broken");
+  });
+
+  // Delivery is checked first (an ad set that isn't showing at all is the more
+  // fundamental problem), and tracking before CTA — the order is deliberate,
+  // so a campaign with several problems always names the same one.
+  it("ranks below delivery_blocked and tracking_broken when several are true at once", () => {
+    const ev = baseEvidence({ creatives: [cr("cr_a", 25000, 10, 2500)], ctaBroken: true, trackingBroken: true });
+    expect(evaluateCampaign(ev).evidence.reason).toBe("tracking_broken");
+  });
+
   it("tracking_broken also suppresses the AIC-86 pre-gate advisory", () => {
     // One creative would normally produce add_creatives_for_comparison, which
     // fires BEFORE the evidence gate. "Add more ads" is wrong advice when the

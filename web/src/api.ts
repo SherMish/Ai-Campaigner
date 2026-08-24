@@ -46,7 +46,7 @@ export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campa
 // fourth cause can't ship without its own message — the three existing ones
 // all wear the same "צריך טיפול" badge and would otherwise silently collapse
 // into one another.
-export type AttentionKind = "connection" | "delivery" | "tracking";
+export type AttentionKind = "connection" | "delivery" | "tracking" | "cta"; // AIC-128
 // AIC-98: mirrors server/src/recommendations/rules.ts. Was `string | null` on
 // CustomerOverview, which defeated exhaustiveness at the boundary — a new
 // engine reason type-checked fine and rendered the generic fallback.
@@ -56,6 +56,7 @@ export type NoActionReason =
   | "budget_below_threshold"
   | "delivery_blocked"
   | "tracking_broken"
+  | "cta_broken" // AIC-128
   | "no_comparable_audiences"
   | "cooling_down"
   | "below_object_evidence_floor"

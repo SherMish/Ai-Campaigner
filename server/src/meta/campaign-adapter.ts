@@ -75,6 +75,7 @@ import { extractLeads } from "./insights.js";
 import type { RawAdMetaRow } from "./ad-meta-types.js";
 import { normalizeAdMedia, type AdMedia, type AdMediaReader, type RawAdMedia } from "./ad-media.js";
 import { detectDestination, type AdSetTrackingConfig, type TrackingReader } from "./tracking-health.js";
+import type { AdCreativeDestination, CtaReader } from "./cta-health.js";
 import type { AdAccountOption, PageOption, InstagramOption, DiscoveredCampaign, CampaignDiscoveryReader } from "./campaign-discovery.js";
 
 // Real Meta reader+writer backing the safe-execute pipeline (AIC-12) against the
@@ -86,7 +87,7 @@ import type { AdAccountOption, PageOption, InstagramOption, DiscoveredCampaign, 
 // one, so setDailyBudget targets the right object.
 const BASE = "https://graph.facebook.com";
 
-export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter, AdditionWriter, ControlWriter, AdMediaReader, TrackingReader, CampaignDiscoveryReader {
+export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter, AdditionWriter, ControlWriter, AdMediaReader, TrackingReader, CtaReader, CampaignDiscoveryReader {
   private budgetObj = new Map<string, string>(); // campaignId → budget object id
 
   constructor(
@@ -396,6 +397,51 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       pixelId: r.promoted_object?.pixel_id ?? null,
       customEventType: r.promoted_object?.custom_event_type ?? null,
     }));
+  }
+
+  // AIC-128: each ad's creative destination, joined to its ad set's promise.
+  // Two reads because Meta will not nest ad-set fields under /ads: the ad set
+  // list gives destination_type, the ad list gives each creative's actual
+  // call_to_action. Comparing them is the whole check.
+  //
+  // `call_to_action{type,value}` is requested explicitly rather than relying on
+  // `call_to_action_type` — that scalar is DERIVED by Meta from the ad set and
+  // reads WHATSAPP_MESSAGE even when the creative carries no number, which is
+  // exactly the failure this check exists to catch. Only the nested `value`
+  // proves a real destination.
+  async getAdCreativeDestinations(metaCampaignId: string): Promise<AdCreativeDestination[]> {
+    const adsetBody = await this.get(
+      `${metaCampaignId}/adsets?fields=id,destination_type&limit=100`,
+    );
+    const destByAdSet = new Map<string, string | null>(
+      (((adsetBody.data as Array<{ id: string; destination_type?: string }>) ?? [])).map((r) => [
+        String(r.id),
+        r.destination_type ?? null,
+      ]),
+    );
+
+    const adsBody = await this.get(
+      `${metaCampaignId}/ads?fields=id,name,adset_id,creative{call_to_action}&limit=200`,
+    );
+    type RawAd = {
+      id: string;
+      name?: string;
+      adset_id?: string;
+      creative?: { call_to_action?: { type?: string; value?: { whatsapp_number?: string; link?: string } } };
+    };
+    return (((adsBody.data as RawAd[]) ?? [])).map((a) => {
+      const cta = a.creative?.call_to_action;
+      const adSetId = String(a.adset_id ?? "");
+      return {
+        adId: String(a.id),
+        adName: a.name ?? null,
+        adSetId,
+        destinationType: destByAdSet.get(adSetId) ?? null,
+        ctaType: cta?.type ?? null,
+        whatsappNumber: cta?.value?.whatsapp_number ?? null,
+        link: cta?.value?.link ?? null,
+      };
+    });
   }
 
   // AIC-105 Branch B — every ad account the System User can currently manage

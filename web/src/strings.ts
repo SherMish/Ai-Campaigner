@@ -73,6 +73,7 @@ export const strings = {
         missing_creative: "חסר קריאייטיב",
         account_restriction: "הגבלה על החשבון",
         campaign_tracking_broken: "מדידת הלידים שגויה",
+        campaign_cta_broken: "כפתור המודעה לא מוביל לשום מקום",
       } satisfies Record<OpsQueueType, string> as Record<OpsQueueType, string>,
       queueSeverityAll: "הכל",
       queueSeverityHigh: "גבוהה",
@@ -102,6 +103,7 @@ export const strings = {
         budget_below_threshold: "תקציב מתחת לסף הזיהוי",
         delivery_blocked: "קבוצת מודעות לא מתפרסמת",
         tracking_broken: "מדידת הפניות לא תואמת את הגדרות Meta", // AIC-88
+        cta_broken: "כפתור המודעה בלי יעד — הקליקים לא מגיעים לשום מקום", // AIC-128
         no_comparable_audiences: "קהל אחד בלבד — אין השוואה", // AIC-85, was single_ad_set
         cooling_down: "בתקופת צינון לאחר שינוי אחרון", // AIC-77b
         below_object_evidence_floor: "יש מה להשוות, אבל עדיין לא מספיק נתונים", // AIC-85
@@ -1003,6 +1005,9 @@ export const strings = {
           // Never phrased as the campaign failing — the fault is ours, and
           // the honest thing is to say the numbers on screen are incomplete.
           tracking: { badge: "צריך טיפול", title: "מספרי הפניות כאן אינם מלאים", body: "יש אי-התאמה בהגדרת מדידת הפניות בקמפיין, כך שפניות שמגיעות אינן נספרות. אנחנו כבר על זה, ולא נמליץ על שינויים עד שנתקן — כדי לא להסתמך על נתון שגוי.", cta: "" },
+          // AIC-128. "אנחנו כבר על זה" and nothing to do on their side, because
+          // the broken creative is ours to rebuild — a customer cannot fix it.
+          cta: { badge: "צריך טיפול", title: "הכפתור במודעה לא מוביל לשום מקום", body: "באחת המודעות חסר היעד של הכפתור — מספר הוואטסאפ או הקישור — כך שלחיצות לא מגיעות אליכם והתקציב מתבזבז. זו תקלה אצלנו, אנחנו מתקנים אותה ולא נמליץ על שינויים עד שהיא מתוקנת.", cta: "" },
           delivery: { badge: "צריך טיפול", title: "חלק מהקמפיין לא מתפרסם כרגע", body: "אחת מקבוצות הפרסום נתקלה בבעיה ואינה מציגה מודעות. אנחנו כבר על זה — ניצור קשר אם נצטרך משהו מכם. שאר הקמפיין ממשיך לרוץ.", cta: "" },
           // AIC-71: nothing is currently delivering (usually the customer's own
           // pause via the audience controls below) — not an error (that's
@@ -1036,6 +1041,7 @@ export const strings = {
           noCampaignReadyToBuild: { meaning: "החשבון מחובר, אפשר לבנות קמפיין.", spend: "לא מוציא תקציב", whoActs: "אנחנו" },
           attentionConnection: { meaning: "איבדנו גישה לחשבון המודעות ולא נוכל לנהל את הקמפיין.", spend: "ייתכן שכן", whoActs: "אתם — צריך לחדש הרשאה" },
           attentionTracking: { meaning: "יש פער בין מה שאנחנו סופרים כפנייה להגדרות במטא. המספרים כאן עלולים להיות לא מדויקים.", spend: "מוציא תקציב", whoActs: "אנחנו" },
+          attentionCta: { meaning: "הכפתור במודעה בלי יעד — לחיצות לא מגיעות אליכם, והתקציב שנרשם כאן נצרך על קליקים שלא הובילו לשום מקום.", spend: "מוציא תקציב", whoActs: "אנחנו" },
           attentionDelivery: { meaning: "אחת מקבוצות המודעות לא מצליחה להתפרסם.", spend: "חלקית", whoActs: "אנחנו" },
         },
         live: {
@@ -1207,6 +1213,13 @@ export const strings = {
           trackingBroken: {
             title: "לא נמליץ על סמך מספרים שאינם מלאים",
             body: "יש אי-התאמה בהגדרת מדידת הפניות, כך שחלק מהפניות אינן נספרות. לא נציע שינויים עד שנתקן — המלצה שמסתמכת על מספר שגוי גרועה מלא להמליץ בכלל.",
+          },
+          // AIC-128. Deliberately says the fix is OURS: the customer cannot
+          // repair a creative we built, so "check your settings" would be
+          // both useless and untrue.
+          ctaBroken: {
+            title: "כפתור המודעה לא מוביל לשום מקום",
+            body: "באחת המודעות חסר היעד של הכפתור (מספר הוואטסאפ או הקישור), כך שלחיצות לא מגיעות אליכם והתקציב מתבזבז. זו תקלה אצלנו, אנחנו מתקנים — ולא נמליץ על שינויים עד שהכפתור עובד.",
           },
           // AIC-77b: after an executed change, the engine waits a few days
           // before proposing another change of the same kind — long enough

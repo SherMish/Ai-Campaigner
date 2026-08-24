@@ -123,6 +123,10 @@ export interface CampaignEvidence {
   // two ads running, zero comparable. Optional so every existing caller and
   // test keeps today's behaviour; only addCreativesForComparison reads it.
   liveCreativeCount?: number;
+  // AIC-128: at least one ad promises a click destination its creative can't
+  // deliver (no whatsapp_number / no link), so the button is dead. Optional —
+  // absent means "not checked", never "fine".
+  ctaBroken?: boolean;
   // AIC-107: an engagement campaign counts engagements, not leads. Creative
   // comparison ports unchanged (cost-per-result is cost-per-result), but
   // budget increases are DELIBERATELY excluded — see increaseBudget. Optional
@@ -225,6 +229,7 @@ export type NoActionReason =
   | "budget_below_threshold"
   | "delivery_blocked"
   | "tracking_broken" // AIC-88 — the lead count itself is wrong; see classifyNoAction
+  | "cta_broken" // AIC-128 — the ads' button goes nowhere; see classifyNoAction
   | "no_comparable_audiences" // AIC-85, replaces single_ad_set — see classifyNoAction
   | "cooling_down"
   | "below_object_evidence_floor" // AIC-85
@@ -394,6 +399,18 @@ function classifyNoAction(
     return {
       reason: "tracking_broken",
       rationale: "declared lead definition doesn't match the ad sets' Meta configuration — leads are not being counted",
+      detail: {},
+    };
+  }
+  // AIC-128, immediately after tracking for the same reason: this is not a
+  // statement about how much evidence we have, it is a statement that the
+  // evidence describes a broken funnel. Every click on these ads lands
+  // nowhere, so spend is being wasted at 100% — judging creatives or budgets
+  // against that data would optimise a campaign that cannot convert.
+  if (ev.ctaBroken) {
+    return {
+      reason: "cta_broken",
+      rationale: "an ad's button has no destination (no WhatsApp number / no link) — clicks go nowhere",
       detail: {},
     };
   }
@@ -774,7 +791,11 @@ export function evaluateCampaign(
   // the real problem is that their conversions aren't being counted at all is
   // confidently wrong advice, and it would bury the actual fix. Fixing the
   // tracking comes first; every judgement below reads leads or CPL.
-  if (ev.trackingBroken) {
+  // AIC-128 rides along for the same reason: "add more ads" is confidently
+  // wrong advice when the ads that exist have a button that goes nowhere —
+  // it would produce more broken ads and bury the actual fix. Both conditions
+  // describe a campaign that cannot convert at all, not one lacking evidence.
+  if (ev.trackingBroken || ev.ctaBroken) {
     const t = classifyNoAction(ev, thresholds);
     return noAction(ev.campaignId, t.reason, t.rationale, t.detail);
   }

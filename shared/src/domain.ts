@@ -86,6 +86,10 @@ export const OPS_QUEUE_TYPE = [
   // zero. Must stay in sync with the CHECK in migration 038 — both enumerate
   // the allowed set, and missing either one throws at runtime.
   "campaign_tracking_broken",
+  // AIC-128: an ad set promises a click destination (WhatsApp/website) but the
+  // ad's creative carries no number/link — Meta renders a dead button. Must
+  // stay in sync with the CHECK in migration 044.
+  "campaign_cta_broken",
 ] as const;
 export type OpsQueueType = (typeof OPS_QUEUE_TYPE)[number];
 

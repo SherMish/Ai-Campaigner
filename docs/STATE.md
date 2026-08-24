@@ -6,6 +6,47 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-24 — CTA health: catching an ad whose button goes nowhere (AIC-128)
+Reported live: a customer's Click-to-WhatsApp ads were running without a WhatsApp
+button, and they paused both themselves.
+
+**Diagnosis.** The ad set was correctly `destination_type: WHATSAPP`, and the
+creatives reported `call_to_action_type: WHATSAPP_MESSAGE` — but their
+`call_to_action` was `{type}` with **no `value`**, so no phone number. Meta
+DERIVES that type from the ad set, which is why every surface said the ads were
+fine. Delivery-health: delivering. Tracking-health: lead definition matched.
+Insights: real spend. Every signal green, every click wasted.
+
+The cause was timing, and narrow: AIC-115 (which attaches the number) began
+deploying at 11:51:20 UTC and went live at 11:58:47; the two ads were created at
+11:54:56 and 11:54:59 — **3m48s inside that window**, by the old code. A probe
+with the current payload on their own post confirmed Meta persists
+`value.whatsapp_number`, so a rebuild fixes them; the probe creative was deleted.
+
+**The real gap was that nothing could see it.** The new check compares each ad
+set's promised `destination_type` against its creative's actual
+`call_to_action.value` — the one comparison that spots the difference. It
+requests `call_to_action{type,value}` explicitly, because the scalar
+`call_to_action_type` reads healthy on the broken ad and would hide the bug.
+
+Four-valued like tracking-health (`unknown` never overwrites a real verdict,
+`not_applicable` does clear a stale one), ops item raised idempotently at high
+severity — this is 100% wasted budget, not degraded measurement — which reaches
+Telegram through the AIC-118 relay with no extra wiring. Recommendations are
+suppressed with `no_rec_reason: cta_broken`, including the "add more ads"
+advisory, which would otherwise produce more ads with the same dead button. The
+customer's dashboard says the button has no destination and that the fix is
+ours, because they cannot repair a creative we built.
+
+Deliberately not judged: MESSENGER/INSTAGRAM_DIRECT/PHONE_CALL, whose payload
+shapes aren't modelled — flagging them on the WhatsApp rule would call every
+working one broken. Written down in the doc rather than guessed at.
+
+The `no_rec_reason` CHECK is widened in the SAME migration as the reason it
+enables (044) — migration 042 exists because tracking_broken was wired through
+the code without that, so every cache write raised a constraint violation, was
+swallowed by the try/catch, and the dashboard could never say why. Not repeated.
+
 ### 2026-08-24 — Reset/delete a signup from the Users view (AIC-127)
 Requested for testing: a bin on every `/admin/users` row, opening a red confirm
 modal with two irreversible choices — delete the **business only** (the login

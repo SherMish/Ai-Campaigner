@@ -15,6 +15,7 @@ See also: [STATE.md](STATE.md) (dated changelog) · [POSTMORTEM-2026-08-19.md](P
 | Insights ingestion → insight_snapshot, scheduler | [features/insights-ingestion.md](features/insights-ingestion.md) |
 | Ad-set delivery health — not-delivering/disapproved detection, needs-attention | [features/delivery-health.md](features/delivery-health.md) |
 | Lead-tracking health — declared lead definition vs Meta's ad-set config, needs-attention | [features/tracking-health.md](features/tracking-health.md) |
+| CTA health — is the ad's button pointing anywhere? (AIC-128) | [features/cta-health.md](features/cta-health.md) |
 | Lead / CPL / metric definitions | [METRICS.md](METRICS.md) |
 | Admin dogfood readout (screen + API) | [features/dogfood-readout.md](features/dogfood-readout.md) |
 | Recommendation engine — state machine, rules, staleness, explainer | [features/recommendation-engine.md](features/recommendation-engine.md) |

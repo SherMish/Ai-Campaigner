@@ -49,6 +49,10 @@ export const EXPLAINER_HE = {
   // sets optimize for. Says plainly that the numbers are wrong and that it's
   // on us to fix — never implies the campaign is failing.
   trackingBroken: () => `יש אצלנו אי-התאמה בהגדרת מדידת הפניות בקמפיין הזה, כך שהפניות שמגיעות לא נספרות ומספרי הביצועים כאן אינם מלאים. אנחנו כבר על זה — לא נמליץ על שינויים עד שנתקן, כדי לא להסתמך על נתון שגוי.`,
+  // AIC-128. States the consequence in the customer's terms — the button does
+  // nothing, so the budget buys clicks that cannot arrive — and that the fix is
+  // ours, because it is: they cannot repair a creative we built.
+  ctaBroken: () => `בכפתור של אחת המודעות חסר היעד (מספר הוואטסאפ או הקישור), כך שלחיצה עליו לא מגיעה לשום מקום — והתקציב מבוזבז. זו תקלה אצלנו ואנחנו מתקנים אותה; עד אז לא נמליץ על שינויים, כי אין טעם לייעל קמפיין שאי אפשר לפנות דרכו.`,
   // AIC-85: replaces singleAdSet — same content, renamed to match the fixed
   // comparableAdsets() check (a dormant ad set no longer silently counts).
   noComparableAudiences: () => `הקמפיין יציב. יש כרגע קהל אחד פעיל, כך שאין עם מה להשוות כדי להמליץ על שינוי קהל.`,
@@ -185,6 +189,8 @@ export function explain(rec: RecommendationRecord): string {
           return EXPLAINER_HE.deliveryBlocked();
         case "tracking_broken":
           return EXPLAINER_HE.trackingBroken();
+        case "cta_broken":
+          return EXPLAINER_HE.ctaBroken();
         case "no_comparable_audiences":
           return EXPLAINER_HE.noComparableAudiences();
         case "no_comparable_creatives":
