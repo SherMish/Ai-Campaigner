@@ -97,6 +97,9 @@ export const OPS_QUEUE_TYPE = [
   // AIC-91: the campaign's lead event stopped firing on the pixel while the
   // pixel itself stayed alive. Must stay in sync with the CHECK in migration 046.
   "lead_event_stopped",
+  // AIC-92: the campaign's leads look inflated (an implausible share of clicks
+  // counted as conversions). Operator-first — see services/overcount-monitor.ts.
+  "leads_possibly_overcounted",
 ] as const;
 export type OpsQueueType = (typeof OPS_QUEUE_TYPE)[number];
 

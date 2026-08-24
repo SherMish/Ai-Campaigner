@@ -78,6 +78,8 @@ export async function buildCampaignEvidence(
   accountCannotSpend?: boolean,
   // AIC-91: the lead event stopped firing while the pixel stayed alive.
   leadEventStopped?: boolean,
+  // AIC-92: the lead count looks inflated — blocks budget INCREASES only.
+  overcountSuspected?: boolean,
 ): Promise<CampaignEvidence> {
   const [curTotals, prevTotals, curCreatives, prevCreatives, curAdsets, curDaily, prevDaily] = await Promise.all([
     store.campaignTotals(campaign.id, current.start, current.end),
@@ -123,6 +125,7 @@ export async function buildCampaignEvidence(
     ctaBroken,
     accountCannotSpend,
     leadEventStopped,
+    overcountSuspected,
   };
 }
 

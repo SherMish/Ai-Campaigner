@@ -6,6 +6,34 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-25 — Over-count detection: the failure that makes the engine spend MORE (AIC-92)
+Every other measurement check assumes under-counting — fewer leads than really
+happened, a cautious engine, bounded damage. Over-counting compounds: inflated
+leads → CPL looks excellent → recommend more budget → more money against
+conversions that never happened → CPL still looks excellent.
+
+Two signals, deliberately unequal. **A (decisive):** `leads ÷ link_clicks` above
+50% with ≥20 clicks, computed from the daily view we already store — no extra
+Graph call. The ceiling is wide on purpose: the real campaigns here convert at
+21.1% and 14.6%, so 50% is 2.4× the highest healthy rate, and both real rates are
+pinned in tests so tightening it has to consciously break them. **B (contextual
+only):** browser AND server events on one pixel, which is where dedup failures
+happen — fetched only when the rate is already implausible, and used to name the
+likely cause. It never raises an alarm alone, because plenty of CAPI setups
+dedupe correctly.
+
+**The guardrail is surgical, not blanket**, and that is the ticket's point:
+`increaseBudget` returns null while an over-count is suspected, but a DECREASE
+and a creative pause still fire. A decrease on suspect numbers is safe; only
+spending more is not. Under-counting makes the engine cautious (acceptable),
+over-counting makes it spend (unacceptable) — so fail toward not spending, not
+toward doing nothing. Consequently this state has no `no_rec_reason`, unlike its
+four siblings.
+
+Operator-first: it implicitly says "your numbers are too good to be true", which
+needs verifying before it is said aloud, so it raises an ops item and blocks
+increases while showing the customer nothing.
+
 ### 2026-08-24 — Lead-event volume: the pixel is alive but the lead event stopped (AIC-91)
 The gap tracking-health explicitly deferred. That check catches a WRONG or
 MISSING lead type; it cannot catch a correctly declared one whose event silently

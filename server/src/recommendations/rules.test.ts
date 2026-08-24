@@ -326,6 +326,33 @@ describe("no_action reason classification (AIC-64)", () => {
   // inspect ad sets that are perfectly configured.
   // AIC-91: leads ARE arriving, we just stopped counting them. Same class as
   // tracking_broken — the number is wrong, not thin — so nothing may fire.
+  // AIC-92. The asymmetry this encodes: under-counting makes the engine
+  // cautious (acceptable), over-counting makes it SPEND (unacceptable). So the
+  // guardrail is surgical, not blanket — unlike every other trust failure.
+  it("overcount blocks a budget INCREASE that would otherwise have fired", () => {
+    const improving = baseEvidence({
+      current: { spendAgorot: 46000, leads: 20, cplAgorot: 2300, days: 7 },
+      previous: { spendAgorot: 46000, leads: 12, cplAgorot: 3800, days: 7 },
+    });
+    expect(evaluateCampaign(improving).type).toBe("increase_budget");
+
+    // Same evidence, inflated numbers suspected → the increase must not fire.
+    expect(evaluateCampaign({ ...improving, overcountSuspected: true }).type).not.toBe("increase_budget");
+  });
+
+  // Deliberately NOT blanket suppression: a DECREASE on suspect numbers is
+  // still safe, and pausing a genuinely weak creative is still right. Only the
+  // spend-more direction is unsafe.
+  it("still allows a spend-REDUCING action while overcount is suspected", () => {
+    const weak = baseEvidence({
+      creatives: [cr("cr_a", 25000, 10, 2500), cr("cr_b", 25000, 1, 25000)],
+      overcountSuspected: true,
+    });
+    const d = evaluateCampaign(weak);
+    expect(d.type).not.toBe("no_action");
+    expect(d.type).not.toBe("increase_budget");
+  });
+
   it("lead_event_stopped suppresses a rule that would otherwise have fired", () => {
     const d = evaluateCampaign(baseEvidence({
       creatives: [cr("cr_a", 25000, 10, 2500), cr("cr_b", 25000, 1, 25000)],

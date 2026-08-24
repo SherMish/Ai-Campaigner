@@ -76,6 +76,7 @@ export const strings = {
         campaign_cta_broken: "כפתור המודעה לא מוביל לשום מקום",
         ad_account_cannot_spend: "חשבון הפרסום לא יכול להוציא תקציב",
         lead_event_stopped: "אירוע הפנייה הפסיק להירשם בפיקסל",
+        leads_possibly_overcounted: "ייתכן שהפניות נספרות פעמיים",
       } satisfies Record<OpsQueueType, string> as Record<OpsQueueType, string>,
       queueSeverityAll: "הכל",
       queueSeverityHigh: "גבוהה",

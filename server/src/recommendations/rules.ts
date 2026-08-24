@@ -134,6 +134,11 @@ export interface CampaignEvidence {
   // AIC-91: the lead event stopped firing on the pixel while the pixel stayed
   // alive, so the lead count is under-reporting reality.
   leadEventStopped?: boolean;
+  // AIC-92: the lead count looks INFLATED (an implausible share of clicks
+  // counted as leads). Unlike every other trust failure this one does NOT
+  // suppress everything — see increaseBudget. Optional; absent means "not
+  // checked", never "fine".
+  overcountSuspected?: boolean;
   // AIC-107: an engagement campaign counts engagements, not leads. Creative
   // comparison ports unchanged (cost-per-result is cost-per-result), but
   // budget increases are DELIBERATELY excluded — see increaseBudget. Optional
@@ -749,6 +754,17 @@ function increaseBudget(ev: CampaignEvidence, thresholds: RuleThresholds = RULE_
   // rule-level refusal rather than a UI omission so the engine cannot produce
   // the recommendation at all.
   if (ev.isEngagement) return null;
+  // AIC-92, and this is the whole point of that ticket. Over-counting is the
+  // one measurement failure that makes the engine SPEND MORE: inflated leads →
+  // CPL looks excellent → increase budget → more money against conversions that
+  // never happened → CPL still looks excellent. It compounds, and the customer's
+  // silent phone is the only contradicting evidence.
+  //
+  // Deliberately NOT a blanket suppression like tracking_broken or cta_broken.
+  // A DECREASE on suspect numbers is still safe, and pausing a genuinely weak
+  // creative is still right — only the spend-more direction is unsafe. When
+  // trust is uncertain, fail toward not spending.
+  if (ev.overcountSuspected) return null;
   const t = thresholds;
   const cur = ev.current.cplAgorot;
   const prev = ev.previous.cplAgorot;

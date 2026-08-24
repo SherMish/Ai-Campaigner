@@ -500,6 +500,26 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       .sort((a, b) => a.day.localeCompare(b.day));
   }
 
+  // AIC-92 signal B: which event SOURCES this pixel receives. BROWSER + SERVER
+  // together means CAPI is running alongside the browser pixel, which is where
+  // deduplication failures happen. Contextual only — it never raises an alarm
+  // by itself (see summarizeOvercount), it explains one.
+  async getPixelEventSources(pixelId: string, sinceUnix: number): Promise<{ browser: boolean; server: boolean }> {
+    const body = await this.get(`${pixelId}/stats?aggregation=event_source&start_time=${sinceUnix}`);
+    type Bucket = { data?: Array<{ value?: string; count?: number | string }> };
+    let browser = false, server = false;
+    for (const b of ((body.data as Bucket[]) ?? [])) {
+      for (const e of b.data ?? []) {
+        const v = String(e.value ?? "").toUpperCase();
+        if (Number(e.count ?? 0) <= 0) continue;
+        if (v === "BROWSER") browser = true;
+        // Meta labels server-side events several ways depending on integration.
+        else if (v === "SERVER" || v === "APP" || v.includes("SERVER")) server = true;
+      }
+    }
+    return { browser, server };
+  }
+
   // AIC-105 Branch B — every ad account the System User can currently manage
   // (both AIC-101 access layers already passed), for the operator to pick
   // from instead of retyping the "act_…" number from Meta's own screen.

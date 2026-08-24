@@ -16,11 +16,13 @@ import { summarizeTracking, type TrackingReader, type TrackingSummary } from "..
 import { summarizeCta, type CtaReader, type CtaSummary } from "../meta/cta-health.js";
 import { summarizeAccount, type AccountHealthReader, type AccountSummary } from "../meta/account-health.js";
 import { summarizeEventVolume, type EventVolumeReader, type EventVolumeSummary } from "../meta/event-volume.js";
+import { summarizeOvercount, type OvercountSummary } from "../meta/overcount.js";
 import { standardEventForAction } from "../meta/tracking-health.js";
 import { recordCampaignTracking } from "../services/tracking-monitor.js";
 import { recordCampaignCta } from "../services/cta-monitor.js";
 import { recordAccountHealth } from "../services/account-monitor.js";
 import { recordLeadEventVolume } from "../services/event-volume-monitor.js";
+import { recordOvercount } from "../services/overcount-monitor.js";
 import { LEAD_ACTION_PRIORITY } from "../meta/insights.js";
 import { deriveAudienceLabels, type AdSetMeta } from "../meta/audience-label.js";
 import { upsertAdSetMeta } from "../services/audience-meta-cache.js";
@@ -90,7 +92,8 @@ export interface GenerationSummary {
   trackingProblems: number;
   ctaProblems: number;
   accountProblems: number;
-  leadEventProblems: number; // campaigns whose lead definition doesn't match Meta (AIC-88)
+  leadEventProblems: number;
+  overcountSuspected: number; // campaigns whose lead definition doesn't match Meta (AIC-88)
 }
 
 // Campaigns eligible for generation: actively managed, automation on, linked to a
@@ -158,6 +161,14 @@ export async function runGenerationTick(deps: {
   recordCta?: (campaign: GenCampaign, summary: CtaSummary) => Promise<void>;
   recordAccount?: (campaign: GenCampaign, summary: AccountSummary) => Promise<void>;
   recordLeadEvent?: (campaign: GenCampaign, summary: EventVolumeSummary) => Promise<void>;
+  recordOvercount?: (campaign: GenCampaign, summary: OvercountSummary) => Promise<void>;
+  // AIC-92 signal B, optional: which event sources the pixel receives.
+  eventSourceReader?: { getPixelEventSources(pixelId: string, sinceUnix: number): Promise<{ browser: boolean; server: boolean }> };
+  // AIC-92 signal A's denominator. A separate optional reader rather than a new
+  // field on PeriodAgg: campaignTotals is a published interface with an
+  // in-memory double used across the rule tests, and widening it would make
+  // every one of those doubles carry a number they do not care about.
+  linkClicksReader?: (campaignId: string, start: string, end: string) => Promise<{ leads: number; linkClicks: number }>;
   // AIC-37: ad-set metadata (name + targeting), used to derive human audience
   // labels and cache them (via recordAudienceMeta) for the customer surface.
   audienceMetaReader?: AudienceMetaReader;
@@ -186,7 +197,7 @@ export async function runGenerationTick(deps: {
     rollingPeriods(deps.ref);
   const log = deps.logger;
 
-  const summary: GenerationSummary = { evaluated: 0, created: 0, expired: 0, skipped: 0, deliveryProblems: 0, trackingProblems: 0, ctaProblems: 0, accountProblems: 0, leadEventProblems: 0 };
+  const summary: GenerationSummary = { evaluated: 0, created: 0, expired: 0, skipped: 0, deliveryProblems: 0, trackingProblems: 0, ctaProblems: 0, accountProblems: 0, leadEventProblems: 0, overcountSuspected: 0 };
 
   for (const campaign of campaigns) {
     let currentBudgetAgorot: number;
@@ -383,6 +394,44 @@ export async function runGenerationTick(deps: {
       }
     }
 
+    // AIC-92: do the leads look INFLATED? Computed from the evidence we already
+    // have (leads ÷ link_clicks in the current window) — no extra Graph call for
+    // the decisive signal. The pixel's event-source split is fetched only to
+    // EXPLAIN a hit, never to cause one.
+    let overcountSuspected = false;
+    if (deps.linkClicksReader) {
+      const totals = await deps
+        .linkClicksReader(campaign.id, current.start, current.end)
+        .catch((e) => {
+          log?.error(`[generation] ${campaign.id}: link-clicks read failed — ${(e as Error).message}`);
+          return { leads: 0, linkClicks: 0 };
+        });
+      const leads = totals.leads;
+      const clicks = totals.linkClicks;
+      let sources: { browser: boolean; server: boolean } | undefined;
+      if (deps.eventSourceReader && campaign.trackingPixelId && clicks > 0 && leads / Math.max(clicks, 1) > 0.5) {
+        // Only read the split when the rate is already implausible — it costs a
+        // Graph call and contributes nothing when the campaign is healthy.
+        try {
+          const since = Math.floor((deps.ref ?? new Date()).getTime() / 1000) - 30 * 86400;
+          sources = await deps.eventSourceReader.getPixelEventSources(campaign.trackingPixelId, since);
+        } catch (e) {
+          log?.error(`[generation] ${campaign.id}: event-source read failed — ${(e as Error).message}`);
+        }
+      }
+      const oc = summarizeOvercount({
+        leads, linkClicks: clicks,
+        hasBrowserEvents: sources?.browser,
+        hasServerEvents: sources?.server,
+      });
+      if (oc.state === "suspected") {
+        overcountSuspected = true;
+        summary.overcountSuspected++;
+        log?.info(`[generation] ${campaign.id}: leads possibly over-counted — ${oc.reason}`);
+      }
+      await deps.recordOvercount?.(campaign, oc);
+    }
+
     let lastActionAtByType: Record<string, Date> | undefined;
     if (deps.cooldownReader) {
       try {
@@ -419,6 +468,7 @@ export async function runGenerationTick(deps: {
       ctaBroken,
       accountCannotSpend,
       leadEventStopped,
+      overcountSuspected,
       adSetLabels,
       flexibleCreativeAdSetIds,
       liveCreativeCount,
@@ -489,6 +539,24 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
         await recordCampaignCta({ pool, ops, campaignId: campaign.id, customerId: campaign.customerId, summary: cta });
       },
       eventVolumeReader: adapter,
+      eventSourceReader: adapter,
+      // Reads the DAILY VIEW, never insight_snapshots — the raw table mixes
+      // per-day rows with overlapping rolling-window rows, and summing across
+      // both double-counts (migration 030). An inflated denominator here would
+      // HIDE an over-count; an inflated numerator would invent one.
+      linkClicksReader: async (campaignId, start, end) => {
+        const { rows } = await pool.query<{ leads: string; clicks: string }>(
+          `SELECT COALESCE(SUM(leads),0) AS leads, COALESCE(SUM(link_clicks),0) AS clicks
+           FROM insight_snapshot_daily
+           WHERE campaign_id = $1 AND grain = 'campaign'
+             AND period_start >= $2 AND period_end <= $3`,
+          [campaignId, start, end],
+        );
+        return { leads: Number(rows[0]?.leads ?? 0), linkClicks: Number(rows[0]?.clicks ?? 0) };
+      },
+      recordOvercount: async (campaign, oc) => {
+        await recordOvercount({ pool, ops, campaignId: campaign.id, customerId: campaign.customerId, summary: oc });
+      },
       recordLeadEvent: async (campaign, ev) => {
         await recordLeadEventVolume({ pool, ops, campaignId: campaign.id, customerId: campaign.customerId, summary: ev });
       },
