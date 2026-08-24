@@ -49,6 +49,14 @@ For each ad, compare its ad set's `destination_type` against its creative's
 | `UNDEFINED` / null | — | never (engagement / on-platform) |
 | `MESSENGER`, `INSTAGRAM_DIRECT`, `PHONE_CALL` | — | never — see gaps |
 
+**Archived and deleted ads are excluded** (`classifyAdState(...) === "gone"`) —
+the same AIC-65 rule one level down. Without it, replacing a broken ad and
+archiving the original would leave the campaign flagged forever, because Meta
+still returns the archived ad on the `/ads` edge: the recommended fix would
+never clear its own alert. **`PAUSED` is deliberately still judged** — a paused
+ad can be resumed at any time, and it is the exact state the live failure was
+found in.
+
 `call_to_action{type,value}` is requested explicitly. Reading the scalar
 `call_to_action_type` would return `WHATSAPP_MESSAGE` for the broken ad and hide
 the bug entirely; only the nested `value` proves a real destination.

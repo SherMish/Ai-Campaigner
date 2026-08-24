@@ -72,6 +72,31 @@ describe("CTA health (AIC-128)", () => {
     expect(summarizeCta([]).state).toBe("unknown");
   });
 
+  // Found while answering "how do I fix it?" — the honest fix is to replace the
+  // broken ad and archive it, and that must actually CLEAR the alert. Without
+  // this filter an archived ad stays in Meta's /ads response and keeps the
+  // campaign flagged forever, making the advice self-defeating.
+  it("ignores archived and deleted ads — so replacing a broken ad clears the alert", () => {
+    const broken = { whatsappNumber: null };
+    expect(summarizeCta([ad({ ...broken, effectiveStatus: "ARCHIVED" })]).state).not.toBe("broken");
+    expect(summarizeCta([ad({ ...broken, effectiveStatus: "DELETED" })]).state).not.toBe("broken");
+
+    // The realistic end state: the broken pair archived, a healthy replacement live.
+    const s = summarizeCta([
+      ad({ adId: "old_1", ...broken, effectiveStatus: "ARCHIVED" }),
+      ad({ adId: "old_2", ...broken, effectiveStatus: "ARCHIVED" }),
+      ad({ adId: "new_1", effectiveStatus: "ACTIVE" }),
+    ]);
+    expect(s.state).toBe("ok");
+    expect(s.brokenAdIds).toEqual([]);
+  });
+
+  // PAUSED is deliberately still judged: it can be resumed, and it is the exact
+  // state the live failure was found in (the customer paused both ads).
+  it("still flags a PAUSED ad, which can be resumed at any time", () => {
+    expect(summarizeCta([ad({ whatsappNumber: null, effectiveStatus: "PAUSED" })]).state).toBe("broken");
+  });
+
   // Destinations whose payload shape isn't modelled must not be judged on the
   // WhatsApp rule — a false alarm on a working ad is worse than a known gap.
   it("leaves unmodelled destinations alone rather than guessing them broken", () => {

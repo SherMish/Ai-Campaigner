@@ -21,12 +21,18 @@
 // A CONFIG COMPARISON, like tracking-health and for the same reasons: exact,
 // no spend required, no attribution lag, and it fires on a PAUSED campaign —
 // so a rebuild can be verified before it costs anything.
+import { classifyAdState } from "./ad-state.js";
 
 // One ad's creative, reduced to the fields that decide this.
 export interface AdCreativeDestination {
   adId: string;
   adName?: string | null;
   adSetId: string;
+  // AIC-65's rule, one level down: an ad that can never serve again must not be
+  // judged. Without this an ARCHIVED ad keeps the campaign flagged forever —
+  // which would make "archive the broken ad" a fix that never clears the alert,
+  // i.e. exactly the wrong advice to give an operator.
+  effectiveStatus?: string | null;
   // The ad set's promise.
   destinationType: string | null; // WHATSAPP | WEBSITE | UNDEFINED | …
   // The creative's payload. `ctaType` without `ctaValue` is the exact live
@@ -101,7 +107,16 @@ function judge(ad: AdCreativeDestination): BrokenAd | null {
   return null;
 }
 
-export function summarizeCta(ads: AdCreativeDestination[]): CtaSummary {
+// DELETED/ARCHIVED map to "gone" — an ad that cannot serve again. PAUSED is
+// deliberately NOT excluded: a paused ad can be resumed, so a broken button on
+// one is a real problem waiting to happen (and is exactly the state the live
+// failure was found in).
+function canStillServe(ad: AdCreativeDestination): boolean {
+  return !ad.effectiveStatus || classifyAdState(ad.effectiveStatus) !== "gone";
+}
+
+export function summarizeCta(input: AdCreativeDestination[]): CtaSummary {
+  const ads = input.filter(canStillServe);
   if (ads.length === 0) {
     // No ads read. NOT "ok" — there is nothing to have checked, and a campaign
     // mid-build legitimately has none yet.

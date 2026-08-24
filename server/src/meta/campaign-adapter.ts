@@ -421,12 +421,13 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     );
 
     const adsBody = await this.get(
-      `${metaCampaignId}/ads?fields=id,name,adset_id,creative{call_to_action}&limit=200`,
+      `${metaCampaignId}/ads?fields=id,name,adset_id,effective_status,creative{call_to_action}&limit=200`,
     );
     type RawAd = {
       id: string;
       name?: string;
       adset_id?: string;
+      effective_status?: string;
       creative?: { call_to_action?: { type?: string; value?: { whatsapp_number?: string; link?: string } } };
     };
     return (((adsBody.data as RawAd[]) ?? [])).map((a) => {
@@ -437,6 +438,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
         adName: a.name ?? null,
         adSetId,
         destinationType: destByAdSet.get(adSetId) ?? null,
+        effectiveStatus: a.effective_status ?? null,
         ctaType: cta?.type ?? null,
         whatsappNumber: cta?.value?.whatsapp_number ?? null,
         link: cta?.value?.link ?? null,
