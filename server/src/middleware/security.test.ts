@@ -19,8 +19,13 @@ function res(): Res {
   };
   return r;
 }
-const req = (ip: string, secure = true) =>
-  ({ ip, socket: { remoteAddress: ip }, secure, header: () => undefined }) as never;
+const req = (ip: string, secure = true, realIp?: string) =>
+  ({
+    ip,
+    socket: { remoteAddress: ip },
+    secure,
+    header: (h: string) => (h.toLowerCase() === "x-real-ip" ? realIp : undefined),
+  }) as never;
 
 describe("rate limiting (AIC-133)", () => {
   beforeEach(() => __resetRateLimits());
@@ -43,6 +48,20 @@ describe("rate limiting (AIC-133)", () => {
     let allowed = 0;
     limiter(req("2.2.2.2"), res() as never, () => { allowed++; });
     expect(allowed).toBe(1);
+  });
+
+  // The bug this pins: req.ip under `trust proxy` is the last X-Forwarded-For
+  // entry, which on Railway is the edge POP and CHANGES between requests. Every
+  // attempt got its own bucket and the limiter counted nothing — in production,
+  // while passing every test, because the tests supplied a stable req.ip.
+  it("counts by X-Real-IP when present, so a rotating proxy address cannot scatter the buckets", () => {
+    const limiter = rateLimit({ name: "t", limit: 2, windowMs: 60_000 });
+    let allowed = 0;
+    // Same client, a different proxy-assigned req.ip every time.
+    for (let i = 0; i < 5; i++) {
+      limiter(req(`10.0.0.${i}`, true, "203.0.113.7"), res() as never, () => { allowed++; });
+    }
+    expect(allowed).toBe(2);
   });
 
   it("keeps separate buckets per route name", () => {

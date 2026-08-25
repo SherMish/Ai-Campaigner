@@ -80,16 +80,39 @@ function hit(key: string, limit: number, windowMs: number, now: number): boolean
   return b.count <= limit;
 }
 
+// Which address to count against.
+//
+// AIC-133 follow-up, found by testing the LIVE endpoint rather than trusting
+// the deploy: eleven bad logins in a row all returned 401 and the limiter never
+// fired, while the identical code blocked on the eleventh locally.
+//
+// `req.ip` under `trust proxy: 1` resolves to the last X-Forwarded-For entry,
+// which on Railway is the EDGE POP that handled the request — and the POP
+// varies request to request (Railway exposes it as X-Railway-Edge). So every
+// attempt landed in its own bucket and nothing was ever limited. A rate limiter
+// that silently counts nothing is worse than none, because it looks like
+// protection in the code review.
+//
+// Railway documents X-Real-IP as the client's remote address, set by its edge.
+// Preferred here, with req.ip as the fallback for any other host.
+function clientKey(req: Request): string {
+  const real = req.header("x-real-ip");
+  if (real && real.trim()) return real.trim();
+  return req.ip ?? req.socket.remoteAddress ?? "unknown";
+}
+
 export function rateLimit(opts: { limit: number; windowMs: number; name: string }) {
   return function limiter(req: Request, res: Response, next: NextFunction): void {
-    // Railway terminates TLS and forwards the client IP; `trust proxy` must be
-    // set for req.ip to be that address rather than the proxy's, or every
-    // request in the world would share one bucket.
-    const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
+    const ip = clientKey(req);
     if (hit(`${opts.name}:${ip}`, opts.limit, opts.windowMs, Date.now())) {
       next();
       return;
     }
+    // Logged: a limiter that fires is either an attack or a broken client, and
+    // both are things an operator wants to know happened rather than discover
+    // from a customer. Also the signal that would have caught this middleware
+    // counting nothing.
+    console.warn(`[rate-limit] ${opts.name} blocked ${ip}`);
     res.setHeader("Retry-After", String(Math.ceil(opts.windowMs / 1000)));
     res.status(429).json({ error: "too many attempts, try again later" });
   };
