@@ -6,6 +6,24 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-25 — The onboarding wizard opens with the business profile (AIC-134)
+The wizard started at "שלב 1 — הלקוח משתף גישה", with the business profile
+(category, main service, area, audience, offer, contact) living only on the
+customer card — a separate screen. Backwards, because everything after it
+depends on it: the builder's recommended defaults key off the category (AIC-49)
+and the ad copy is written from the offer and the audience. Collecting it last
+meant guessing on the call or leaving the wizard mid-flow.
+
+Now the first card, seeded from the server — `GET /admin/customers/:id` already
+returned all of it and the wizard just declared a narrower type. Seeding is not
+only convenience: a blank form invites retyping what we know, and a blank field
+saved over a real value is silent data loss on a live call.
+
+Rendered and exercised in a browser before shipping, not just typechecked: card
+order verified as profile → steps 1–5, a field edited, saved, and the new value
+confirmed in the database, with no console errors. That is the practice the four
+visual bugs earlier today were missing.
+
 ### 2026-08-25 — Security audit (AIC-133)
 Full pass over authn/authz, tenant isolation, transport, and the usual attack
 classes. Details in [features/security.md](features/security.md).

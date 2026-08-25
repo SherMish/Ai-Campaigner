@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FIXED_DESTINATION, WEBSITE_DESTINATION, missingRequiredFields } from "@aic/shared";
-import { api, ApiError } from "../api";
+import { api, ApiError, updateCustomer, type CustomerWriteFields } from "../api";
 import { step4Branch } from "./onboarding-step4";
 import { strings } from "../strings";
+import { BusinessFields } from "./BusinessFields";
 import { diagnosisCopy, type AccessDiagnosis } from "./onboarding-copy";
 
 const w = strings.he.onboardingWizard;
+const cc = strings.he.customerCrud;
 const c = strings.he.app.connect;
 
 // AIC-101 — the guided, live-verified Meta connection call. Every check hits
@@ -41,6 +43,18 @@ interface OnboardingState {
 interface CustomerBasics {
   id: string;
   businessName: string;
+  // AIC-134: the business profile. GET /admin/customers/:id has always
+  // returned these (getCustomerDetail selects the full record) — the wizard
+  // simply declared a narrower shape and threw them away.
+  category?: string;
+  mainService?: string;
+  geoArea?: string;
+  primaryCustomer?: string;
+  offer?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  isTest?: boolean;
   // Both already returned by GET /admin/customers/:id and previously
   // discarded. Needed so step 4 can tell "no records yet" from "records
   // already exist" — see the alreadyProvisioned guard below.
@@ -126,6 +140,12 @@ export function AdminOnboarding() {
   const { id } = useParams<{ id: string }>();
   const nav = useNavigate();
   const [customer, setCustomer] = useState<CustomerBasics | null>(null);
+  // AIC-134: the business profile, edited in place at the top of the wizard.
+  // `null` until the customer loads, so the inputs are never briefly blank and
+  // then repopulated — on a live call that reads as the wizard losing data.
+  const [profile, setProfile] = useState<CustomerWriteFields | null>(null);
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileMsg, setProfileMsg] = useState<"saved" | "error" | null>(null);
   // A linked Meta campaign means provisioning already happened — whether via
   // this form or via the builder (AIC-105 Branch A). Either way there is
   // nothing left to create, and trying would violate UNIQUE(customer_id).
@@ -197,7 +217,22 @@ export function AdminOnboarding() {
 
   useEffect(() => {
     if (!id) return;
-    api<CustomerBasics>(`/admin/customers/${id}`).then(setCustomer).catch(() => {});
+    api<CustomerBasics>(`/admin/customers/${id}`)
+      .then((c) => {
+        setCustomer(c);
+        // Seeded from the server rather than left blank: this wizard is opened
+        // for customers that already exist, so an empty form would invite an
+        // operator to retype what we already know — and a blank field saved
+        // over a real value is a silent data loss on a live call.
+        setProfile({
+          businessName: c.businessName ?? "", category: c.category ?? "",
+          mainService: c.mainService ?? "", geoArea: c.geoArea ?? "",
+          primaryCustomer: c.primaryCustomer ?? "", offer: c.offer ?? "",
+          contactName: c.contactName ?? "", contactPhone: c.contactPhone ?? "",
+          contactEmail: c.contactEmail ?? "", isTest: c.isTest ?? false,
+        });
+      })
+      .catch(() => {});
     api<{ state: OnboardingState; businessPortfolioId: string }>(`/admin/customers/${id}/onboarding`)
       .then((r) => { setState(r.state); setPortfolioId(r.businessPortfolioId); })
       .catch(() => setError(w.errorGeneric));
@@ -645,6 +680,51 @@ export function AdminOnboarding() {
         <div className="pill ok" style={{ marginTop: 10, padding: "4px 12px" }}><span className="dot" />{w.finalizeOk}</div>
       )}
       {error && <p style={{ color: "#c0362c", fontSize: "0.85rem", marginTop: 8 }}>{error}</p>}
+
+      {/* AIC-134: the business profile, FIRST. Everything after it depends on
+          it — the builder's recommended defaults key off the category
+          (AIC-49) and the ad copy is written from the offer and the target
+          audience — so collecting it at the end meant the operator either
+          guessed during the call or left the wizard to go and fill in the
+          customer card. Same component as the customer card renders, not a
+          copy: a second list of these fields would drift, and the drifting
+          half would be the one filled in live. */}
+      <div className="card" style={{ marginTop: 12 }}>
+        <b>{w.profileTitle}</b>
+        <p className="muted" style={{ fontSize: "0.85rem" }}>{w.profileSub}</p>
+        {profile && (
+          <form
+            style={{ marginTop: 12 }}
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!id) return;
+              setProfileBusy(true);
+              setProfileMsg(null);
+              try {
+                await updateCustomer(id, profile);
+                // Keep the header in step with the form — the page title reads
+                // from `customer`, so a renamed business would otherwise still
+                // show the old name until a reload.
+                setCustomer((c) => (c ? { ...c, businessName: profile.businessName ?? c.businessName } : c));
+                setProfileMsg("saved");
+              } catch {
+                setProfileMsg("error");
+              } finally {
+                setProfileBusy(false);
+              }
+            }}
+          >
+            <BusinessFields form={profile} onChange={setProfile} />
+            <div className="row gap12" style={{ marginTop: 12, alignItems: "center" }}>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={profileBusy}>
+                {profileBusy ? cc.saving : w.profileSave}
+              </button>
+              {profileMsg === "saved" && <span className="muted" style={{ color: "var(--green)", fontSize: "0.85rem" }}>{w.profileSaved}</span>}
+              {profileMsg === "error" && <span style={{ color: "#c0362c", fontSize: "0.85rem" }}>{w.profileError}</span>}
+            </div>
+          </form>
+        )}
+      </div>
 
       {/* Step 1 — customer grants partner access */}
       <div className="card" style={{ marginTop: 12 }}>

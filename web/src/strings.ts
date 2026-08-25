@@ -487,6 +487,18 @@ export const strings = {
       // exactly what is already verified.
       resumedNote: "כבר עבדנו על הלקוח הזה — הבדיקות למטה מראות מה כבר אומת.",
 
+      // AIC-134: the business profile, collected BEFORE the Meta connection
+      // steps. It comes first because everything after it depends on it — the
+      // builder's recommended defaults key off the category (AIC-49), and the
+      // ad copy is written from the offer and the target audience. Collecting
+      // it at the end meant the operator either guessed on the call or went
+      // back to the customer card mid-wizard.
+      profileTitle: "פרטי העסק",
+      profileSub: "ממלאים קודם — ההמלצות והקופי בהמשך נבנים מהשדות האלה.",
+      profileSave: "שמירת פרטי העסק",
+      profileSaved: "נשמר",
+      profileError: "השמירה נכשלה.",
+
       step1Title: "שלב 1 — הלקוח משתף גישה",
       step1Sub: "בשיחה, עם הלקוח מול המסך שלו.",
       // Both of these are prerequisites Meta enforces on ITS side, invisible

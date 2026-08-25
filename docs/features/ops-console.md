@@ -1212,3 +1212,26 @@ prod Neon (add → promote → remove a real test operator, the last-full-admin
 guard correctly blocking a demotion, a real reversible emergency-control
 round trip on Pisga's own campaign logging both actions truthfully) — cleaned
 up afterward.
+
+## The onboarding wizard opens with the business profile (AIC-134)
+
+The wizard used to start at *"שלב 1 — הלקוח משתף גישה"*, and the business
+profile — category, main service, service area, target audience, offer, contact
+— lived only on the customer card, a separate screen.
+
+That ordering was backwards, because **everything after it depends on it**: the
+builder's recommended defaults key off the category (AIC-49), and the ad copy is
+written from the offer and the target audience. Collecting the profile last
+meant the operator either guessed during the call or left the wizard mid-flow to
+go and fill in the customer card.
+
+It is now the first card, above step 1, seeded from the server rather than
+blank. `GET /admin/customers/:id` already returned every one of these fields —
+the wizard simply declared a narrower type and threw them away. Seeding matters
+beyond convenience: an empty form invites retyping what we already know, and a
+blank field saved over a real value is silent data loss on a live call.
+
+**The same component the customer card renders**, extracted to
+`web/src/admin/BusinessFields.tsx` rather than copied. A second list of these
+fields would drift the first time one was added, and the drifting half would be
+the one an operator fills in with the customer on the phone.

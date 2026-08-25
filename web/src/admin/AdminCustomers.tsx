@@ -7,6 +7,7 @@ import {
   type CustomerWriteFields, type AuditEntry,
 } from "../api";
 import { strings } from "../strings";
+import { BusinessFields, EMPTY_BUSINESS_FORM as EMPTY_FORM } from "./BusinessFields";
 import { filterAndGroup, presentTypes, type SeverityFilter, type TypeFilter } from "./ops-queue-view";
 
 const t = strings.he.ops;
@@ -139,31 +140,6 @@ function noRecDetailLine(reason: string, detail: Record<string, unknown> | null)
   }
 }
 
-const EMPTY_FORM: CustomerWriteFields = {
-  businessName: "", category: "", mainService: "", geoArea: "", primaryCustomer: "",
-  offer: "", contactName: "", contactPhone: "", contactEmail: "", isTest: false,
-};
-
-function BusinessFields({ form, onChange }: { form: CustomerWriteFields; onChange: (f: CustomerWriteFields) => void }) {
-  const set = (k: keyof CustomerWriteFields) => (e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...form, [k]: e.target.value });
-  return (
-    <div className="op-form-grid">
-      <div className="field span-2"><label>{cc.fieldBusinessName}</label><input value={form.businessName ?? ""} onChange={set("businessName")} required /></div>
-      <div className="field"><label>{cc.fieldCategory}</label><input value={form.category ?? ""} onChange={set("category")} /></div>
-      <div className="field"><label>{cc.fieldMainService}</label><input value={form.mainService ?? ""} onChange={set("mainService")} /></div>
-      <div className="field"><label>{cc.fieldGeoArea}</label><input value={form.geoArea ?? ""} onChange={set("geoArea")} /></div>
-      <div className="field"><label>{cc.fieldPrimaryCustomer}</label><input value={form.primaryCustomer ?? ""} onChange={set("primaryCustomer")} /></div>
-      <div className="field span-2"><label>{cc.fieldOffer}</label><input value={form.offer ?? ""} onChange={set("offer")} /></div>
-      <div className="field"><label>{cc.fieldContactName}</label><input value={form.contactName ?? ""} onChange={set("contactName")} /></div>
-      <div className="field"><label>{cc.fieldContactPhone}</label><input value={form.contactPhone ?? ""} onChange={set("contactPhone")} /></div>
-      <div className="field span-2"><label>{cc.fieldContactEmail}</label><input type="email" value={form.contactEmail ?? ""} onChange={set("contactEmail")} /></div>
-      <label className="check span-2">
-        <input type="checkbox" checked={form.isTest ?? false} onChange={(e) => onChange({ ...form, isTest: e.target.checked })} />
-        {cc.fieldIsTest}
-      </label>
-    </div>
-  );
-}
 
 // Customers section (AIC-43 shell; AIC-44 adds full CRUD): the needs-attention
 // queue + the operator's customer roster, with a per-customer drill-down
