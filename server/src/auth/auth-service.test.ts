@@ -58,3 +58,28 @@ describe("AuthService", () => {
     await expect(s.changePassword(user.id, "wrongcurrent", "newpass34")).rejects.toBeInstanceOf(InvalidCredentialsError);
   });
 });
+
+// AIC-133: user enumeration by timing. An unknown email used to return
+// immediately while a known one paid ~100ms of bcrypt, so response time
+// answered "does this address have an account here?" for anyone timing it.
+describe("login does not leak whether an email exists", () => {
+  it("takes comparable time for an unknown email and a wrong password", async () => {
+    const store = new InMemoryUserStore();
+    const svc = new AuthService(store);
+    await svc.signup({ email: "real@example.com", password: "correct-horse", name: "R" });
+
+    const time = async (fn: () => Promise<unknown>) => {
+      const t0 = performance.now();
+      await fn().catch(() => {});
+      return performance.now() - t0;
+    };
+    const known = await time(() => svc.login({ email: "real@example.com", password: "wrong-password" }));
+    const unknown = await time(() => svc.login({ email: "nobody@example.com", password: "wrong-password" }));
+
+    // Both must actually hash. The old code returned in well under a
+    // millisecond on the miss; the assertion that matters is that the unknown
+    // path is no longer trivially faster, not that the two match exactly —
+    // bcrypt timing varies and a strict ratio would be a flaky test.
+    expect(unknown).toBeGreaterThan(known / 3);
+  });
+});

@@ -108,6 +108,30 @@ as any real person.
 - **CORS** — defaults to localhost, and the SPA is same-origin, so no
   cross-origin browser access is granted in production.
 
+## Second pass — what the first pass did not look at
+
+The first pass covered authn/authz, tenant isolation, transport and injection.
+It did **not** look at dependencies, timing side channels, or resource limits.
+Doing that turned up:
+
+**User enumeration by timing (fixed).** `login` returned immediately on an
+unknown email and paid ~100ms of bcrypt on a known one, so response time
+answered *"does this address have an account here?"* to anyone willing to time
+it — worth money to a competitor and a ready-made target list for phishing. The
+miss path now hashes against a fixed dummy digest so both branches cost the
+same. The code's own comment had described this fix as *"would be ideal… kept
+simple for P0"*, which is how a known gap becomes a permanent one.
+
+**Two moderate dependency advisories (assessed, not exploitable here).**
+`react-router` 6.30.6 carries an open-redirect via backslash in `<Link>` /
+`useNavigate`, and arbitrary constructor injection in SSR hydration. Neither is
+reachable in this app: every navigation target is a literal path prefix plus an
+id from our own database — there is no user-controlled destination anywhere —
+and the app is client-only, so the hydration path does not exist. `npm audit
+fix` cannot resolve them without the v7 major, so this is scheduled work rather
+than an incident. **Worth re-checking whenever a user-supplied redirect is
+added**, which is exactly what would make the first one live.
+
 ## Known gaps
 
 - **Rate limits are per-instance and in memory.** Correct for one Railway
@@ -122,3 +146,12 @@ as any real person.
   This stops being true the day auth moves to cookies.
 - **No audit trail on reads.** Writes are logged (`action_history`,
   `admin_audit_log`); an operator reading a customer's data leaves no trace.
+- **Signup confirms whether an email is registered.** Unavoidable while signup
+  reports "email already registered"; the alternative (always claim success and
+  send a mail) needs an email pipeline this product does not have.
+- **Uploads buffer up to 200 MB in memory** (`multer.memoryStorage`). A handful
+  of concurrent large uploads is a memory-exhaustion vector against a single
+  instance. Disk or streaming storage would remove it.
+- **React Router 6 → 7** to clear the two advisories above.
+- **Dependency scanning is not automated.** `npm audit` had never been run
+  before this pass; nothing in CI would report a new advisory.

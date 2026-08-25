@@ -9,6 +9,10 @@ export class InvalidCredentialsError extends Error {
   constructor() { super("invalid credentials"); this.name = "InvalidCredentialsError"; }
 }
 
+// A valid bcrypt-12 digest of a random string kept nowhere else, so no supplied
+// password can match it. Its only job is to cost the same as a real comparison.
+const DUMMY_HASH = "$2a$12$C6UzMDM.H6dfI/f/IKcEe.9x0Xg6YkkVv3lUxV2XKDbSXbjqzYRnq";
+
 export interface AuthResult {
   user: AppUser;
   token: string;
@@ -45,9 +49,22 @@ export class AuthService {
 
   async login(input: { email: string; password: string }): Promise<AuthResult> {
     const rec = await this.store.findByEmail(normalizeEmail(input.email));
-    // Verify even on a miss would be ideal to avoid user enumeration by timing;
-    // bcrypt.compare against a dummy keeps timing closer. Kept simple for P0.
-    if (!rec) throw new InvalidCredentialsError();
+    // AIC-133: user enumeration by TIMING. The old code returned immediately on
+    // an unknown email and ran bcrypt (~100ms at 12 rounds) on a known one, so
+    // the response time answered "does this address have an account here?" for
+    // anyone willing to time it — worth real money to a competitor and a
+    // ready-made target list for a phishing run.
+    //
+    // The comment here used to describe this exact fix as "would be ideal…
+    // kept simple for P0", which is how a known gap becomes a permanent one.
+    //
+    // Hashing against a dummy on the miss path makes both branches pay the same
+    // cost. The hash is a real bcrypt digest of a value nothing can equal, so
+    // the comparison always fails and always takes the full time.
+    if (!rec) {
+      await verifyPassword(input.password, DUMMY_HASH);
+      throw new InvalidCredentialsError();
+    }
     if (!(await verifyPassword(input.password, rec.passwordHash))) throw new InvalidCredentialsError();
     const { passwordHash, ...user } = rec;
     void passwordHash;
