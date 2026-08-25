@@ -64,6 +64,40 @@ export async function upsertAdMeta(
       : `UPDATE ad_meta SET gone_at = now() WHERE campaign_id = $1 AND gone_at IS NULL`,
     keep.length > 0 ? [campaignId, keep] : [campaignId],
   );
+
+  // AIC-130: tombstone the BACK CATALOGUE — ads that vanished from Meta before
+  // the tombstone existed, and were therefore hard-deleted from this cache with
+  // no trace left. Found live: a customer deleted two ads, and because their
+  // cache rows were gone the ads kept rendering in the dashboard as ordinary
+  // live rows, off their frozen snapshot status. Exactly the corpse-as-a-
+  // live-ad problem the tombstone fixes, for everything that predates it.
+  //
+  // DONE HERE, NOT IN THE READ PATH, because only here is the evidence
+  // conclusive. `ads` is Meta's complete current list for this campaign, so a
+  // creative with measured history that is missing from it is definitively
+  // gone. Inferring the same thing at render time from "no cache row" would be
+  // a guess that fails catastrophically on a campaign whose cache simply has
+  // not been built yet — every ad would silently disappear at once.
+  //
+  // Self-limiting: it only ever inserts rows that are already tombstoned, and
+  // ON CONFLICT DO NOTHING means a later real refresh (or a reappearing ad)
+  // still wins through the upsert above.
+  await pool.query(
+    `INSERT INTO ad_meta (meta_ad_id, campaign_id, meta_ad_set_id, name, effective_status, gone_at, updated_at)
+     -- $1 is cast explicitly: it appears both in the SELECT list (where
+     -- Postgres has no column to infer from) and in the WHERE against a uuid,
+     -- and without the cast the planner rejects it outright with "inconsistent
+     -- types deduced for parameter $1" — which would have thrown on every
+     -- ingestion tick. Caught by the integration tests.
+     SELECT DISTINCT s.meta_object_id, $1::uuid, COALESCE(s.parent_meta_id, ''), s.creative_name, '', now(), now()
+       FROM insight_snapshots s
+      WHERE s.campaign_id = $1::uuid
+        AND s.grain = 'creative'
+        AND NOT (s.meta_object_id = ANY($2::text[]))
+        AND NOT EXISTS (SELECT 1 FROM ad_meta m WHERE m.meta_ad_id = s.meta_object_id)
+     ON CONFLICT (meta_ad_id) DO NOTHING`,
+    [campaignId, keep],
+  );
 }
 
 export async function listAdMeta(pool: pg.Pool, campaignId: string): Promise<CachedAdMeta[]> {

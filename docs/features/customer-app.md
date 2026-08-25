@@ -258,3 +258,23 @@ The design includes a **self-serve card checkout** (`/checkout`, ₪598 = setup 
 first month). P0's billing decision (AIC-19) was **manual billing, no gateway**.
 This divergence needs a call — tracked in its own ticket. The screen is built; no
 payment integration is wired.
+
+## Two honesty fixes on Home (AIC-130)
+
+**A window with no rows shows `—`, not `₪0`.** Seen live: with no data yet for
+today, the cards read "₪0 · 0 פניות" — a measured claim of zero — directly above
+a panel saying *"אין נתונים לתקופה שנבחרה"*. Both came from the same empty
+result and only one told the truth. (עלות לפנייה already showed `—`, because
+null has nowhere to collapse to; spend and leads had a plausible-looking zero to
+fall into.) `readout.rangeHasData` now travels alongside `ranges`, because
+`sumDays([])` cannot express the difference between "no rows" and "zero".
+
+**An audience shows `לא מתפרסם · אין מודעה פעילה` when every ad under it is
+paused.** Seen live: an audience badged `מפרסם` with both of its ads showing
+`מושהה על ידך`. The ad set's own switch was on, so the badge claimed
+"publishing" while nothing could possibly be shown — the same false-green as
+AIC-100 and AIC-71, one level up and pointing the other way (there the parent
+was off; here the children are). Only asserted when live statuses are loaded
+*and* there are rows to judge: with no creatives in the window this view knows
+nothing about what's running, and guessing would swap one false badge for
+another.

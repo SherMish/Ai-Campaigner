@@ -299,7 +299,19 @@ export function AddContent() {
                 {adSetsLoading ? (
                   <p className="muted">{s.pickAdSetLoading}</p>
                 ) : !adSets || adSets.length === 0 ? (
-                  <p className="muted">{s.noAdSets}</p>
+                  // AIC-130: an explanation and a way out, not a dead end. This
+                  // used to be one muted line with the whole creative builder
+                  // still live underneath it, so the customer did all the work
+                  // and then hit a disabled button that said nothing.
+                  <div className="stack gap12">
+                    <p className="muted" style={{ margin: 0 }}>{s.noAdSets}</p>
+                    <p className="muted" style={{ margin: 0 }}>{s.noAdSetsBody}</p>
+                    <div>
+                      <button className="btn btn-primary btn-sm" onClick={() => switchMode("ad_set")}>
+                        {s.noAdSetsCta}
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <div className="stack gap12">
                     {adSets.map((set) => (
@@ -313,22 +325,31 @@ export function AddContent() {
                 )}
               </div>
 
-              <div className="card">
-                <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 12 }}>{s.adsTitle}</b>
-                <BuilderCreatives
-                  ads={adDrafts}
-                  onChange={setAdDrafts}
-                  whatsappNumber={whatsappNumber}
-                  getPosts={getAdditionPosts}
-                  uploadFile={uploadAdditionFile}
-                  createCreativeFn={createAdditionCreative}
-                />
-              </div>
+              {/* AIC-130: with no ad set there is nowhere for an ad to go, so
+                  don't invite the work. This whole section used to stay live
+                  and the submit button below merely went grey — the customer
+                  uploaded creatives, saw them confirmed, and only then found a
+                  dead button with no explanation on it. */}
+              {(adSets?.length ?? 0) > 0 && (
+                <>
+                  <div className="card">
+                    <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 12 }}>{s.adsTitle}</b>
+                    <BuilderCreatives
+                      ads={adDrafts}
+                      onChange={setAdDrafts}
+                      whatsappNumber={whatsappNumber}
+                      getPosts={getAdditionPosts}
+                      uploadFile={uploadAdditionFile}
+                      createCreativeFn={createAdditionCreative}
+                    />
+                  </div>
 
-              {submitError && <p className="muted" style={{ color: "var(--orange)" }}>{submitError}</p>}
-              <button className="btn btn-primary btn-wide" disabled={!adReady || submitting} onClick={submitAd}>
-                {submitting ? s.submitting : s.submitAdCta}
-              </button>
+                  {submitError && <p className="muted" style={{ color: "var(--orange)" }}>{submitError}</p>}
+                  <button className="btn btn-primary btn-wide" disabled={!adReady || submitting} onClick={submitAd}>
+                    {submitting ? s.submitting : s.submitAdCta}
+                  </button>
+                </>
+              )}
             </div>
           ) : (
             <div className="stack gap16">

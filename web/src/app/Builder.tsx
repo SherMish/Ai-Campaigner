@@ -500,6 +500,7 @@ export function Builder({ customerId, onExit }: Props = {}) {
             <div>
               <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 12 }}>{b.creatives.title}</b>
               <BuilderCreatives
+                businessName={businessName}
                 ads={ads} onChange={setAds} localCampaignId={localCampaignId} customerId={customerId} postsOnly={isEngagement}
                 whatsappNumber={isWebsite ? undefined : wizard.whatsappNumber}
                 destination={isWebsite ? wizard.destination : undefined}

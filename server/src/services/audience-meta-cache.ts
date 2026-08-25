@@ -15,7 +15,7 @@ import type { AdSetMeta } from "../meta/audience-label.js";
 export async function upsertAdSetMeta(
   pool: pg.Pool,
   campaignId: string,
-  adsets: Omit<AdSetMeta, "status" | "isManaged">[],
+  adsets: Omit<AdSetMeta, "status" | "isManaged" | "existsOnMeta">[],
 ): Promise<void> {
   for (const a of adsets) {
     await pool.query(

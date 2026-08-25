@@ -120,6 +120,25 @@ operator's own view disappeared it too. Every hide/restore also writes an
 visibility**, not a Meta status — claiming a status transition would be a lie,
 since Meta's status is deliberately unchanged.
 
+## The back catalogue (AIC-130)
+
+The tombstone only covers ads pruned *after* migration 048. Every ad deleted
+before it was hard-deleted from `ad_meta` with no trace, so it kept rendering as
+an ordinary live row off its frozen snapshot status — the same corpse-as-a-live-
+ad problem, for everything that predates the fix. Found live on a real customer
+within hours of shipping.
+
+`upsertAdMeta` now also **inserts** tombstones: any creative with snapshot
+history that is missing from Meta's current ad list gets an `ad_meta` row with
+`gone_at` set.
+
+Done at ingestion, **not in the read path**, and the distinction matters. Only
+here is the evidence conclusive — `ads` is Meta's complete current list for the
+campaign, so absence from it is proof. Inferring the same thing at render time
+from "no cache row" was tried first and is a guess that fails catastrophically
+on a campaign whose cache simply hasn't been built yet: every ad would silently
+disappear at once.
+
 ## Keying
 
 `hidden_ads` is keyed `(campaign_id, meta_ad_id)`, not on the ad id alone. A
@@ -135,8 +154,5 @@ reuse ad ids across campaigns, caught this.
 - **The Meta explorer does not badge a customer-removed ad.** An operator can
   see it in the action history but not inline on the row. Worth adding if
   support questions come up.
-- **A pre-existing archived ad has no tombstone.** Rows hard-deleted before this
-  migration are simply gone from `ad_meta`, so such an ad still renders from its
-  snapshots with a stale badge. Only ads archived from now on get the tombstone.
 - **Ad sets have no equivalent.** Remove applies to ads only; a customer with a
   dead audience still sees it.

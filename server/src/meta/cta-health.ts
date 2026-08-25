@@ -118,9 +118,27 @@ function canStillServe(ad: AdCreativeDestination): boolean {
 export function summarizeCta(input: AdCreativeDestination[]): CtaSummary {
   const ads = input.filter(canStillServe);
   if (ads.length === 0) {
-    // No ads read. NOT "ok" — there is nothing to have checked, and a campaign
-    // mid-build legitimately has none yet.
-    return { state: "unknown", reason: "no ads to check", brokenAdIds: [], detail: {} };
+    // No ad can still serve — either the campaign has none yet (mid-build), or
+    // every one it had has been archived/deleted.
+    //
+    // AIC-130, found live: this used to return `unknown`, and `unknown`
+    // deliberately never writes the flag so a failed read can't wipe a real
+    // alarm. The consequence was a trap. A customer was told "the button in
+    // your ad leads nowhere", deleted both broken ads — the only fix available
+    // — and the alarm FROZE: no ads left to check, so `unknown` forever, still
+    // citing "2 of 2 ad(s)" that no longer existed. Following our own advice
+    // made the warning permanent.
+    //
+    // `not_applicable` is the honest answer and it settles: a read that
+    // SUCCEEDED and found nothing broken is not an absence of information. A
+    // read that actually fails throws before reaching here, so this branch
+    // cannot be a failed read misreported as a clean bill of health.
+    return {
+      state: "not_applicable",
+      reason: "no ads that can still serve — nothing to check",
+      brokenAdIds: [],
+      detail: { adsChecked: 0 },
+    };
   }
 
   const judgeable = ads.filter((a) => ACTIONABLE.has((a.destinationType ?? "").toUpperCase()));

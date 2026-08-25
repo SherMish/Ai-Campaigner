@@ -51,7 +51,26 @@ export interface AdSetMeta {
   // ACTIVE (Meta doesn't always reclassify a deleted ad set), but it has no
   // ads and can't deliver. Callers must exclude these everywhere: counts,
   // labels, delivery-health, the audience rule, the customer dashboard.
+  //
+  // AIC-130: this conflates two facts, and one caller needs them apart —
+  // see `existsOnMeta`. `isManaged` keeps its meaning ("has something to
+  // show right now") for every DISPLAY consumer.
   isManaged: boolean;
+  // AIC-130, found live: the ad set is a real object on Meta — not deleted,
+  // not archived — regardless of whether it currently has ads.
+  //
+  // The bug this exists to fix. A customer deleted both ads from a live,
+  // ACTIVE ad set. `isManaged` went false (zero ads ⇒ "unpublished draft"),
+  // so the add-an-ad picker showed "no ad sets found" and there was NO WAY
+  // BACK: the one screen that could put an ad into that ad set refused to
+  // list it. The campaign became unrecoverable through the UI while being
+  // perfectly healthy on Meta.
+  //
+  // "Has no ads" is the strongest possible reason to OFFER an ad set as a
+  // place to add one — the heuristic was pointing exactly backwards for that
+  // caller. Display consumers still want `isManaged`; anything asking "can I
+  // write here?" wants this.
+  existsOnMeta: boolean;
 }
 
 function isDeletedOrArchived(status?: string | null): boolean {
@@ -128,6 +147,7 @@ export function normalizeAdSetMeta(row: RawAdSetMeta): AdSetMeta {
     isDynamicCreative: row.is_dynamic_creative === true,
     status: row.effective_status === "ACTIVE" ? "active" : "paused",
     isManaged: !isDeletedOrArchived(row.effective_status) && !isDraftWithNoAds,
+    existsOnMeta: !isDeletedOrArchived(row.effective_status),
   };
 }
 

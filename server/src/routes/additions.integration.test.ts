@@ -299,11 +299,11 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
   // AIC-65 reached the engine tick but NOT these customer-facing routes — found
   // live on 2026-08-12 when the real dead GelNails ad set was still offered in
   // the add-ad picker. An ad added to a dead ad set would never deliver.
-  it("never offers a dead/never-published ad set, and refuses one passed by id", async () => {
+  it("never offers a DELETED ad set, and refuses one passed by id", async () => {
     const { token, campaignId } = await seedExistingCampaign("deadadset");
     const { fetchMock } = mockMetaFetch([
       { id: "as_real", name: "Women 18-45" },
-      { id: "as_dead", name: "Deleted draft", hasAds: false },
+      { id: "as_dead", name: "Deleted", status: "DELETED" },
     ]);
     vi.stubGlobal("fetch", fetchMock);
 
@@ -321,7 +321,25 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
     expect(res.status).toBe(404);
 
     const pending = await pool.query(`SELECT count(*)::int AS n FROM pending_additions WHERE campaign_id = $1`, [campaignId]);
-    expect(pending.rows[0].n).toBe(0); // nothing created against a dead ad set
+    expect(pending.rows[0].n).toBe(0); // nothing created against a deleted ad set
+  });
+
+  // AIC-130, found live on a real customer. This test used to assert the
+  // OPPOSITE — that an ad set with zero ads is never offered — and that was
+  // the bug. A customer deleted both ads from a live ACTIVE ad set, the picker
+  // filtered it out as a "never-published draft", and the screen said "no ad
+  // sets found in the campaign". There was no way to put an ad back into a
+  // perfectly healthy ad set: the campaign was unrecoverable through the UI.
+  //
+  // Having no ads is the strongest possible reason to OFFER an ad set here.
+  it("DOES offer a live ad set whose ads were all deleted — the whole point of this screen", async () => {
+    const { token } = await seedExistingCampaign("emptyadset");
+    const { fetchMock } = mockMetaFetch([{ id: "as_empty", name: "Women 18-45", hasAds: false }]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const list = await request(app).get("/api/app/additions/ad-sets").set("Authorization", `Bearer ${token}`);
+    expect(list.status).toBe(200);
+    expect(list.body.adSets.map((a: { id: string }) => a.id)).toEqual(["as_empty"]);
   });
 
   it("503s honestly with no META_SYSTEM_USER_TOKEN configured", async () => {

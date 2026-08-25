@@ -124,6 +124,9 @@ export interface CustomerOverview {
     // The day/week/month/all-time switcher's data. Bounded ranges are summed
     // from disjoint per-day rows; allTime is the cached lifetime read.
     ranges: Record<RangeKey, PeriodAgg>;
+    // AIC-130: does the window contain ANY measured rows? A zero summed over
+    // an empty set is not the same claim as a measured zero.
+    rangeHasData: Record<RangeKey, boolean>;
     daily: DailyPoint[];
     firstDataDate: string | null;
     delta: { spendPct: number | null; leadsPct: number | null; cplPct: number | null };

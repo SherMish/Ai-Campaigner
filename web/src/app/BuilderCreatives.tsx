@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { strings, creativeValidationMessage } from "../strings";
 import {
   getPromotablePosts, uploadCreativeFile, createCreative, CreativeValidationError, ApiError,
@@ -16,6 +16,11 @@ export interface AdDraft {
   headline: string;
   primaryText: string;
   media: UploadedMedia | null;
+  // AIC-130, client-only and never sent: an object URL for the file the
+  // customer just picked, so the dropzone and the preview can show the actual
+  // picture. The server's UploadedMedia gives back an imageHash with no URL
+  // (Meta hosts it), so there is nothing else to render it from.
+  localPreviewUrl: string | null;
   postId: string | null;
   postPreview: string | null;
   creativeId: string | null;
@@ -31,6 +36,7 @@ export function newAdDraft(index: number): AdDraft {
     headline: "",
     primaryText: "",
     media: null,
+    localPreviewUrl: null,
     postId: null,
     postPreview: null,
     creativeId: null,
@@ -54,6 +60,10 @@ export type AdCreativeBody =
 interface Props {
   ads: AdDraft[];
   onChange: (ads: AdDraft[]) => void;
+  // AIC-130: names the advertiser in the preview header. Optional — the
+  // preview is still useful without it, so a caller that doesn't have the
+  // business name loaded shouldn't be blocked from rendering one.
+  businessName?: string;
   // Only used by the default createCreativeFn (the builder's own endpoint) —
   // omit when passing a custom createCreativeFn (AIC-63's screen resolves
   // its campaign server-side instead).
@@ -83,6 +93,7 @@ interface Props {
 
 export function BuilderCreatives({
   ads, onChange, localCampaignId, whatsappNumber, destination, destinationUrl, customerId,
+  businessName,
   postsOnly = false,
   getPosts = () => getPromotablePosts(customerId),
   uploadFile = (file) => uploadCreativeFile(file, customerId),
@@ -123,7 +134,13 @@ export function BuilderCreatives({
   }
 
   async function doUpload(ad: AdDraft, file: File) {
-    update(ad.clientKey, { status: "uploading", error: null });
+    // AIC-130: shown immediately, before the upload finishes — the customer
+    // picked this file, so the picture is the fastest possible confirmation
+    // that the right one is going up. Revoked when replaced so a customer who
+    // re-picks several times doesn't leak a blob per attempt.
+    if (ad.localPreviewUrl) URL.revokeObjectURL(ad.localPreviewUrl);
+    const localPreviewUrl = URL.createObjectURL(file);
+    update(ad.clientKey, { status: "uploading", error: null, localPreviewUrl });
     try {
       const media = await uploadFile(file);
       update(ad.clientKey, { media, status: "draft" });
@@ -176,6 +193,7 @@ export function BuilderCreatives({
             postsOnly={postsOnly}
             onUpdate={(patch) => update(ad.clientKey, patch)}
             onUpload={(file) => doUpload(ad, file)}
+            previewBusinessName={businessName}
             onCreate={() => doCreate(ad)}
             onRemove={ads.length > 1 ? () => removeAd(ad.clientKey) : undefined}
           />
@@ -192,6 +210,7 @@ export function BuilderCreatives({
 
 function AdCard({
   index, ad, posts, postsLoading, onLoadPosts, postsOnly, onUpdate, onUpload, onCreate, onRemove,
+  previewBusinessName,
 }: {
   index: number;
   ad: AdDraft;
@@ -201,6 +220,7 @@ function AdCard({
   postsOnly: boolean;
   onUpdate: (patch: Partial<AdDraft>) => void;
   onUpload: (file: File) => void;
+  previewBusinessName?: string;
   onCreate: () => void;
   onRemove?: () => void;
 }) {
@@ -246,13 +266,7 @@ function AdCard({
             <div className="stack gap12">
               <div className="field">
                 <label>{c.chooseFile}</label>
-                <input
-                  type="file"
-                  accept="image/*,video/*"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); }}
-                />
-                {ad.status === "uploading" && <p className="muted" style={{ marginTop: 6 }}>{c.uploading}</p>}
-                {ad.media && ad.status !== "uploading" && <p className="muted" style={{ marginTop: 6 }}>✓ {ad.media.kind === "image" ? "תמונה" : "וידאו"}</p>}
+                <MediaDropzone ad={ad} onUpload={onUpload} />
               </div>
               <div className="field">
                 <label>{c.headlineLabel}</label>
@@ -261,6 +275,15 @@ function AdCard({
               <div className="field">
                 <label>{c.primaryTextLabel}</label>
                 <textarea placeholder={c.primaryTextPlaceholder} value={ad.primaryText} onChange={(e) => onUpdate({ primaryText: e.target.value })} />
+              </div>
+              {/* AIC-130: the fields above are three boxes; this is what they
+                  add up to. Chiefly it answers the question the form itself
+                  can't — that the headline is the small line UNDER the picture
+                  and the primary text is the big one above it. */}
+              <div className="field">
+                <label>{c.previewTitle}</label>
+                <AdPreview ad={ad} businessName={previewBusinessName} />
+                <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>{c.previewNote}</p>
               </div>
             </div>
           ) : (
@@ -290,6 +313,128 @@ function AdCard({
           </button>
         </>
       )}
+    </div>
+  );
+}
+
+// AIC-130. Replaces a bare <input type="file">, which the browser renders as
+// its own grey "Choose File / No file chosen" control — English chrome in the
+// middle of a Hebrew screen, and the least considered element in the product
+// at the exact moment a customer hands us the photo of their work.
+//
+// Drag-and-drop is the reason this is a component rather than a styled label:
+// people already have the picture open in a folder, and the native control
+// cannot accept a drop.
+function MediaDropzone({ ad, onUpload }: { ad: AdDraft; onUpload: (file: File) => void }) {
+  const [over, setOver] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const uploading = ad.status === "uploading";
+  const has = !!ad.localPreviewUrl || !!ad.media;
+
+  function take(files: FileList | null | undefined) {
+    const f = files?.[0];
+    // Guard the drop path specifically: `accept` constrains the file PICKER,
+    // and a drag-and-drop bypasses it entirely — without this, dropping a PDF
+    // would upload it and fail server-side with a worse message.
+    if (f && /^(image|video)\//.test(f.type)) onUpload(f);
+  }
+
+  return (
+    <>
+      <div
+        className={`dropzone${over ? " is-over" : ""}${has ? " has-file" : ""}`}
+        role="button"
+        tabIndex={0}
+        onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); inputRef.current?.click(); } }}
+        onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => { e.preventDefault(); setOver(false); take(e.dataTransfer.files); }}
+      >
+        {has ? (
+          <div className="row gap12" style={{ alignItems: "center" }}>
+            {ad.localPreviewUrl && ad.media?.kind !== "video" ? (
+              <img className="dz-thumb" src={ad.localPreviewUrl} alt="" />
+            ) : ad.media?.kind === "video" ? (
+              <img className="dz-thumb" src={ad.media.thumbnailUrl} alt="" />
+            ) : null}
+            <div className="stack" style={{ gap: 4, textAlign: "start" }}>
+              <span className="dz-title">
+                {uploading ? c.uploading : `✓ ${ad.media?.kind === "video" ? c.dropVideo : c.dropImage}`}
+              </span>
+              <button
+                type="button"
+                className="link"
+                style={{ background: "none", border: "none", padding: 0, fontSize: ".8rem", cursor: "pointer" }}
+                onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
+              >
+                {c.dropReplace}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <span className="dz-title">{c.dropTitle}</span>
+            <span className="dz-hint">{c.dropHint}</span>
+          </>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*,video/*"
+        style={{ display: "none" }}
+        onChange={(e) => { take(e.target.files); e.target.value = ""; }}
+      />
+    </>
+  );
+}
+
+// AIC-130. What the three form fields actually add up to.
+//
+// The form asks for "כותרת" and "טקסט ראשי" as two boxes of the same size,
+// which says nothing about where either one lands — and they land in very
+// different places: the primary text is the big paragraph ABOVE the picture,
+// the headline is the small bold line UNDER it, next to the button. Customers
+// reasonably assume the "headline" is the prominent one and write accordingly.
+//
+// Deliberately a SKETCH, not a facsimile. Meta reformats per placement (feed,
+// reels, stories all differ), so a pixel-accurate Facebook render would be
+// claiming something we cannot deliver — the note under it says so. What this
+// does show reliably is which field goes where.
+function AdPreview({ ad, businessName }: { ad: AdDraft; businessName?: string }) {
+  const name = businessName?.trim() || c.previewYourBusiness;
+  // Prefer the local file the customer just picked; fall back to Meta's video
+  // thumbnail. An uploaded IMAGE has no URL at all — Meta returns only an
+  // imageHash — so without the local object URL there is simply nothing to
+  // render, which is why the draft carries one.
+  const src = ad.localPreviewUrl ?? (ad.media?.kind === "video" ? ad.media.thumbnailUrl : null);
+  return (
+    <div className="ad-preview">
+      <div className="apv-head">
+        <div className="apv-avatar" aria-hidden="true">{name.slice(0, 1)}</div>
+        <div>
+          <div className="apv-name"><bdi>{name}</bdi></div>
+          <div className="apv-sponsored">{c.previewSponsored}</div>
+        </div>
+      </div>
+      {/* Placeholders rather than a collapsed layout: an empty preview should
+          still show the SHAPE, since seeing where the text will sit is the
+          whole reason to look at it before writing. */}
+      <div className="apv-body">
+        {ad.primaryText.trim() ? <bdi>{ad.primaryText}</bdi> : <span className="muted">{c.previewEmptyText}</span>}
+      </div>
+      {src ? (
+        <img className="apv-media" src={src} alt="" />
+      ) : (
+        <div className="apv-media-empty">{c.previewEmptyMedia}</div>
+      )}
+      <div className="apv-foot">
+        <span className="apv-headline">
+          {ad.headline.trim() ? <bdi>{ad.headline}</bdi> : <span className="muted">{c.previewEmptyHeadline}</span>}
+        </span>
+        <span className="apv-cta">{c.previewCta}</span>
+      </div>
     </div>
   );
 }

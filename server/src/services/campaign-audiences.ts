@@ -202,6 +202,7 @@ export async function buildCampaignAudiences(
       // deriveAudienceLabels — this view never surfaces an ad set's status.
       status: "active",
       isManaged: true, // filtered above — only managed ad sets reach here
+      existsOnMeta: true,
     };
   });
   const labels = deriveAudienceLabels(asMetaList);
@@ -223,6 +224,7 @@ export async function buildCampaignAudiences(
   // build this list outlive the Meta object and carry a frozen status, so
   // without it a deleted ad renders as a live one forever.
   const goneAdIds = new Set(adMeta.filter((a) => a.goneAt !== null).map((a) => a.adId));
+
   // gone_at_meta WINS when both apply, and the order matters. If the customer
   // removed it here and an operator later archived it at Meta, the object no
   // longer exists — offering "restore" would put a row back for something that

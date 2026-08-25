@@ -1024,3 +1024,32 @@ ad-set picker's honest empty state (503, no Meta token), the audience
 prefill bug fix, and the mobile overflow fix — all confirmed zero
 `scrollWidth` overflow after the CSS fix. The actual create + activate
 against a real Meta campaign rides the same pending live dogfood as AIC-50.
+
+## The creative step: dropzone + ad preview (AIC-130)
+
+**Upload** was a bare `<input type="file">` — the browser's own grey "Choose
+File / No file chosen", English chrome in the middle of a Hebrew screen, and the
+least considered element in the product at exactly the moment a customer hands
+us the photo of their work. It is now a dropzone: click or drag, with the picked
+image shown as a thumbnail immediately (before the upload finishes — the
+customer chose the file, so the picture is the fastest confirmation the right
+one is going up).
+
+Drag-and-drop is why it's a component rather than a styled label; the native
+control cannot accept a drop. The drop path re-checks the MIME type, because
+`accept` constrains the picker only and a drop bypasses it entirely.
+
+**Preview.** The form asks for "כותרת" and "טקסט ראשי" as two identical boxes,
+which says nothing about where either one lands — and they land in very
+different places: the primary text is the big paragraph *above* the picture, the
+headline is the small bold line *under* it next to the button. Customers
+reasonably assume "headline" is the prominent one and write accordingly.
+
+Deliberately a **sketch, not a facsimile**. Meta reformats per placement (feed,
+reels, stories all differ), so a pixel-accurate Facebook render would claim
+something we cannot deliver; the note under it says so. What it does show
+reliably is which field goes where.
+
+An uploaded image has no URL to render — Meta returns only an `imageHash` — so
+the draft carries a client-only object URL (`localPreviewUrl`, never sent,
+revoked when the file is replaced). Video falls back to Meta's thumbnail.

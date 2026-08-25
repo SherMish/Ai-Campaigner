@@ -195,3 +195,30 @@ shipped that for the **builder's create-a-new-campaign path**
 This flow's own `POST /ad-set` route (adding a new ad set to an *existing*
 campaign) still never calls it for a non-WhatsApp campaign — still genuinely
 separate, unbuilt scope, tracked below if it's ever needed.
+
+## An ad set is required, and the screen says so up front (AIC-130)
+
+Found live. A customer whose campaign had one ACTIVE ad set saw **"לא נמצאו
+קבוצות מודעות בקמפיין"**, because the picker filtered on `isManaged` — which is
+false for an ad set with **zero ads** (AIC-65's "never-published draft"
+heuristic). They had just deleted both of that ad set's ads. The one screen that
+could put an ad back refused to list the only place it could go, so the campaign
+was unrecoverable through the UI.
+
+Two changes:
+
+1. **The picker asks the narrower question.** `existsOnMeta` (not deleted, not
+   archived) instead of `isManaged` (that, *and* currently has ads). Having no
+   ads is the strongest possible reason to offer an ad set as a place to add
+   one — the heuristic was pointing exactly backwards for this caller. The
+   `POST /ad` guard uses the **same** predicate, or the picker would offer an ad
+   set that submit then rejects with a bare 404.
+2. **No ad sets is now an explanation with a way out**, not one muted line. The
+   creative builder and the submit button are hidden entirely in that state.
+   Previously everything stayed live: the customer uploaded creatives, saw them
+   confirmed, and only then met a greyed-out button with no reason on it.
+
+Related copy fix: the per-creative badge said **"המודעה נוצרה"** when only the
+Meta *creative* had been made. On this screen that produced two green "the ad
+was created" ticks with no ad on Meta and nothing in the action history. It now
+reads **"התוכן מוכן"**.

@@ -1170,6 +1170,12 @@ export const strings = {
           // without inferring it from which direction the action button points.
           statusRunning: "מפרסם",
           statusPausedByYou: "מושהה על ידך",
+          // AIC-130, seen live: an audience badged מפרסם with both of its ads
+          // showing מושהה על ידך. The ad set's own switch was on, so the badge
+          // said "publishing" while nothing could possibly be shown. Same
+          // false-green as AIC-100 and AIC-71, one level up and pointing the
+          // other way — there the parent was off, here the children are.
+          statusNoLiveAds: "לא מתפרסם · אין מודעה פעילה",
           // AIC-100, real live bug: an ad showed מפרסם while its own ad set
           // was מושהה — the ad's own switch is on, but nothing delivers,
           // because its parent is off. Two distinct causes, two distinct
@@ -1640,13 +1646,41 @@ export const strings = {
         headlinePlaceholder: "מבצע קיץ",
         primaryTextLabel: "טקסט ראשי",
         primaryTextPlaceholder: "20% הנחה על הטיפול הראשון",
+        // AIC-130: replaced the browser's default file input, which rendered
+        // as an English "Choose File / No file chosen" control in the middle
+        // of a Hebrew screen.
         chooseFile: "בחירת קובץ",
+        dropTitle: "גוררים לכאן תמונה או וידאו",
+        dropHint: "או לוחצים לבחירת קובץ מהמחשב",
+        dropReplace: "החלפת הקובץ",
+        dropImage: "תמונה",
+        dropVideo: "וידאו",
+        // The preview. Honest about what it is: Meta renders differently per
+        // placement, so promising an exact likeness would be a promise we
+        // can't keep. What it DOES show reliably is which field lands where.
+        previewTitle: "איך זה ייראה",
+        previewNote: "תצוגה מקדימה משוערת. המראה המדויק משתנה בין פייסבוק, אינסטגרם וסטוריז.",
+        previewSponsored: "ממומן",
+        // Fallback advertiser name. The add-content screen doesn't load the
+        // business name (its context returns the CAMPAIGN's), and showing the
+        // campaign name here would misrepresent whose page the ad appears to
+        // come from — better a neutral placeholder than a confident wrong one.
+        previewYourBusiness: "העסק שלך",
+        previewCta: "שליחת הודעה",
+        previewEmptyMedia: "כאן תופיע התמונה",
+        previewEmptyText: "כאן יופיע הטקסט הראשי",
+        previewEmptyHeadline: "כאן תופיע הכותרת",
         uploading: "מעלה…",
         noPosts: "לא נמצאו פוסטים בעמוד המחובר.",
         loadingPosts: "טוען פוסטים…",
         createAdCta: "יצירת המודעה",
         creatingAd: "יוצר…",
-        adCreated: "המודעה נוצרה",
+        // AIC-130: was "המודעה נוצרה" — which claimed the AD existed when only
+        // the Meta CREATIVE had been made. A customer hit this on a campaign
+        // with no selectable ad set: two green "the ad was created" ticks, a
+        // greyed-out submit, and no ad on Meta or in the history. The badge has
+        // to name what actually happened.
+        adCreated: "התוכן מוכן",
         countHint: "מומלץ 3–5 מודעות נפרדות",
       },
       review: {
@@ -1778,6 +1812,12 @@ export const strings = {
       pickAdSetTitle: "לאיזו קבוצת מודעות?",
       pickAdSetLoading: "טוען קבוצות מודעות…",
       noAdSets: "לא נמצאו קבוצות מודעות בקמפיין.",
+      // AIC-130: the bare line above was the whole message, and everything
+      // below it stayed enabled — a customer built two creatives and only then
+      // met a greyed-out button with no reason on it. An ad cannot exist
+      // without an ad set, so say that here and point at the tab that fixes it.
+      noAdSetsBody: "מודעה חייבת להשתייך לקבוצת מודעות, ובקמפיין הזה אין אף אחת כרגע. אפשר ליצור קבוצת מודעות ואז לחזור לכאן ולהוסיף אליה מודעות.",
+      noAdSetsCta: "יצירת קבוצת מודעות",
       adSetPaused: "מושהית",
       adsTitle: "המודעה",
 

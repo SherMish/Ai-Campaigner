@@ -108,3 +108,20 @@ problems always names the same one.
   valid-looking wrong number still passes.
 - **Two Graph reads per campaign per tick** (ad sets + ads). Meta will not nest
   ad-set fields under `/ads`, so the join has to happen on our side.
+
+## Zero ads is `not_applicable`, not `unknown` (AIC-130)
+
+Found live, and it made this check's own advice a trap. A customer was told
+*"the button in your ad leads nowhere"*, deleted both broken ads — the only fix
+available to them — and the alarm **froze**. With no ads left, `summarizeCta`
+returned `unknown`; `unknown` deliberately never writes the flag (so a failed
+read can't wipe a real alarm); so `cta_ok` stayed false forever, still citing
+*"2 of 2 ad(s)"* that no longer existed.
+
+An empty list here always means a read that **succeeded** and found nothing
+left to judge — a read that actually fails throws before reaching
+`summarizeCta`. That is information, not the absence of it, so the answer is
+`not_applicable`, which settles and clears.
+
+This is the same lesson as the archived-ad filter one level down: any state the
+customer can reach by following our advice must be a state the check can clear.

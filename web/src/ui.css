@@ -575,3 +575,62 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 .ac-row-track { width: 96px; height: 8px; border-radius: 999px; background: var(--cream-2); overflow: hidden; flex-shrink: 0; }
 .ac-row-fill { display: block; height: 100%; border-radius: 999px; }
 .ac-row-n { font-family: var(--mono); font-size: 0.78rem; min-width: 2.2em; text-align: end; font-variant-numeric: tabular-nums; }
+
+/* ── AIC-130: creative upload + ad preview ─────────────────────────────────
+   The upload was a bare <input type="file">, i.e. the browser's own grey
+   "Choose File / No file chosen" control — the one element on the screen that
+   looked like nothing else in the product, sitting at the exact moment a
+   salon owner is handing us the photo of their work. */
+.dropzone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; width: 100%; min-height: 132px; padding: 20px;
+  border: 1.5px dashed var(--line); border-radius: 16px;
+  background: var(--cream); color: var(--muted);
+  cursor: pointer; text-align: center;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.dropzone:hover, .dropzone:focus-visible { border-color: var(--ink); color: var(--ink); }
+/* Dragging is the one state that needs to read instantly from across the
+   screen — the cursor is already busy, so colour does the work. */
+.dropzone.is-over { border-color: var(--indigo); background: var(--indigo-soft); color: var(--ink); }
+.dropzone.has-file { border-style: solid; background: var(--cream); cursor: default; }
+.dropzone .dz-title { font-weight: 600; color: inherit; }
+.dropzone .dz-hint { font-size: .8rem; }
+.dropzone .dz-thumb {
+  width: 84px; height: 84px; border-radius: 12px; object-fit: cover;
+  background: var(--page); flex: none;
+}
+
+/* The preview. Deliberately NOT pixel-perfect Meta chrome — it is a sketch of
+   where each field lands, so a customer can see that their headline is the
+   small line under the picture and not the big text. Claiming to be a real
+   Facebook render would be a promise we can't keep: Meta reformats per
+   placement, and the ad will not look exactly like this everywhere. */
+.ad-preview {
+  border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+  background: #fff; max-width: 340px;
+}
+.ad-preview .apv-head { display: flex; gap: 8px; align-items: center; padding: 10px 12px; }
+.ad-preview .apv-avatar {
+  width: 32px; height: 32px; border-radius: 50%; flex: none;
+  background: var(--indigo-soft); color: var(--indigo);
+  display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .8rem;
+}
+.ad-preview .apv-name { font-weight: 600; font-size: .82rem; line-height: 1.2; color: #111; }
+.ad-preview .apv-sponsored { font-size: .72rem; color: rgba(0,0,0,.5); }
+.ad-preview .apv-body { padding: 0 12px 10px; font-size: .82rem; color: #111; white-space: pre-wrap; }
+.ad-preview .apv-media { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; background: var(--page); display: block; }
+.ad-preview .apv-media-empty {
+  width: 100%; aspect-ratio: 1 / 1; background: var(--page);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: .8rem;
+}
+.ad-preview .apv-foot {
+  display: flex; gap: 10px; align-items: center; justify-content: space-between;
+  padding: 10px 12px; background: #f0f2f5; border-top: 1px solid var(--line);
+}
+.ad-preview .apv-headline { font-weight: 600; font-size: .8rem; color: #111; overflow-wrap: anywhere; }
+.ad-preview .apv-cta {
+  flex: none; font-size: .74rem; font-weight: 600; color: #111;
+  background: #e4e6eb; border-radius: 6px; padding: 6px 10px;
+}

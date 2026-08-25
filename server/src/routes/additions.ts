@@ -126,9 +126,17 @@ additionsRouter.get("/ad-sets", requireAuth, async (req, res) => {
     if (!ctx) return notReady(res);
     const writer = buildAdditionWriter();
     if (!writer) return unavailable(res);
-    // AIC-65: never offer a deleted/archived/never-published ad set as a place
-    // to add an ad — an ad added there would never deliver.
-    const adsets = (await writer.getAdSetMeta(ctx.metaCampaignId)).filter((a) => a.isManaged);
+    // AIC-65: never offer a DELETED or ARCHIVED ad set as a place to add an ad
+    // — an ad added there would never deliver.
+    //
+    // AIC-130: this used to filter on `isManaged`, which ALSO excludes an ad
+    // set with zero ads. Found live: a customer deleted both ads from a live
+    // ACTIVE ad set, this returned an empty list, and the add-ad screen said
+    // "no ad sets found in the campaign" — leaving no way to put an ad back
+    // into a perfectly healthy ad set. An empty ad set is the strongest reason
+    // to OFFER it here, not to hide it, so this caller asks the narrower
+    // question: does the object exist on Meta?
+    const adsets = (await writer.getAdSetMeta(ctx.metaCampaignId)).filter((a) => a.existsOnMeta);
     res.json({ adSets: adsets.map((a) => ({ id: a.adSetId, name: a.name, status: a.status })) });
   } catch (e) {
     console.error("[additions] list ad sets failed", e);
@@ -278,9 +286,15 @@ additionsRouter.post("/ad", requireAuth, async (req, res) => {
     if (!writer) return unavailable(res);
 
     // Ownership + liveness re-check: the ad set must be the caller's AND still
-    // a real, managed one (AIC-65) — a client can't target a dead ad set by id
-    // even though the picker no longer offers it.
-    const ownAdSets = (await writer.getAdSetMeta(ctx.metaCampaignId)).filter((a) => a.isManaged);
+    // a real one (AIC-65) — a client can't target a deleted ad set by id even
+    // though the picker no longer offers it.
+    //
+    // AIC-130: this must use the SAME predicate as the picker above. When the
+    // picker moved to `existsOnMeta` and this stayed on `isManaged`, an empty
+    // ad set would be offered and then refused with a bare 404 at submit —
+    // trading one dead end for a worse one, since the customer would only hit
+    // it after building the creatives.
+    const ownAdSets = (await writer.getAdSetMeta(ctx.metaCampaignId)).filter((a) => a.existsOnMeta);
     if (!ownAdSets.some((a) => a.adSetId === body.metaAdSetId)) {
       res.status(404).json({ error: "ad set not found" });
       return;

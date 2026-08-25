@@ -66,10 +66,32 @@ describe("CTA health (AIC-128)", () => {
     expect(s.state).toBe("not_applicable");
   });
 
-  // unknown must never be a soft ok — it must not overwrite a real prior
-  // verdict (the bug this module's sibling, delivery-health, actually has).
-  it("reports unknown when there are no ads to check", () => {
-    expect(summarizeCta([]).state).toBe("unknown");
+  // AIC-130, found live and the reason this flipped from `unknown`.
+  //
+  // A customer was told "the button in your ad leads nowhere", deleted both
+  // broken ads — the only fix available to them — and the alarm FROZE. With no
+  // ads left, the check returned `unknown`, and `unknown` deliberately never
+  // writes the flag (so a failed read can't wipe a real alarm), so cta_ok
+  // stayed false forever, still citing "2 of 2 ad(s)" that no longer existed.
+  // Following our own advice made the warning permanent.
+  //
+  // `not_applicable` settles and clears. A read that actually FAILS throws
+  // before reaching summarizeCta, so an empty list here always means a
+  // successful read that found nothing left to judge — which is information,
+  // not the absence of it.
+  it("reports not_applicable when no ad can still serve — so deleting the broken ads CLEARS the alert", () => {
+    expect(summarizeCta([]).state).toBe("not_applicable");
+  });
+
+  it("clears when every ad that was broken has since been deleted", () => {
+    const gone = [
+      { adId: "a1", adSetId: "s1", destinationType: "WHATSAPP", ctaType: "WHATSAPP_MESSAGE",
+        whatsappNumber: null, link: null, effectiveStatus: "DELETED" },
+      { adId: "a2", adSetId: "s1", destinationType: "WHATSAPP", ctaType: "WHATSAPP_MESSAGE",
+        whatsappNumber: null, link: null, effectiveStatus: "ARCHIVED" },
+    ];
+    // Both WOULD be broken if they could still serve; neither can.
+    expect(summarizeCta(gone).state).toBe("not_applicable");
   });
 
   // Found while answering "how do I fix it?" — the honest fix is to replace the

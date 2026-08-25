@@ -70,6 +70,9 @@ export interface CampaignReadout {
   // DAILY_LOOKBACK_DAYS). Never summed from the rolling-window snapshots —
   // those overlap and would multiply every figure.
   ranges: Record<RangeKey, PeriodAgg>;
+  // Whether the window has ANY measured rows — see where it's built. Without
+  // it a zero-sum over an empty set is indistinguishable from a real zero.
+  rangeHasData: Record<RangeKey, boolean>;
   // Per-day series behind the leads graph, oldest first.
   daily: DailyPoint[];
   // Earliest day we have real data for, so the UI can say "this campaign is
@@ -136,6 +139,25 @@ export async function buildCampaignReadout(
     },
   } satisfies Record<RangeKey, PeriodAgg>;
 
+  // AIC-130, found live: with no rows for today the cards read "₪0 · 0 פניות"
+  // — a measured claim of zero — directly above a panel saying "אין נתונים
+  // לתקופה שנבחרה". Both came from the same empty result; only one told the
+  // truth. (עלות לפנייה already showed "—", because null has nowhere to
+  // collapse to; spend and leads had a plausible-looking zero to fall into.)
+  //
+  // This is the same distinction the per-ad rows already make with `hasData`:
+  // "no results YET" is not the claim "zero results". sumDays([]) cannot
+  // express it, so the emptiness has to travel separately.
+  const inRange = (k: RangeKey) => daily.filter((p) => p.date >= resolveRangeWindow(k, ref).start);
+  const rangeHasData = {
+    day: inRange("day").length > 0,
+    week: inRange("week").length > 0,
+    month: inRange("month").length > 0,
+    // Lifetime doesn't come from the daily rows at all (they only reach back
+    // DAILY_LOOKBACK_DAYS), so it's answered by the cached lifetime read.
+    allTime: camp.rows[0].spend_to_date != null || camp.rows[0].leads_to_date != null,
+  } satisfies Record<RangeKey, boolean>;
+
   // AIC-85/86 regression fix: this used to be its own hand-rolled query,
   // independently vulnerable to the same overlapping-window bug
   // creativeStats() was just fixed for (a rolling row plus the "today"
@@ -156,6 +178,7 @@ export async function buildCampaignReadout(
     previous: prev,
     today,
     ranges,
+    rangeHasData,
     daily,
     firstDataDate: daily.find((p) => p.spendAgorot > 0 || p.leads > 0)?.date ?? null,
     delta: {

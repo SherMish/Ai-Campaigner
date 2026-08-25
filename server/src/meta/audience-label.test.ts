@@ -89,10 +89,33 @@ describe("normalizeAdSetMeta — isManaged (AIC-65: exclude dead/draft ad sets)"
     const m = normalizeAdSetMeta({ id: "as_1", effective_status: "PAUSED", ads: { data: [{ id: "ad_1" }] } });
     expect(m.isManaged).toBe(true);
   });
+
+  // AIC-130, found live. A customer deleted both ads from a live ACTIVE ad
+  // set. isManaged went false (zero ads reads as "unpublished draft"), the
+  // add-an-ad picker filtered on it, and the screen said "no ad sets found in
+  // the campaign" — so there was no way to put an ad back into a perfectly
+  // healthy ad set. The campaign was unrecoverable through the UI.
+  //
+  // The two facts have to be separable: isManaged answers "is there anything
+  // to SHOW", existsOnMeta answers "can I WRITE here". For an empty ad set
+  // they disagree, and having no ads is the strongest reason to offer it as a
+  // place to add one.
+  it("an ACTIVE ad set whose ads were all deleted still EXISTS, even though it is not managed", () => {
+    const m = normalizeAdSetMeta({ id: "as_1", effective_status: "ACTIVE", ads: { data: [] } });
+    expect(m.isManaged).toBe(false);
+    expect(m.existsOnMeta).toBe(true);
+  });
+
+  it("a deleted or archived ad set does not exist, so it is never offered", () => {
+    for (const st of ["DELETED", "ARCHIVED"]) {
+      const m = normalizeAdSetMeta({ id: "as_1", effective_status: st, ads: { data: [{ id: "ad_1" }] } });
+      expect(m.existsOnMeta).toBe(false);
+    }
+  });
 });
 
 function meta(o: Partial<AdSetMeta> & Pick<AdSetMeta, "adSetId">): AdSetMeta {
-  return { name: "", ageMin: null, ageMax: null, genders: "all", geoSummary: "", isDynamicCreative: false, status: "active", isManaged: true, ...o };
+  return { name: "", ageMin: null, ageMax: null, genders: "all", geoSummary: "", isDynamicCreative: false, status: "active", isManaged: true, existsOnMeta: true, ...o };
 }
 
 describe("deriveAudienceLabels — never a raw ad-set name, compose from the ad set's OWN targeting (AIC-73)", () => {

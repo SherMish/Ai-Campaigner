@@ -357,6 +357,12 @@ export function Home() {
   // the destination at build time (campaign-create.ts), so it is the same
   // single source of truth the engine uses — not a second guess from copy.
   const isEngagementCampaign = ov.campaign?.objective === "engagement";
+  // AIC-130: no rows in this window means we have NOT measured zero — we have
+  // measured nothing. Rendering "₪0 · 0 פניות" under a panel that says "אין
+  // נתונים לתקופה שנבחרה" was the product contradicting itself on one screen,
+  // and the zero is the half that isn't true. Same rule the per-ad rows
+  // already follow with hasData.
+  const hasRangeData = r?.rangeHasData?.[range] ?? true;
   const leads = agg?.leads ?? 0;
   const cpl = agg?.cplAgorot ?? null;
   const spend = agg?.spendAgorot ?? 0;
@@ -423,12 +429,12 @@ export function Home() {
               <Delta pct={r?.delta.cplPct ?? null} goodDown />
             </div>
             <div className="kpi">
-              <b>{leads}</b>
+              <b>{hasRangeData ? leads : L.none}</b>
               <div className="lbl">{isEngagementCampaign ? h.kpiLeadsEngagement : h.kpiLeads}</div>
               <Delta pct={r?.delta.leadsPct ?? null} />
             </div>
             <div className="kpi">
-              <b>{shekels(spend)}</b>
+              <b>{hasRangeData ? shekels(spend) : L.none}</b>
               <div className="lbl">{h.kpiSpend}</div>
               <Delta pct={r?.delta.spendPct ?? null} />
             </div>
@@ -851,6 +857,14 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
             <div className="stack gap8">
               {data.audiences.map((aud) => {
                 const audPaused = isPaused("ad_set", aud.adSetId);
+                // AIC-130: an ad set switched ON delivers nothing if every ad
+                // under it is off. Only asserted when we actually have live
+                // statuses AND rows to judge — with no creatives in the window
+                // this view knows nothing about what's running, and guessing
+                // would replace one false badge with another.
+                const noLiveAds =
+                  !audPaused && !!ctl && aud.creatives.length > 0 &&
+                  aud.creatives.every((c) => isPaused("ad", c.metaObjectId));
                 const shown = !collapsed.has(aud.adSetId);
                 return (
                   <div key={aud.adSetId} className="soft" style={{ borderRadius: 14, padding: 14 }}>
@@ -875,7 +889,10 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
                             <Chevron open={shown} />
                           </button>
                         )}
-                        <RowStatus label={audPaused ? D.statusPausedByYou : D.statusRunning} tone={audPaused ? "neutral" : "ok"} />
+                        <RowStatus
+                          label={audPaused ? D.statusPausedByYou : noLiveAds ? D.statusNoLiveAds : D.statusRunning}
+                          tone={audPaused || noLiveAds ? "neutral" : "ok"}
+                        />
                         <b><bdi>{aud.label}</bdi></b>
                       </div>
                       {ctl && (

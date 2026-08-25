@@ -6,6 +6,56 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-25 — Six live bugs from the first hour of dogfooding the removed-ads work (AIC-130)
+**The blocker.** A customer deleted both ads from a live ACTIVE ad set, and the
+add-an-ad screen then said "לא נמצאו קבוצות מודעות בקמפיין". The picker filtered
+on `isManaged`, which is false for an ad set with ZERO ADS — AIC-65's
+"never-published draft" heuristic. The one screen that could put an ad back
+refused to list the only place it could go: the campaign was unrecoverable
+through the UI while being perfectly healthy on Meta. `isManaged` now splits
+into `isManaged` (has something to show) and `existsOnMeta` (is a real object);
+the picker and the `POST /ad` guard both use the latter, in step, or the picker
+would offer an ad set that submit rejects.
+
+**The CTA alarm could never clear.** Told "the button in your ad leads nowhere",
+the customer deleted both broken ads — the only fix available — and the alarm
+froze: no ads left, so `summarizeCta` returned `unknown`, and `unknown` never
+writes the flag, so `cta_ok` stayed false forever citing "2 of 2 ad(s)" that no
+longer existed. Following our own advice made the warning permanent. An empty
+list means a read that SUCCEEDED and found nothing to judge, so it is now
+`not_applicable`, which settles and clears.
+
+**The tombstone had no back catalogue.** Ads deleted before migration 048 were
+hard-deleted from `ad_meta`, so they kept rendering as live rows off their
+frozen snapshot status. `upsertAdMeta` now inserts tombstones for creatives with
+snapshot history missing from Meta's current list — at ingestion, where `ads` is
+proof, not in the read path, where "no cache row" is a guess that would hide
+every ad on a campaign whose cache hasn't been built.
+
+**"₪0" where we meant "we don't know".** No rows for today rendered "₪0 · 0
+פניות" above a panel saying "אין נתונים לתקופה שנבחרה". `rangeHasData` now
+travels with `ranges`; the cards show "—".
+
+**An audience badged מפרסם with both its ads מושהה על ידך.** Same false-green as
+AIC-100/71, one level up: the badge read only the ad set's own switch.
+
+**"המודעה נוצרה" when no ad existed.** The badge fires when the Meta CREATIVE is
+made. On a campaign with no selectable ad set that meant two green "the ad was
+created" ticks, a greyed-out submit, and nothing on Meta or in the history — now
+"התוכן מוכן", and the creative builder is hidden entirely when there is no ad
+set, instead of letting the work happen and then greying out the button.
+
+Also, both requested while testing: the file input is now a real dropzone
+(drag-and-drop, immediate thumbnail) instead of the browser's English "Choose
+File" chrome, and the creative step shows an ad preview — a deliberate sketch,
+since Meta reformats per placement — chiefly so it is visible that the headline
+is the small line UNDER the picture and the primary text the big one above it.
+
+Two bugs were caught by the tests rather than by review: a `$1` used as both a
+uuid and an untyped SELECT item, which would have thrown on every ingestion
+tick, and an existing test that asserted the exact behaviour the blocker fix had
+to reverse.
+
 ### 2026-08-25 — The customer can remove an ad; Meta's archive could not be used (AIC-128)
 Meta's archive was the obvious mechanism and is unusable: "An ARCHIVED object
 has only two fields you can change: name and status. You can also only change
