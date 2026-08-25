@@ -1070,3 +1070,22 @@ Page's public fields, and Meta answers *"(#10) requires the
 nothing extra and only the picture needs the second call. Best-effort
 throughout — a failure returns nulls and the header falls back to the neutral
 placeholder, because a mock-up missing an avatar is still a useful mock-up.
+
+### Two preview bugs found by looking at it (AIC-132)
+
+**It only existed on the upload tab.** The existing-post path — the one where a
+real picture is already available — had no preview at all, so choosing a post
+showed nothing. Reported as *"still don't see the image in the preview"*. The
+preview now sits outside the source branches, and reads the post's own picture
+and copy: on that path the headline and primary-text fields are not even shown,
+so rendering them would print empty placeholders over a post that has real text,
+and the CTA comes from the post rather than from anything we set.
+
+**`<bdi>` broke RTL.** `bdi` derives its direction from the **first strong
+character**, so copy beginning with a Latin brand name — *"Ads Agent מנהל את
+הקמפיין…"* — made the entire Hebrew paragraph render left-to-right: full stops
+jumped to the start of lines, and the brand name slid to the end of the
+sentence. The body and headline are plain elements now, inheriting the page's
+RTL and letting the bidi algorithm place embedded Latin runs, which is the whole
+job. `bdi` is still right for the Page NAME — a short isolated label where
+auto-direction is correct and isolation stops it disturbing the row.

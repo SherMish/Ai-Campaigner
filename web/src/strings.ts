@@ -1670,6 +1670,10 @@ export const strings = {
         previewEmptyMedia: "כאן תופיע התמונה",
         previewEmptyText: "כאן יופיע הטקסט הראשי",
         previewEmptyHeadline: "כאן תופיע הכותרת",
+        // The existing-post path: the copy and the button come from the post
+        // itself, so promising a headline we don't set would be wrong.
+        previewPostNoText: "הפוסט שנבחר יופיע כאן",
+        previewPostHeadline: "הכותרת והכפתור מגיעים מהפוסט",
         uploading: "מעלה…",
         noPosts: "לא נמצאו פוסטים בעמוד המחובר.",
         loadingPosts: "טוען פוסטים…",

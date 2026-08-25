@@ -23,6 +23,9 @@ export interface AdDraft {
   localPreviewUrl: string | null;
   postId: string | null;
   postPreview: string | null;
+  // AIC-132: the post's own copy, so the preview can show what the ad will
+  // actually say. Client-only, never sent — the creative is built from postId.
+  postMessage: string | null;
   creativeId: string | null;
   status: "draft" | "uploading" | "creating" | "created" | "error";
   error: string | null;
@@ -39,6 +42,7 @@ export function newAdDraft(index: number): AdDraft {
     localPreviewUrl: null,
     postId: null,
     postPreview: null,
+    postMessage: null,
     creativeId: null,
     status: "draft",
     error: null,
@@ -280,15 +284,6 @@ function AdCard({
                 <label>{c.primaryTextLabel}</label>
                 <textarea placeholder={c.primaryTextPlaceholder} value={ad.primaryText} onChange={(e) => onUpdate({ primaryText: e.target.value })} />
               </div>
-              {/* AIC-130: the fields above are three boxes; this is what they
-                  add up to. Chiefly it answers the question the form itself
-                  can't — that the headline is the small line UNDER the picture
-                  and the primary text is the big one above it. */}
-              <div className="field">
-                <label>{c.previewTitle}</label>
-                <AdPreview ad={ad} businessName={previewBusinessName} pictureUrl={previewPictureUrl} />
-                <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>{c.previewNote}</p>
-              </div>
             </div>
           ) : (
             <div>
@@ -300,7 +295,7 @@ function AdCard({
                 <div className="stack gap12">
                   {posts.map((p) => (
                     <label key={p.id} className="row gap12" style={{ alignItems: "center", cursor: "pointer" }}>
-                      <input type="radio" name={`post-${ad.clientKey}`} checked={ad.postId === p.id} onChange={() => onUpdate({ postId: p.id, postPreview: p.pictureUrl })} />
+                      <input type="radio" name={`post-${ad.clientKey}`} checked={ad.postId === p.id} onChange={() => onUpdate({ postId: p.id, postPreview: p.pictureUrl, postMessage: p.message ?? null })} />
                       {p.pictureUrl && <img src={p.pictureUrl} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover" }} />}
                       <span className="muted" style={{ fontSize: "0.9rem" }}>{p.message?.slice(0, 60) || p.id}</span>
                     </label>
@@ -309,6 +304,17 @@ function AdCard({
               )}
             </div>
           )}
+
+          {/* AIC-132: OUTSIDE the source branches, because both need it. It
+              used to sit inside the upload arm only, so choosing an existing
+              post — the path where there is already a real picture to show —
+              got no preview at all. Reported live as "still don't see the image
+              in the preview". */}
+          <div className="field" style={{ marginTop: 14 }}>
+            <label>{c.previewTitle}</label>
+            <AdPreview ad={ad} businessName={previewBusinessName} pictureUrl={previewPictureUrl} />
+            <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>{c.previewNote}</p>
+          </div>
 
           {ad.error && <p className="muted" style={{ marginTop: 12, color: "var(--orange)" }}>{ad.error}</p>}
 
@@ -412,11 +418,16 @@ function AdPreview({ ad, businessName, pictureUrl }: {
   pictureUrl?: string | null;
 }) {
   const name = businessName?.trim() || c.previewYourBusiness;
-  // Prefer the local file the customer just picked; fall back to Meta's video
-  // thumbnail. An uploaded IMAGE has no URL at all — Meta returns only an
-  // imageHash — so without the local object URL there is simply nothing to
-  // render, which is why the draft carries one.
-  const src = ad.localPreviewUrl ?? (ad.media?.kind === "video" ? ad.media.thumbnailUrl : null);
+  // Three sources, in the order of what is most certainly correct:
+  //   1. the local file just picked — an uploaded IMAGE has no URL at all
+  //      (Meta returns only an imageHash), which is why the draft carries one
+  //   2. Meta's thumbnail for an uploaded video
+  //   3. the chosen existing POST's own picture — AIC-132: this was missing
+  //      entirely, on the one path where a real picture already exists
+  const src =
+    ad.localPreviewUrl ??
+    (ad.media?.kind === "video" ? ad.media.thumbnailUrl : null) ??
+    ad.postPreview;
   return (
     <div className="ad-preview">
       <div className="apv-head">
@@ -438,7 +449,25 @@ function AdPreview({ ad, businessName, pictureUrl }: {
           still show the SHAPE, since seeing where the text will sit is the
           whole reason to look at it before writing. */}
       <div className="apv-body">
-        {ad.primaryText.trim() ? <bdi>{ad.primaryText}</bdi> : <span className="muted">{c.previewEmptyText}</span>}
+        {/* An existing post carries its OWN copy; the headline/primary-text
+            fields are not even shown on that path, so reading them would
+            render an empty placeholder over a post that has real text. */}
+        {/* NOT <bdi> — AIC-132, found live. bdi picks its direction from the
+            FIRST STRONG CHARACTER, so ad copy beginning with a Latin brand name
+            ("Ads Agent מנהל את הקמפיין…") made the whole Hebrew paragraph
+            render LTR: full stops jumped to the start of lines and the brand
+            name slid to the end of the sentence.
+            A plain element inherits the page's RTL and lets the bidi algorithm
+            place the embedded Latin runs correctly, which is the entire job. */}
+        {ad.source === "post" ? (
+          ad.postMessage?.trim()
+            ? ad.postMessage
+            : <span className="muted">{c.previewPostNoText}</span>
+        ) : ad.primaryText.trim() ? (
+          ad.primaryText
+        ) : (
+          <span className="muted">{c.previewEmptyText}</span>
+        )}
       </div>
       {src ? (
         <img className="apv-media" src={src} alt="" />
@@ -447,7 +476,13 @@ function AdPreview({ ad, businessName, pictureUrl }: {
       )}
       <div className="apv-foot">
         <span className="apv-headline">
-          {ad.headline.trim() ? <bdi>{ad.headline}</bdi> : <span className="muted">{c.previewEmptyHeadline}</span>}
+          {ad.source === "post" ? (
+            <span className="muted">{c.previewPostHeadline}</span>
+          ) : ad.headline.trim() ? (
+            ad.headline
+          ) : (
+            <span className="muted">{c.previewEmptyHeadline}</span>
+          )}
         </span>
         <span className="apv-cta">{c.previewCta}</span>
       </div>
