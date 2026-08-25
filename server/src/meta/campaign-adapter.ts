@@ -971,6 +971,45 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // (read back as call_to_action_type: WHATSAPP_MESSAGE). The post never
   // needed its own CTA — we needed to attach one, exactly as the upload path
   // already does.
+  // AIC-131: which creatives an ad currently points at, for the reaper's
+  // "is anything using this?" check.
+  //
+  // Read from /ads rather than from each creative, because an adcreative does
+  // not expose who references it — the relationship is only visible from the ad
+  // side. Includes ads of every status on purpose: a PAUSED or ARCHIVED ad
+  // still holds its creative, and deleting the content out from under one is
+  // exactly the mistake this check exists to prevent.
+  async listAdCreativeIdsInUse(adAccountId: string): Promise<string[]> {
+    const body = await this.get(`${adAccountId}/ads?fields=creative{id}&limit=500`);
+    type Raw = { creative?: { id?: string } };
+    return ((body.data as Raw[]) ?? [])
+      .map((a) => a.creative?.id)
+      .filter((id): id is string => typeof id === "string");
+  }
+
+  // AIC-131: the account's ad creatives, for the one-off backfill of leaks that
+  // predate created_creatives. Not used by the reaper itself, which works from
+  // our own records rather than from everything Meta holds.
+  async listAdCreatives(adAccountId: string): Promise<Array<{ id: string; name: string | null }>> {
+    const body = await this.get(`${adAccountId}/adcreatives?fields=id,name&limit=500`);
+    type Raw = { id: string; name?: string };
+    return ((body.data as Raw[]) ?? []).map((c) => ({ id: String(c.id), name: c.name ?? null }));
+  }
+
+  // AIC-131. Meta's DELETE on an adcreative. Only ever called by the reaper,
+  // and only for a creative we created, aged past the threshold, and confirmed
+  // unreferenced by any ad in the account.
+  async deleteCreative(creativeId: string): Promise<void> {
+    const r = await fetch(`${BASE}/${this.ver}/${creativeId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${this.token}` },
+    });
+    if (!r.ok) {
+      const body = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+      throw graphError(`DELETE ${creativeId}`, r.status, body);
+    }
+  }
+
   async createCreativeFromExistingPost(params: CreatePostCreativeParams): Promise<string> {
     const fields: Record<string, unknown> = {
       name: params.name,

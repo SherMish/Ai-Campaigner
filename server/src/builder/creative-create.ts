@@ -1,6 +1,7 @@
 import type pg from "pg";
 import { WriteOutbox, builderKey, type WriteKind, type CreatingWriter } from "../execution/write-outbox.js";
 import type { CreativeWriter, CreativeMedia } from "./creative-types.js";
+import { recordCreatedCreative } from "../services/creative-reaper.js";
 
 // The creative-handling create step (AIC-51), idempotent the same way AIC-50's
 // campaign/ad-set/ad creates are — a resubmitted creative step must never
@@ -66,7 +67,7 @@ export async function createCreativeIdempotent(
       : { adAccountId: spec.adAccountId, pageId: spec.pageId, name: spec.name, postId: spec.postId,
           destination: spec.destination, whatsappNumber: spec.whatsappNumber, destinationUrl: spec.destinationUrl };
 
-  return outbox.applyIdempotent(
+  const creativeId = await outbox.applyIdempotent(
     {
       idempotencyKey: builderKey(localCampaignId, "create_creative", clientKey),
       campaignId: localCampaignId,
@@ -76,4 +77,20 @@ export async function createCreativeIdempotent(
     },
     asCreatingWriter(writer, spec),
   );
+
+  // AIC-131: recorded HERE because this is the single funnel every creative
+  // goes through — the customer builder, the add-content flow and the admin
+  // builder all call it. Recording in the three routes instead would leave the
+  // leak open the moment a fourth caller appears, which is exactly how the
+  // isManaged filter ended up wrong at three separate call sites.
+  //
+  // Best-effort: a bookkeeping failure must never fail a creative the customer
+  // has already successfully created on Meta. The cost of missing a row is one
+  // creative the reaper won't clean up — the same state as before this existed.
+  try {
+    await recordCreatedCreative(pool, creativeId, spec.adAccountId, localCampaignId);
+  } catch (e) {
+    console.error(`[creative] failed to record ${creativeId} for reaping — ${(e as Error).message}`);
+  }
+  return creativeId;
 }

@@ -6,6 +6,41 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-25 — Reap the ad creatives that never became ads (AIC-131)
+Building an ad is two Meta calls — POST /adcreatives, then POST /ads. The UI
+makes the creative as soon as that step is filled in, deliberately, because Meta
+validates it there and the customer gets real errors before committing. The cost
+is that anything stopping them before submit leaves a creative behind that
+nothing references. Found live while answering "where are they?": **21 orphans
+on one ad account across four days, against zero ads.**
+
+Three conditions, each ruling out a different disaster: we created it (a row in
+`created_creatives` — a creative the customer made in Ads Manager is theirs and
+may be kept for reuse); it is older than a day (one made moments ago is a
+customer mid-form, not litter); and no ad references it, re-read from Meta at
+reap time. The in-use read is never inferred from our own `attached_at`, because
+ads can be created outside our flow — and if that read fails the reaper deletes
+NOTHING, since without it an orphan is indistinguishable from a live creative.
+
+A table rather than asking Meta, because an adcreative exposes no `created_time`
+— age is unknowable from the API and is the only thing separating abandoned from
+in-progress. It doubles as the safety boundary: the reaper can only touch ids it
+recorded.
+
+Recorded in `createCreativeIdempotent`, the single funnel all three creative
+callers share, rather than in the routes — recording per-route would reopen the
+leak the moment a fourth caller appears, which is exactly how the `isManaged`
+filter ended up wrong at three call sites in AIC-130.
+
+Leaks predating the table are invisible to the reaper by design; a gated one-off
+(`backfill-orphan-creatives.ts`, dry run unless `BACKFILL_APPLY=1`) adopts them
+so the next tick collects them, and never deletes anything itself.
+
+Not done, and the better fix: don't create the creative until submit, which
+would make the leak impossible. It would cost the per-creative Meta validation
+the customer currently gets before committing, or require restructuring the
+whole builder flow.
+
 ### 2026-08-25 — The audience row has to survive its last ad (AIC-130 round 2)
 Found live an hour after the AIC-130 fixes shipped. The tombstones were being
 written correctly and the customer still saw no removed ads — because the whole

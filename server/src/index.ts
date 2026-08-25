@@ -4,6 +4,8 @@ import { pool } from "./db/pool.js";
 import { buildIngestionTick } from "./meta/scheduled-ingestion.js";
 import { buildGenerationTick } from "./recommendations/generation.js";
 import { buildOutcomeTick } from "./services/outcome-measurement.js";
+import { buildReaperTick } from "./services/creative-reaper.js";
+import { GraphCampaignAdapter } from "./meta/campaign-adapter.js";
 import { startScheduler } from "./services/scheduler.js";
 import { consoleLogger } from "./services/logger.js";
 import { buildNotificationRelay } from "./notify/relay.js";
@@ -101,6 +103,32 @@ if (ingestTick || generationTick) {
           `generation tick: ${g.evaluated} evaluated, ${g.created} proposed, ${g.expired} expired, ${g.skipped} skipped, ${g.deliveryProblems} delivery-problems`,
         );
       }
+      // AIC-131: delete ad creatives that never became ads. Isolated for the
+      // same reason as the outcome tick below, and quiet when it finds nothing
+      // — on a healthy account that is every tick, and a log line per hour
+      // saying "0 reaped" is noise that trains people to skip the logs.
+      try {
+        const reaperTick = await buildReaperTick(
+          pool,
+          () => {
+            const token = process.env.META_SYSTEM_USER_TOKEN;
+            return token ? new GraphCampaignAdapter(token) : null;
+          },
+          consoleLogger,
+        );
+        if (reaperTick) {
+          const r = await reaperTick();
+          if (r.considered > 0) {
+            consoleLogger.info(
+              `reaper tick: ${r.considered} considered, ${r.deleted.length} deleted, ` +
+                `${r.reattached.length} in use, ${r.failed.length} failed`,
+            );
+          }
+        }
+      } catch (e) {
+        consoleLogger.error(`reaper tick crashed — ${(e as Error).message}`);
+      }
+
       // Isolated: a measurement failure must never make an otherwise-successful
       // ingest+generate tick read as crashed.
       try {

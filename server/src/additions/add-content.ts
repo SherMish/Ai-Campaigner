@@ -1,5 +1,6 @@
 import type pg from "pg";
 import { FIXED_DESTINATION } from "@aic/shared";
+import { markCreativesAttached } from "../services/creative-reaper.js";
 import { WriteOutbox, builderKey } from "../execution/write-outbox.js";
 import { asCreatingWriter } from "../builder/campaign-create.js";
 import type { BuilderWriter, CreateAdSetTargeting } from "../builder/types.js";
@@ -122,6 +123,12 @@ export async function addAdToExistingCampaign(
     },
     creator,
   );
+  // AIC-131: the creative is now an ad, so it is finished business and must
+  // never be reaped. This is an OPTIMISATION, not the safety mechanism — the
+  // reaper re-checks against Meta before deleting anything and would find it in
+  // use regardless. What it buys is that the common path settles immediately
+  // instead of sitting as a candidate until the next reap.
+  await markCreativesAttached(pool, [input.creativeId]);
   await logAdd(pool, input.localCampaignId, "create_ad", metaAdId, `added ad "${input.name}" (paused) to an existing ad set`);
 
   const additionId = await recordPending(pool, input.localCampaignId, input.additionKey, "ad", input.name, input.metaAdSetId, [metaAdId]);
