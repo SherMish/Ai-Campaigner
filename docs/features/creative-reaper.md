@@ -9,6 +9,12 @@ created, aged past a day, and confirmed referenced by no ad.
 `createCreativeIdempotent`, the tick wiring in `server/src/index.ts`.
 
 **Lock-in tests:** `server/src/services/creative-reaper.integration.test.ts`.
+`server/src/meta/run-reaper-once.ts` runs the same tick immediately instead of
+waiting the hour — identical code path and identical guards, it only changes
+*when*.
+
+**Proven live** on 2026-08-25: 21 orphans adopted and reaped on a real ad
+account, 0 failures, verified by re-reading the account (0 creatives remaining).
 
 ---
 
@@ -112,6 +118,9 @@ inference gives back exactly the safety the boundary was providing.
   current step is what gives the customer per-creative validation from Meta
   before committing, and moving it would either lose that or need the whole
   builder flow restructured.
-- **`deleteCreative` is unverified against live Meta.** The reaper's logic is
-  covered by tests with a double; the DELETE call itself has never run against
-  a real creative.
+- **What "deleted" means on Meta.** Verified live on 21 real creatives: after
+  the DELETE the account's `adcreatives` edge returns **0**, but a direct query
+  by id still returns the object and its name. Same semantics as a deleted ad —
+  gone from every listing, still addressable if you already hold the id. So the
+  reaper removes creatives from the account's inventory; it does not erase them
+  from Meta's storage, and nothing here should be described as if it did.

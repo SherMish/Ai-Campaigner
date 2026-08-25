@@ -6,6 +6,34 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-25 — First live reap: 21 orphaned creatives deleted (AIC-131)
+Ran end to end on a real ad account, on the customer's explicit instruction.
+21 adopted through the allowlist, 21 deleted, 0 failures, account re-read
+afterwards showing 0 creatives remaining. First proof that `deleteCreative`
+works against live Meta at all — until now it was covered only by a test double.
+
+**Only 4 of the 21 were provably ours.** The outbox holds `create_creative` rows
+for exactly four (23 and 25 Aug), each with the resulting creative id in its
+`result`. The other 17 have no outbox row and no audit row, and the campaign has
+existed unbroken since 18 Aug so nothing cascaded their records away. They were
+deleted on the customer's explicit "terminate all of them" after that limit was
+stated plainly — not on our own judgement that they looked like ours.
+
+That matters as a precedent: the naming convention is NOT evidence of
+authorship. A generated "מודעה 1" and a hand-typed one are indistinguishable,
+and reading one as the other is what the backfill's first version did across an
+entire account.
+
+**What "deleted" means on Meta**, verified rather than assumed: afterwards the
+account's `adcreatives` edge returns 0, but a direct query by id still returns
+the object and its name — the same semantics as a deleted ad. Removed from the
+inventory, not erased from storage.
+
+The 33 orphans on the OTHER ad account were deliberately left alone: they are
+demonstrably the customer's own work (ad copy from 2022-10, creatives from
+2025-03, campaigns from 2026-06), and a scope named "all of them" in a
+conversation about one account is not authority over a second.
+
 ### 2026-08-25 — Reap the ad creatives that never became ads (AIC-131)
 Building an ad is two Meta calls — POST /adcreatives, then POST /ads. The UI
 makes the creative as soon as that step is filled in, deliberately, because Meta
