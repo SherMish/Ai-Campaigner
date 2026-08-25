@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { normalizeBusinessCategory, resolveAudienceDefault, type BusinessCategory } from "@aic/shared";
 import { strings } from "../strings";
 import {
-  getAdditionContext, getExistingAdSets, getPendingAdditions, approveAddition,
+  getAdditionContext, getExistingAdSets, getPendingAdditions, approveAddition, getConnectedPage,
   addAd, addAdSet, ApiError, getConfig,
   uploadAdditionFile, getAdditionPosts, createAdditionCreative,
   type ExistingAdSet, type PendingAddition, type AdditionUnavailableReason,
@@ -32,6 +32,10 @@ export function AddContent() {
   const [missingConfigFields, setMissingConfigFields] = useState<string[]>([]);
 
   // add-ad mode
+  // AIC-132: who the ad appears to come from, for the preview header. Fetched
+  // once and best-effort — a failure leaves the neutral placeholder rather than
+  // blocking the screen.
+  const [page, setPage] = useState<{ name: string | null; pictureUrl: string | null }>({ name: null, pictureUrl: null });
   const [adSets, setAdSets] = useState<ExistingAdSet[] | null>(null);
   const [adSetsLoading, setAdSetsLoading] = useState(false);
   const [selectedAdSetId, setSelectedAdSetId] = useState<string | null>(null);
@@ -89,11 +93,21 @@ export function AddContent() {
   function loadAdSets() {
     if (adSets !== null || adSetsLoading) return;
     setAdSetsLoading(true);
-    getExistingAdSets().then((r) => setAdSets(r.adSets)).catch(() => setAdSets([])).finally(() => setAdSetsLoading(false));
+    getExistingAdSets()
+      .then((r) => {
+        setAdSets(r.adSets);
+        // AIC-132: with exactly one ad set there is no decision to make, and
+        // leaving it unpicked produced a dead submit button the customer had
+        // no reason to connect to an unticked radio they never saw.
+        if (r.adSets.length === 1) setSelectedAdSetId(r.adSets[0].id);
+      })
+      .catch(() => setAdSets([]))
+      .finally(() => setAdSetsLoading(false));
   }
 
   useEffect(() => {
     if (mode === "ad" && phase === "ready") loadAdSets();
+    if (phase === "ready") getConnectedPage().then(setPage).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, phase]);
 
@@ -335,6 +349,8 @@ export function AddContent() {
                   <div className="card">
                     <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 12 }}>{s.adsTitle}</b>
                     <BuilderCreatives
+                      businessName={page.name ?? undefined}
+                      pagePictureUrl={page.pictureUrl}
                       ads={adDrafts}
                       onChange={setAdDrafts}
                       whatsappNumber={whatsappNumber}
@@ -345,6 +361,20 @@ export function AddContent() {
                   </div>
 
                   {submitError && <p className="muted" style={{ color: "var(--orange)" }}>{submitError}</p>}
+                  {/* AIC-132: a disabled button that explains nothing is the
+                      same dead end as the missing-ad-set screen, just later in
+                      the flow — the customer sees "התוכן מוכן ✓" and a greyed
+                      button and reasonably concludes something broke. House
+                      rule (AIC-98): never render a blank where a reason exists. */}
+                  {!adReady && !submitting && (
+                    <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>
+                      {s.blockedPrefix}{" "}
+                      {[
+                        !selectedAdSetId ? s.blockedPickAdSet : null,
+                        !adDrafts.some((dr) => dr.creativeId) ? s.blockedNeedCreative : null,
+                      ].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
                   <button className="btn btn-primary btn-wide" disabled={!adReady || submitting} onClick={submitAd}>
                     {submitting ? s.submitting : s.submitAdCta}
                   </button>
@@ -372,6 +402,8 @@ export function AddContent() {
               <div className="card">
                 <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 12 }}>{strings.he.builder.creatives.title}</b>
                 <BuilderCreatives
+                  businessName={page.name ?? undefined}
+                  pagePictureUrl={page.pictureUrl}
                   ads={groupAdDrafts}
                   onChange={setGroupAdDrafts}
                   whatsappNumber={whatsappNumber}

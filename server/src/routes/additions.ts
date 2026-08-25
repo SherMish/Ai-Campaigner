@@ -144,6 +144,29 @@ additionsRouter.get("/ad-sets", requireAuth, async (req, res) => {
   }
 });
 
+// GET /page — the connected Page's name and profile photo, for the ad preview
+// (AIC-132). Read-only and best-effort: a failure degrades the preview header
+// to a neutral placeholder rather than breaking the screen, because a mock-up
+// missing an avatar is still a useful mock-up.
+additionsRouter.get("/page", requireAuth, async (req, res) => {
+  try {
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    if (!ctx?.pageId) {
+      res.json({ name: null, pictureUrl: null });
+      return;
+    }
+    const reader = buildAdditionWriter() as { getPageIdentity?: (id: string) => Promise<{ name: string | null; pictureUrl: string | null }> } | null;
+    if (!reader?.getPageIdentity) {
+      res.json({ name: null, pictureUrl: null });
+      return;
+    }
+    res.json(await reader.getPageIdentity(ctx.pageId));
+  } catch (e) {
+    console.error("[additions] page identity failed", e);
+    res.json({ name: null, pictureUrl: null });
+  }
+});
+
 // POST /upload — same one-shot-not-idempotent contract as /builder/upload.
 additionsRouter.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
   try {

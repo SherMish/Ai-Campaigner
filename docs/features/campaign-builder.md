@@ -1052,4 +1052,21 @@ reliably is which field goes where.
 
 An uploaded image has no URL to render — Meta returns only an `imageHash` — so
 the draft carries a client-only object URL (`localPreviewUrl`, never sent,
-revoked when the file is replaced). Video falls back to Meta's thumbnail.
+revoked when the file is replaced). Video falls back to Meta's thumbnail. Before
+a file is chosen the media area shows a placeholder rather than collapsing: the
+point of the preview is the SHAPE, and seeing where the picture will sit is
+useful before there is one.
+
+**The header shows the real Page (AIC-132).** It used to read *"העסק שלך"* with
+a letter in a circle — a placeholder standing exactly where the most
+recognisable thing about the ad belongs. `getPageIdentity` reads the connected
+Page's name and profile photo, so the preview shows the customer what they
+already see in every ad they scroll past.
+
+That read **needs the Page's own token**: the System User token cannot read a
+Page's public fields, and Meta answers *"(#10) requires the
+'pages_read_engagement' permission or the Page Public Metadata Access feature"*.
+`me/accounts` returns both a name and a usable per-Page token, so the name costs
+nothing extra and only the picture needs the second call. Best-effort
+throughout — a failure returns nulls and the header falls back to the neutral
+placeholder, because a mock-up missing an avatar is still a useful mock-up.

@@ -415,6 +415,12 @@ export const setObjectPaused = (kind: ControlKind, metaObjectId: string, paused:
  *  with no un-archive, so it stays operator-only.
  *
  *  Hiding requires the ad to already be paused, enforced server-side (409). */
+/** AIC-132: the connected Page's name + profile photo, for the ad preview.
+ *  Always resolves — a failure comes back as nulls and the preview falls back
+ *  to a neutral placeholder rather than breaking the screen. */
+export const getConnectedPage = () =>
+  api<{ name: string | null; pictureUrl: string | null }>("/app/additions/page");
+
 export const setAdRemoved = (metaObjectId: string, removed: boolean) =>
   api<{ outcome: string }>(`/app/controls/${removed ? "hide" : "unhide"}`, {
     method: "POST",

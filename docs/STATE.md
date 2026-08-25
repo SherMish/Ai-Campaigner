@@ -6,6 +6,26 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-25 — The dead submit button, and a preview that shows the real Page (AIC-132)
+**"Created ad without choosing ad set. Didn't get an error. Was the ad created
+or not?"** — reported live. It was not. The ad set radio was unticked, so the
+button was disabled, and nothing said so while a green "התוכן מוכן ✓" sat
+directly above it. Yesterday's fix covered "no ad sets exist" and left the
+commoner case — ad sets exist, none picked — as the same silent dead end.
+
+A single ad set is now selected automatically (with one option there is no
+decision to make), and the button states what is missing. AIC-98's rule applies
+to disabled controls too: a greyed button with no explanation IS a blank.
+
+**The preview header shows the real Page name and profile photo.** It read
+"העסק שלך" with a letter in a circle — a placeholder standing exactly where the
+most recognisable thing about the ad belongs. The System User token cannot read
+a Page's public fields ("(#10) requires 'pages_read_engagement' or Page Public
+Metadata Access", verified live), but `me/accounts` returns a per-Page token
+AND the name, so the name is free and only the picture needs a second call.
+Best-effort: a failure falls back to the placeholder rather than breaking the
+screen.
+
 ### 2026-08-25 — The reaper could not see archived ads (AIC-131 fix)
 Found by the question "were the ads I deleted really deleted?". They were —
 both `status: DELETED`, terminal — but checking exposed a defect in the reaper

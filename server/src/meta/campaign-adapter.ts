@@ -887,6 +887,34 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     return match.access_token;
   }
 
+  // AIC-132: the Page's real name and profile photo, for the ad preview.
+  //
+  // The preview header used to read "העסק שלך" with a letter in a circle —
+  // a placeholder standing where the single most recognisable thing about the
+  // ad belongs. The customer sees their own Page in every ad they scroll past;
+  // showing them a grey initial instead is the difference between a mock-up
+  // they trust and one they squint at.
+  //
+  // NEEDS THE PAGE'S OWN TOKEN. The System User token cannot read a Page's
+  // public fields — Meta answers "(#10) requires the 'pages_read_engagement'
+  // permission or the Page Public Metadata Access feature" (verified live).
+  // me/accounts hands back both the name AND a usable token per Page, so the
+  // name costs nothing extra and only the picture needs the second call.
+  async getPageIdentity(pageId: string): Promise<{ name: string | null; pictureUrl: string | null }> {
+    const token = await this.pageAccessToken(pageId);
+    const r = await fetch(
+      `${BASE}/${this.ver}/${pageId}?fields=name,picture.width(120).height(120){url}` +
+        `&access_token=${encodeURIComponent(token)}`,
+    );
+    const body = (await r.json().catch(() => ({}))) as {
+      name?: string;
+      picture?: { data?: { url?: string } };
+      error?: unknown;
+    };
+    if (!r.ok) throw graphError(`GET ${pageId} identity`, r.status, body as Record<string, unknown>);
+    return { name: body.name ?? null, pictureUrl: body.picture?.data?.url ?? null };
+  }
+
   async listPromotablePosts(pageId: string): Promise<PromotablePost[]> {
     // NOT `/promotable_posts` — that edge does not exist (verified live: "(#100)
     // Tried accessing nonexisting field (promotable_posts)" with BOTH a System

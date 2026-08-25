@@ -222,3 +222,21 @@ Related copy fix: the per-creative badge said **"המודעה נוצרה"** when
 Meta *creative* had been made. On this screen that produced two green "the ad
 was created" ticks with no ad on Meta and nothing in the action history. It now
 reads **"התוכן מוכן"**.
+
+## The disabled submit button now says why (AIC-132)
+
+The "no ad sets at all" fix above left the commoner case untouched: ad sets
+exist, none is selected, and the button simply greys out. Reported live —
+*"created ad without choosing ad set, didn't get an error… was the ad created or
+not?"* — with the creative showing a green **התוכן מוכן ✓** directly above a
+dead button. The honest answer was "no ad was created", and nothing on screen
+said so.
+
+Two changes:
+
+- **A single ad set is selected automatically.** With one option there is no
+  decision to make, and leaving it unpicked produced a dead button the customer
+  had no reason to connect to an unticked radio they never noticed.
+- **The button states what is missing** — pick an ad set, prepare a creative, or
+  both. Same house rule as everywhere else (AIC-98): never render a blank where
+  a reason exists. A disabled control with no explanation is a blank.

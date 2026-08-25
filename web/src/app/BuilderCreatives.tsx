@@ -60,10 +60,12 @@ export type AdCreativeBody =
 interface Props {
   ads: AdDraft[];
   onChange: (ads: AdDraft[]) => void;
-  // AIC-130: names the advertiser in the preview header. Optional — the
-  // preview is still useful without it, so a caller that doesn't have the
-  // business name loaded shouldn't be blocked from rendering one.
+  // AIC-130/132: who the ad appears to come from, in the preview header. The
+  // Page's real name and profile photo when we can read them (AIC-132), else
+  // just a name, else a neutral placeholder — the preview stays useful at every
+  // level, so a caller missing this is never blocked from rendering one.
   businessName?: string;
+  pagePictureUrl?: string | null;
   // Only used by the default createCreativeFn (the builder's own endpoint) —
   // omit when passing a custom createCreativeFn (AIC-63's screen resolves
   // its campaign server-side instead).
@@ -93,7 +95,7 @@ interface Props {
 
 export function BuilderCreatives({
   ads, onChange, localCampaignId, whatsappNumber, destination, destinationUrl, customerId,
-  businessName,
+  businessName, pagePictureUrl,
   postsOnly = false,
   getPosts = () => getPromotablePosts(customerId),
   uploadFile = (file) => uploadCreativeFile(file, customerId),
@@ -194,6 +196,7 @@ export function BuilderCreatives({
             onUpdate={(patch) => update(ad.clientKey, patch)}
             onUpload={(file) => doUpload(ad, file)}
             previewBusinessName={businessName}
+            previewPictureUrl={pagePictureUrl}
             onCreate={() => doCreate(ad)}
             onRemove={ads.length > 1 ? () => removeAd(ad.clientKey) : undefined}
           />
@@ -210,7 +213,7 @@ export function BuilderCreatives({
 
 function AdCard({
   index, ad, posts, postsLoading, onLoadPosts, postsOnly, onUpdate, onUpload, onCreate, onRemove,
-  previewBusinessName,
+  previewBusinessName, previewPictureUrl,
 }: {
   index: number;
   ad: AdDraft;
@@ -221,6 +224,7 @@ function AdCard({
   onUpdate: (patch: Partial<AdDraft>) => void;
   onUpload: (file: File) => void;
   previewBusinessName?: string;
+  previewPictureUrl?: string | null;
   onCreate: () => void;
   onRemove?: () => void;
 }) {
@@ -282,7 +286,7 @@ function AdCard({
                   and the primary text is the big one above it. */}
               <div className="field">
                 <label>{c.previewTitle}</label>
-                <AdPreview ad={ad} businessName={previewBusinessName} />
+                <AdPreview ad={ad} businessName={previewBusinessName} pictureUrl={previewPictureUrl} />
                 <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>{c.previewNote}</p>
               </div>
             </div>
@@ -402,7 +406,11 @@ function MediaDropzone({ ad, onUpload }: { ad: AdDraft; onUpload: (file: File) =
 // reels, stories all differ), so a pixel-accurate Facebook render would be
 // claiming something we cannot deliver — the note under it says so. What this
 // does show reliably is which field goes where.
-function AdPreview({ ad, businessName }: { ad: AdDraft; businessName?: string }) {
+function AdPreview({ ad, businessName, pictureUrl }: {
+  ad: AdDraft;
+  businessName?: string;
+  pictureUrl?: string | null;
+}) {
   const name = businessName?.trim() || c.previewYourBusiness;
   // Prefer the local file the customer just picked; fall back to Meta's video
   // thumbnail. An uploaded IMAGE has no URL at all — Meta returns only an
@@ -412,7 +420,15 @@ function AdPreview({ ad, businessName }: { ad: AdDraft; businessName?: string })
   return (
     <div className="ad-preview">
       <div className="apv-head">
-        <div className="apv-avatar" aria-hidden="true">{name.slice(0, 1)}</div>
+        {/* The real Page photo when we have it. The initial-in-a-circle is a
+            fallback, not the design — the customer recognises their own Page
+            picture instantly, and a grey letter is the difference between a
+            mock-up they trust and one they squint at. */}
+        {pictureUrl ? (
+          <img className="apv-avatar" src={pictureUrl} alt="" style={{ objectFit: "cover" }} />
+        ) : (
+          <div className="apv-avatar" aria-hidden="true">{name.slice(0, 1)}</div>
+        )}
         <div>
           <div className="apv-name"><bdi>{name}</bdi></div>
           <div className="apv-sponsored">{c.previewSponsored}</div>

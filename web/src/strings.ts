@@ -1818,6 +1818,12 @@ export const strings = {
       // without an ad set, so say that here and point at the tab that fixes it.
       noAdSetsBody: "מודעה חייבת להשתייך לקבוצת מודעות, ובקמפיין הזה אין אף אחת כרגע. אפשר ליצור קבוצת מודעות ואז לחזור לכאן ולהוסיף אליה מודעות.",
       noAdSetsCta: "יצירת קבוצת מודעות",
+      // AIC-132: why the submit button is dead. Fixing the "no ad sets at all"
+      // case left the commoner one untouched — ad sets exist, none is picked,
+      // and the button just greys out saying nothing.
+      blockedPickAdSet: "לבחור קבוצת מודעות למעלה",
+      blockedNeedCreative: "להכין לפחות מודעה אחת (להעלות תמונה וללחוץ על יצירת המודעה)",
+      blockedPrefix: "כדי להמשיך:",
       adSetPaused: "מושהית",
       adsTitle: "המודעה",
 
