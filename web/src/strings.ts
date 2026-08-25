@@ -1839,16 +1839,28 @@ export const strings = {
       // paused, then separately approve it" two-step. The CTA says what
       // actually happens now.
       submitAdCta: "הוספת המודעה",
+      // AIC-132: the flow creates ONE AD PER READY CREATIVE — the submit loops
+      // over them — so with two prepared it was labelled for one.
+      submitAdCtaPlural: "הוספת המודעות",
       submitAdSetCta: "הוספת קבוצת המודעות",
       submitting: "מוסיף…",
       submitSuccessTitle: "נוסף ופעיל",
       submitSuccessBody: "המודעה רצה עכשיו.",
+      submitSuccessBodyPlural: "המודעות רצות עכשיו.",
       // Shown only in the rare case the create succeeded but going live
       // didn't (a Meta-side hiccup) — the item below still needs one retry.
       submitSuccessTitleRetry: "נוסף, אבל עדיין לא רץ",
       submitSuccessBodyRetry: "המודעה נוצרה בהצלחה, אבל היה קושי להפעיל אותה. אפשר לנסות שוב למטה.",
+      submitSuccessBodyRetryPlural: "המודעות נוצרו בהצלחה, אבל היה קושי להפעיל אותן. אפשר לנסות שוב למטה.",
       submitAnother: "הוספת עוד",
       submitError: "משהו השתבש בהוספה. אפשר לנסות שוב — מה שכבר נוצר לא ייווצר פעמיים.",
+      // AIC-132: the submit creates the ads one at a time, so a failure on the
+      // second leaves the first ALREADY CREATED. Reporting that as a flat
+      // failure sends the customer back to retry believing nothing happened,
+      // when in fact an ad is live. The retry is safe either way — it is keyed
+      // per draft — but the customer deserves to know the true state.
+      submitErrorPartialPrefix: "נוצרו",
+      submitErrorPartialSuffix: "מודעות מתוך הרשימה, ואז משהו השתבש. אפשר לנסות שוב — מה שכבר נוצר לא ייווצר פעמיים.",
 
       // AIC-106: this section is now the exception, not the norm — content
       // is live the moment it's created. It only ever shows something when

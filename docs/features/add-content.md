@@ -240,3 +240,22 @@ Two changes:
 - **The button states what is missing** — pick an ad set, prepare a creative, or
   both. Same house rule as everywhere else (AIC-98): never render a blank where
   a reason exists. A disabled control with no explanation is a blank.
+
+## Submitting more than one ad (AIC-132)
+
+The submit creates **one ad per prepared creative** — it loops over them — so
+with two ready it was labelled for one. The button now pluralises, and so does
+the success copy.
+
+**A failure part-way through is now reported honestly.** Because the ads are
+created one at a time, a failure on the second leaves the first *already created
+and live*. That used to surface as a flat "something went wrong", sending the
+customer back to retry believing nothing had happened while an ad was running.
+The count is tracked in a ref as well as state — the catch block needs it
+*during* the failed run, and a state update from inside the loop is not visible
+there. Retrying stays safe either way: the idempotency key is per draft.
+
+**The success card's pill had no label.** It rendered a bare `✓` — a green chip
+floating alone above the text, which reads as a rendering fault rather than a
+status. A status pill exists to *name* a state; an icon on its own names
+nothing. It now carries the state's actual words, with the detail beneath it.

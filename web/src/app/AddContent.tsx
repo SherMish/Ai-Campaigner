@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { normalizeBusinessCategory, resolveAudienceDefault, type BusinessCategory } from "@aic/shared";
 import { strings } from "../strings";
@@ -36,6 +36,11 @@ export function AddContent() {
   // once and best-effort — a failure leaves the neutral placeholder rather than
   // blocking the screen.
   const [page, setPage] = useState<{ name: string | null; pictureUrl: string | null }>({ name: null, pictureUrl: null });
+  // AIC-132: how many ads the last submit actually created. A ref as well as
+  // state because the catch block needs the count DURING the failed run, and
+  // a state update from inside the loop would not be visible there.
+  const [submittedCount, setSubmittedCount] = useState(0);
+  const submittedSoFar = useRef(0);
   const [adSets, setAdSets] = useState<ExistingAdSet[] | null>(null);
   const [adSetsLoading, setAdSetsLoading] = useState(false);
   const [selectedAdSetId, setSelectedAdSetId] = useState<string | null>(null);
@@ -124,17 +129,30 @@ export function AddContent() {
     if (created.length === 0) return;
     setSubmitting(true);
     setSubmitError(null);
+    submittedSoFar.current = 0;
     try {
       let allLive = true;
+      // AIC-132: counted, because these are created ONE AT A TIME. A failure on
+      // the second leaves the first already created and live — reporting that
+      // as a flat failure would send the customer back believing nothing
+      // happened while an ad is running.
+      let done = 0;
       for (const draft of created) {
         const result = await addAd({ metaAdSetId: selectedAdSetId, name: draft.name, creativeId: draft.creativeId!, additionKey: `${additionKey}-${draft.clientKey}` });
         if (result.activation.outcome !== "approved" && result.activation.outcome !== "already_approved") allLive = false;
+        done++;
+        submittedSoFar.current = done;
       }
+      setSubmittedCount(done);
       setJustAddedLive(allLive);
       setJustAdded(true);
       refreshPending();
     } catch (e) {
-      setSubmitError(e instanceof ApiError ? e.message : s.submitError);
+      setSubmitError(
+        submittedSoFar.current > 0
+          ? `${s.submitErrorPartialPrefix} ${submittedSoFar.current} ${s.submitErrorPartialSuffix}`
+          : e instanceof ApiError ? e.message : s.submitError,
+      );
     } finally {
       setSubmitting(false);
     }
@@ -296,13 +314,18 @@ export function AddContent() {
           </div>
 
           {justAdded ? (
-            <div className="card">
-              <StatusPill variant={justAddedLive ? "ok" : "warn"}>{justAddedLive ? "✓" : "!"}</StatusPill>
-              <b style={{ fontSize: "1.2rem", display: "block", margin: "14px 0 10px" }}>
+            // AIC-132: the pill used to hold a bare "✓" with no label — a
+            // green chip floating alone above the text, which reads as a
+            // rendering fault rather than a status. A status pill exists to
+            // NAME a state; an icon on its own names nothing.
+            <div className="card" style={{ textAlign: "center", padding: "32px 24px" }}>
+              <StatusPill variant={justAddedLive ? "ok" : "warn"}>
                 {justAddedLive ? s.submitSuccessTitle : s.submitSuccessTitleRetry}
-              </b>
-              <p className="muted" style={{ marginBottom: 20 }}>
-                {justAddedLive ? s.submitSuccessBody : s.submitSuccessBodyRetry}
+              </StatusPill>
+              <p className="muted" style={{ margin: "16px auto 22px", maxWidth: 380 }}>
+                {justAddedLive
+                  ? (submittedCount > 1 ? s.submitSuccessBodyPlural : s.submitSuccessBody)
+                  : (submittedCount > 1 ? s.submitSuccessBodyRetryPlural : s.submitSuccessBodyRetry)}
               </p>
               <button className="btn btn-primary btn-sm" onClick={addAnother}>{s.submitAnother}</button>
             </div>
@@ -376,7 +399,11 @@ export function AddContent() {
                     </p>
                   )}
                   <button className="btn btn-primary btn-wide" disabled={!adReady || submitting} onClick={submitAd}>
-                    {submitting ? s.submitting : s.submitAdCta}
+                    {submitting
+                      ? s.submitting
+                      : adDrafts.filter((dr) => dr.creativeId).length > 1
+                        ? s.submitAdCtaPlural
+                        : s.submitAdCta}
                   </button>
                 </>
               )}
