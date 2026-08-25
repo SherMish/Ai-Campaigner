@@ -51,6 +51,11 @@ interface CustomerBasics {
   geoArea?: string;
   primaryCustomer?: string;
   offer?: string;
+  differentiators?: string;
+  objections?: string;
+  priceRange?: string;
+  copyConstraints?: string;
+  leadFollowup?: string;
   contactName?: string;
   contactPhone?: string;
   contactEmail?: string;
@@ -228,6 +233,9 @@ export function AdminOnboarding() {
           businessName: c.businessName ?? "", category: c.category ?? "",
           mainService: c.mainService ?? "", geoArea: c.geoArea ?? "",
           primaryCustomer: c.primaryCustomer ?? "", offer: c.offer ?? "",
+          differentiators: c.differentiators ?? "", objections: c.objections ?? "",
+          priceRange: c.priceRange ?? "", copyConstraints: c.copyConstraints ?? "",
+          leadFollowup: c.leadFollowup ?? "",
           contactName: c.contactName ?? "", contactPhone: c.contactPhone ?? "",
           contactEmail: c.contactEmail ?? "", isTest: c.isTest ?? false,
         });

@@ -219,6 +219,40 @@ export const strings = {
       fieldContactEmail: "אימייל",
       fieldIsTest: "חשבון פנימי/בדיקה (לא נספר בנתוני חיוב)",
       fieldAgreedBudget: "תקציב מוסכם (₪ ליום)",
+
+      // AIC-134. An "i" next to every field, because the value of these
+      // answers depends entirely on HOW they are filled in: "שיפוצים" and
+      // "שיפוצי מטבחים בדירות ישנות בגוש דן" are the same field and produce
+      // completely different ad copy. Each hint says what to write and gives a
+      // real example — an operator reads these live, on a call, while the
+      // customer waits.
+      //
+      // AIC-78's fields (differentiators, objections) plus three that pass the
+      // same test: would a copy generator write MATERIALLY different copy with
+      // this? Anything that failed it was left out — every field is friction.
+      hints: {
+        businessName: "השם שהלקוח מזהה את עצמו בו. לא שם חברה רשום אלא איך שהוא מציג את עצמו בטלפון.",
+        category: "התחום הכללי — מספרה, עורך דין, מוסך, קליניקה. קובע את ברירות המחדל של הקמפיין (קהל, תקציב, סוג יעד).",
+        mainService: "השירות הספציפי שרוצים לפרסם, לא כל מה שהעסק עושה. ככל שזה צר יותר — הקופי חד יותר. \"שיפוצי מטבחים\" עדיף על \"שיפוצים\".",
+        geoArea: "לאן מגיעים בפועל. עיר, אזור או רדיוס. משפיע ישירות על מי רואה את המודעה — ואם זה רחב מדי משלמים על חשיפה חסרת ערך.",
+        primaryCustomer: "מי הלקוח האידיאלי — גיל, מצב, מה מביא אותו. \"זוגות צעירים לפני משכנתא ראשונה\" ולא \"כולם\".",
+        offer: "מה בדיוק מקבלים אם לוחצים. הצעה קונקרטית עובדת הרבה יותר טוב מ\"צרו קשר\": \"פגישת ייעוץ 30 דקות ללא עלות\".",
+        differentiators: "למה דווקא הוא ולא המתחרה. ותק, התמחות, זמינות, אחריות. זה מה שהמודעה תטען בפועל — בלי זה נשארים עם מחיר, וזו התחרות הכי גרועה.",
+        objections: "מה גורם לאנשים להסס לפני שפונים — מחיר, זמן, ספק אם זה מתאים להם. קופי שעונה על ההתנגדות מראש ממיר הרבה יותר טוב מקופי שמתעלם ממנה.",
+        priceRange: "טווח מחירים או נקודת פתיחה. שני דברים: \"החל מ-₪X\" הוא אחד המשפטים החזקים במודעה, וזה מסנן פניות של אנשים שממילא לא היו קונים.",
+        copyConstraints: "מה אסור להגיד — הבטחות שהעסק לא יכול לעמוד בהן, ניסוחים שהרגולציה אוסרת, השוואה למתחרים. בלי זה מחולל קופי ימציא הבטחה, והאחריות עליה היא של הלקוח.",
+        leadFollowup: "מה קורה אחרי שמישהו פונה — \"חוזרים תוך שעה\", \"שולחים הצעת מחיר באותו יום\". קובע מה מותר למודעה להבטיח ומשפיע על הכפתור.",
+        contactName: "מי עונה בפועל אצל הלקוח — מי שנדבר איתו כשצריך משהו.",
+        contactPhone: "טלפון ליצירת קשר איתנו, לא בהכרח המספר שמופיע במודעה.",
+        contactEmail: "אימייל לעדכונים ולחשבוניות.",
+        isTest: "חשבון פנימי לבדיקות — לא נספר בנתוני החיוב והצמיחה.",
+      },
+
+      fieldDifferentiators: "במה הוא שונה ממתחרים",
+      fieldObjections: "התנגדויות נפוצות",
+      fieldPriceRange: "טווח מחירים",
+      fieldCopyConstraints: "מה אסור להגיד",
+      fieldLeadFollowup: "מה קורה אחרי פנייה",
       // AIC-103: the fix-it surface for a campaign the health check found
       // incomplete — same fields the onboarding wizard's step 4 collects,
       // editable here for a campaign that's already provisioned.

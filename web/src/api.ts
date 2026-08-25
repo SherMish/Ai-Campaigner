@@ -253,6 +253,13 @@ export interface CustomerWriteFields {
   businessName?: string;
   category?: string;
   mainService?: string;
+  // AIC-134: the creative-context slice — what an AI needs to write copy that
+  // is about this business rather than generic marketing filler.
+  differentiators?: string;
+  objections?: string;
+  priceRange?: string;
+  copyConstraints?: string;
+  leadFollowup?: string;
   geoArea?: string;
   primaryCustomer?: string;
   offer?: string;

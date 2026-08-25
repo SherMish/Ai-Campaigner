@@ -103,6 +103,14 @@ export async function listCustomers(pool: pg.Pool): Promise<CustomerListRow[]> {
 
 export interface CustomerDetail extends CustomerListRow {
   mainService: string;
+  // AIC-134 / AIC-78's first slice: the facts a copy generator needs to write
+  // about THIS business. Captured on the onboarding call, where they are told
+  // freely and were previously lost.
+  differentiators: string;
+  objections: string;
+  priceRange: string;
+  copyConstraints: string;
+  leadFollowup: string;
   geoArea: string;
   primaryCustomer: string;
   offer: string;
@@ -210,6 +218,11 @@ export async function getCustomerDetail(
     openRecommendations: openRecs,
     ...readinessAndMissing(c),
     mainService: c.main_service,
+    differentiators: c.differentiators ?? "",
+    objections: c.objections ?? "",
+    priceRange: c.price_range ?? "",
+    copyConstraints: c.copy_constraints ?? "",
+    leadFollowup: c.lead_followup ?? "",
     geoArea: c.geo_area,
     primaryCustomer: c.primary_customer,
     offer: c.offer,

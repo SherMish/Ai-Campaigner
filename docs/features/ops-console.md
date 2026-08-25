@@ -1235,3 +1235,44 @@ blank field saved over a real value is silent data loss on a live call.
 `web/src/admin/BusinessFields.tsx` rather than copied. A second list of these
 fields would drift the first time one was added, and the drifting half would be
 the one an operator fills in with the customer on the phone.
+
+### Every field carries an "i", and five new ones (AIC-134 / first slice of AIC-78)
+
+**The hints are not decoration.** The value of these answers depends entirely on
+*how* they are filled in — *"שיפוצים"* and *"שיפוצי מטבחים בדירות ישנות בגוש
+דן"* are the same field and produce completely different ad copy. Each hint says
+what to write and gives a real example, because an operator reads it live, on a
+call, while a customer waits.
+
+The affordance is the same `InfoTip` Home's status pill uses, extracted rather
+than rebuilt. Everything non-obvious in it was earned there: hover lives on the
+wrapper so moving the pointer into the popover doesn't dismiss it mid-read; the
+popover is `position: fixed` and re-measured on scroll so an overflow container
+can't clip it; and it opens on focus and closes on Escape or outside
+pointer-down, because hover alone is unusable on the touch screen an operator is
+actually holding.
+
+**Five new fields**, each chosen against one test: *would a copy generator write
+materially different copy with this?* Anything that failed it was left out — the
+wizard runs during a live call and every field is friction.
+
+| Field | Why it changes the copy |
+| --- | --- |
+| במה הוא שונה ממתחרים | AIC-78's canonical example. Without it the ad falls back to price, which is the worst competition to pick. |
+| התנגדויות נפוצות | Copy that answers the hesitation up front converts; copy written without it argues with the wrong thing. |
+| טווח מחירים | *"החל מ-₪X"* is one of the strongest lines an ad can carry, and it filters out leads who were never going to buy — visible later in AIC-67's lead quality. |
+| מה אסור להגיד | A **safety rail**, not flavour. A generator with no constraints will invent a guarantee, and the liability lands on the customer. |
+| מה קורה אחרי פנייה | Sets what the ad is allowed to promise, and shapes the CTA. |
+
+The creative-context answers are textareas, not inputs: a single-line box invites
+a two-word reply, which is exactly the useless version of these fields.
+
+**Two bugs caught by rendering it, which no test would have found:**
+
+- The field components were defined *inside* `BusinessFields`, giving them a new
+  identity every render — React remounted each input on every keystroke, so
+  focus jumped to `<body>` after the first character. The form would have been
+  unusable. They are module-level now.
+- `onChange` rebuilt from the `form` **prop**, so two edits in the same tick lost
+  one. Reachable through browser autofill, which sets name/phone/email together.
+  Composed through a ref, the same fix `BuilderCreatives` needed the same day.

@@ -6,6 +6,29 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-25 — An "i" on every onboarding field, and five fields an AI actually needs (AIC-134)
+Hints on every field, because how these are filled in decides their worth:
+"שיפוצים" and "שיפוצי מטבחים בדירות ישנות בגוש דן" are the same field and
+produce completely different copy. Each hint says what to write and gives an
+example — an operator reads it live, on a call.
+
+Five new fields, the first slice of AIC-78's creative context: differentiators
+and objections (both named in that ticket as exactly what a founder tells you in
+the first five minutes and had nowhere to live), plus price range, "what not to
+say", and what happens after a lead. Each passed one test — would a copy
+generator write MATERIALLY different copy with this? — and anything that failed
+it was left out, because the wizard runs during a live call. "מה אסור להגיד" is
+a safety rail rather than flavour: a generator with no constraints invents a
+guarantee, and the liability lands on the customer.
+
+TWO BUGS CAUGHT BY RENDERING IT, neither of which any test would have found.
+The field components were defined INSIDE BusinessFields, so React remounted
+every input on every keystroke and focus jumped to <body> after one character —
+the form would have been unusable. And onChange rebuilt from the `form` prop, so
+two edits in one tick lost one (reachable via browser autofill, which fills
+name/phone/email together) — the same stale-closure fix BuilderCreatives needed
+the same morning, reintroduced hours later in a new component.
+
 ### 2026-08-25 — The onboarding wizard opens with the business profile (AIC-134)
 The wizard started at "שלב 1 — הלקוח משתף גישה", with the business profile
 (category, main service, area, audience, offer, contact) living only on the

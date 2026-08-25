@@ -13,6 +13,11 @@ export interface CustomerWriteFields {
   businessName?: string;
   category?: string;
   mainService?: string;
+  differentiators?: string;
+  objections?: string;
+  priceRange?: string;
+  copyConstraints?: string;
+  leadFollowup?: string;
   geoArea?: string;
   primaryCustomer?: string;
   offer?: string;
@@ -66,8 +71,10 @@ export async function createCustomer(
   const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO customers
        (business_name, category, main_service, geo_area, primary_customer, offer,
-        contact_name, contact_phone, contact_email, is_test, onboarding_status)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, COALESCE($11,'call_scheduled'))
+        contact_name, contact_phone, contact_email, is_test, onboarding_status,
+        differentiators, objections, price_range, copy_constraints, lead_followup)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, COALESCE($11,'call_scheduled'),
+             $12,$13,$14,$15,$16)
      RETURNING id`,
     [
       businessName,
@@ -81,6 +88,11 @@ export async function createCustomer(
       fields.contactEmail ?? "",
       fields.isTest ?? false,
       fields.onboardingStatus ?? null,
+      fields.differentiators ?? "",
+      fields.objections ?? "",
+      fields.priceRange ?? "",
+      fields.copyConstraints ?? "",
+      fields.leadFollowup ?? "",
     ],
   );
   const id = rows[0].id;
@@ -127,7 +139,12 @@ export async function updateCustomer(
        contact_phone     = COALESCE($9, contact_phone),
        contact_email     = COALESCE($10, contact_email),
        is_test           = COALESCE($11, is_test),
-       onboarding_status = COALESCE($12, onboarding_status)
+       onboarding_status = COALESCE($12, onboarding_status),
+       differentiators   = COALESCE($13, differentiators),
+       objections        = COALESCE($14, objections),
+       price_range       = COALESCE($15, price_range),
+       copy_constraints  = COALESCE($16, copy_constraints),
+       lead_followup     = COALESCE($17, lead_followup)
      WHERE id = $1`,
     [
       customerId,
@@ -142,6 +159,11 @@ export async function updateCustomer(
       fields.contactEmail ?? null,
       fields.isTest ?? null,
       fields.onboardingStatus ?? null,
+      fields.differentiators ?? null,
+      fields.objections ?? null,
+      fields.priceRange ?? null,
+      fields.copyConstraints ?? null,
+      fields.leadFollowup ?? null,
     ],
   );
 
