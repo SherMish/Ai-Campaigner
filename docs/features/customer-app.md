@@ -278,3 +278,33 @@ was off; here the children are). Only asserted when live statuses are loaded
 *and* there are rows to judge: with no creatives in the window this view knows
 nothing about what's running, and guessing would swap one false badge for
 another.
+
+## The business profile on Settings (AIC-134)
+
+The same fields the ops console collects, editable by the customer. They are the
+customer's own answers about their own business, and they are the ones who know
+when a differentiator or a price changes — an agency finds out months later, if
+at all. The note above the form says what it is for (*"מהפרטים האלה נכתבות
+המודעות"*), because a customer who understands that fills it in properly instead
+of treating it as a contact form.
+
+Same `BusinessFields` component as the admin form, with `showIsTest={false}`.
+
+**The UI is not the security boundary, and this is the important part.** The
+admin writer (`updateCustomer`) also accepts `isTest`, `onboardingStatus`,
+`agreedBudgetAgorot` and per-account rule-threshold overrides. Reusing it behind
+a customer route — even with those fields unrendered — would let a customer POST
+`isTest: true` and remove themselves from every billing and growth figure, or
+POST threshold overrides and retune the engine on their own account.
+
+So `saveCustomerProfile` is a **separate write path with an explicit column
+whitelist**, and the customer is resolved by joining from the caller's user row,
+so no body key can redirect the write at another business. Adding a
+customer-editable field means adding it to that list on purpose. Pinned by tests
+that post `isTest`, `onboardingStatus`, `thresholdOverrides` and four different
+id-shaped keys, and assert none of them lands.
+
+Unknown keys are ignored rather than rejected: a newer client sending a field
+this server doesn't know should still save the rest, and dropping it is safer
+than writing it. Values are trimmed and length-capped, since the JSON body limit
+bounds a request but not a single column.

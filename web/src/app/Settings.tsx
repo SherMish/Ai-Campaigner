@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { strings, connectionMessage } from "../strings";
 import {
   shekels, recheckConnection, requestBudgetChange, changePassword,
   ApiError, type AccessHealth,
   adAccountLabel,
+  getMyProfile, saveMyProfile, type CustomerWriteFields,
 } from "../api";
 import { StatusPill, SupportCard, Field, WA } from "./components";
+import { BusinessFields } from "../admin/BusinessFields";
 import { useSharedOverview } from "./overview-store";
 
 const a = strings.he.app;
@@ -19,6 +21,30 @@ export function Settings() {
   const [budgetSent, setBudgetSent] = useState(false);
   const [connHealth, setConnHealth] = useState<AccessHealth | null>(null);
   const [connChecking, setConnChecking] = useState(false);
+  // AIC-134: the business profile. `null` until loaded so the inputs are never
+  // briefly blank and then filled — that reads as the page losing their data.
+  const [profile, setProfile] = useState<CustomerWriteFields | null>(null);
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileMsg, setProfileMsg] = useState<"saved" | "error" | null>(null);
+
+  useEffect(() => {
+    getMyProfile().then(setProfile).catch(() => {});
+  }, []);
+
+  async function saveProfile(e: React.FormEvent) {
+    e.preventDefault();
+    if (!profile) return;
+    setProfileBusy(true);
+    setProfileMsg(null);
+    try {
+      await saveMyProfile(profile);
+      setProfileMsg("saved");
+    } catch {
+      setProfileMsg("error");
+    } finally {
+      setProfileBusy(false);
+    }
+  }
 
   const period = ov?.campaign?.budgetPeriod === "monthly" ? L.perMonth : L.perDay;
   const conn = ov?.connection;
@@ -48,6 +74,29 @@ export function Settings() {
         ) : (
           <div className="stack gap20" style={{ gap: 20 }}>
             <SupportCard />
+
+            {/* AIC-134: the same fields the ops console collects, editable
+                here. The customer is the authority on their own business, and
+                a differentiator or a price changes without anyone thinking to
+                tell their agency. Same component as the admin form, not a
+                copy — with the internal test flag hidden, and the server
+                whitelisting columns so it isn't reachable by posting it. */}
+            {profile && (
+              <div className="card">
+                <b style={{ fontSize: "1.05rem", display: "block", marginBottom: 4 }}>{s.profileTitle}</b>
+                <p className="muted" style={{ fontSize: "0.85rem", marginBottom: 14 }}>{s.profileNote}</p>
+                <form onSubmit={saveProfile}>
+                  <BusinessFields form={profile} onChange={setProfile} showIsTest={false} />
+                  <div className="row gap12" style={{ marginTop: 14, alignItems: "center" }}>
+                    <button type="submit" className="btn btn-primary btn-sm" disabled={profileBusy}>
+                      {profileBusy ? s.profileSaving : s.profileSave}
+                    </button>
+                    {profileMsg === "saved" && <span className="muted" style={{ color: "var(--green)", fontSize: "0.85rem" }}>{s.profileSaved}</span>}
+                    {profileMsg === "error" && <span style={{ color: "var(--orange)", fontSize: "0.85rem" }}>{s.profileError}</span>}
+                  </div>
+                </form>
+              </div>
+            )}
 
             {/* budget */}
             <div className="card">

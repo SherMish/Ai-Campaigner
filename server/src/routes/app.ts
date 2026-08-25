@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
+import { getCustomerProfile, saveCustomerProfile } from "../services/customer-profile.js";
 import { buildCustomerOverview } from "../services/customer-overview.js";
 import { recordLeadQualityReview, LeadQualityValidationError } from "../services/lead-quality-review.js";
 import {
@@ -159,6 +160,49 @@ appRouter.post("/budget-request", requireAuth, async (req, res) => {
   } catch (e) {
     console.error("[app] budget request failed", e);
     res.status(500).json({ error: "failed to submit request" });
+  }
+});
+
+// ── The customer's own business profile (AIC-134) ──────────────────────────
+//
+// Same facts the ops console collects, editable by the customer, because they
+// are the customer's own answers about their own business and they are best
+// placed to keep them current — a differentiator or a price changes and nobody
+// thinks to tell their agency.
+//
+// Both routes resolve the customer from the JWT. The write goes through
+// saveCustomerProfile's explicit column whitelist, NOT the admin writer: that
+// one also accepts isTest, onboardingStatus, agreedBudgetAgorot and rule
+// thresholds, and a customer must not be able to remove themselves from
+// billing figures or retune the engine on their own account by posting a
+// field the UI doesn't render.
+appRouter.get("/profile", requireAuth, async (req, res) => {
+  try {
+    const profile = await getCustomerProfile(pool, (req as AuthedRequest).userId!);
+    if (!profile) {
+      res.status(404).json({ error: "no customer" });
+      return;
+    }
+    res.json(profile);
+  } catch (e) {
+    console.error("[app] get profile failed", e);
+    res.status(500).json({ error: "failed to load profile" });
+  }
+});
+
+appRouter.patch("/profile", requireAuth, async (req, res) => {
+  try {
+    const result = await saveCustomerProfile(
+      pool,
+      (req as AuthedRequest).userId!,
+      (req.body ?? {}) as Record<string, unknown>,
+    );
+    if (result === "no_customer") { res.status(404).json({ error: "no customer" }); return; }
+    if (result === "invalid") { res.status(400).json({ error: "nothing valid to save" }); return; }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[app] save profile failed", e);
+    res.status(500).json({ error: "failed to save profile" });
   }
 });
 

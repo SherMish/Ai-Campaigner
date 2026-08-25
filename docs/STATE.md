@@ -6,6 +6,27 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-25 — The business profile is editable by the customer too (AIC-134)
+The same fields the ops console collects, now on /app/settings, populated from
+the database. The customer is the authority on their own business and the first
+to know when a differentiator or a price changes; the note above the form says
+the copy is written from these answers, so it reads as what it is rather than a
+contact form.
+
+Same component as the admin form (`showIsTest={false}`), but NOT the same write
+path. `updateCustomer` also accepts isTest, onboardingStatus,
+agreedBudgetAgorot and rule-threshold overrides — reusing it behind a customer
+route, even with those fields unrendered, would have let a customer POST
+`isTest: true` and vanish from every billing figure, or retune the engine on
+their own account. THE UI IS NOT THE BOUNDARY: `saveCustomerProfile` has an
+explicit column whitelist and resolves the customer by joining from the caller's
+user row, so no body key can redirect the write. Pinned by tests that post
+isTest, onboardingStatus, thresholdOverrides and four id-shaped keys and assert
+none of them lands.
+
+Rendered and exercised as a customer before shipping: 14 fields, no internal
+test flag, two edits saved and read back out of the database.
+
 ### 2026-08-25 — An "i" on every onboarding field, and five fields an AI actually needs (AIC-134)
 Hints on every field, because how these are filled in decides their worth:
 "שיפוצים" and "שיפוצי מטבחים בדירות ישנות בגוש דן" are the same field and

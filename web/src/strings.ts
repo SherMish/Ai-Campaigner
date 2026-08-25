@@ -1479,6 +1479,17 @@ export const strings = {
         supportTitle: "צריכים עזרה?",
         support: "אפשר לדבר איתנו בוואטסאפ או לקבוע שיחה.",
         bookCall: "קביעת שיחה",
+        // AIC-134: the same business profile the ops console collects, editable
+        // by the customer. Framed as what it is for — these answers are what
+        // the copy is written from, so a customer who understands that fills
+        // them in properly instead of treating it as a contact form.
+        profileTitle: "פרטי העסק שלך",
+        profileNote: "מהפרטים האלה נכתבות המודעות. ככל שהם מדויקים יותר — הקופי והקהל מדויקים יותר.",
+        profileSave: "שמירה",
+        profileSaving: "שומר…",
+        profileSaved: "נשמר",
+        profileError: "השמירה נכשלה. אפשר לנסות שוב.",
+
         budgetTitle: "תקציב פרסום",
         budgetReq: "בקשה לשינוי תקציב",
         budgetNote: "זהו התקציב של Meta ואינו כולל את דמי השירות.",

@@ -422,6 +422,13 @@ export const setObjectPaused = (kind: ControlKind, metaObjectId: string, paused:
  *  with no un-archive, so it stays operator-only.
  *
  *  Hiding requires the ad to already be paused, enforced server-side (409). */
+/** AIC-134: the customer's own business profile, on /app/settings. The server
+ *  resolves the customer from the JWT and writes only a whitelisted set of
+ *  columns — isTest, budget and engine thresholds are not reachable here. */
+export const getMyProfile = () => api<CustomerWriteFields>("/app/profile");
+export const saveMyProfile = (fields: CustomerWriteFields) =>
+  api<{ ok: true }>("/app/profile", { method: "PATCH", body: JSON.stringify(fields) });
+
 /** AIC-132: the connected Page's name + profile photo, for the ad preview.
  *  Always resolves — a failure comes back as nulls and the preview falls back
  *  to a neutral placeholder rather than breaking the screen. */
