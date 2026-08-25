@@ -1,6 +1,7 @@
 import type { LiveCampaignState, MetaReader, ExecWriter } from "../execution/safe-executor.js";
 import { normalizeAdSet, isProblem, type AdSetHealth, type DeliveryReader, type RawAdSetDelivery } from "./delivery-health.js";
 import { normalizeAdSetMeta, type AdSetMeta, type RawAdSetMeta } from "./audience-label.js";
+import { normalizeAdDetail, type AdDetail, type RawAdDetail } from "./ad-detail.js";
 import type { BuilderWriter, CreateCampaignParams, CreateAdSetParams, CreateAdParams, PixelOption, PixelRecencyCheck } from "../builder/types.js";
 import type {
   CreativeWriter,
@@ -999,6 +1000,19 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // (read back as call_to_action_type: WHATSAPP_MESSAGE). The post never
   // needed its own CTA — we needed to attach one, exactly as the upload path
   // already does.
+  // AIC-135: one ad's full creative, for the details modal. Fetched only when
+  // a customer opens that ad — the panel already makes two live reads on open,
+  // and pulling every ad's copy into them would pay for text nobody asked to
+  // see.
+  async getAdDetail(metaAdId: string): Promise<AdDetail | null> {
+    const body = await this.get(
+      `${metaAdId}?fields=id,name,effective_status,` +
+        `creative{id,title,body,image_url,object_story_id,object_story_spec,call_to_action_type}`,
+    );
+    if (!body?.id) return null;
+    return normalizeAdDetail(body as unknown as RawAdDetail);
+  }
+
   // AIC-131: which creatives an ad currently points at, for the reaper's
   // "is anything using this?" check.
   //

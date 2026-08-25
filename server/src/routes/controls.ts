@@ -7,6 +7,7 @@ import { hideAd, unhideAd, listHiddenAds } from "../controls/hidden-ads.js";
 import type { ControlObjectKind, ControlWriter } from "../controls/types.js";
 import type { DeliveryReader } from "../meta/delivery-health.js";
 import type { AdMediaReader } from "../meta/ad-media.js";
+import type { AdDetailReader } from "../meta/ad-detail.js";
 import { refreshDeliveryNow } from "../services/delivery-monitor.js";
 import { OpsQueue } from "../services/ops-queue.js";
 
@@ -152,6 +153,39 @@ for (const action of ["pause", "resume"] as const) {
   });
 }
 
+
+// GET /ad/:metaAdId — one ad's full creative, for the details modal (AIC-135).
+//
+// Ownership-checked like every other route that takes a Meta id from a client:
+// the ad must live under the caller's OWN campaign. Without it this would be a
+// read oracle for any ad id in any account the system user can reach — the
+// copy, the image and the destination phone number of another business's ads.
+controlsRouter.get("/ad/:metaAdId", requireAuth, async (req, res) => {
+  try {
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    if (!ctx) {
+      res.status(409).json({ error: "no managed campaign" });
+      return;
+    }
+    const reader = buildAdditionWriter() as (ControlWriter & AdDetailReader) | null;
+    if (!reader) return unavailable(res);
+
+    const metaAdId = String(req.params.metaAdId);
+    if (!(await assertOwnedByCampaign(reader, ctx.metaCampaignId, "ad", metaAdId))) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    const detail = await reader.getAdDetail(metaAdId);
+    if (!detail) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    res.json(detail);
+  } catch (e) {
+    console.error("[controls] ad detail failed", e);
+    res.status(502).json({ error: "failed to load the ad" });
+  }
+});
 
 // ── AIC-128: remove from view / restore ──────────────────────────────────────
 //

@@ -10,6 +10,8 @@ import {
   getAdMedia,
   setObjectPaused,
   setAdRemoved,
+  getAdDetail,
+  type AdDetail,
   ApiError,
   type ControlState,
   type AdMedia,
@@ -694,6 +696,10 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
   const [successId, setSuccessId] = useState<string | null>(null);
   // AIC-128: which ad sets have their removed-ads list expanded, the ad
   // awaiting confirmation, and the server's refusal if it comes.
+  // AIC-135: which ad's details modal is open, and what we loaded for it.
+  const [detailFor, setDetailFor] = useState<string | null>(null);
+  const [detail, setDetail] = useState<AdDetail | null>(null);
+  const [detailError, setDetailError] = useState(false);
   const [removedOpen, setRemovedOpen] = useState<Set<string>>(new Set());
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
@@ -785,6 +791,17 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
   // removal moves a row between two lists AND changes the reconciliation line
   // under the ad set, so guessing the new shape client-side would be a second
   // implementation of the server's rules, free to drift from it.
+  // Fetched on OPEN, never with the panel: this is a live Meta read per ad,
+  // and pulling every ad's copy up front would pay for text nobody asked to
+  // see. Cleared first so a slow second open never shows the previous ad's
+  // copy under the new ad's title.
+  function openDetail(adId: string) {
+    setDetailFor(adId);
+    setDetail(null);
+    setDetailError(false);
+    getAdDetail(adId).then(setDetail).catch(() => setDetailError(true));
+  }
+
   async function onRemoveToggle(adId: string, remove: boolean) {
     setBusyId(adId);
     setRemoveError(null);
@@ -966,9 +983,19 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
                                       {/* Honest count: what Meta actually
                                           reports for this creative, never
                                           inferred from the ad's name. */}
-                                      <b style={{ fontSize: "0.85rem" }}>
+                                      {/* AIC-135: the row's own title is the
+                                          affordance. A separate "details" link
+                                          would add a third control to a row
+                                          that already carries pause and
+                                          remove. */}
+                                      <button
+                                        className="link"
+                                        style={{ background: "none", border: "none", padding: 0, font: "inherit", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", textAlign: "start" }}
+                                        title={D.adDetailOpen}
+                                        onClick={(e) => { e.stopPropagation(); openDetail(c.metaObjectId); }}
+                                      >
                                         {m && m.assetCount > 1 ? `${m.assetCount} ${D.adCreativesSuffix}` : D.adOne}
-                                      </b>
+                                      </button>
                                     </div>
                                     {ctl && (
                                       <PauseLink
@@ -1081,6 +1108,66 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
         </div>
       )}
 
+      {/* AIC-135: the ad's full creative. Read-only, because Meta's own
+          reference lists `name` and `status` as the ONLY editable fields on a
+          creative — the copy and the image are frozen at creation. The card at
+          the bottom says exactly that and points at the flow that does work,
+          rather than offering an edit control that would silently rebuild the
+          ad and restart its learning. */}
+      {detailFor && (
+        <div className="op-modal-backdrop" onClick={() => setDetailFor(null)}>
+          <div className="op-modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+            <b style={{ fontSize: "1.05rem" }}>{D.adDetailTitle}</b>
+            {detailError ? (
+              <p className="muted" style={{ marginTop: 12, color: "var(--orange)" }}>{D.adDetailError}</p>
+            ) : !detail ? (
+              <p className="muted" style={{ marginTop: 12 }}>{D.adDetailLoading}</p>
+            ) : (
+              <div style={{ marginTop: 12 }}>
+                {detail.imageUrl && (
+                  <img
+                    src={detail.imageUrl}
+                    alt=""
+                    // Capped, and `contain` so a portrait creative is not
+                    // cropped. Uncapped, a tall ad image filled the whole
+                    // modal and pushed the copy, the CTA and both buttons
+                    // below the fold — measured at 1030px in a 720px viewport.
+                    // This modal exists to show the DETAILS; the picture is
+                    // context, not the subject.
+                    style={{
+                      width: "100%", maxHeight: 220, objectFit: "contain",
+                      borderRadius: 12, marginBottom: 12, background: "var(--page)",
+                    }}
+                  />
+                )}
+                {detail.fromExistingPost ? (
+                  <p className="muted" style={{ fontSize: "0.85rem" }}>{D.adDetailFromPost}</p>
+                ) : (
+                  <>
+                    <DetailRow label={D.adDetailHeadline} value={detail.headline} />
+                    <DetailRow label={D.adDetailPrimary} value={detail.primaryText} />
+                  </>
+                )}
+                <DetailRow
+                  label={D.adDetailCta}
+                  value={detail.ctaType ? (D.ctaLabels[detail.ctaType] ?? detail.ctaType) : null}
+                />
+                <DetailRow label={D.adDetailDestination} value={detail.whatsappNumber ?? detail.link} />
+
+                <div className="soft" style={{ borderRadius: 12, padding: 12, marginTop: 14 }}>
+                  <b style={{ fontSize: "0.9rem", display: "block", marginBottom: 4 }}>{D.adDetailEditTitle}</b>
+                  <p className="muted" style={{ fontSize: "0.82rem", margin: "0 0 10px" }}>{D.adDetailEditBody}</p>
+                  <Link className="btn btn-primary btn-sm" to="/app/add-content">{D.adDetailEditCta}</Link>
+                </div>
+              </div>
+            )}
+            <div style={{ marginTop: 14 }}>
+              <button className="btn btn-outline btn-sm" onClick={() => setDetailFor(null)}>{D.adDetailClose}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* A light confirm, deliberately NOT the confirm-to-type the admin
           console demands for a real Meta archive/delete. This is reversible and
           Meta never sees it, so that bar would be theatre — but the body copy
@@ -1104,6 +1191,20 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// AIC-135: one labelled line in the ad-details modal. Renders an em dash for a
+// missing value rather than collapsing the row — a field that is absent is
+// itself information, and a silently missing line reads as a rendering bug.
+function DetailRow({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div className="muted" style={{ fontSize: "0.75rem" }}>{label}</div>
+      <div style={{ fontSize: "0.88rem", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+        {value?.trim() ? value : D.adDetailEmpty}
+      </div>
     </div>
   );
 }

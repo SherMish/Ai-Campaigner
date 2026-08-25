@@ -422,6 +422,24 @@ export const setObjectPaused = (kind: ControlKind, metaObjectId: string, paused:
  *  with no un-archive, so it stays operator-only.
  *
  *  Hiding requires the ad to already be paused, enforced server-side (409). */
+/** AIC-135: one ad's full creative, for the details modal. Ownership-checked
+ *  server-side — an ad id from another campaign answers 404. */
+export interface AdDetail {
+  adId: string;
+  name: string | null;
+  effectiveStatus: string | null;
+  creativeId: string | null;
+  headline: string | null;
+  primaryText: string | null;
+  imageUrl: string | null;
+  ctaType: string | null;
+  whatsappNumber: string | null;
+  link: string | null;
+  fromExistingPost: boolean;
+}
+export const getAdDetail = (metaAdId: string) =>
+  api<AdDetail>(`/app/controls/ad/${encodeURIComponent(metaAdId)}`);
+
 /** AIC-134: the customer's own business profile, on /app/settings. The server
  *  resolves the customer from the JWT and writes only a whitelisted set of
  *  columns — isTest, budget and engine thresholds are not reachable here. */

@@ -6,6 +6,28 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-25 — Click an ad to see its full creative (AIC-135)
+Clicking an ad in הצג פירוט opens its image, headline, primary text, button and
+destination — the row's own title is the affordance, since the row already
+carries pause and remove. One live Meta read per ad, on open: the panel already
+makes two on open and pulling every ad's copy into them would pay for text
+nobody asked to see. Ownership-checked, or it would be a read oracle for any ad
+the system user can reach — another business's copy, image and destination
+phone number.
+
+**Read-only, and that is Meta's constraint rather than a shortcut.** Meta's own
+reference lists `name` and `status` as the ONLY editable fields on a creative:
+copy and image are frozen at creation, and the docs do not sanction swapping an
+ad's creative afterwards either. The modal says so and points at the flow that
+works — a new ad with the updated content, old one paused. An edit control would
+either silently rebuild the ad (costing its learning and sending it back to
+review) or fail against Meta after the customer had done the work.
+
+Two bugs caught by rendering it: an uncapped image pushed the copy and both
+buttons past the fold (1030px of content in a 720px viewport), and the button
+showed the raw enum WHATSAPP_MESSAGE — the same raw-Meta-names problem AIC-73
+fixed in the panel itself.
+
 ### 2026-08-25 — The business profile is editable by the customer too (AIC-134)
 The same fields the ops console collects, now on /app/settings, populated from
 the database. The customer is the authority on their own business and the first

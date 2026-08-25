@@ -156,6 +156,18 @@ d("tenant isolation: customer A cannot reach customer B (AIC-133)", () => {
       expect(rows).toHaveLength(0);
     });
 
+    // AIC-135: the details modal reads an ad by id. Without the ownership
+    // check this route would be a read oracle for any ad the system user can
+    // reach — another business's copy, image and destination phone number.
+    it("A cannot read the details of B's ad", async () => {
+      vi.stubGlobal("fetch", metaFor([A, B]));
+      const res = await request(app)
+        .get(`/api/app/controls/ad/${B.adId}`)
+        .set("Authorization", `Bearer ${A.token}`);
+      expect(res.status).toBe(404);
+      expect(JSON.stringify(res.body)).not.toContain("whatsapp");
+    });
+
     it("A cannot add an ad into B's ad set", async () => {
       vi.stubGlobal("fetch", metaFor([A, B]));
       const res = await request(app)

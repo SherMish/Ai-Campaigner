@@ -1235,6 +1235,52 @@ export const strings = {
           // real ad is named "almond green, french, video, pink lines" but has
           // exactly one creative; claiming 4 would invent data).
           adOne: "מודעה אחת",
+          // AIC-135: the per-ad details modal.
+          adDetailOpen: "הצגת המודעה",
+          adDetailTitle: "פרטי המודעה",
+          adDetailHeadline: "כותרת",
+          adDetailPrimary: "טקסט ראשי",
+          adDetailCta: "כפתור",
+          adDetailDestination: "יעד",
+          adDetailStatus: "מצב",
+          adDetailLoading: "טוען…",
+          adDetailError: "לא הצלחנו לטעון את פרטי המודעה.",
+          adDetailClose: "סגירה",
+          adDetailEmpty: "—",
+          // AIC-135: Meta's CTA enum in plain Hebrew. The modal is a CUSTOMER
+          // surface and "WHATSAPP_MESSAGE" is jargon there — the same
+          // raw-Meta-names problem AIC-73 fixed in the details panel.
+          // An unknown type falls back to the raw value on purpose: showing
+          // what Meta actually says beats inventing a friendly label for a
+          // button we don't recognise.
+          ctaLabels: {
+            WHATSAPP_MESSAGE: "שליחת הודעה בוואטסאפ",
+            MESSAGE_PAGE: "שליחת הודעה",
+            SEND_MESSAGE: "שליחת הודעה",
+            LEARN_MORE: "מידע נוסף",
+            SIGN_UP: "הרשמה",
+            SHOP_NOW: "לחנות",
+            CONTACT_US: "יצירת קשר",
+            GET_QUOTE: "קבלת הצעת מחיר",
+            CALL_NOW: "התקשרו עכשיו",
+            BOOK_TRAVEL: "הזמנת תור",
+            APPLY_NOW: "הגשת מועמדות",
+            DOWNLOAD: "הורדה",
+            GET_DIRECTIONS: "ניווט",
+            SUBSCRIBE: "הרשמה לעדכונים",
+          } as Record<string, string>,
+          // An ad built from an existing Page post has no copy of ours: the
+          // post IS the creative. Saying so beats rendering three blanks and
+          // implying the ad is empty.
+          adDetailFromPost: "המודעה בנויה מפוסט קיים בעמוד — הטקסט והכותרת מגיעים מהפוסט עצמו.",
+          // AIC-135: editing. Meta's own reference lists `name` and `status` as
+          // the ONLY editable fields on a creative, so changing copy means
+          // building a new one — which costs the ad its learning and sends it
+          // back to review. Said plainly instead of offering a pencil that
+          // silently restarts the ad.
+          adDetailEditTitle: "רוצים לשנות את הטקסט?",
+          adDetailEditBody: "Meta לא מאפשרת לערוך מודעה קיימת — הטקסט והתמונה נעולים מרגע היצירה. כדי לשנות משהו יוצרים מודעה חדשה עם התוכן המעודכן ומשהים את הישנה. אפשר לעשות את זה מהוספת תוכן.",
+          adDetailEditCta: "יצירת מודעה מעודכנת",
           // Found live 2026-08-22: a customer added an ad, got a success
           // message, and the dashboard still showed only the old ads — the
           // per-ad list is built from measured data and a new ad has none.

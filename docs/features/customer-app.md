@@ -308,3 +308,43 @@ Unknown keys are ignored rather than rejected: a newer client sending a field
 this server doesn't know should still save the rest, and dropping it is safer
 than writing it. Values are trimmed and length-capped, since the JSON body limit
 bounds a request but not a single column.
+
+## The ad-details modal (AIC-135)
+
+Clicking an ad in `הצג פירוט` opens its full creative: image, headline, primary
+text, button and destination. The row's own title is the affordance — a separate
+"details" link would put a third control on a row that already carries pause and
+remove.
+
+Fetched **on open**, one live Meta read per ad. The panel already makes two live
+reads when it opens; pulling every ad's copy into them would pay for text nobody
+has asked to see. The previous ad's copy is cleared first, so a slow second open
+never shows one ad's text under another's title.
+
+**Ownership-checked**, like every route that takes a Meta id from a client.
+Without it this is a read oracle for any ad the system user can reach — another
+business's copy, image and destination phone number. Pinned in the tenant
+isolation suite.
+
+`link_data` wins over Meta's derived `title`/`body`: it is what we actually
+wrote, and the derived pair can be truncated or missing depending on the
+creative shape. An ad built from an existing Page post says so instead of
+rendering three blanks — the post *is* the creative, so there is no copy of ours
+to show. The CTA renders in Hebrew, with an unrecognised type falling back to
+the raw Meta value rather than inventing a friendly label.
+
+### Why it is read-only
+
+**Meta ad creatives are immutable.** Its own reference lists `name` and `status`
+as the only editable fields — the copy and the image are frozen at creation. The
+docs also do not sanction swapping an ad's `creative` after the fact.
+
+So the modal says that plainly and points at the flow that does work: create a
+new ad with the updated content and pause the old one. An edit control here
+would either silently rebuild the ad — costing it its learning and sending it
+back to review — or fail against Meta after the customer had done the work.
+
+Two things caught by rendering it: the image had no height cap, so a tall
+creative pushed the copy and both buttons past the fold (measured at 1030px in a
+720px viewport); and the button showed the raw enum `WHATSAPP_MESSAGE`, the same
+raw-Meta-names problem AIC-73 fixed in the panel itself.
