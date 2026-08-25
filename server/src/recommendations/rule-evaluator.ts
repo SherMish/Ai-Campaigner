@@ -80,6 +80,9 @@ export async function buildCampaignEvidence(
   leadEventStopped?: boolean,
   // AIC-92: the lead count looks inflated — blocks budget INCREASES only.
   overcountSuspected?: boolean,
+  // AIC-132: no offer/differentiators captured — nothing to base a creative
+  // recommendation on. Reported as its own reason rather than `collecting`.
+  profileIncomplete?: boolean,
 ): Promise<CampaignEvidence> {
   const [curTotals, prevTotals, curCreatives, prevCreatives, curAdsets, curDaily, prevDaily] = await Promise.all([
     store.campaignTotals(campaign.id, current.start, current.end),
@@ -125,6 +128,7 @@ export async function buildCampaignEvidence(
     ctaBroken,
     accountCannotSpend,
     leadEventStopped,
+    profileIncomplete,
     overcountSuspected,
   };
 }

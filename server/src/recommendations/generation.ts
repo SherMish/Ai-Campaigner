@@ -81,6 +81,10 @@ export interface GenCampaign {
   metaAdAccountId?: string | null;
   // AIC-91: the pixel to read event volume from (managed_campaigns.tracking_pixel_id).
   trackingPixelId?: string | null;
+  // AIC-132: the business profile is too thin to base a creative
+  // recommendation on. Only `broken` sets this — `thin` is an operator nudge,
+  // not grounds for withholding every recommendation from a paying customer.
+  profileIncomplete?: boolean;
 }
 
 export interface GenerationSummary {
@@ -109,14 +113,20 @@ export async function listEligibleForGeneration(pool: pg.Pool): Promise<GenCampa
     connection_id: string;
     meta_ad_account_id: string | null;
     tracking_pixel_id: string | null;
+    profile_state: string | null;
   }>(
     // AIC-72 needs the ad account (to ask Meta if it can spend) and the
     // connection id (where that verdict is cached — one account backs N
     // campaigns, so it is a connection-level fact, not a campaign one).
+    // AIC-132 reads the customer's cached profile verdict here rather than
+    // recomputing it per campaign: it is a fact about the BUSINESS, and the
+    // profile tick that writes it runs in the same loop.
     `SELECT mc.id, mc.meta_campaign_id, mc.customer_id, mc.threshold_overrides, mc.lead_event_types,
-            conn.id AS connection_id, aa.meta_ad_account_id, mc.tracking_pixel_id
+            conn.id AS connection_id, aa.meta_ad_account_id, mc.tracking_pixel_id,
+            cust.profile_state
      FROM managed_campaigns mc
      JOIN meta_connections conn ON conn.customer_id = mc.customer_id
+     LEFT JOIN customers cust ON cust.id = mc.customer_id
      LEFT JOIN ad_accounts aa ON aa.id = mc.ad_account_id
      WHERE mc.status = 'active'
        AND mc.automation_enabled = true
@@ -130,6 +140,9 @@ export async function listEligibleForGeneration(pool: pg.Pool): Promise<GenCampa
     thresholdOverrides: r.threshold_overrides,
     leadEventTypes: r.lead_event_types,
     connectionId: r.connection_id,
+    // Only `broken` suppresses. `thin` is a nudge for the operator, not a
+    // reason to withhold every recommendation from a paying customer.
+    profileIncomplete: r.profile_state === "broken",
     metaAdAccountId: r.meta_ad_account_id ?? null,
     trackingPixelId: r.tracking_pixel_id ?? null,
   }));
@@ -483,6 +496,9 @@ export async function runGenerationTick(deps: {
       trackingBroken,
       ctaBroken,
       accountCannotSpend,
+      // AIC-132: read from the campaign row (the customer's cached verdict),
+      // not recomputed here — the profile tick owns that judgement.
+      profileIncomplete: campaign.profileIncomplete === true,
       leadEventStopped,
       overcountSuspected,
       adSetLabels,

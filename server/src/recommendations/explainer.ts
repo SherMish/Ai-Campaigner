@@ -60,6 +60,11 @@ export const EXPLAINER_HE = {
   accountCannotSpend: () => `יש בעיה בחשבון הפרסום עצמו במטא — אמצעי תשלום שנדחה, חוב פתוח או חשבון מושבת — ולכן שום מודעה בחשבון הזה לא יכולה להתפרסם. צריך להיכנס למנהל המודעות של מטא ולעדכן את אמצעי התשלום. עד שזה מסודר אין טעם בשינויים בקמפיין.`,
   // AIC-91.
   leadEventStopped: () => `אירוע הפנייה של הקמפיין הפסיק להירשם בפיקסל, בזמן שהפיקסל עצמו ממשיך לפעול — כלומר ייתכן שמגיעות פניות שאינן נספרות, והמספרים כאן נמוכים מהמציאות. אנחנו בודקים את המדידה, ולא נמליץ על שינויים עד שתחזור.`,
+  // AIC-132. The one no-rec reason whose fix is OURS, not Meta's and not the
+  // customer's — so the copy must not imply we are waiting on anything. It
+  // reaches the customer only through the recommendation surface; the operator
+  // gets the specific missing fields via the ops item and the wizard badge.
+  profileIncomplete: () => `כדי להמליץ על שינויים בקמפיין חסרים לנו כמה פרטים על העסק — מה בדיוק ההצעה ובמה אתם שונים ממתחרים. נשלים אותם אצלנו ונחזור עם המלצות.`,
   // AIC-85: replaces singleAdSet — same content, renamed to match the fixed
   // comparableAdsets() check (a dormant ad set no longer silently counts).
   noComparableAudiences: () => `הקמפיין יציב. יש כרגע קהל אחד פעיל, כך שאין עם מה להשוות כדי להמליץ על שינוי קהל.`,
@@ -202,6 +207,8 @@ export function explain(rec: RecommendationRecord): string {
           return EXPLAINER_HE.accountCannotSpend();
         case "lead_event_stopped":
           return EXPLAINER_HE.leadEventStopped();
+        case "profile_incomplete":
+          return EXPLAINER_HE.profileIncomplete();
         case "no_comparable_audiences":
           return EXPLAINER_HE.noComparableAudiences();
         case "no_comparable_creatives":

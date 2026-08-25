@@ -6,6 +6,35 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-25 — Know when we don't know enough about the business (AIC-132)
+Six health checks ask whether a campaign's numbers can be trusted. This one asks
+whether OUR homework is done, and it is the only one that reads no Meta data at
+all. Measured when it shipped: three of five customers had every business field
+blank, including the only one spending money.
+
+It matters because the failure is invisible in the output — a copy generator
+handed nothing writes something equally fluent and completely worthless, so
+every downstream feature degrades silently while still looking polished.
+
+Presence is not the check: `geo_area = "Israel"` passes any is-it-filled test and
+produces exactly the country-wide spend that wastes the budget. `broken` = no
+offer or no differentiators (the ad could only compete on price). `thin` =
+filled but uninformative. Rules only — an LLM specificity pass is a separate
+decision, not a hidden dependency — and where the rules can't tell they answer
+`ok`, because a false alarm erodes the signal faster than a missed one.
+
+New `profile_incomplete` no-rec reason, placed BELOW everything that costs money
+now (a dead button wastes 100% of spend hourly; a thin profile costs nothing
+today) and ABOVE every evidence gate, because those all mean "wait for Meta" and
+that is the wrong instruction when the missing data is ours. Only `broken`
+suppresses; `thin` is a nudge.
+
+The wizard badge is the part that earns its keep at five customers: live as the
+operator types, naming the missing fields rather than scoring the profile —
+"70% complete" tells nobody what to ask next. It is a deliberate second
+implementation of the rules, client-side; the server's verdict stays the one of
+record and nothing downstream reads the badge.
+
 ### 2026-08-25 — Ticket-id mapping for nine commits with wrong ids
 Nine commits dated 2026-08-25 carry ticket ids that belong to **different**
 tickets. The work had no ticket at all; the ids were invented while writing the

@@ -946,3 +946,31 @@ describe("evaluateCampaign — cooldown suppression (AIC-77b)", () => {
     expect(d.evidence.reason).toBe("stable");
   });
 });
+
+// AIC-132: the engine must be able to say "I have nothing to propose because
+// nobody told me what this business sells" — which is NOT `collecting`.
+describe("classifyNoAction — profile_incomplete (AIC-132)", () => {
+  it("reports profile_incomplete instead of collecting when the profile is broken", () => {
+    // The distinction that matters: "still gathering data" sends an operator to
+    // watch a dashboard, when the fix is a five-minute phone call. The missing
+    // information was never Meta's to give.
+    const ev = { ...baseEvidence({}), profileIncomplete: true };
+    expect(__rulesForTest.classifyNoAction(ev, T).reason).toBe("profile_incomplete");
+  });
+
+  it("does NOT outrank a reason that is costing money right now", () => {
+    // A dead button wastes 100% of spend every hour it persists; a thin profile
+    // costs nothing today. Order matters because the operator acts on whatever
+    // we name first.
+    const ev = { ...baseEvidence({}), profileIncomplete: true, ctaBroken: true };
+    expect(__rulesForTest.classifyNoAction(ev, T).reason).toBe("cta_broken");
+
+    const ev2 = { ...baseEvidence({}), profileIncomplete: true, accountCannotSpend: true };
+    expect(__rulesForTest.classifyNoAction(ev2, T).reason).toBe("account_cannot_spend");
+  });
+
+  it("a complete profile changes nothing", () => {
+    const ev = { ...baseEvidence({}), profileIncomplete: false };
+    expect(__rulesForTest.classifyNoAction(ev, T).reason).not.toBe("profile_incomplete");
+  });
+});

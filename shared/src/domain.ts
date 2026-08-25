@@ -100,6 +100,11 @@ export const OPS_QUEUE_TYPE = [
   // AIC-92: the campaign's leads look inflated (an implausible share of clicks
   // counted as conversions). Operator-first — see services/overcount-monitor.ts.
   "leads_possibly_overcounted",
+  // AIC-132: we don't know enough about the BUSINESS to advertise it — no
+  // offer, no differentiators, or answers too vague to write from. The only
+  // ops type whose fix is ours rather than Meta's. Must stay in sync with the
+  // CHECK in migration 051.
+  "business_profile_incomplete",
 ] as const;
 export type OpsQueueType = (typeof OPS_QUEUE_TYPE)[number];
 

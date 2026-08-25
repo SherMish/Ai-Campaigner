@@ -127,6 +127,8 @@ export interface CampaignEvidence {
   // deliver (no whatsapp_number / no link), so the button is dead. Optional —
   // absent means "not checked", never "fine".
   ctaBroken?: boolean;
+  // AIC-132: we never captured enough about the business to write copy for it.
+  profileIncomplete?: boolean;
   // AIC-72: the ad ACCOUNT is disabled, unsettled, in review, or has no payment
   // method. Dominates every per-campaign verdict — nothing on the account can
   // deliver. Optional; absent means "not checked", never "fine".
@@ -244,6 +246,7 @@ export type NoActionReason =
   | "cta_broken" // AIC-128 — the ads' button goes nowhere; see classifyNoAction
   | "account_cannot_spend" // AIC-72 — the ad account itself can't pay
   | "lead_event_stopped" // AIC-91 — leads arrive but stopped being counted
+  | "profile_incomplete" // AIC-132 — we never captured what this business sells
   | "no_comparable_audiences" // AIC-85, replaces single_ad_set — see classifyNoAction
   | "cooling_down"
   | "below_object_evidence_floor" // AIC-85
@@ -448,6 +451,25 @@ function classifyNoAction(
     return {
       reason: "cta_broken",
       rationale: "an ad's button has no destination (no WhatsApp number / no link) — clicks go nowhere",
+      detail: {},
+    };
+  }
+  // AIC-132, LAST of the "something is wrong" reasons and FIRST of the
+  // "not enough to say" ones — which is exactly where it belongs.
+  //
+  // Below every measurement and delivery reason on purpose: those describe a
+  // campaign that is broken or mismeasured RIGHT NOW and cost money every hour
+  // they persist. A thin profile costs nothing today; it only blocks what we
+  // could propose.
+  //
+  // But above `collecting` and every evidence gate, because those all say
+  // "wait for more data from Meta" — and that is false here. The missing
+  // information was never Meta's to give. Reporting it as `collecting` sends
+  // an operator to watch a dashboard when the fix is a five-minute phone call.
+  if (ev.profileIncomplete) {
+    return {
+      reason: "profile_incomplete",
+      rationale: "no offer or differentiators captured for this business — there is nothing to base a creative recommendation on",
       detail: {},
     };
   }

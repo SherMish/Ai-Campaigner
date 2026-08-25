@@ -76,6 +76,7 @@ export const strings = {
         campaign_cta_broken: "כפתור המודעה לא מוביל לשום מקום",
         ad_account_cannot_spend: "חשבון הפרסום לא יכול להוציא תקציב",
         lead_event_stopped: "אירוע הפנייה הפסיק להירשם בפיקסל",
+        business_profile_incomplete: "חסרים פרטים על העסק — אי אפשר לכתוב קופי בלי הצעה ובידול",
         leads_possibly_overcounted: "ייתכן שהפניות נספרות פעמיים",
       } satisfies Record<OpsQueueType, string> as Record<OpsQueueType, string>,
       queueSeverityAll: "הכל",
@@ -530,6 +531,25 @@ export const strings = {
       profileTitle: "פרטי העסק",
       profileSub: "ממלאים קודם — ההמלצות והקופי בהמשך נבנים מהשדות האלה.",
       profileSave: "שמירת פרטי העסק",
+      // AIC-132: the badge. Shown to the OPERATOR while the customer is still
+      // on the phone, which is the only moment these are cheap to collect.
+      // Names the fields rather than scoring the profile — "70% complete"
+      // tells nobody what to ask next.
+      profileBadgeOk: "מספיק כדי לכתוב קופי",
+      profileBadgeThin: "אפשר לכתוב, אבל חסר חדות",
+      profileBadgeBroken: "חסר מידע בסיסי",
+      profileMissingPrefix: "חסר:",
+      profileVaguePrefix: "כללי מדי:",
+      // Field names as an operator would say them aloud on a call.
+      profileFieldNames: {
+        offer: "הצעה",
+        differentiators: "במה שונים ממתחרים",
+        mainService: "שירות עיקרי",
+        geoArea: "אזור שירות",
+        primaryCustomer: "קהל היעד",
+        objections: "התנגדויות נפוצות",
+        priceRange: "טווח מחירים",
+      } as Record<string, string>,
       profileSaved: "נשמר",
       profileError: "השמירה נכשלה.",
 
@@ -1366,6 +1386,14 @@ export const strings = {
           // AIC-91. Ours to fix — the pixel event lives on the customer's site
           // but we own the integration, and telling them to debug it would be
           // both useless and an evasion.
+          // AIC-132. The only no-rec reason whose fix is OURS. The copy must
+          // not imply we're waiting on Meta or on them — and must not read as
+          // "your fault", which is why it says "נשלים אותם" rather than
+          // "אתם צריכים למלא".
+          profileIncomplete: {
+            title: "חסרים לנו כמה פרטים על העסק",
+            body: "כדי להמליץ על שינויים אנחנו צריכים להבין מה בדיוק ההצעה שלכם ובמה אתם שונים ממתחרים. נשלים את זה אצלנו ונחזור עם המלצות — הקמפיין ממשיך לרוץ בינתיים כרגיל.",
+          },
           leadEventStopped: {
             title: "הפניות שלכם לא נספרות כרגע",
             body: "אירוע הפנייה הפסיק להירשם בפיקסל, בזמן שהפיקסל עצמו ממשיך לעבוד — כלומר ייתכן שמגיעות פניות שאנחנו לא רואים, והמספרים כאן נמוכים מהמציאות. אנחנו בודקים; לא נמליץ על שינויים עד שהמדידה תחזור, כדי לא להסתמך על מספר חסר.",

@@ -5,6 +5,8 @@ import { api, ApiError, updateCustomer, type CustomerWriteFields } from "../api"
 import { step4Branch } from "./onboarding-step4";
 import { strings } from "../strings";
 import { BusinessFields } from "./BusinessFields";
+import { profileBadge, badgeLabel, fieldNames } from "./profile-badge";
+import { StatusPill } from "../app/components";
 import { diagnosisCopy, type AccessDiagnosis } from "./onboarding-copy";
 
 const w = strings.he.onboardingWizard;
@@ -698,7 +700,33 @@ export function AdminOnboarding() {
           copy: a second list of these fields would drift, and the drifting
           half would be the one filled in live. */}
       <div className="card" style={{ marginTop: 12 }}>
-        <b>{w.profileTitle}</b>
+        <div className="row between" style={{ gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <b>{w.profileTitle}</b>
+          {/* AIC-132: live as the operator types, not after a save — the whole
+              value is being able to ask the next question while the customer
+              is still on the phone. Names the missing fields rather than
+              scoring the profile: "70% complete" tells nobody what to ask. */}
+          {profile && (() => {
+            const b = profileBadge(profile);
+            return (
+              <div style={{ textAlign: "start" }}>
+                <StatusPill variant={b.state === "ok" ? "ok" : b.state === "thin" ? "neutral" : "warn"}>
+                  {badgeLabel(b.state)}
+                </StatusPill>
+                {b.missing.length > 0 && (
+                  <p className="muted" style={{ fontSize: "0.78rem", margin: "6px 0 0" }}>
+                    {w.profileMissingPrefix} {fieldNames(b.missing)}
+                  </p>
+                )}
+                {b.vague.length > 0 && (
+                  <p className="muted" style={{ fontSize: "0.78rem", margin: "2px 0 0" }}>
+                    {w.profileVaguePrefix} {fieldNames(b.vague)}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+        </div>
         <p className="muted" style={{ fontSize: "0.85rem" }}>{w.profileSub}</p>
         {profile && (
           <form

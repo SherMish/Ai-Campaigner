@@ -5,6 +5,8 @@ import { buildIngestionTick } from "./meta/scheduled-ingestion.js";
 import { buildGenerationTick } from "./recommendations/generation.js";
 import { buildOutcomeTick } from "./services/outcome-measurement.js";
 import { buildReaperTick } from "./services/creative-reaper.js";
+import { runProfileQualityTick } from "./services/profile-monitor.js";
+import { OpsQueue } from "./services/ops-queue.js";
 import { GraphCampaignAdapter } from "./meta/campaign-adapter.js";
 import { startScheduler } from "./services/scheduler.js";
 import { consoleLogger } from "./services/logger.js";
@@ -84,6 +86,8 @@ const generationTick = buildGenerationTick(pool);
 // Needs no Meta token — it reads snapshots we already stored — so it is never
 // inert. It still only runs inside the engine loop: with no token nothing can
 // execute, so there is never anything to measure.
+// AIC-132: the profile tick raises/clears ops items like every other monitor.
+const opsQueue = new OpsQueue(pool);
 const outcomeTick = buildOutcomeTick(pool, consoleLogger);
 if (ingestTick || generationTick) {
   const intervalMs = Number(process.env.INGESTION_INTERVAL_MS) || 60 * 60 * 1000;
@@ -103,6 +107,23 @@ if (ingestTick || generationTick) {
           `generation tick: ${g.evaluated} evaluated, ${g.created} proposed, ${g.expired} expired, ${g.skipped} skipped, ${g.deliveryProblems} delivery-problems`,
         );
       }
+      // AIC-132: is the business profile good enough to advertise from? Runs
+      // BEFORE generation in the same tick, so the verdict generation reads is
+      // this tick's, not last hour's — a profile filled in during an onboarding
+      // call should stop suppressing recommendations on the very next run.
+      // Isolated: this is our own bookkeeping, and it must never take down an
+      // otherwise-successful ingest+generate.
+      try {
+        const pq = await runProfileQualityTick(pool, opsQueue);
+        if (pq.broken > 0 || pq.thin > 0) {
+          consoleLogger.info(
+            `profile tick: ${pq.checked} checked, ${pq.broken} broken, ${pq.thin} thin`,
+          );
+        }
+      } catch (e) {
+        consoleLogger.error(`profile tick crashed — ${(e as Error).message}`);
+      }
+
       // AIC-131: delete ad creatives that never became ads. Isolated for the
       // same reason as the outcome tick below, and quiet when it finds nothing
       // — on a healthy account that is every tick, and a log line per hour
