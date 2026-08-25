@@ -89,8 +89,21 @@ account we manage it lists the creatives, lists the ones any ad references, and
 records the difference with a backdated `created_at` so the next tick collects
 them.
 
-Dry run by default; `BACKFILL_APPLY=1` writes. It never deletes anything itself
-— deletion stays with the reaper, behind the reaper's own three checks.
+**Ownership is asserted by a human, never derived** — `BACKFILL_IDS` is an
+explicit allowlist and nothing outside it is adopted. Without it the script only
+reports, which is the form in which it is actually useful: a list for a person
+to read and choose from. It never deletes anything itself.
+
+The first version inferred ownership instead, on the reasoning that an account
+we manage contains creatives we made. **The dry run listed 54 candidates, of
+which 33 were the customer's own** — ad copy from 2022-10, "AI Radar" creatives
+from 2025-03, their own 2026-06 campaigns, all predating this product. Applying
+it would have queued four years of a real business's advertising history for
+irreversible deletion.
+
+The lesson generalises past this script: the reaper is safe *because* it can
+only touch ids it recorded, and any tool that reconstructs that set from
+inference gives back exactly the safety the boundary was providing.
 
 ## Known gaps
 

@@ -32,9 +32,20 @@ callers share, rather than in the routes — recording per-route would reopen th
 leak the moment a fourth caller appears, which is exactly how the `isManaged`
 filter ended up wrong at three call sites in AIC-130.
 
-Leaks predating the table are invisible to the reaper by design; a gated one-off
-(`backfill-orphan-creatives.ts`, dry run unless `BACKFILL_APPLY=1`) adopts them
-so the next tick collects them, and never deletes anything itself.
+Leaks predating the table are invisible to the reaper by design; a one-off
+(`backfill-orphan-creatives.ts`) can adopt them so the next tick collects them,
+and never deletes anything itself.
+
+**Its first version inferred ownership and was wrong.** It adopted every orphan
+in every managed account, reasoning that an account we manage contains creatives
+we made. The dry run listed 54, of which 33 were the customer's OWN — ad copy
+from 2022-10, "AI Radar" creatives from 2025-03, their own 2026-06 campaigns,
+all predating this product. Applying it would have queued four years of a real
+business's advertising history for irreversible deletion. Ownership is now
+asserted by a human via an explicit `BACKFILL_IDS` allowlist; without one the
+script only reports. The reaper is safe because it can only touch ids it
+recorded, and reconstructing that set by inference hands back exactly the safety
+the boundary was providing.
 
 Not done, and the better fix: don't create the creative until submit, which
 would make the leak impossible. It would cost the per-creative Meta validation
