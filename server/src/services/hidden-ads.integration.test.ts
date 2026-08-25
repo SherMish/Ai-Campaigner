@@ -310,6 +310,32 @@ d("hidden ads (AIC-128)", () => {
     });
   });
 
+  // AIC-130 round 2, found live within an hour of the first fix. The tombstones
+  // were written correctly and the customer still saw nothing — because the
+  // AUDIENCE row had disappeared, taking its removed ads and its whole spend
+  // history with it. upsertAdSetMeta was fed only `isManaged` ad sets, and an
+  // ad set whose last ad was deleted is not "managed".
+  it("keeps the audience row — and its removed ads — after its last ad is deleted", async () => {
+    const { userId, campaignId } = await seedTwoAds("lastad");
+    // Both ads gone from Meta, which is what deleting them looks like here.
+    await upsertAdMeta(pool, campaignId, []);
+
+    const result = await buildCampaignAudiences(pool, userId);
+    const row = result!.audiences[0];
+
+    // The audience is still there. Deleting ads must not delete the record of
+    // what they spent — that money is still inside the campaign totals.
+    expect(row).toBeDefined();
+    expect(row.spendAgorot).toBe(30000);
+    expect(row.creatives).toHaveLength(0);
+    // ...and both ads are findable, with their numbers, under "removed".
+    expect(row.removedCreatives.map((c) => c.metaObjectId).sort()).toEqual(["ad_gone", "ad_keep"]);
+    expect(row.removedCreatives.every((c) => c.removed === "gone_at_meta")).toBe(true);
+    expect(row.removedSpendAgorot).toBe(30000);
+    // The reconciliation still closes: nothing visible, everything accounted.
+    expect(row.removedSpendAgorot).toBe(row.spendAgorot);
+  });
+
   it("writes an honest action_history row that does not claim a Meta change", async () => {
     const { campaignId } = await seedTwoAds("history");
     await hideAd({ pool, writer: pausedWriter("ad_gone"), campaignId, metaAdId: "ad_gone", actorLabel: "customer" });

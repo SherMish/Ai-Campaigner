@@ -251,7 +251,23 @@ export async function runGenerationTick(deps: {
         unmanagedAdSetIds = new Set(allAdsets.filter((a) => !a.isManaged).map((a) => a.adSetId));
         adSetLabels = deriveAudienceLabels(managedAdsets);
         flexibleCreativeAdSetIds = new Set(managedAdsets.filter((a) => a.isDynamicCreative).map((a) => a.adSetId));
-        await deps.recordAudienceMeta?.(campaign, managedAdsets);
+        // AIC-130 round 2, found live. THE CACHE AND THE ENGINE WANT DIFFERENT
+        // SETS, and feeding both `managedAdsets` was wrong in one direction.
+        //
+        // The engine exclusion above is right: an ad set with no ads has no
+        // evidence to contribute, so it must not reach the rules.
+        //
+        // The CACHE drives what the customer SEES (campaign-audiences iterates
+        // it), and pruning an empty-but-live ad set from it deletes the whole
+        // audience row from הצג פירוט — along with every shekel it ever spent
+        // and every removed ad underneath it. A customer deleted both ads from
+        // a live ad set and their ₪16.90 of history simply vanished from the
+        // breakdown while still counting in the totals above it.
+        //
+        // An ad set that EXISTS should be visible; whether it currently has
+        // ads decides what the engine does with it, not whether the customer
+        // is allowed to see where their money went.
+        await deps.recordAudienceMeta?.(campaign, allAdsets.filter((a) => a.existsOnMeta));
       } catch (e) {
         log?.error(`[generation] ${campaign.id}: audience-meta read failed — ${(e as Error).message}`);
       }

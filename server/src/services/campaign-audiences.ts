@@ -164,11 +164,18 @@ export async function buildCampaignAudiences(
 
   const metaById = new Map(meta.map((m) => [m.adSetId, m]));
   const statsByAdSet = new Map(adsetStats.map((a) => [a.adSetId, a]));
-  // AIC-65: the cache (upsertAdSetMeta) only ever stores MANAGED ad sets now
-  // — a deleted/archived/never-published one has no meta row here even if
-  // its historical spend still shows up in adsetStats (Insights, unfiltered).
-  // Drop those rather than render them with blank labels. Iterating the cache
-  // rather than filtering the stats enforces that by construction.
+  // AIC-65: the cache (upsertAdSetMeta) only stores ad sets that EXIST on Meta
+  // — a deleted/archived one has no meta row here even if its historical spend
+  // still shows up in adsetStats (Insights, unfiltered). Drop those rather than
+  // render them with blank labels. Iterating the cache rather than filtering
+  // the stats enforces that by construction.
+  //
+  // AIC-130 round 2: the cache used to store only MANAGED ad sets, which also
+  // excluded a live ad set with zero ads — deleting an ad set's last ad erased
+  // the entire audience row from this view, with its spend history and its
+  // removed ads inside it, while that same spend kept counting in the totals
+  // above. Existence is the right test for display; having ads is the right
+  // test for the engine.
   //
   // AIC-116: which of those ad sets to show. It used to be "the ones with
   // stats in the window", which silently made this a list of ad sets that have

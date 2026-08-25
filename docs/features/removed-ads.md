@@ -139,6 +139,32 @@ from "no cache row" was tried first and is a guess that fails catastrophically
 on a campaign whose cache simply hasn't been built yet: every ad would silently
 disappear at once.
 
+## The audience row has to survive its last ad (AIC-130 round 2)
+
+Found live within an hour of the first fix, and the tombstones were working
+perfectly — the customer still saw nothing, because the whole **audience row**
+had disappeared.
+
+`upsertAdSetMeta` was fed only `isManaged` ad sets, and an ad set whose last ad
+was deleted is not "managed". `campaign-audiences` iterates that cache, so
+deleting an ad set's final ad erased the entire audience from `הצג פירוט` —
+along with its ₪16.90 of spend history and both removed ads inside it, while
+that same money kept counting in the campaign totals directly above.
+
+The cache and the engine want different sets, and both were getting the same one:
+
+| | fed with | why |
+| --- | --- | --- |
+| engine (rules, evidence) | `isManaged` | an ad set with no ads has no evidence to contribute |
+| cache (what the customer sees) | `existsOnMeta` | an ad set that exists should be visible, whatever it currently holds |
+
+**Whether an ad set has ads decides what the engine may reason about; it does
+not decide whether the customer may see where their money went.**
+
+The audience badge follows: with every ad removed it reads
+`לא מתפרסם · אין מודעה פעילה` rather than `מפרסם`, which is an ACTIVE switch
+with nothing behind it.
+
 ## Keying
 
 `hidden_ads` is keyed `(campaign_id, meta_ad_id)`, not on the ad id alone. A

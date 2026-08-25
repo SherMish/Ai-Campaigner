@@ -6,6 +6,35 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-25 — The audience row has to survive its last ad (AIC-130 round 2)
+Found live an hour after the AIC-130 fixes shipped. The tombstones were being
+written correctly and the customer still saw no removed ads — because the whole
+AUDIENCE ROW had vanished.
+
+`upsertAdSetMeta` was fed only `isManaged` ad sets, and an ad set whose last ad
+was deleted is not "managed". campaign-audiences iterates that cache, so
+deleting an ad set's final ad erased the entire audience from הצג פירוט, taking
+its ₪16.90 of spend history and both removed ads with it — while that same money
+kept counting in the campaign totals directly above it.
+
+The same `isManaged` conflation as the picker bug, at a third call site. The
+cache and the engine want DIFFERENT sets: the engine excludes an empty ad set
+because it has no evidence to contribute, and that is right; the cache drives
+what the customer SEES, and whether an ad set currently has ads must not decide
+whether the customer may see where their money went. Cache now takes
+`existsOnMeta`, engine keeps `isManaged`. The audience badge follows — with
+every ad removed it reads "לא מתפרסם · אין מודעה פעילה" instead of "מפרסם".
+
+Also answered from the same investigation: the two ads the customer believed
+they had created never existed. `pending_additions` was empty and Meta reported
+zero ads — the submit button was disabled the whole time, so the green
+"המודעה נוצרה" ticks were only creatives being prepared. That copy is now
+"התוכן מוכן" (shipped in the previous commit).
+
+The new engine test was verified to FAIL against the unfixed code before being
+kept — the read-path test written first passed either way, because it seeds the
+cache directly and never exercises what writes it.
+
 ### 2026-08-25 — Six live bugs from the first hour of dogfooding the removed-ads work (AIC-130)
 **The blocker.** A customer deleted both ads from a live ACTIVE ad set, and the
 add-an-ad screen then said "לא נמצאו קבוצות מודעות בקמפיין". The picker filtered

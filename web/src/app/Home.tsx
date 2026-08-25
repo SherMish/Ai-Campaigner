@@ -863,8 +863,18 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
                 // this view knows nothing about what's running, and guessing
                 // would replace one false badge with another.
                 const noLiveAds =
-                  !audPaused && !!ctl && aud.creatives.length > 0 &&
-                  aud.creatives.every((c) => isPaused("ad", c.metaObjectId));
+                  !audPaused &&
+                  // Every ad we can see is paused...
+                  ((!!ctl && aud.creatives.length > 0 &&
+                    aud.creatives.every((c) => isPaused("ad", c.metaObjectId))) ||
+                   // ...or every ad this audience has was removed, so there is
+                   // nothing left to run at all. Without this second case an ad
+                   // set whose last ad was deleted reads מפרסם forever — an
+                   // ACTIVE switch with nothing behind it. Requires at least
+                   // one removed ad as evidence: an empty `creatives` on its
+                   // own only means "no data in this window", which says
+                   // nothing about what is running.
+                   (aud.creatives.length === 0 && aud.removedCreatives.length > 0));
                 const shown = !collapsed.has(aud.adSetId);
                 return (
                   <div key={aud.adSetId} className="soft" style={{ borderRadius: 14, padding: 14 }}>

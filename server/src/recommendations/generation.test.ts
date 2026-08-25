@@ -331,6 +331,58 @@ describe("runGenerationTick — flexible/Advantage+ creative exclusion (AIC-36)"
     expect(cached).toEqual([adSetMeta("as_flex", true)]);
   });
 
+  // AIC-130 round 2, found live. The cache and the engine want DIFFERENT sets,
+  // and both were being fed `managedAdsets`.
+  //
+  // A customer deleted both ads from a live ACTIVE ad set. isManaged went false
+  // (zero ads), so the ad set was pruned from ad_set_meta — and because
+  // campaign-audiences iterates that cache, the entire audience row vanished
+  // from הצג פירוט, taking its ₪16.90 of spend history and both removed ads
+  // with it. The same money kept counting in the totals directly above.
+  //
+  // Existence decides what the customer may SEE; having ads decides what the
+  // engine may REASON about. This pins both halves at once.
+  it("caches a live ad set with no ads for display, while still excluding it from the engine", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedFlexibleCreative(snapshots);
+    const recs = new InMemoryRecommendationStore();
+    // Exists on Meta, but every ad under it has been deleted.
+    const emptyButLive: AdSetMeta = { ...adSetMeta("as_empty", false, false), existsOnMeta: true };
+    const audienceMetaReader: AudienceMetaReader = { getAdSetMeta: async () => [emptyButLive] };
+    let cached: AdSetMeta[] | null = null;
+
+    await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      audienceMetaReader,
+      recordAudienceMeta: async (_c, adsets) => { cached = adsets; },
+    });
+
+    // Cached, so the customer keeps the audience row and its spend history.
+    expect(cached).toEqual([emptyButLive]);
+  });
+
+  it("still does NOT cache a deleted or archived ad set", async () => {
+    const snapshots = new InMemorySnapshotStore();
+    await seedFlexibleCreative(snapshots);
+    const recs = new InMemoryRecommendationStore();
+    // AIC-65's original case, which must keep working: a dead ad set has
+    // nothing to show and would render with blank labels.
+    const dead: AdSetMeta = { ...adSetMeta("as_dead", false, false), existsOnMeta: false };
+    let cached: AdSetMeta[] | null = null;
+
+    await runGenerationTick({
+      campaigns: [CAMP], reader: okReader(),
+      snapshotStore: snapshots, recommendationStore: recs,
+      recommendationService: new RecommendationService(recs), ref: REF,
+      audienceMetaReader: { getAdSetMeta: async () => [dead] },
+      recordAudienceMeta: async (_c, adsets) => { cached = adsets; },
+    });
+
+    expect(cached).toEqual([]);
+  });
+
 });
 
 // AIC-64: the engine caches WHY it had nothing to propose, so the dashboard/ops
