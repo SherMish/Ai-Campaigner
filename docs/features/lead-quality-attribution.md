@@ -119,3 +119,8 @@ that fit your business less often", not "your leads are low quality".
   than an invented number, but it is a real coverage gap.
 - Reviews are self-reported and unverifiable. Cost per relevant lead is only as
   good as the customer's own reading of their leads.
+- **Two consumers named in the ticket are not wired.** `creative_context`
+  (AIC-78) does not exist yet — there is nothing to feed. Outcome measurement
+  (AIC-76) still records whether a recommendation moved CPL, not cost per
+  relevant lead, so a quality-basis recommendation is graded on the metric it
+  deliberately declined to optimise. Worth fixing inside AIC-76 rather than here.
