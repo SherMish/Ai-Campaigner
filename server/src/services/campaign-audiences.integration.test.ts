@@ -54,7 +54,7 @@ function snap(campaignId: string, o: Partial<SnapshotUpsert> & Pick<SnapshotUpse
 }
 
 d("campaign audiences (DB + HTTP)", () => {
-  beforeAll(() => { process.env.JWT_SECRET ||= "test-secret-audiences"; });
+  beforeAll(() => { process.env.JWT_SECRET ||= "test-secret-audiences-padding-to-32-chars-minimum"; });
   afterAll(async () => {
     await pool.query(`DELETE FROM app_users WHERE email LIKE '__it_aud_%'`);
     await pool.query(`DELETE FROM customers WHERE business_name LIKE '__it_aud_%'`);

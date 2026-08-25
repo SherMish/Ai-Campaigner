@@ -21,7 +21,7 @@ async function seedUser(tag: string, isAdmin: boolean): Promise<string> {
 
 d("per-user admin auth (DB + HTTP)", () => {
   beforeAll(() => {
-    process.env.JWT_SECRET ||= "test-secret-admin-int";
+    process.env.JWT_SECRET ||= "test-secret-admin-int-padding-to-32-chars-minimum";
     delete process.env.ADMIN_TOKEN; // pure user-based, no break-glass
   });
   afterAll(async () => {

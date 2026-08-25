@@ -77,7 +77,7 @@ d("guided builder routes (DB + HTTP)", () => {
   const app = createApp();
 
   beforeAll(() => {
-    process.env.JWT_SECRET ||= "test-secret-builder-routes";
+    process.env.JWT_SECRET ||= "test-secret-builder-routes-padding-to-32-chars-minimum";
     process.env.META_SYSTEM_USER_TOKEN = "test-meta-token";
   });
   afterEach(() => {

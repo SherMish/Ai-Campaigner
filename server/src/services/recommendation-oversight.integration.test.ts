@@ -64,7 +64,7 @@ async function seedOutcome(
 }
 
 d("recommendations oversight (DB + HTTP)", () => {
-  beforeAll(() => { process.env.JWT_SECRET ||= "test-secret-oversight"; delete process.env.ADMIN_TOKEN; });
+  beforeAll(() => { process.env.JWT_SECRET ||= "test-secret-oversight-padding-to-32-chars-minimum"; delete process.env.ADMIN_TOKEN; });
   afterAll(async () => {
     await pool.query(`DELETE FROM customers WHERE business_name LIKE '__it_oversight_%'`);
     await pool.query(`DELETE FROM admin_audit_log WHERE entity_label LIKE '__it_oversight_%'`);

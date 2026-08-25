@@ -75,7 +75,7 @@ d("launch gate routes (DB + HTTP)", () => {
   const app = createApp();
 
   beforeAll(() => {
-    process.env.JWT_SECRET ||= "test-secret-launch-routes";
+    process.env.JWT_SECRET ||= "test-secret-launch-routes-padding-to-32-chars-minimum";
     process.env.META_SYSTEM_USER_TOKEN = "test-meta-token";
   });
   afterEach(() => vi.unstubAllGlobals());

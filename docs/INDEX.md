@@ -29,6 +29,7 @@ See also: [STATE.md](STATE.md) (dated changelog) · [POSTMORTEM-2026-08-19.md](P
 | Manual object controls — pause/resume (all users), archive/delete (admin) | [features/manual-controls.md](features/manual-controls.md) |
 | Removed ads — the customer's "delete", and Meta's (AIC-128) | [features/removed-ads.md](features/removed-ads.md) |
 | Orphaned creatives — the ones that never became ads (AIC-131) | [features/creative-reaper.md](features/creative-reaper.md) |
+| Security posture — tenant isolation, authn/authz, TLS, rate limits (AIC-133) | [features/security.md](features/security.md) |
 | Action history surface (audit trail + condensed projection) | [features/action-history.md](features/action-history.md) |
 | Ops console — customers, needs-attention, review, billing | [features/ops-console.md](features/ops-console.md) |
 | Ops notifications — Telegram relay for changes, failures and errors | [features/notifications.md](features/notifications.md) |

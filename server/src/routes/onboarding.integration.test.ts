@@ -54,7 +54,7 @@ async function seedCustomer(tag: string): Promise<string> {
 
 d("onboarding wizard routes (AIC-101)", () => {
   beforeAll(() => {
-    process.env.JWT_SECRET ||= "test-secret-wizard";
+    process.env.JWT_SECRET ||= "test-secret-wizard-padding-to-32-chars-minimum";
     process.env.ADMIN_TOKEN = "test-admin";
     process.env.META_SYSTEM_USER_TOKEN ||= "test-meta-token";
   });

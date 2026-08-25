@@ -100,7 +100,7 @@ async function auditFor(campaignId: string, metaObjectId: string) {
 
 d("manual controls routes (AIC-66)", () => {
   beforeAll(() => {
-    process.env.JWT_SECRET ||= "test-secret-controls";
+    process.env.JWT_SECRET ||= "test-secret-controls-padding-to-32-chars-minimum";
     process.env.ADMIN_TOKEN = "test-admin";
     process.env.META_SYSTEM_USER_TOKEN ||= "test-meta-token";
   });

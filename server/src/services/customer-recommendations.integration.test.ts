@@ -59,7 +59,7 @@ async function seedRec(campaignId: string) {
 
 d("customer recommendations (DB + HTTP)", () => {
   beforeAll(() => {
-    process.env.JWT_SECRET ||= "test-secret-recs";
+    process.env.JWT_SECRET ||= "test-secret-recs-padding-to-32-chars-minimum";
     delete process.env.META_SYSTEM_USER_TOKEN; // force the "unavailable" branch
   });
   afterAll(async () => {

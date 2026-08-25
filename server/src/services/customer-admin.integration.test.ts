@@ -46,7 +46,7 @@ async function seedCampaign(customerId: string, agreedBudgetAgorot = 5000): Prom
 
 d("customer CRUD (DB + HTTP)", () => {
   beforeAll(() => {
-    process.env.JWT_SECRET ||= "test-secret-crud-int";
+    process.env.JWT_SECRET ||= "test-secret-crud-int-padding-to-32-chars-minimum";
     delete process.env.ADMIN_TOKEN;
   });
   afterAll(async () => {

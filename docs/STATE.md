@@ -6,6 +6,33 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-25 — Security audit (AIC-133)
+Full pass over authn/authz, tenant isolation, transport, and the usual attack
+classes. Details in [features/security.md](features/security.md).
+
+**Tenant isolation was already sound** and is now pinned by 14 cross-tenant
+tests that send real authenticated requests from customer A carrying customer
+B's identifiers. Every customer route resolves the acting customer from the JWT
+and membership-tests any client-supplied id. No customer-facing budget write
+exists at all.
+
+**Three real defects, now fixed.** (1) TLS to the database was UNAUTHENTICATED —
+`rejectUnauthorized: false`, under a comment claiming the opposite — so a
+man-in-the-middle could read and rewrite every query. Verified against
+production that full verification works before changing it. (2) No rate limiting
+on authentication: credential grinding, and a bcrypt-12 CPU-exhaustion vector.
+(3) No security headers at all: no CSP, no clickjacking protection, no HSTS.
+
+Also: JWT algorithm pinned, JWT secret length-checked (production's was verified
+to satisfy it BEFORE shipping the check, via a signature-parity probe that
+authenticates as nobody), and `sslmode` stripped from the DB URL — it emitted a
+deprecation warning and is scheduled to silently WEAKEN in pg v9.
+
+The isolation test's first Meta mock answered yes to every id, which made the
+victim's ad genuinely the attacker's as far as the ownership check could tell,
+and turned five correct refusals into apparent 200s. A permissive mock does not
+prove isolation; it manufactures ownership.
+
 ### 2026-08-25 — The dead submit button, and a preview that shows the real Page (AIC-132)
 **"Created ad without choosing ad set. Didn't get an error. Was the ad created
 or not?"** — reported live. It was not. The ad set radio was unticked, so the

@@ -4,7 +4,7 @@ import { AuthService, EmailTakenError, InvalidCredentialsError } from "./auth-se
 import { verifyAuthToken } from "./tokens.js";
 
 beforeAll(() => {
-  process.env.JWT_SECRET = "test-secret-for-auth-unit";
+  process.env.JWT_SECRET = "test-secret-for-auth-unit-padding-to-32-chars-minimum";
 });
 
 function svc() {

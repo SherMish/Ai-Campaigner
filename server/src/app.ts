@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import cors from "cors";
+import { securityHeaders } from "./middleware/security.js";
 import express from "express";
 import { adminRouter } from "./routes/admin.js";
 import { adminBuilderRouter } from "./routes/admin-builder.js";
@@ -38,6 +39,15 @@ export function createApp() {
   // /health + /api are mounted and Vite serves the web.
   const WEB_DIST = resolveWebDist();
 
+  // AIC-133: Railway terminates TLS and forwards the client IP in
+  // X-Forwarded-For. Without this, req.ip is the proxy for EVERY request, so
+  // the auth rate limiter would put the entire internet in one bucket — one
+  // attacker would lock out all customers, and separately would never be
+  // limited relative to anyone else. Set to 1 (trust one hop) rather than
+  // `true`, which trusts a client-supplied header chain and lets an attacker
+  // spoof a fresh IP per request to bypass the limiter entirely.
+  app.set("trust proxy", 1);
+  app.use(securityHeaders);
   app.use(cors({ origin: process.env.CORS_ORIGIN || "http://localhost:5173" }));
   app.use(express.json({ limit: "1mb" }));
 

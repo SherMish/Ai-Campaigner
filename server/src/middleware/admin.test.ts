@@ -4,7 +4,7 @@ import { buildRequireAdmin, buildRequireFullAdmin } from "./admin.js";
 import { signAuthToken } from "../auth/tokens.js";
 
 // Set before snapshotting OLD so afterEach preserves it (CI has no JWT_SECRET).
-process.env.JWT_SECRET ||= "test-secret-admin";
+process.env.JWT_SECRET ||= "test-secret-admin-padding-to-32-chars-minimum";
 const OLD = { ...process.env };
 afterEach(() => {
   process.env = { ...OLD };

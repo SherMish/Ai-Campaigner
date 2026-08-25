@@ -33,7 +33,7 @@ async function seedCustomer(tag: string): Promise<string> {
 }
 
 d("customer onboarding (DB)", () => {
-  beforeAll(() => { process.env.JWT_SECRET ||= "test-secret-onboarding"; });
+  beforeAll(() => { process.env.JWT_SECRET ||= "test-secret-onboarding-padding-to-32-chars-minimum"; });
   afterAll(async () => {
     await pool.query(`DELETE FROM customers WHERE business_name LIKE '__it_onb_%'`);
     await pool.end();

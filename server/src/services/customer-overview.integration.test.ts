@@ -66,7 +66,7 @@ async function seedChain(tag: string, status = "active") {
 
 d("customer overview (DB + HTTP)", () => {
   beforeAll(() => {
-    process.env.JWT_SECRET ||= "test-secret-overview";
+    process.env.JWT_SECRET ||= "test-secret-overview-padding-to-32-chars-minimum";
   });
   afterAll(async () => {
     await pool.query(`DELETE FROM app_users WHERE email LIKE '__it_ov_%'`);

@@ -84,7 +84,7 @@ function pausedWriter(...pausedIds: string[]) {
 }
 
 d("hidden ads (AIC-128)", () => {
-  beforeAll(() => { process.env.JWT_SECRET ||= "test-secret-hidden"; });
+  beforeAll(() => { process.env.JWT_SECRET ||= "test-secret-hidden-padding-to-32-chars-minimum"; });
   afterAll(async () => {
     await pool.query(`DELETE FROM app_users WHERE email LIKE '__it_hid_%'`);
     await pool.query(`DELETE FROM customers WHERE business_name LIKE '__it_hid_%'`);
