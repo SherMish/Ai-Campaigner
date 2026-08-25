@@ -1011,3 +1011,37 @@ describe("GraphCampaignAdapter getAdSetTracking (AIC-88)", () => {
     expect(await adapter.getAdSetTracking("meta_camp_1")).toEqual([]);
   });
 });
+
+// AIC-131, found by asking "were the ads I deleted really deleted?". The
+// reaper's in-use check read /ads with Meta's DEFAULT filtering, which excludes
+// ARCHIVED ads — while the comment above it claimed the opposite. Measured on a
+// real account: 8 ads by default, 18 with ARCHIVED requested. Every one of those
+// ten archived ads' creatives would have read as orphaned and been deleted out
+// from under them.
+describe("listAdCreativeIdsInUse — archived ads must be visible (AIC-131)", () => {
+  it("asks Meta for ARCHIVED explicitly, because the default hides them", async () => {
+    let requested = "";
+    const fetchMock = vi.fn(async (url: string) => {
+      requested = String(url);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [{ creative: { id: "cr_1" } }, { creative: { id: "cr_2" } }] }),
+      } as unknown as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ids = await new GraphCampaignAdapter("T").listAdCreativeIdsInUse("act_1");
+
+    expect(ids).toEqual(["cr_1", "cr_2"]);
+    expect(decodeURIComponent(requested)).toContain("ARCHIVED");
+    // The statuses a live ad can sit in, each of which still holds its creative.
+    for (const st of ["ACTIVE", "PAUSED", "ADSET_PAUSED", "CAMPAIGN_PAUSED", "DISAPPROVED", "PENDING_REVIEW"]) {
+      expect(decodeURIComponent(requested)).toContain(st);
+    }
+    // DELETED is deliberately absent: Meta refuses the request outright
+    // (subcode 1815001), so including it would break the whole read and leave
+    // the reaper unable to check anything.
+    expect(decodeURIComponent(requested)).not.toContain('"DELETED"');
+  });
+});

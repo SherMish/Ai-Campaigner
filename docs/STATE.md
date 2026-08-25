@@ -6,6 +6,28 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-25 — The reaper could not see archived ads (AIC-131 fix)
+Found by the question "were the ads I deleted really deleted?". They were —
+both `status: DELETED`, terminal — but checking exposed a defect in the reaper
+shipped an hour earlier.
+
+Its in-use check read `/ads` with Meta's DEFAULT filtering, which **excludes
+archived ads**, while the comment directly above it claimed "includes ads of
+every status on purpose: a PAUSED or ARCHIVED ad still holds its creative". The
+comment asserted a safety property the code did not deliver — the worst kind of
+wrong comment, because it invites the next reader to trust it.
+
+Measured live: 8 ads by default, **18 with ARCHIVED requested**. Ten archived
+ads were invisible, and every one of their creatives read as orphaned. On the
+account we did NOT touch, ten of the thirty-three "orphans" were the content of
+live archived ads. Fixing the query drops that account's orphan count from 33
+to 23.
+
+`DELETED` cannot be included at all — Meta refuses the request outright
+(subcode 1815001) — so a creative whose only ad is deleted will always read as
+orphaned. Deliberate and acceptable, since a DELETED ad is terminal, but
+documented as a limit rather than left as an assumption.
+
 ### 2026-08-25 — First live reap: 21 orphaned creatives deleted (AIC-131)
 Ran end to end on a real ad account, on the customer's explicit instruction.
 21 adopted through the allowlist, 21 deleted, 0 failures, account re-read

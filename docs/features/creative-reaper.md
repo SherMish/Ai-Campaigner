@@ -59,6 +59,20 @@ Age is the only thing separating *abandoned* from *in progress*, and only we can
 know it. The table doubles as the safety boundary: the reaper can only ever
 touch ids it recorded.
 
+**The in-use read must ask for ARCHIVED explicitly.** Meta's `/ads` edge
+excludes archived ads by default, so the obvious query silently under-reports
+what is in use. Measured on a real account: **8 ads by default, 18 with
+`ARCHIVED` requested** — ten archived ads invisible, every one of whose
+creatives would have read as orphaned and been deleted out from under them. The
+first version of this check did exactly that while its comment claimed the
+opposite.
+
+`DELETED` cannot be requested at all — Meta refuses outright ("Requesting for
+deleted objects is not supported in this endpoint", subcode 1815001). So a
+creative whose only ad is DELETED will always read as orphaned and will be
+reaped. Deliberate and acceptable — a DELETED ad is terminal and can never serve
+again — but a real limit, not something the check handles.
+
 **The in-use check is never inferred from `attached_at`.** Ads can be created
 outside our flow, and one attached elsewhere would still read as unattached to
 us. `attached_at` is an optimisation that settles the common path immediately;

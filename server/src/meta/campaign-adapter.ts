@@ -976,11 +976,29 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   //
   // Read from /ads rather than from each creative, because an adcreative does
   // not expose who references it — the relationship is only visible from the ad
-  // side. Includes ads of every status on purpose: a PAUSED or ARCHIVED ad
-  // still holds its creative, and deleting the content out from under one is
-  // exactly the mistake this check exists to prevent.
+  // side.
+  //
+  // THE effective_status FILTER IS LOAD-BEARING, not tidiness. Meta's /ads edge
+  // EXCLUDES archived ads by default, and this comment previously claimed the
+  // opposite while the query did the default thing. Measured on a real account:
+  // 8 ads by default, 18 with ARCHIVED requested — TEN archived ads invisible,
+  // whose creatives would every one of them have read as orphaned and been
+  // deleted out from under them.
+  //
+  // DELETED ads cannot be included at all: Meta refuses the request outright
+  // ("Requesting for deleted objects is not supported in this endpoint",
+  // subcode 1815001). So a creative whose only ad is DELETED will always look
+  // orphaned here and will be reaped. That is acceptable and deliberate — a
+  // DELETED ad is terminal, can never serve again, and Meta will not even show
+  // it to us — but it is a real limit, not something the check handles.
   async listAdCreativeIdsInUse(adAccountId: string): Promise<string[]> {
-    const body = await this.get(`${adAccountId}/ads?fields=creative{id}&limit=500`);
+    const statuses = [
+      "ACTIVE", "PAUSED", "ARCHIVED", "ADSET_PAUSED", "CAMPAIGN_PAUSED",
+      "DISAPPROVED", "PENDING_REVIEW", "PENDING_BILLING_INFO", "IN_PROCESS", "WITH_ISSUES",
+    ];
+    const body = await this.get(
+      `${adAccountId}/ads?fields=creative{id}&effective_status=${encodeURIComponent(JSON.stringify(statuses))}&limit=500`,
+    );
     type Raw = { creative?: { id?: string } };
     return ((body.data as Raw[]) ?? [])
       .map((a) => a.creative?.id)
