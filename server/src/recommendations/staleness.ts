@@ -47,6 +47,8 @@ export async function refreshRecommendations(deps: {
   leadEventStopped?: boolean; // the lead event stopped firing (AIC-91)
   overcountSuspected?: boolean; // the lead count looks inflated (AIC-92)
   profileIncomplete?: boolean; // no offer/differentiators captured (AIC-132)
+  // AIC-133: per-audience lead quality, where attributable and usable.
+  adSetQuality?: Map<string, { costPerRelevantAgorot: number | null; relevantRate: number | null; reviewCount: number }>;
   liveCreativeCount?: number; // ads actually running now, from delivery-health (AIC-117)
   adStatuses?: Record<string, "active" | "paused">; // live per-ad status (AIC-77b)
   adSetStatuses?: Record<string, "active" | "paused">; // live per-ad-set status (AIC-77b)
@@ -57,7 +59,7 @@ export async function refreshRecommendations(deps: {
   const evidence = await buildCampaignEvidence(
     snapshotStore, campaign, deps.current, deps.previous,
     deps.excludeAdSetIds, deps.adSetLabels, deps.flexibleCreativeAdSetIds, deps.deliveryProblemAdSetIds,
-    deps.adStatuses, deps.adSetStatuses, deps.trackingBroken, deps.liveCreativeCount, deps.ctaBroken, deps.accountCannotSpend, deps.leadEventStopped, deps.overcountSuspected, deps.profileIncomplete,
+    deps.adStatuses, deps.adSetStatuses, deps.trackingBroken, deps.liveCreativeCount, deps.ctaBroken, deps.accountCannotSpend, deps.leadEventStopped, deps.overcountSuspected, deps.profileIncomplete, deps.adSetQuality,
   );
   const thresholds = resolveThresholds(campaign.thresholdOverrides, campaign.currentBudgetAgorot);
   const cooldownClasses = resolveCooldownClasses(campaign.lastActionAtByType, thresholds.COOLDOWN_DAYS, deps.now ?? new Date());

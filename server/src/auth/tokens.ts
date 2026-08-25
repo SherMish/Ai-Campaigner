@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 // JWT_SECRET must be set — read lazily so tests can inject one.
 const EXPIRES_IN = "30d";
 
-// AIC-133: the signing algorithm is pinned on BOTH sides. jsonwebtoken v9
+// security audit 2026-08-25: the signing algorithm is pinned on BOTH sides. jsonwebtoken v9
 // already refuses `alg: none`, so this is not the classic bypass — it is that
 // a verifier which accepts whatever the TOKEN says it is has no business being
 // a security boundary. Pinning makes the guarantee independent of the

@@ -32,6 +32,7 @@ import { recordLiveBudget } from "../services/live-budget.js";
 import { recordLeadsToDate } from "../services/leads-to-date.js";
 import { getLatestEngineActionByType } from "../services/action-history.js";
 import { OpsQueue } from "../services/ops-queue.js";
+import { loadAdSetQuality } from "../services/lead-quality-source.js";
 import { consoleLogger, type Logger } from "../services/logger.js";
 
 export interface AudienceMetaReader {
@@ -177,6 +178,9 @@ export async function runGenerationTick(deps: {
   recordOvercount?: (campaign: GenCampaign, summary: OvercountSummary) => Promise<void>;
   // AIC-92 signal B, optional: which event sources the pixel receives.
   eventSourceReader?: { getPixelEventSources(pixelId: string, sinceUnix: number): Promise<{ browser: boolean; server: boolean }> };
+  // AIC-133: per-audience lead quality. Optional, so every existing caller and
+  // test keeps judging on CPL unchanged until it is wired in.
+  leadQualityLoader?: (campaign: GenCampaign) => Promise<Map<string, { costPerRelevantAgorot: number | null; relevantRate: number | null; reviewCount: number }>>;
   // AIC-92 signal A's denominator. A separate optional reader rather than a new
   // field on PeriodAgg: campaignTotals is a published interface with an
   // in-memory double used across the rule tests, and widening it would make
@@ -397,6 +401,19 @@ export async function runGenerationTick(deps: {
       }
     }
 
+    // AIC-133: per-audience lead quality, loaded before evaluation because the
+    // rule needs BOTH sides of a comparison at once. Isolated on purpose — a
+    // failure here must leave the engine judging on CPL exactly as it did
+    // before, never skip the tick.
+    let adSetQuality: Map<string, { costPerRelevantAgorot: number | null; relevantRate: number | null; reviewCount: number }> | undefined;
+    if (deps.leadQualityLoader) {
+      try {
+        adSetQuality = await deps.leadQualityLoader(campaign);
+      } catch (e) {
+        log?.error(`[generation] ${campaign.id}: lead-quality attribution failed — ${(e as Error).message}`);
+      }
+    }
+
     // AIC-91: is the campaign's lead event still firing on the pixel? Only
     // meaningful for a Pixel-based campaign — a Click-to-WhatsApp one has no
     // pixel event, and summarizeEventVolume reports not_applicable rather than
@@ -499,6 +516,10 @@ export async function runGenerationTick(deps: {
       // AIC-132: read from the campaign row (the customer's cached verdict),
       // not recomputed here — the profile tick owns that judgement.
       profileIncomplete: campaign.profileIncomplete === true,
+      // AIC-133: per-audience lead quality, where any of it could be
+      // attributed. Absent for an ad set means "no usable quality data" — the
+      // rule then falls back to CPL and SAYS so.
+      adSetQuality,
       leadEventStopped,
       overcountSuspected,
       adSetLabels,
@@ -562,6 +583,9 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
           }
         }
       },
+      // AIC-133: per-audience lead quality from the customer's own reviews.
+      // Reads only stored rows, so it needs no Meta call and cannot fail the tick.
+      leadQualityLoader: async (campaign) => (await loadAdSetQuality(pool, campaign.id)).byAdSet,
       trackingReader: adapter,
       recordTracking: async (campaign, tr) => {
         await recordCampaignTracking({ pool, ops, campaignId: campaign.id, customerId: campaign.customerId, summary: tr });

@@ -39,7 +39,7 @@ export function createApp() {
   // /health + /api are mounted and Vite serves the web.
   const WEB_DIST = resolveWebDist();
 
-  // AIC-133: Railway terminates TLS and forwards the client IP in
+  // security audit 2026-08-25: Railway terminates TLS and forwards the client IP in
   // X-Forwarded-For. Without this, req.ip is the proxy for EVERY request, so
   // the auth rate limiter would put the entire internet in one bucket — one
   // attacker would lock out all customers, and separately would never be

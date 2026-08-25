@@ -83,6 +83,10 @@ export async function buildCampaignEvidence(
   // AIC-132: no offer/differentiators captured — nothing to base a creative
   // recommendation on. Reported as its own reason rather than `collecting`.
   profileIncomplete?: boolean,
+  // AIC-133: per-audience lead quality, keyed by ad set id. Only USABLE
+  // verdicts are present — an ad set with one review is absent rather than
+  // present-with-weak-data, so a rule cannot act on it by forgetting a flag.
+  adSetQuality?: Map<string, { costPerRelevantAgorot: number | null; relevantRate: number | null; reviewCount: number }>,
 ): Promise<CampaignEvidence> {
   const [curTotals, prevTotals, curCreatives, prevCreatives, curAdsets, curDaily, prevDaily] = await Promise.all([
     store.campaignTotals(campaign.id, current.start, current.end),
@@ -129,6 +133,7 @@ export async function buildCampaignEvidence(
     accountCannotSpend,
     leadEventStopped,
     profileIncomplete,
+    adSetQuality,
     overcountSuspected,
   };
 }

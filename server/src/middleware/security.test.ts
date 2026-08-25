@@ -1,4 +1,4 @@
-// AIC-133: the rate limiter and the header set.
+// security audit 2026-08-25: the rate limiter and the header set.
 import { describe, it, expect, beforeEach } from "vitest";
 import { rateLimit, securityHeaders, __resetRateLimits } from "./security.js";
 
@@ -27,7 +27,7 @@ const req = (ip: string, secure = true, realIp?: string) =>
     header: (h: string) => (h.toLowerCase() === "x-real-ip" ? realIp : undefined),
   }) as never;
 
-describe("rate limiting (AIC-133)", () => {
+describe("rate limiting (security audit 2026-08-25)", () => {
   beforeEach(() => __resetRateLimits());
 
   it("allows up to the limit, then refuses with 429 and Retry-After", () => {
@@ -76,7 +76,7 @@ describe("rate limiting (AIC-133)", () => {
   });
 });
 
-describe("security headers (AIC-133)", () => {
+describe("security headers (security audit 2026-08-25)", () => {
   it("sets the full set, and a CSP that denies framing and inline script", () => {
     const r = res();
     securityHeaders(req("1.2.3.4"), r as never, () => {});

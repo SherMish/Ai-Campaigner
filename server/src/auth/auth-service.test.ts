@@ -59,7 +59,7 @@ describe("AuthService", () => {
   });
 });
 
-// AIC-133: user enumeration by timing. An unknown email used to return
+// security audit 2026-08-25: user enumeration by timing. An unknown email used to return
 // immediately while a known one paid ~100ms of bcrypt, so response time
 // answered "does this address have an account here?" for anyone timing it.
 describe("login does not leak whether an email exists", () => {

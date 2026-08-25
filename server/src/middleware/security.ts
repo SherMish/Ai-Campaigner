@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 
-// AIC-133: security response headers, hand-rolled rather than pulling in helmet.
+// security audit 2026-08-25: security response headers, hand-rolled rather than pulling in helmet.
 // The set we actually need is small and every line below is a decision worth
 // being able to read; a dependency would hide those decisions behind defaults
 // that change on upgrade.
@@ -82,7 +82,7 @@ function hit(key: string, limit: number, windowMs: number, now: number): boolean
 
 // Which address to count against.
 //
-// AIC-133 follow-up, found by testing the LIVE endpoint rather than trusting
+// security audit 2026-08-25 follow-up, found by testing the LIVE endpoint rather than trusting
 // the deploy: eleven bad logins in a row all returned 401 and the limiter never
 // fired, while the identical code blocked on the eleventh locally.
 //

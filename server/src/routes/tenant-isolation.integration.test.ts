@@ -1,4 +1,4 @@
-// AIC-133: the security guarantee, stated as a test.
+// security audit 2026-08-25: the security guarantee, stated as a test.
 //
 // "User A can NEVER, by purpose or by API bug, touch user B's ads, and their
 // budget cannot be changed by others."
@@ -100,7 +100,7 @@ async function seedTenant(tag: string) {
   };
 }
 
-d("tenant isolation: customer A cannot reach customer B (AIC-133)", () => {
+d("tenant isolation: customer A cannot reach customer B (security audit 2026-08-25)", () => {
   let A: Awaited<ReturnType<typeof seedTenant>>;
   let B: Awaited<ReturnType<typeof seedTenant>>;
 

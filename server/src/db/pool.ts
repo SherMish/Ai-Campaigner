@@ -15,7 +15,7 @@ function needsSsl(url: string | undefined): boolean {
   return !/localhost|127\.0\.0\.1/.test(url);
 }
 
-// SECURITY (AIC-133). This used to pass `rejectUnauthorized: false`, whose
+// SECURITY (security audit 2026-08-25). This used to pass `rejectUnauthorized: false`, whose
 // comment claimed we "accept the provider's chain-trusted certs" — the exact
 // opposite of what the flag does. It disables certificate verification
 // entirely, so ANY server presenting ANY certificate was trusted: a

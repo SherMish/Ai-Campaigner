@@ -974,3 +974,63 @@ describe("classifyNoAction — profile_incomplete (AIC-132)", () => {
     expect(__rulesForTest.classifyNoAction(ev, T).reason).not.toBe("profile_incomplete");
   });
 });
+
+// AIC-133: the engine used to prefer whichever audience produced the cheapest
+// leads, and cheap leads are very often the wrong leads.
+describe("pause_adset — quality-adjusted comparison (AIC-133)", () => {
+  // The exact shape from the ticket:
+  //   A: 24 leads · ₪22 CPL · 4 relevant  →  ₪132 per REAL lead
+  //   B: 12 leads · ₪48 CPL · 10 relevant →  ₪58  per REAL lead
+  // (spends are above AUDIENCE_MIN_SPEND_AGOROT — ₪300 — so both audiences
+  // carry enough evidence to be compared at all.)
+  // On CPL alone, B is 2.2x A and gets paused. On relevant leads, B is the
+  // better audience and pausing it is the mistake this ticket exists to stop.
+  const CHEAP_JUNK = { adSetId: "as_cheap", spendAgorot: 52800, leads: 24, cplAgorot: 2200, deliveryStatus: "active" };
+  const PRICEY_GOOD = { adSetId: "as_good", spendAgorot: 57600, leads: 12, cplAgorot: 4800, deliveryStatus: "active" };
+
+  const evidence = (quality?: Map<string, { costPerRelevantAgorot: number | null; relevantRate: number | null; reviewCount: number }>) =>
+    baseEvidence({
+      current: { spendAgorot: 110400, leads: 36, cplAgorot: 3067, days: 7 },
+      adsets: [CHEAP_JUNK, PRICEY_GOOD],
+      adSetQuality: quality,
+    });
+
+  it("WITHOUT quality data, still pauses the expensive audience and says the basis is volume", () => {
+    // Unchanged behaviour, and the fallback must be explicit rather than
+    // silent — the customer is approving a different claim.
+    const d = __rulesForTest.pauseUnderperformingAudience(evidence(), T);
+    expect(d?.targetMetaId).toBe("as_good");
+    expect(d?.evidence.basis).toBe("lead_volume");
+    expect(d?.rationale).toContain("lead volume only");
+  });
+
+  it("WITH quality data, does NOT pause the audience that brings the relevant leads", () => {
+    // The bug fix. Cheap-and-junk is ₪132 per relevant lead; pricey-and-good is
+    // ₪58. The "worst by CPL" audience is the better one, so the rule withholds.
+    const q = new Map([
+      ["as_cheap", { costPerRelevantAgorot: 13200, relevantRate: 0.17, reviewCount: 3 }],
+      ["as_good", { costPerRelevantAgorot: 5760, relevantRate: 0.83, reviewCount: 3 }],
+    ]);
+    expect(__rulesForTest.pauseUnderperformingAudience(evidence(q), T)).toBeNull();
+  });
+
+  it("falls back to CPL when only ONE side has quality data", () => {
+    // Comparing one audience's quality-adjusted cost against another's raw CPL
+    // is comparing two different units; it would produce confident nonsense.
+    const q = new Map([["as_good", { costPerRelevantAgorot: 5760, relevantRate: 0.83, reviewCount: 3 }]]);
+    const d = __rulesForTest.pauseUnderperformingAudience(evidence(q), T);
+    expect(d?.evidence.basis).toBe("lead_volume");
+  });
+
+  it("an audience sending only junk is ranked worse than any finite cost", () => {
+    // Zero relevant leads has no finite cost per relevant lead. It must lose
+    // the comparison deliberately, not by Infinity leaking into arithmetic.
+    const q = new Map([
+      ["as_cheap", { costPerRelevantAgorot: 2000, relevantRate: 0.5, reviewCount: 3 }],
+      ["as_good", { costPerRelevantAgorot: null, relevantRate: 0, reviewCount: 3 }],
+    ]);
+    const d = __rulesForTest.pauseUnderperformingAudience(evidence(q), T);
+    expect(d?.targetMetaId).toBe("as_good");
+    expect(d?.evidence.basis).toBe("relevant_leads");
+  });
+});

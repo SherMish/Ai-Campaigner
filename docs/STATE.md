@@ -6,6 +6,19 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-26 — AIC-133: audiences judged on relevant leads, not cheap ones
+
+`pause_adset` ranked audiences on CPL, and cheap leads are very often the wrong
+leads — a broad audience pulls browsers, CPL drops, and the engine proposed
+pausing the narrow audience that actually books work. Where the customer's own
+lead-quality reviews (AIC-67) give usable data for BOTH sides of a comparison,
+the ranking is now cost per RELEVANT lead; otherwise it falls back to CPL and
+the copy says so out loud. Attribution is deliberately strict — a review counts
+only when exactly one ad set produced leads in its window — because the obvious
+proportional split gives every ad set the same relevance rate and therefore
+reorders nothing while looking like quality. Owning doc:
+[docs/features/lead-quality-attribution.md](features/lead-quality-attribution.md).
+
 ### 2026-08-25 — Know when we don't know enough about the business (AIC-132)
 Six health checks ask whether a campaign's numbers can be trusted. This one asks
 whether OUR homework is done, and it is the only one that reads no Meta data at
@@ -140,7 +153,7 @@ order verified as profile → steps 1–5, a field edited, saved, and the new va
 confirmed in the database, with no console errors. That is the practice the four
 visual bugs earlier today were missing.
 
-### 2026-08-25 — Security audit (AIC-133)
+### 2026-08-25 — Security audit (ad-hoc, no ticket)
 Full pass over authn/authz, tenant isolation, transport, and the usual attack
 classes. Details in [features/security.md](features/security.md).
 

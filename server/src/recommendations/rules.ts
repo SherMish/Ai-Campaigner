@@ -129,6 +129,9 @@ export interface CampaignEvidence {
   ctaBroken?: boolean;
   // AIC-132: we never captured enough about the business to write copy for it.
   profileIncomplete?: boolean;
+  // AIC-133: per-audience lead quality, where it could be attributed at all.
+  // Absent for an ad set means "no usable quality data", never "no quality".
+  adSetQuality?: Map<string, { costPerRelevantAgorot: number | null; relevantRate: number | null; reviewCount: number }>;
   // AIC-72: the ad ACCOUNT is disabled, unsettled, in review, or has no payment
   // method. Dominates every per-campaign verdict — nothing on the account can
   // deliver. Optional; absent means "not checked", never "fine".
@@ -689,6 +692,35 @@ function pauseUnderperformingAudience(
     .sort((a, b) => (b.cplAgorot ?? Infinity) - (a.cplAgorot ?? Infinity))[0];
   if (!worst) return null;
 
+  // ── AIC-133: is the cheap audience actually the good one? ────────────────
+  //
+  // Everything above ranks on COST PER LEAD, and cheap leads are very often
+  // the wrong leads: broad audiences pull browsers, CPL drops, and the engine
+  // scales exactly the audience the customer is complaining about.
+  //
+  // Where quality data exists for BOTH sides, the comparison is redone on cost
+  // per RELEVANT lead. Both sides is the requirement, not a nicety — comparing
+  // one audience's quality-adjusted cost against another's raw CPL is
+  // comparing two different units and would produce confident nonsense.
+  const qWorst = ev.adSetQuality?.get(worst.adSetId);
+  const qBest = ev.adSetQuality?.get(bestAdset.adSetId);
+  const qualityUsable = !!qWorst && !!qBest;
+
+  // The basis travels with the recommendation. "Based on relevant leads" and
+  // "based on lead volume" are different claims, and the customer is approving
+  // one of them — saying which is not a detail.
+  let basis: "relevant_leads" | "lead_volume" = "lead_volume";
+
+  if (qualityUsable) {
+    basis = "relevant_leads";
+    // A null cost means zero relevant leads — junk-only. Ranked as worse than
+    // any finite cost rather than allowed to be Infinity in arithmetic.
+    const costOf = (q: typeof qWorst) => (q!.costPerRelevantAgorot ?? Number.MAX_SAFE_INTEGER);
+    // The suppression this ticket exists for: the "worst" audience by CPL is
+    // NOT worse once quality is counted, so pausing it would be the mistake.
+    if (costOf(qWorst) <= costOf(qBest)) return null;
+  }
+
   return {
     campaignId: ev.campaignId,
     type: "pause_adset",
@@ -707,11 +739,21 @@ function pauseUnderperformingAudience(
       // cannot tell which one is meant. Count passed so the copy can name the
       // winner instead of counting positions.
       otherAudienceCount: withData.length - 1,
+      // AIC-133: which basis this judgement used, carried into the customer
+      // copy. Never implied — a recommendation that silently switched basis
+      // would be two different claims wearing one sentence.
+      basis,
+      adSetRelevantRate: qWorst?.relevantRate ?? null,
+      bestAdSetRelevantRate: qBest?.relevantRate ?? null,
+      adSetCostPerRelevantAgorot: qWorst?.costPerRelevantAgorot ?? null,
+      bestAdSetCostPerRelevantAgorot: qBest?.costPerRelevantAgorot ?? null,
     },
     currentBudgetAgorot: null,
     proposedBudgetAgorot: null,
     maxSpendImpactAgorot: 0, // CBO shifts budget to the winner; no new spend
-    rationale: `ad set ${worst.adSetId} CPL ${worst.cplAgorot ?? "∅"} vs best audience ${bestCpl} (≥${t.AUDIENCE_CPL_MULTIPLIER}×)`,
+    rationale: basis === "relevant_leads"
+      ? `ad set ${worst.adSetId} cost/relevant-lead ${qWorst?.costPerRelevantAgorot ?? "∅"} vs best audience ${qBest?.costPerRelevantAgorot ?? "∅"} (quality-adjusted, ${qWorst?.reviewCount}+${qBest?.reviewCount} reviews)`
+      : `ad set ${worst.adSetId} CPL ${worst.cplAgorot ?? "∅"} vs best audience ${bestCpl} (≥${t.AUDIENCE_CPL_MULTIPLIER}×, lead volume only — no usable quality data)`,
   };
 }
 

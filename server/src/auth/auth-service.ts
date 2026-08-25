@@ -49,7 +49,7 @@ export class AuthService {
 
   async login(input: { email: string; password: string }): Promise<AuthResult> {
     const rec = await this.store.findByEmail(normalizeEmail(input.email));
-    // AIC-133: user enumeration by TIMING. The old code returned immediately on
+    // security audit 2026-08-25: user enumeration by TIMING. The old code returned immediately on
     // an unknown email and ran bcrypt (~100ms at 12 rounds) on a known one, so
     // the response time answered "does this address have an account here?" for
     // anyone willing to time it — worth real money to a competitor and a

@@ -168,3 +168,26 @@ describe("explainWithLlm guardrail (LLM explains, never decides)", () => {
     expect(await explainWithLlm(PAUSE, llm)).toBe(explain(PAUSE));
   });
 });
+
+// AIC-133: "we compared lead volume" and "we compared how many leads were a
+// fit" are two different claims, and the customer approves one of them.
+describe("pause_adset — the copy names which basis was used (AIC-133)", () => {
+  it("says lead-quality feedback when the judgement used it", () => {
+    const t = explain(rec({ type: "pause_adset", targetMetaId: "as_2", evidence: { audienceLabel: "נשים 35–45", basis: "relevant_leads" } }));
+    expect(t).toContain("רלוונטית");
+    expect(t).toContain("המשוב שלכם");
+    expect(t).not.toContain("כמות הפניות בלבד");
+  });
+
+  it("admits volume-only when there was no usable quality data", () => {
+    const t = explain(rec({ type: "pause_adset", targetMetaId: "as_2", evidence: { audienceLabel: "נשים 35–45", basis: "lead_volume" } }));
+    expect(t).toContain("כמות הפניות בלבד");
+  });
+
+  it("an OLD row with no basis field reads as volume-only, not as quality", () => {
+    // The row was written before quality existed. Claiming it weighed customer
+    // feedback would be retroactively false.
+    const t = explain(rec({ type: "pause_adset", targetMetaId: "as_2", evidence: { audienceLabel: "נשים 35–45" } }));
+    expect(t).toContain("כמות הפניות בלבד");
+  });
+});

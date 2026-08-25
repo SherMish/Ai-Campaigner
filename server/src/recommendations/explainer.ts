@@ -33,12 +33,27 @@ export const EXPLAINER_HE = {
   // Fixed by NAMING the winning audience rather than counting positions — we
   // already have its label, and "cheaper than 45–65" is both correct at any
   // count and more useful than any positional phrasing.
-  pauseAudience: (label: string | null, bestLabel: string | null, otherCount: number) => {
+  // AIC-133: the sentence now says WHICH BASIS the judgement used. "Based on
+  // relevant leads" and "based on lead volume" are different claims, and the
+  // customer is approving one of them — a recommendation that switched basis
+  // silently would be two claims wearing one sentence.
+  //
+  // Framed as TARGETING, never as lead-quality blame. "הפניות שלכם באיכות
+  // נמוכה" reads as "your business can't close"; "מביא פחות פניות אבל יותר
+  // מהן רלוונטיות" says the same thing about the audience.
+  pauseAudience: (
+    label: string | null,
+    bestLabel: string | null,
+    otherCount: number,
+    basis: "relevant_leads" | "lead_volume" = "lead_volume",
+  ) => {
     const others = otherCount === 1 ? "מהקהל האחר" : "משאר הקהלים";
     const versus = bestLabel ? `מהקהל ${bestLabel}` : others;
-    return label
-      ? `הקהל ${label} מביא פניות בעלות גבוהה משמעותית ${versus}. אנחנו ממליצים לעצור אותו ולהפנות את התקציב לקהל שמביא תוצאות טובות יותר.`
-      : `אחד הקהלים בקמפיין מביא פניות בעלות גבוהה משמעותית ${versus}. אנחנו ממליצים לעצור אותו ולהפנות את התקציב לקהל שמביא תוצאות טובות יותר.`;
+    const who = label ? `הקהל ${label}` : "אחד הקהלים בקמפיין";
+    if (basis === "relevant_leads") {
+      return `${who} מביא פניות שפחות מהן מתאימות לעסק ${versus} — כך שגם אם המחיר לפנייה נראה דומה, העלות לפנייה רלוונטית גבוהה יותר. אנחנו ממליצים לעצור אותו ולהפנות את התקציב לקהל שמביא פניות מתאימות יותר. (מבוסס על המשוב שלכם על איכות הפניות.)`;
+    }
+    return `${who} מביא פניות בעלות גבוהה משמעותית ${versus}. אנחנו ממליצים לעצור אותו ולהפנות את התקציב לקהל שמביא תוצאות טובות יותר. (מבוסס על כמות הפניות בלבד — עדיין אין לנו מספיק משוב על איכותן.)`;
   },
   stable: () => `הקמפיין יציב ואין כרגע שינוי שאנחנו ממליצים לבצע.`,
   collecting: () => `אין כרגע מספיק מידע שמצדיק שינוי. נמשיך לעקוב.`,
@@ -160,6 +175,10 @@ export function explain(rec: RecommendationRecord): string {
         typeof rec.evidence.audienceLabel === "string" ? rec.evidence.audienceLabel : null,
         typeof rec.evidence.bestAudienceLabel === "string" ? rec.evidence.bestAudienceLabel : null,
         typeof rec.evidence.otherAudienceCount === "number" ? rec.evidence.otherAudienceCount : 2,
+        // Older rows predate this field and were written on volume alone —
+        // defaulting to lead_volume keeps their wording truthful rather than
+        // retroactively claiming a quality basis they never had.
+        rec.evidence.basis === "relevant_leads" ? "relevant_leads" : "lead_volume",
       );
     case "increase_budget":
       return EXPLAINER_HE.increaseBudget(

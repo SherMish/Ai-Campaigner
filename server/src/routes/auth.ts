@@ -13,7 +13,7 @@ const service = new AuthService(store);
 
 const MIN_PASSWORD = 8;
 
-// AIC-133. Unlimited password attempts are two problems, not one: an attacker
+// security audit 2026-08-25. Unlimited password attempts are two problems, not one: an attacker
 // can grind credentials, and every attempt costs US a bcrypt-12 hash, so the
 // login endpoint doubles as a CPU-exhaustion vector against this server.
 //

@@ -1,6 +1,6 @@
 # Security posture
 
-**Status:** live. Audited end-to-end on 2026-08-25 (AIC-133).
+**Status:** live. Audited end-to-end on 2026-08-25 (ad-hoc, no ticket).
 
 **Source of truth:** `server/src/middleware/security.ts` (headers + rate
 limits), `server/src/middleware/auth.ts` + `admin.ts` (authn/authz),
