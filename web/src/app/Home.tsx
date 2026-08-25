@@ -696,7 +696,7 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
   const [successId, setSuccessId] = useState<string | null>(null);
   // AIC-128: which ad sets have their removed-ads list expanded, the ad
   // awaiting confirmation, and the server's refusal if it comes.
-  // AIC-135: which ad's details modal is open, and what we loaded for it.
+  // AIC-139: which ad's details modal is open, and what we loaded for it.
   const [detailFor, setDetailFor] = useState<string | null>(null);
   const [detail, setDetail] = useState<AdDetail | null>(null);
   const [detailError, setDetailError] = useState(false);
@@ -983,7 +983,7 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
                                       {/* Honest count: what Meta actually
                                           reports for this creative, never
                                           inferred from the ad's name. */}
-                                      {/* AIC-135: the row's own title is the
+                                      {/* AIC-139: the row's own title is the
                                           affordance. A separate "details" link
                                           would add a third control to a row
                                           that already carries pause and
@@ -1108,7 +1108,7 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
         </div>
       )}
 
-      {/* AIC-135: the ad's full creative. Read-only, because Meta's own
+      {/* AIC-139: the ad's full creative. Read-only, because Meta's own
           reference lists `name` and `status` as the ONLY editable fields on a
           creative — the copy and the image are frozen at creation. The card at
           the bottom says exactly that and points at the flow that does work,
@@ -1195,7 +1195,7 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
   );
 }
 
-// AIC-135: one labelled line in the ad-details modal. Renders an em dash for a
+// AIC-139: one labelled line in the ad-details modal. Renders an em dash for a
 // missing value rather than collapsing the row — a field that is absent is
 // itself information, and a silently missing line reads as a rendering bug.
 function DetailRow({ label, value }: { label: string; value: string | null }) {

@@ -1057,7 +1057,7 @@ a file is chosen the media area shows a placeholder rather than collapsing: the
 point of the preview is the SHAPE, and seeing where the picture will sit is
 useful before there is one.
 
-**The header shows the real Page (AIC-132).** It used to read *"העסק שלך"* with
+**The header shows the real Page (AIC-136).** It used to read *"העסק שלך"* with
 a letter in a circle — a placeholder standing exactly where the most
 recognisable thing about the ad belongs. `getPageIdentity` reads the connected
 Page's name and profile photo, so the preview shows the customer what they
@@ -1071,7 +1071,7 @@ nothing extra and only the picture needs the second call. Best-effort
 throughout — a failure returns nulls and the header falls back to the neutral
 placeholder, because a mock-up missing an avatar is still a useful mock-up.
 
-### Two preview bugs found by looking at it (AIC-132)
+### Two preview bugs found by looking at it (AIC-136)
 
 **It only existed on the upload tab.** The existing-post path — the one where a
 real picture is already available — had no preview at all, so choosing a post

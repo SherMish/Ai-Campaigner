@@ -154,7 +154,7 @@ for (const action of ["pause", "resume"] as const) {
 }
 
 
-// GET /ad/:metaAdId — one ad's full creative, for the details modal (AIC-135).
+// GET /ad/:metaAdId — one ad's full creative, for the details modal (AIC-139).
 //
 // Ownership-checked like every other route that takes a Meta id from a client:
 // the ad must live under the caller's OWN campaign. Without it this would be a

@@ -21,7 +21,7 @@ export function Settings() {
   const [budgetSent, setBudgetSent] = useState(false);
   const [connHealth, setConnHealth] = useState<AccessHealth | null>(null);
   const [connChecking, setConnChecking] = useState(false);
-  // AIC-134: the business profile. `null` until loaded so the inputs are never
+  // AIC-138: the business profile. `null` until loaded so the inputs are never
   // briefly blank and then filled — that reads as the page losing their data.
   const [profile, setProfile] = useState<CustomerWriteFields | null>(null);
   const [profileBusy, setProfileBusy] = useState(false);
@@ -75,7 +75,7 @@ export function Settings() {
           <div className="stack gap20" style={{ gap: 20 }}>
             <SupportCard />
 
-            {/* AIC-134: the same fields the ops console collects, editable
+            {/* AIC-138: the same fields the ops console collects, editable
                 here. The customer is the authority on their own business, and
                 a differentiator or a price changes without anyone thinking to
                 tell their agency. Same component as the admin form, not a

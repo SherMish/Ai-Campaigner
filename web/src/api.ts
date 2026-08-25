@@ -253,7 +253,7 @@ export interface CustomerWriteFields {
   businessName?: string;
   category?: string;
   mainService?: string;
-  // AIC-134: the creative-context slice — what an AI needs to write copy that
+  // AIC-138: the creative-context slice — what an AI needs to write copy that
   // is about this business rather than generic marketing filler.
   differentiators?: string;
   objections?: string;
@@ -422,7 +422,7 @@ export const setObjectPaused = (kind: ControlKind, metaObjectId: string, paused:
  *  with no un-archive, so it stays operator-only.
  *
  *  Hiding requires the ad to already be paused, enforced server-side (409). */
-/** AIC-135: one ad's full creative, for the details modal. Ownership-checked
+/** AIC-139: one ad's full creative, for the details modal. Ownership-checked
  *  server-side — an ad id from another campaign answers 404. */
 export interface AdDetail {
   adId: string;
@@ -440,14 +440,14 @@ export interface AdDetail {
 export const getAdDetail = (metaAdId: string) =>
   api<AdDetail>(`/app/controls/ad/${encodeURIComponent(metaAdId)}`);
 
-/** AIC-134: the customer's own business profile, on /app/settings. The server
+/** AIC-138: the customer's own business profile, on /app/settings. The server
  *  resolves the customer from the JWT and writes only a whitelisted set of
  *  columns — isTest, budget and engine thresholds are not reachable here. */
 export const getMyProfile = () => api<CustomerWriteFields>("/app/profile");
 export const saveMyProfile = (fields: CustomerWriteFields) =>
   api<{ ok: true }>("/app/profile", { method: "PATCH", body: JSON.stringify(fields) });
 
-/** AIC-132: the connected Page's name + profile photo, for the ad preview.
+/** AIC-136: the connected Page's name + profile photo, for the ad preview.
  *  Always resolves — a failure comes back as nulls and the preview falls back
  *  to a neutral placeholder rather than breaking the screen. */
 export const getConnectedPage = () =>

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { normalizeAdDetail } from "./ad-detail.js";
 
-describe("normalizeAdDetail (AIC-135)", () => {
+describe("normalizeAdDetail (AIC-139)", () => {
   it("reads the copy we wrote, from link_data", () => {
     // Shape verified against a real live ad on 2026-08-25.
     const d = normalizeAdDetail({

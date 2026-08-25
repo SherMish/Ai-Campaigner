@@ -1,6 +1,6 @@
 import type pg from "pg";
 
-// AIC-134: the business profile, read and written by the CUSTOMER themselves
+// AIC-138: the business profile, read and written by the CUSTOMER themselves
 // from /app/settings. The same facts the ops console collects — they are the
 // customer's own answers about their own business, and they are the ones best
 // placed to keep them current.

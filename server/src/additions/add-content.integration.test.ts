@@ -204,7 +204,7 @@ d("add content to an existing campaign (DB)", () => {
     expect(otherWriter.activateAdCalls).toHaveLength(0);
   });
 
-  // AIC-132, found live: every addition read "בוצע על ידינו" — us — for ads the
+  // AIC-137, found live: every addition read "בוצע על ידינו" — us — for ads the
   // CUSTOMER had just added from their own dashboard. approved_by was written
   // NULL, and actorOf reads NULL-with-human_involved as "a human did it and it
   // was not the customer's dashboard". Right default, wrong answer here.

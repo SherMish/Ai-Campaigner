@@ -1,4 +1,4 @@
-// AIC-134: the customer editing their OWN business profile from /app/settings.
+// AIC-138: the customer editing their OWN business profile from /app/settings.
 //
 // The point of this file is the whitelist. These fields are also writable by
 // the admin console, whose writer additionally accepts isTest,
@@ -30,7 +30,7 @@ async function seed(tag: string) {
   return { customerId, token: signAuthToken(user.rows[0].id) };
 }
 
-d("customer business profile (AIC-134)", () => {
+d("customer business profile (AIC-138)", () => {
   beforeAll(() => { process.env.JWT_SECRET ||= "test-secret-profile-at-least-32-chars-long"; });
   afterAll(async () => {
     await pool.query(`DELETE FROM app_users WHERE email LIKE '__it_prof_%'`);

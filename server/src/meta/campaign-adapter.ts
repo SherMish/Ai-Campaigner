@@ -888,7 +888,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     return match.access_token;
   }
 
-  // AIC-132: the Page's real name and profile photo, for the ad preview.
+  // AIC-136: the Page's real name and profile photo, for the ad preview.
   //
   // The preview header used to read "העסק שלך" with a letter in a circle —
   // a placeholder standing where the single most recognisable thing about the
@@ -1000,7 +1000,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // (read back as call_to_action_type: WHATSAPP_MESSAGE). The post never
   // needed its own CTA — we needed to attach one, exactly as the upload path
   // already does.
-  // AIC-135: one ad's full creative, for the details modal. Fetched only when
+  // AIC-139: one ad's full creative, for the details modal. Fetched only when
   // a customer opens that ad — the panel already makes two live reads on open,
   // and pulling every ad's copy into them would pay for text nobody asked to
   // see.

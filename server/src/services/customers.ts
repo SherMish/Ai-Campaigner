@@ -103,7 +103,7 @@ export async function listCustomers(pool: pg.Pool): Promise<CustomerListRow[]> {
 
 export interface CustomerDetail extends CustomerListRow {
   mainService: string;
-  // AIC-134 / AIC-78's first slice: the facts a copy generator needs to write
+  // AIC-138 / AIC-78's first slice: the facts a copy generator needs to write
   // about THIS business. Captured on the onboarding call, where they are told
   // freely and were previously lost.
   differentiators: string;

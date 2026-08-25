@@ -279,7 +279,7 @@ was off; here the children are). Only asserted when live statuses are loaded
 nothing about what's running, and guessing would swap one false badge for
 another.
 
-## The business profile on Settings (AIC-134)
+## The business profile on Settings (AIC-138)
 
 The same fields the ops console collects, editable by the customer. They are the
 customer's own answers about their own business, and they are the ones who know
@@ -309,7 +309,7 @@ this server doesn't know should still save the rest, and dropping it is safer
 than writing it. Values are trimmed and length-capped, since the JSON body limit
 bounds a request but not a single column.
 
-## The ad-details modal (AIC-135)
+## The ad-details modal (AIC-139)
 
 Clicking an ad in `הצג פירוט` opens its full creative: image, headline, primary
 text, button and destination. The row's own title is the affordance — a separate

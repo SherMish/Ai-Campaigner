@@ -23,7 +23,7 @@ export interface AdDraft {
   localPreviewUrl: string | null;
   postId: string | null;
   postPreview: string | null;
-  // AIC-132: the post's own copy, so the preview can show what the ad will
+  // AIC-136: the post's own copy, so the preview can show what the ad will
   // actually say. Client-only, never sent — the creative is built from postId.
   postMessage: string | null;
   creativeId: string | null;
@@ -65,7 +65,7 @@ interface Props {
   ads: AdDraft[];
   onChange: (ads: AdDraft[]) => void;
   // AIC-130/132: who the ad appears to come from, in the preview header. The
-  // Page's real name and profile photo when we can read them (AIC-132), else
+  // Page's real name and profile photo when we can read them (AIC-136), else
   // just a name, else a neutral placeholder — the preview stays useful at every
   // level, so a caller missing this is never blocked from rendering one.
   businessName?: string;
@@ -119,7 +119,7 @@ export function BuilderCreatives({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postsOnly, ads]);
 
-  // AIC-132, found live: "the photo appears for 1 sec and disappears".
+  // AIC-136, found live: "the photo appears for 1 sec and disappears".
   //
   // `ads` is a PROP, captured at render. doUpload calls update() twice in one
   // async function — once to show the picked file immediately, once when the
@@ -323,7 +323,7 @@ function AdCard({
             </div>
           )}
 
-          {/* AIC-132: OUTSIDE the source branches, because both need it. It
+          {/* AIC-136: OUTSIDE the source branches, because both need it. It
               used to sit inside the upload arm only, so choosing an existing
               post — the path where there is already a real picture to show —
               got no preview at all. Reported live as "still don't see the image
@@ -440,7 +440,7 @@ function AdPreview({ ad, businessName, pictureUrl }: {
   //   1. the local file just picked — an uploaded IMAGE has no URL at all
   //      (Meta returns only an imageHash), which is why the draft carries one
   //   2. Meta's thumbnail for an uploaded video
-  //   3. the chosen existing POST's own picture — AIC-132: this was missing
+  //   3. the chosen existing POST's own picture — AIC-136: this was missing
   //      entirely, on the one path where a real picture already exists
   const src =
     ad.localPreviewUrl ??
@@ -470,7 +470,7 @@ function AdPreview({ ad, businessName, pictureUrl }: {
         {/* An existing post carries its OWN copy; the headline/primary-text
             fields are not even shown on that path, so reading them would
             render an empty placeholder over a post that has real text. */}
-        {/* NOT <bdi> — AIC-132, found live. bdi picks its direction from the
+        {/* NOT <bdi> — AIC-136, found live. bdi picks its direction from the
             FIRST STRONG CHARACTER, so ad copy beginning with a Latin brand name
             ("Ads Agent מנהל את הקמפיין…") made the whole Hebrew paragraph
             render LTR: full stops jumped to the start of lines and the brand

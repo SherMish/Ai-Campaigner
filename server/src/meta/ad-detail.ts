@@ -1,4 +1,4 @@
-// AIC-135: one ad's full creative, for the details modal.
+// AIC-139: one ad's full creative, for the details modal.
 //
 // Separate from ad-media.ts, which answers "what pictures does this ad have"
 // for the whole campaign at once. This answers "show me EVERYTHING about this

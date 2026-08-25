@@ -4,7 +4,7 @@ import { strings } from "../strings";
 const ST = strings.he.app.home.statusTooltip;
 
 // The small "i" affordance and its popover, extracted from Home's StatusInfo
-// (AIC-134) so the admin forms can use the same one. Everything non-obvious
+// (AIC-138) so the admin forms can use the same one. Everything non-obvious
 // here was earned by the original: hover lives on the WRAPPER so moving the
 // pointer from the "i" into the popover doesn't dismiss it mid-read; the
 // popover is position:fixed and re-measured on scroll/resize so it never gets

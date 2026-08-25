@@ -7,7 +7,7 @@ const cc = strings.he.customerCrud;
 const hint = cc.hints;
 
 // The business profile a customer is described by. Extracted from
-// AdminCustomers (AIC-134) so the onboarding wizard collects the SAME set
+// AdminCustomers (AIC-138) so the onboarding wizard collects the SAME set
 // rather than growing a parallel copy — a second list of these fields would
 // drift the first time one was added, and the drifting half would be the one an
 // operator fills in during a live call.

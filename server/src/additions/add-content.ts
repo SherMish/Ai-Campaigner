@@ -42,7 +42,7 @@ export interface AddAdInput {
   metaAdSetId: string; // an EXISTING ad set — caller must verify ownership first
   name: string;
   creativeId: string;
-  // AIC-132: who is doing this — 'customer' from their own dashboard,
+  // AIC-137: who is doing this — 'customer' from their own dashboard,
   // 'operator' when we act for them. Drives the action-history attribution.
   actor: string;
   additionKey: string; // client-generated, stable across a resubmission of this same attempt
@@ -72,7 +72,7 @@ export interface AddResult {
   activation: ApproveResult;
 }
 
-// AIC-132, found live: every addition read "בוצע על ידינו" — us — for ads the
+// AIC-137, found live: every addition read "בוצע על ידינו" — us — for ads the
 // CUSTOMER had just added from their own dashboard. approved_by was written
 // NULL, and actorOf() reads NULL-with-human_involved as "a human did it and it
 // wasn't the customer's dashboard", which is the right default and the wrong

@@ -223,7 +223,7 @@ Meta *creative* had been made. On this screen that produced two green "the ad
 was created" ticks with no ad on Meta and nothing in the action history. It now
 reads **"התוכן מוכן"**.
 
-## The disabled submit button now says why (AIC-132)
+## The disabled submit button now says why (AIC-136)
 
 The "no ad sets at all" fix above left the commoner case untouched: ad sets
 exist, none is selected, and the button simply greys out. Reported live —
@@ -241,7 +241,7 @@ Two changes:
   both. Same house rule as everywhere else (AIC-98): never render a blank where
   a reason exists. A disabled control with no explanation is a blank.
 
-## Submitting more than one ad (AIC-132)
+## Submitting more than one ad (AIC-136)
 
 The submit creates **one ad per prepared creative** — it loops over them — so
 with two ready it was labelled for one. The button now pluralises, and so does
@@ -260,7 +260,7 @@ floating alone above the text, which reads as a rendering fault rather than a
 status. A status pill exists to *name* a state; an icon on its own names
 nothing. It now carries the state's actual words, with the detail beneath it.
 
-## Two things the addition path forgot to say (AIC-132)
+## Two things the addition path forgot to say (AIC-136)
 
 **Attribution.** Every addition read *"בוצע על ידינו"* — us — for ads the
 customer had just added themselves. `logAdd` wrote `approved_by = NULL`, and

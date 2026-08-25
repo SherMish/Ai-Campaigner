@@ -1213,7 +1213,7 @@ guard correctly blocking a demotion, a real reversible emergency-control
 round trip on Pisga's own campaign logging both actions truthfully) — cleaned
 up afterward.
 
-## The onboarding wizard opens with the business profile (AIC-134)
+## The onboarding wizard opens with the business profile (AIC-138)
 
 The wizard used to start at *"שלב 1 — הלקוח משתף גישה"*, and the business
 profile — category, main service, service area, target audience, offer, contact
@@ -1236,7 +1236,7 @@ blank field saved over a real value is silent data loss on a live call.
 fields would drift the first time one was added, and the drifting half would be
 the one an operator fills in with the customer on the phone.
 
-### Every field carries an "i", and five new ones (AIC-134 / first slice of AIC-78)
+### Every field carries an "i", and five new ones (AIC-138 / first slice of AIC-78)
 
 **The hints are not decoration.** The value of these answers depends entirely on
 *how* they are filled in — *"שיפוצים"* and *"שיפוצי מטבחים בדירות ישנות בגוש

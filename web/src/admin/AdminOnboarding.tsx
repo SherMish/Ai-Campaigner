@@ -43,7 +43,7 @@ interface OnboardingState {
 interface CustomerBasics {
   id: string;
   businessName: string;
-  // AIC-134: the business profile. GET /admin/customers/:id has always
+  // AIC-138: the business profile. GET /admin/customers/:id has always
   // returned these (getCustomerDetail selects the full record) — the wizard
   // simply declared a narrower shape and threw them away.
   category?: string;
@@ -145,7 +145,7 @@ export function AdminOnboarding() {
   const { id } = useParams<{ id: string }>();
   const nav = useNavigate();
   const [customer, setCustomer] = useState<CustomerBasics | null>(null);
-  // AIC-134: the business profile, edited in place at the top of the wizard.
+  // AIC-138: the business profile, edited in place at the top of the wizard.
   // `null` until the customer loads, so the inputs are never briefly blank and
   // then repopulated — on a live call that reads as the wizard losing data.
   const [profile, setProfile] = useState<CustomerWriteFields | null>(null);
@@ -689,7 +689,7 @@ export function AdminOnboarding() {
       )}
       {error && <p style={{ color: "#c0362c", fontSize: "0.85rem", marginTop: 8 }}>{error}</p>}
 
-      {/* AIC-134: the business profile, FIRST. Everything after it depends on
+      {/* AIC-138: the business profile, FIRST. Everything after it depends on
           it — the builder's recommended defaults key off the category
           (AIC-49) and the ad copy is written from the offer and the target
           audience — so collecting it at the end meant the operator either

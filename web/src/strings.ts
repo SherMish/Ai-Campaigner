@@ -220,7 +220,7 @@ export const strings = {
       fieldIsTest: "חשבון פנימי/בדיקה (לא נספר בנתוני חיוב)",
       fieldAgreedBudget: "תקציב מוסכם (₪ ליום)",
 
-      // AIC-134. An "i" next to every field, because the value of these
+      // AIC-138. An "i" next to every field, because the value of these
       // answers depends entirely on HOW they are filled in: "שיפוצים" and
       // "שיפוצי מטבחים בדירות ישנות בגוש דן" are the same field and produce
       // completely different ad copy. Each hint says what to write and gives a
@@ -521,7 +521,7 @@ export const strings = {
       // exactly what is already verified.
       resumedNote: "כבר עבדנו על הלקוח הזה — הבדיקות למטה מראות מה כבר אומת.",
 
-      // AIC-134: the business profile, collected BEFORE the Meta connection
+      // AIC-138: the business profile, collected BEFORE the Meta connection
       // steps. It comes first because everything after it depends on it — the
       // builder's recommended defaults key off the category (AIC-49), and the
       // ad copy is written from the offer and the target audience. Collecting
@@ -1235,7 +1235,7 @@ export const strings = {
           // real ad is named "almond green, french, video, pink lines" but has
           // exactly one creative; claiming 4 would invent data).
           adOne: "מודעה אחת",
-          // AIC-135: the per-ad details modal.
+          // AIC-139: the per-ad details modal.
           adDetailOpen: "הצגת המודעה",
           adDetailTitle: "פרטי המודעה",
           adDetailHeadline: "כותרת",
@@ -1247,7 +1247,7 @@ export const strings = {
           adDetailError: "לא הצלחנו לטעון את פרטי המודעה.",
           adDetailClose: "סגירה",
           adDetailEmpty: "—",
-          // AIC-135: Meta's CTA enum in plain Hebrew. The modal is a CUSTOMER
+          // AIC-139: Meta's CTA enum in plain Hebrew. The modal is a CUSTOMER
           // surface and "WHATSAPP_MESSAGE" is jargon there — the same
           // raw-Meta-names problem AIC-73 fixed in the details panel.
           // An unknown type falls back to the raw value on purpose: showing
@@ -1273,7 +1273,7 @@ export const strings = {
           // post IS the creative. Saying so beats rendering three blanks and
           // implying the ad is empty.
           adDetailFromPost: "המודעה בנויה מפוסט קיים בעמוד — הטקסט והכותרת מגיעים מהפוסט עצמו.",
-          // AIC-135: editing. Meta's own reference lists `name` and `status` as
+          // AIC-139: editing. Meta's own reference lists `name` and `status` as
           // the ONLY editable fields on a creative, so changing copy means
           // building a new one — which costs the ad its learning and sends it
           // back to review. Said plainly instead of offering a pencil that
@@ -1525,7 +1525,7 @@ export const strings = {
         supportTitle: "צריכים עזרה?",
         support: "אפשר לדבר איתנו בוואטסאפ או לקבוע שיחה.",
         bookCall: "קביעת שיחה",
-        // AIC-134: the same business profile the ops console collects, editable
+        // AIC-138: the same business profile the ops console collects, editable
         // by the customer. Framed as what it is for — these answers are what
         // the copy is written from, so a customer who understands that fills
         // them in properly instead of treating it as a contact form.
@@ -1925,7 +1925,7 @@ export const strings = {
       // without an ad set, so say that here and point at the tab that fixes it.
       noAdSetsBody: "מודעה חייבת להשתייך לקבוצת מודעות, ובקמפיין הזה אין אף אחת כרגע. אפשר ליצור קבוצת מודעות ואז לחזור לכאן ולהוסיף אליה מודעות.",
       noAdSetsCta: "יצירת קבוצת מודעות",
-      // AIC-132: why the submit button is dead. Fixing the "no ad sets at all"
+      // AIC-136: why the submit button is dead. Fixing the "no ad sets at all"
       // case left the commoner one untouched — ad sets exist, none is picked,
       // and the button just greys out saying nothing.
       blockedPickAdSet: "לבחור קבוצת מודעות למעלה",
@@ -1942,7 +1942,7 @@ export const strings = {
       // paused, then separately approve it" two-step. The CTA says what
       // actually happens now.
       submitAdCta: "הוספת המודעה",
-      // AIC-132: the flow creates ONE AD PER READY CREATIVE — the submit loops
+      // AIC-136: the flow creates ONE AD PER READY CREATIVE — the submit loops
       // over them — so with two prepared it was labelled for one.
       submitAdCtaPlural: "הוספת המודעות",
       submitAdSetCta: "הוספת קבוצת המודעות",
@@ -1957,7 +1957,7 @@ export const strings = {
       submitSuccessBodyRetryPlural: "המודעות נוצרו בהצלחה, אבל היה קושי להפעיל אותן. אפשר לנסות שוב למטה.",
       submitAnother: "הוספת עוד",
       submitError: "משהו השתבש בהוספה. אפשר לנסות שוב — מה שכבר נוצר לא ייווצר פעמיים.",
-      // AIC-132: the submit creates the ads one at a time, so a failure on the
+      // AIC-136: the submit creates the ads one at a time, so a failure on the
       // second leaves the first ALREADY CREATED. Reporting that as a flat
       // failure sends the customer back to retry believing nothing happened,
       // when in fact an ad is live. The retry is safe either way — it is keyed

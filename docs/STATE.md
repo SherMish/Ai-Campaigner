@@ -6,7 +6,28 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
-### 2026-08-25 — Click an ad to see its full creative (AIC-135)
+### 2026-08-25 — Ticket-id mapping for nine commits with wrong ids
+Nine commits dated 2026-08-25 carry ticket ids that belong to **different**
+tickets. The work had no ticket at all; the ids were invented while writing the
+commit message, and Linear had meanwhile assigned those numbers to real,
+unrelated tickets. History was not rewritten — the commits are pushed and
+deployed, and rewriting master to fix a reference costs more than the confusion
+it removes. Code comments and docs have been corrected; this note exists so the
+commit messages stay discoverable rather than silently misleading.
+
+| Commit message says | Actually is | The real ticket with that id |
+| --- | --- | --- |
+| `aic-132` — a8048ce, f10c344, 4b9d86a, 6a122dc | **AIC-136** add-content / ad-preview fixes | AIC-132 = profile quality gate |
+| `aic-132` — a6eb500 | **AIC-137** additions attribution + stale delivery state | AIC-132 = profile quality gate |
+| `aic-134` — 638afc5, 9db4bbf, 8f31b5a | **AIC-138** business profile capture | AIC-134 = unit economics |
+| `aic-135` — 43b6144 | **AIC-139** ad-details modal | AIC-135 = funnel diagnosis |
+
+The root cause is the one AIC-129 already names: **writing an id into a commit
+before Linear has assigned it.** The rule going forward is create the ticket
+first, read the id back, then reference it — and flip the status in the commit
+that closes it.
+
+### 2026-08-25 — Click an ad to see its full creative (AIC-139)
 Clicking an ad in הצג פירוט opens its image, headline, primary text, button and
 destination — the row's own title is the affordance, since the row already
 carries pause and remove. One live Meta read per ad, on open: the panel already
@@ -28,7 +49,7 @@ buttons past the fold (1030px of content in a 720px viewport), and the button
 showed the raw enum WHATSAPP_MESSAGE — the same raw-Meta-names problem AIC-73
 fixed in the panel itself.
 
-### 2026-08-25 — The business profile is editable by the customer too (AIC-134)
+### 2026-08-25 — The business profile is editable by the customer too (AIC-138)
 The same fields the ops console collects, now on /app/settings, populated from
 the database. The customer is the authority on their own business and the first
 to know when a differentiator or a price changes; the note above the form says
@@ -49,7 +70,7 @@ none of them lands.
 Rendered and exercised as a customer before shipping: 14 fields, no internal
 test flag, two edits saved and read back out of the database.
 
-### 2026-08-25 — An "i" on every onboarding field, and five fields an AI actually needs (AIC-134)
+### 2026-08-25 — An "i" on every onboarding field, and five fields an AI actually needs (AIC-138)
 Hints on every field, because how these are filled in decides their worth:
 "שיפוצים" and "שיפוצי מטבחים בדירות ישנות בגוש דן" are the same field and
 produce completely different copy. Each hint says what to write and gives an
@@ -72,7 +93,7 @@ two edits in one tick lost one (reachable via browser autofill, which fills
 name/phone/email together) — the same stale-closure fix BuilderCreatives needed
 the same morning, reintroduced hours later in a new component.
 
-### 2026-08-25 — The onboarding wizard opens with the business profile (AIC-134)
+### 2026-08-25 — The onboarding wizard opens with the business profile (AIC-138)
 The wizard started at "שלב 1 — הלקוח משתף גישה", with the business profile
 (category, main service, area, audience, offer, contact) living only on the
 customer card — a separate screen. Backwards, because everything after it
@@ -117,7 +138,7 @@ victim's ad genuinely the attacker's as far as the ownership check could tell,
 and turned five correct refusals into apparent 200s. A permissive mock does not
 prove isolation; it manufactures ownership.
 
-### 2026-08-25 — The dead submit button, and a preview that shows the real Page (AIC-132)
+### 2026-08-25 — The dead submit button, and a preview that shows the real Page (AIC-136)
 **"Created ad without choosing ad set. Didn't get an error. Was the ad created
 or not?"** — reported live. It was not. The ad set radio was unticked, so the
 button was disabled, and nothing said so while a green "התוכן מוכן ✓" sat

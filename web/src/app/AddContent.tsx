@@ -32,11 +32,11 @@ export function AddContent() {
   const [missingConfigFields, setMissingConfigFields] = useState<string[]>([]);
 
   // add-ad mode
-  // AIC-132: who the ad appears to come from, for the preview header. Fetched
+  // AIC-136: who the ad appears to come from, for the preview header. Fetched
   // once and best-effort — a failure leaves the neutral placeholder rather than
   // blocking the screen.
   const [page, setPage] = useState<{ name: string | null; pictureUrl: string | null }>({ name: null, pictureUrl: null });
-  // AIC-132: how many ads the last submit actually created. A ref as well as
+  // AIC-136: how many ads the last submit actually created. A ref as well as
   // state because the catch block needs the count DURING the failed run, and
   // a state update from inside the loop would not be visible there.
   const [submittedCount, setSubmittedCount] = useState(0);
@@ -101,7 +101,7 @@ export function AddContent() {
     getExistingAdSets()
       .then((r) => {
         setAdSets(r.adSets);
-        // AIC-132: with exactly one ad set there is no decision to make, and
+        // AIC-136: with exactly one ad set there is no decision to make, and
         // leaving it unpicked produced a dead submit button the customer had
         // no reason to connect to an unticked radio they never saw.
         if (r.adSets.length === 1) setSelectedAdSetId(r.adSets[0].id);
@@ -132,7 +132,7 @@ export function AddContent() {
     submittedSoFar.current = 0;
     try {
       let allLive = true;
-      // AIC-132: counted, because these are created ONE AT A TIME. A failure on
+      // AIC-136: counted, because these are created ONE AT A TIME. A failure on
       // the second leaves the first already created and live — reporting that
       // as a flat failure would send the customer back believing nothing
       // happened while an ad is running.
@@ -314,7 +314,7 @@ export function AddContent() {
           </div>
 
           {justAdded ? (
-            // AIC-132: the pill used to hold a bare "✓" with no label — a
+            // AIC-136: the pill used to hold a bare "✓" with no label — a
             // green chip floating alone above the text, which reads as a
             // rendering fault rather than a status. A status pill exists to
             // NAME a state; an icon on its own names nothing.
@@ -384,7 +384,7 @@ export function AddContent() {
                   </div>
 
                   {submitError && <p className="muted" style={{ color: "var(--orange)" }}>{submitError}</p>}
-                  {/* AIC-132: a disabled button that explains nothing is the
+                  {/* AIC-136: a disabled button that explains nothing is the
                       same dead end as the missing-ad-set screen, just later in
                       the flow — the customer sees "התוכן מוכן ✓" and a greyed
                       button and reasonably concludes something broke. House

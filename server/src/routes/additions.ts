@@ -24,7 +24,7 @@ import { gendersOf } from "./builder.js";
 // resolves the caller's context fresh from their own JWT-scoped rows.
 export const additionsRouter = Router();
 
-// AIC-132: the delivery refresh below raises/clears ops items like every other
+// AIC-137: the delivery refresh below raises/clears ops items like every other
 // caller of refreshDeliveryNow.
 const ops = new OpsQueue(pool);
 
@@ -152,7 +152,7 @@ additionsRouter.get("/ad-sets", requireAuth, async (req, res) => {
 });
 
 // GET /page — the connected Page's name and profile photo, for the ad preview
-// (AIC-132). Read-only and best-effort: a failure degrades the preview header
+// (AIC-136). Read-only and best-effort: a failure degrades the preview header
 // to a neutral placeholder rather than breaking the screen, because a mock-up
 // missing an avatar is still a useful mock-up.
 additionsRouter.get("/page", requireAuth, async (req, res) => {
@@ -355,7 +355,7 @@ interface AddAdSetBody {
   additionKey?: string;
 }
 
-// AIC-132, found live: after adding two ads the dashboard headline still read
+// AIC-137, found live: after adding two ads the dashboard headline still read
 // "אין כרגע מודעות שמוצגות ללקוחות · כל קבוצות הפרסום מושהות" while the
 // campaign, its ad set and both new ads were all ACTIVE on Meta. The
 // delivery/homeState cache is only recomputed on the hourly tick and by the
