@@ -10,6 +10,7 @@
 // that's what makes retrying a half-failed create safe.
 import { describe, it, expect, afterAll } from "vitest";
 import { pool } from "../db/pool.js";
+import { actorOf } from "../services/action-history.js";
 import { addAdToExistingCampaign, addAdSetToExistingCampaign } from "./add-content.js";
 import { approveAddition } from "./approve.js";
 import { FakeAddContentWriter, FakeAdditionWriter } from "./types.js";
@@ -48,7 +49,7 @@ d("add content to an existing campaign (DB)", () => {
       metaAdSetId: "as_existing_1",
       name: "New Ad",
       creativeId: "crea_1",
-      additionKey: "attempt-1",
+      additionKey: "attempt-1", actor: "customer",
     });
 
     expect(result.metaAdSetId).toBe("as_existing_1");
@@ -74,7 +75,7 @@ d("add content to an existing campaign (DB)", () => {
   it("adding an ad is idempotent per additionKey: a resubmit never creates a second ad, a second row, or re-activates", async () => {
     const { campaignId } = await makeExistingCampaign("ad-idem");
     const writer = new FakeAddContentWriter();
-    const input = { localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "same-key" };
+    const input = { localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "same-key" , actor: "customer"};
 
     const first = await addAdToExistingCampaign(pool, writer, input);
     const second = await addAdToExistingCampaign(pool, writer, input);
@@ -105,7 +106,7 @@ d("add content to an existing campaign (DB)", () => {
         { clientKey: "ad-1", name: "Ad A", creativeId: "crea_a" },
         { clientKey: "ad-2", name: "Ad B", creativeId: "crea_b" },
       ],
-      additionKey: "attempt-2",
+      additionKey: "attempt-2", actor: "customer",
     });
 
     expect(result.metaAdIds).toHaveLength(2);
@@ -133,7 +134,7 @@ d("add content to an existing campaign (DB)", () => {
       localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_existing", pageId: "page_1",
       name: "Set", targeting: { ageMin: 20, ageMax: 40, genders: [], countries: ["IL"] },
       ads: [{ clientKey: "ad-1", name: "Ad A", creativeId: "crea_a" }],
-      additionKey: "attempt-3",
+      additionKey: "attempt-3", actor: "customer",
     };
 
     await expect(addAdSetToExistingCampaign(pool, writer, input)).rejects.toThrow("simulated Meta create-ad failure");
@@ -160,7 +161,7 @@ d("add content to an existing campaign (DB)", () => {
     writer.failNextActivateAd = 1;
 
     const result = await addAdToExistingCampaign(pool, writer, {
-      localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "a-1",
+      localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "a-1", actor: "customer",
     });
 
     expect(result.metaAdIds).toHaveLength(1); // the ad DID get created
@@ -177,7 +178,7 @@ d("add content to an existing campaign (DB)", () => {
     const { campaignId } = await makeExistingCampaign("approve-idem");
     const writer = new FakeAddContentWriter();
     const added = await addAdToExistingCampaign(pool, writer, {
-      localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "a-1",
+      localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "a-1", actor: "customer",
     });
 
     // Already activated by the create itself; a further call must no-op.
@@ -193,7 +194,7 @@ d("add content to an existing campaign (DB)", () => {
     const b = await makeExistingCampaign("owner-b");
     const writer = new FakeAddContentWriter();
     const added = await addAdToExistingCampaign(pool, writer, {
-      localCampaignId: a.campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "a-1",
+      localCampaignId: a.campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "a-1", actor: "customer",
     });
     const otherWriter = new FakeAdditionWriter();
 
@@ -201,5 +202,29 @@ d("add content to an existing campaign (DB)", () => {
 
     expect(stolen.outcome).toBe("not_found");
     expect(otherWriter.activateAdCalls).toHaveLength(0);
+  });
+
+  // AIC-132, found live: every addition read "בוצע על ידינו" — us — for ads the
+  // CUSTOMER had just added from their own dashboard. approved_by was written
+  // NULL, and actorOf reads NULL-with-human_involved as "a human did it and it
+  // was not the customer's dashboard". Right default, wrong answer here.
+  it("attributes an addition to whoever actually did it", async () => {
+    const { campaignId } = await makeExistingCampaign("actor");
+    const writer = new FakeAddContentWriter();
+    await addAdToExistingCampaign(pool, writer, {
+      localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it",
+      metaAdSetId: "as_existing_1", name: "Ad", creativeId: "cr_1", additionKey: "k-actor",
+      actor: "customer",
+    });
+
+    const { rows } = await pool.query<{ approved_by: string | null; human_involved: boolean }>(
+      `SELECT approved_by, human_involved FROM action_history
+        WHERE campaign_id = $1 AND action_type = 'create_ad'`,
+      [campaignId],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].approved_by).toBe("customer");
+    // The projection the dashboard actually reads.
+    expect(actorOf(rows[0].human_involved, rows[0].approved_by)).toBe("customer");
   });
 });

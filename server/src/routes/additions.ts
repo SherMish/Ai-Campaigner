@@ -9,6 +9,9 @@ import {
   resolveCreativeDestination, type CreativeBlockReason,
 } from "../additions/session.js";
 import { addAdToExistingCampaign, addAdSetToExistingCampaign } from "../additions/add-content.js";
+import { refreshDeliveryNow } from "../services/delivery-monitor.js";
+import type { DeliveryReader } from "../meta/delivery-health.js";
+import { OpsQueue } from "../services/ops-queue.js";
 import { approveAddition, listPendingAdditions } from "../additions/approve.js";
 import { createCreativeIdempotent, uploadCreativeMedia, type CreativeSpec } from "../builder/creative-create.js";
 import type { CreativeMedia } from "../builder/creative-types.js";
@@ -20,6 +23,10 @@ import { gendersOf } from "./builder.js";
 // required), and nothing here ever creates a new campaign. Every route
 // resolves the caller's context fresh from their own JWT-scoped rows.
 export const additionsRouter = Router();
+
+// AIC-132: the delivery refresh below raises/clears ops items like every other
+// caller of refreshDeliveryNow.
+const ops = new OpsQueue(pool);
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_VIDEO_BYTES } });
 
@@ -331,7 +338,9 @@ additionsRouter.post("/ad", requireAuth, async (req, res) => {
       name: body.name,
       creativeId: body.creativeId,
       additionKey: body.additionKey,
+      actor: "customer",
     });
+    await refreshAfterAdd(ctx, writer);
     res.json(result);
   } catch (e) {
     console.error("[additions] add ad failed", e);
@@ -344,6 +353,37 @@ interface AddAdSetBody {
   targeting?: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[] };
   ads?: Array<{ clientKey: string; name: string; creativeId: string }>;
   additionKey?: string;
+}
+
+// AIC-132, found live: after adding two ads the dashboard headline still read
+// "אין כרגע מודעות שמוצגות ללקוחות · כל קבוצות הפרסום מושהות" while the
+// campaign, its ad set and both new ads were all ACTIVE on Meta. The
+// delivery/homeState cache is only recomputed on the hourly tick and by the
+// write paths that explicitly ask for it — pause/resume (AIC-71) and launch
+// approval. Adding content was the remaining one that skipped it.
+//
+// delivery-monitor's own doc comment predicts this symptom for exactly that
+// omission; this is the third write path to need the same line, which is a
+// hint the refresh belongs closer to the writes than to each route.
+//
+// Isolated: a refresh failure must not turn a successful addition into an
+// error response. The ads exist either way, and the headline self-corrects on
+// the next tick.
+async function refreshAfterAdd(
+  ctx: { localCampaignId: string; customerId: string | null; metaCampaignId: string },
+  writer: unknown,
+): Promise<void> {
+  try {
+    await refreshDeliveryNow({
+      pool, ops,
+      deliveryReader: writer as DeliveryReader,
+      campaignId: ctx.localCampaignId,
+      customerId: ctx.customerId,
+      metaCampaignId: ctx.metaCampaignId,
+    });
+  } catch (e) {
+    console.error("[additions] delivery refresh after add failed", e);
+  }
 }
 
 // POST /ad-set — add a new PAUSED ad set + its ads under the EXISTING
@@ -381,6 +421,7 @@ additionsRouter.post("/ad-set", requireAuth, async (req, res) => {
       },
       ads: body.ads,
       additionKey: body.additionKey,
+      actor: "customer",
     });
     res.json(result);
   } catch (e) {

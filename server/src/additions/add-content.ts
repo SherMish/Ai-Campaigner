@@ -42,6 +42,9 @@ export interface AddAdInput {
   metaAdSetId: string; // an EXISTING ad set — caller must verify ownership first
   name: string;
   creativeId: string;
+  // AIC-132: who is doing this — 'customer' from their own dashboard,
+  // 'operator' when we act for them. Drives the action-history attribution.
+  actor: string;
   additionKey: string; // client-generated, stable across a resubmission of this same attempt
 }
 
@@ -53,6 +56,7 @@ export interface AddAdSetInput {
   name: string;
   targeting: CreateAdSetTargeting;
   ads: Array<{ clientKey: string; name: string; creativeId: string }>;
+  actor: string;
   additionKey: string;
 }
 
@@ -68,13 +72,30 @@ export interface AddResult {
   activation: ApproveResult;
 }
 
-async function logAdd(pool: pg.Pool, campaignId: string, actionType: string, targetMetaId: string, what: string): Promise<void> {
+// AIC-132, found live: every addition read "בוצע על ידינו" — us — for ads the
+// CUSTOMER had just added from their own dashboard. approved_by was written
+// NULL, and actorOf() reads NULL-with-human_involved as "a human did it and it
+// wasn't the customer's dashboard", which is the right default and the wrong
+// answer here. This IS the customer's dashboard.
+//
+// Threaded as a parameter rather than hardcoded to 'customer': today the only
+// caller is the customer's own route, and hardcoding would silently mislabel
+// the first operator-side caller that appears — the same shape of bug, just
+// pointing the other way.
+async function logAdd(
+  pool: pg.Pool,
+  campaignId: string,
+  actionType: string,
+  targetMetaId: string,
+  what: string,
+  approvedBy: string,
+): Promise<void> {
   await pool.query(
     `INSERT INTO action_history
        (campaign_id, recommendation_id, what, action_type, target_meta_id,
         previous_state, new_state, why, approved_by, human_involved, result)
-     VALUES ($1, NULL, $2, $3, $4, '{}'::jsonb, $5, $6, NULL, true, 'success')`,
-    [campaignId, what, actionType, targetMetaId, JSON.stringify({ metaId: targetMetaId }), "add to existing campaign (AIC-63)"],
+     VALUES ($1, NULL, $2, $3, $4, '{}'::jsonb, $5, $6, $7, true, 'success')`,
+    [campaignId, what, actionType, targetMetaId, JSON.stringify({ metaId: targetMetaId }), "add to existing campaign (AIC-63)", approvedBy],
   );
 }
 
@@ -129,7 +150,7 @@ export async function addAdToExistingCampaign(
   // use regardless. What it buys is that the common path settles immediately
   // instead of sitting as a candidate until the next reap.
   await markCreativesAttached(pool, [input.creativeId]);
-  await logAdd(pool, input.localCampaignId, "create_ad", metaAdId, `added ad "${input.name}" (paused) to an existing ad set`);
+  await logAdd(pool, input.localCampaignId, "create_ad", metaAdId, `added ad "${input.name}" (paused) to an existing ad set`, input.actor);
 
   const additionId = await recordPending(pool, input.localCampaignId, input.additionKey, "ad", input.name, input.metaAdSetId, [metaAdId]);
   // Activate immediately (AIC-106). Note this activates the AD only — never
@@ -185,7 +206,7 @@ export async function addAdSetToExistingCampaign(
     },
     creator,
   );
-  await logAdd(pool, input.localCampaignId, "create_ad_set", metaAdSetId, `added ad set "${input.name}" (paused)`);
+  await logAdd(pool, input.localCampaignId, "create_ad_set", metaAdSetId, `added ad set "${input.name}" (paused)`, input.actor);
 
   const metaAdIds: string[] = [];
   for (const ad of input.ads) {
@@ -204,7 +225,7 @@ export async function addAdSetToExistingCampaign(
       },
       creator,
     );
-    await logAdd(pool, input.localCampaignId, "create_ad", metaAdId, `added ad "${ad.name}" (paused)`);
+    await logAdd(pool, input.localCampaignId, "create_ad", metaAdId, `added ad "${ad.name}" (paused)`, input.actor);
     metaAdIds.push(metaAdId);
   }
 

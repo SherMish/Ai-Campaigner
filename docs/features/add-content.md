@@ -259,3 +259,27 @@ there. Retrying stays safe either way: the idempotency key is per draft.
 floating alone above the text, which reads as a rendering fault rather than a
 status. A status pill exists to *name* a state; an icon on its own names
 nothing. It now carries the state's actual words, with the detail beneath it.
+
+## Two things the addition path forgot to say (AIC-132)
+
+**Attribution.** Every addition read *"בוצע על ידינו"* — us — for ads the
+customer had just added themselves. `logAdd` wrote `approved_by = NULL`, and
+`actorOf` reads NULL-with-`human_involved` as *"a human did it and it wasn't the
+customer's dashboard"*. That is the right default and the wrong answer here,
+because this **is** their dashboard. The actor is now threaded as a parameter
+rather than hardcoded to `customer`: today the only caller is the customer's own
+route, and hardcoding would mislabel the first operator-side caller in exactly
+the same way, pointing the other way.
+
+**Delivery state.** After adding two ads the headline still read *"אין כרגע
+מודעות שמוצגות ללקוחות · כל קבוצות הפרסום מושהות"* while the campaign, its ad
+set and both new ads were **all ACTIVE on Meta**. The delivery/homeState cache
+is recomputed on the hourly tick and by write paths that explicitly ask —
+pause/resume (AIC-71) and launch approval. Adding content was the last one that
+skipped it, which `delivery-monitor.ts`'s own doc comment predicts for any write
+path that does.
+
+The refresh is isolated: a failure there must not turn a successful addition
+into an error, since the ads exist either way and the headline self-corrects on
+the next tick. This is the **third** route to need the same line — a hint the
+refresh belongs closer to the writes than to each caller.
