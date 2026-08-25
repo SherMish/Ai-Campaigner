@@ -119,8 +119,26 @@ export function BuilderCreatives({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postsOnly, ads]);
 
+  // AIC-132, found live: "the photo appears for 1 sec and disappears".
+  //
+  // `ads` is a PROP, captured at render. doUpload calls update() twice in one
+  // async function — once to show the picked file immediately, once when the
+  // upload returns — and both closed over the SAME pre-upload array. The second
+  // call rebuilt the draft from that stale snapshot, so `localPreviewUrl` set by
+  // the first was silently dropped. The picture showed for exactly as long as
+  // the upload took, then vanished.
+  //
+  // Composing through a ref makes sequential updates build on each other
+  // instead of each starting from the last render. Every multi-step handler
+  // here has the same shape (doCreate patches status, then the result), so this
+  // is the general fix rather than threading the lost field back through by
+  // hand at one call site.
+  const latest = useRef(ads);
+  latest.current = ads;
   function update(key: string, patch: Partial<AdDraft>) {
-    onChange(ads.map((a) => (a.clientKey === key ? { ...a, ...patch } : a)));
+    const next = latest.current.map((a) => (a.clientKey === key ? { ...a, ...patch } : a));
+    latest.current = next;
+    onChange(next);
   }
 
   function addAd() {
