@@ -191,3 +191,16 @@ describe("pause_adset — the copy names which basis was used (AIC-133)", () => 
     expect(t).toContain("כמות הפניות בלבד");
   });
 });
+
+describe("pause_creative — the copy names which basis was used (AIC-133)", () => {
+  it("says lead-quality feedback when the judgement used it", () => {
+    const t = explain(rec({ type: "pause_creative", targetMetaId: "ad_3", evidence: { spendAgorot: 18000, leads: 1, basis: "relevant_leads" } }));
+    expect(t).toContain("רלוונטית");
+    expect(t).toContain("המשוב שלכם");
+  });
+
+  it("an OLD row with no basis reads as volume-only", () => {
+    const t = explain(rec({ type: "pause_creative", targetMetaId: "ad_3", evidence: { spendAgorot: 18000, leads: 1 } }));
+    expect(t).toContain("כמות הפניות בלבד");
+  });
+});

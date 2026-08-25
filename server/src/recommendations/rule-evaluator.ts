@@ -87,6 +87,7 @@ export async function buildCampaignEvidence(
   // verdicts are present — an ad set with one review is absent rather than
   // present-with-weak-data, so a rule cannot act on it by forgetting a flag.
   adSetQuality?: Map<string, { costPerRelevantAgorot: number | null; relevantRate: number | null; reviewCount: number }>,
+  creativeQuality?: Map<string, { costPerRelevantAgorot: number | null; relevantRate: number | null; reviewCount: number }>,
 ): Promise<CampaignEvidence> {
   const [curTotals, prevTotals, curCreatives, prevCreatives, curAdsets, curDaily, prevDaily] = await Promise.all([
     store.campaignTotals(campaign.id, current.start, current.end),
@@ -134,6 +135,7 @@ export async function buildCampaignEvidence(
     leadEventStopped,
     profileIncomplete,
     adSetQuality,
+    creativeQuality,
     overcountSuspected,
   };
 }

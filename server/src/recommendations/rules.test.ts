@@ -1034,3 +1034,33 @@ describe("pause_adset — quality-adjusted comparison (AIC-133)", () => {
     expect(d?.evidence.basis).toBe("relevant_leads");
   });
 });
+
+// AIC-133, creative half: a discount-led ad pulls cheap volume and no intent.
+describe("pause_creative — quality-adjusted comparison (AIC-133)", () => {
+  // cr_cheap: ₪250 · 10 leads · ₪25 CPL   cr_good: ₪250 · 4 leads · ₪62.5 CPL
+  const evidence = (quality?: Map<string, { costPerRelevantAgorot: number | null; relevantRate: number | null; reviewCount: number }>) =>
+    baseEvidence({
+      current: { spendAgorot: 50000, leads: 14, cplAgorot: 3571, days: 7 },
+      creatives: [cr("cr_cheap", 25000, 10, 2500), cr("cr_good", 25000, 4, 6250)],
+      creativeQuality: quality,
+    });
+
+  it("WITHOUT quality data, pauses the expensive ad and admits the basis", () => {
+    const d = __rulesForTest.pauseWeakCreative(evidence(), T);
+    expect(d?.targetMetaId).toBe("cr_good");
+    expect(d?.evidence.basis).toBe("lead_volume");
+  });
+
+  it("WITH quality data, does NOT pause the ad that brings the relevant leads", () => {
+    const q = new Map([
+      ["cr_cheap", { costPerRelevantAgorot: 12500, relevantRate: 0.2, reviewCount: 3 }],
+      ["cr_good", { costPerRelevantAgorot: 8333, relevantRate: 0.75, reviewCount: 3 }],
+    ]);
+    expect(__rulesForTest.pauseWeakCreative(evidence(q), T)).toBeNull();
+  });
+
+  it("falls back to CPL when only ONE side has quality data", () => {
+    const q = new Map([["cr_good", { costPerRelevantAgorot: 8333, relevantRate: 0.75, reviewCount: 3 }]]);
+    expect(__rulesForTest.pauseWeakCreative(evidence(q), T)?.evidence.basis).toBe("lead_volume");
+  });
+});

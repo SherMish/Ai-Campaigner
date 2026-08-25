@@ -131,6 +131,9 @@ export interface CampaignEvidence {
   profileIncomplete?: boolean;
   // AIC-133: per-audience lead quality, where it could be attributed at all.
   // Absent for an ad set means "no usable quality data", never "no quality".
+  // AIC-133: same shape at creative grain. Sparser than the ad-set map by
+  // nature — several ads usually run at once, so few reviews have a sole source.
+  creativeQuality?: Map<string, { costPerRelevantAgorot: number | null; relevantRate: number | null; reviewCount: number }>;
   adSetQuality?: Map<string, { costPerRelevantAgorot: number | null; relevantRate: number | null; reviewCount: number }>;
   // AIC-72: the ad ACCOUNT is disabled, unsettled, in review, or has no payment
   // method. Dominates every per-campaign verdict — nothing on the account can
@@ -597,6 +600,7 @@ function weakestInGroup(
   campaignId: string,
   creatives: CreativeStat[],
   thresholds: RuleThresholds = RULE_THRESHOLDS,
+  quality?: CampaignEvidence["creativeQuality"],
 ): RecommendationDraft | null {
   const t = thresholds;
   const withData = creatives.filter((c) => c.spendAgorot >= t.MIN_CREATIVE_SPEND_AGOROT);
@@ -620,6 +624,20 @@ function weakestInGroup(
     .sort((a, b) => (b.cplAgorot ?? Infinity) - (a.cplAgorot ?? Infinity))[0];
   if (!weak) return null;
 
+  // AIC-133, creative half. Identical rule to the audience one: a discount-led
+  // ad can pull cheap volume and no intent, and pausing the ad that actually
+  // brings buyers is the failure mode. Quality is required on BOTH sides — one
+  // side's quality-adjusted cost against the other's raw CPL is two units.
+  const bestPeer = creatives.find((c) => c.cplAgorot === bestCpl);
+  const qWeak = quality?.get(weak.metaObjectId);
+  const qBest = bestPeer ? quality?.get(bestPeer.metaObjectId) : undefined;
+  let basis: "relevant_leads" | "lead_volume" = "lead_volume";
+  if (qWeak && qBest) {
+    basis = "relevant_leads";
+    const costOf = (q: typeof qWeak) => (q!.costPerRelevantAgorot ?? Number.MAX_SAFE_INTEGER);
+    if (costOf(qWeak) <= costOf(qBest)) return null;
+  }
+
   return {
     campaignId,
     type: "pause_creative",
@@ -635,11 +653,19 @@ function weakestInGroup(
       // האחרות" (plural), which is wrong when there is exactly one other ad.
       // The count was available here and simply never passed on.
       otherCreativeCount: withData.length - 1,
+      // Which basis this judgement used — carried into the copy, never implied.
+      basis,
+      creativeRelevantRate: qWeak?.relevantRate ?? null,
+      bestPeerRelevantRate: qBest?.relevantRate ?? null,
+      creativeCostPerRelevantAgorot: qWeak?.costPerRelevantAgorot ?? null,
+      bestPeerCostPerRelevantAgorot: qBest?.costPerRelevantAgorot ?? null,
     },
     currentBudgetAgorot: null,
     proposedBudgetAgorot: null,
     maxSpendImpactAgorot: 0, // pausing only reduces spend
-    rationale: `creative ${weak.metaObjectId} spent ${weak.spendAgorot} for ${weak.leads} lead(s); best peer CPL ${bestCpl}`,
+    rationale: basis === "relevant_leads"
+      ? `creative ${weak.metaObjectId} cost/relevant-lead ${qWeak?.costPerRelevantAgorot ?? "∅"} vs best peer ${qBest?.costPerRelevantAgorot ?? "∅"} (quality-adjusted, ${qWeak?.reviewCount}+${qBest?.reviewCount} reviews)`
+      : `creative ${weak.metaObjectId} spent ${weak.spendAgorot} for ${weak.leads} lead(s); best peer CPL ${bestCpl} (lead volume only — no usable quality data)`,
   };
 }
 
@@ -651,7 +677,7 @@ function weakestInGroup(
 function pauseWeakCreative(ev: CampaignEvidence, thresholds: RuleThresholds = RULE_THRESHOLDS): RecommendationDraft | null {
   const byAdSet = groupCreativesByAdSet(ev.creatives, ev.flexibleCreativeAdSetIds);
   for (const group of byAdSet.values()) {
-    const draft = weakestInGroup(ev.campaignId, group, thresholds);
+    const draft = weakestInGroup(ev.campaignId, group, thresholds, ev.creativeQuality);
     if (draft) return draft;
   }
   return null;

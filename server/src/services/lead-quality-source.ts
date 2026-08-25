@@ -20,7 +20,16 @@ export interface AdSetQualityMap {
   unattributable: number;
 }
 
-export async function loadAdSetQuality(pool: pg.Pool, campaignId: string): Promise<AdSetQualityMap> {
+// The attribution math is keyed on an object id and knows nothing about what
+// that object IS, so the same windows answer "which audience" and "which ad".
+// Creatives are the sparser of the two — a campaign usually runs several ads
+// at once, so most reviews come back unattributable — but sparse-and-honest is
+// the whole design here, and the alternative is guessing.
+export async function loadLeadQuality(
+  pool: pg.Pool,
+  campaignId: string,
+  grain: "adset" | "creative" = "adset",
+): Promise<AdSetQualityMap> {
   const { rows: reviewRows } = await pool.query<{ id: string; reviewed_at: Date; leads_delta: number; relevant_delta: number }>(
     `SELECT id, reviewed_at, leads_delta, relevant_delta
        FROM lead_quality_reviews WHERE campaign_id = $1 ORDER BY reviewed_at ASC`,
@@ -44,9 +53,9 @@ export async function loadAdSetQuality(pool: pg.Pool, campaignId: string): Promi
     `SELECT meta_object_id, period_start::text AS day, SUM(leads)::int AS leads,
             SUM(spend_agorot)::bigint AS spend_agorot
        FROM insight_snapshot_daily
-      WHERE campaign_id = $1 AND grain = 'adset'
+      WHERE campaign_id = $1 AND grain = $2
       GROUP BY meta_object_id, period_start`,
-    [campaignId],
+    [campaignId, grain],
   );
 
   // SPEND MUST COVER THE SAME DAYS AS THE LEADS. The review windows are

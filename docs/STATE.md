@@ -16,7 +16,9 @@ the ranking is now cost per RELEVANT lead; otherwise it falls back to CPL and
 the copy says so out loud. Attribution is deliberately strict — a review counts
 only when exactly one ad set produced leads in its window — because the obvious
 proportional split gives every ad set the same relevance rate and therefore
-reorders nothing while looking like quality. Owning doc:
+reorders nothing while looking like quality. Applies at both grains —
+`pause_adset` and `pause_creative` — since the attribution is keyed on an object
+id and doesn't care what the object is. Owning doc:
 [docs/features/lead-quality-attribution.md](features/lead-quality-attribution.md).
 
 ### 2026-08-25 — Know when we don't know enough about the business (AIC-132)

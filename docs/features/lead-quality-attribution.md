@@ -7,12 +7,13 @@ instead of cost per lead.
 **Source of truth:**
 - `server/src/services/lead-quality-attribution.ts` — the judgement, pure.
 - `server/src/services/lead-quality-source.ts` — the DB half (reviews + windows).
-- `server/src/recommendations/rules.ts` → `pauseUnderperformingAudience`.
+- `server/src/recommendations/rules.ts` → `pauseUnderperformingAudience` (audiences)
+  and `weakestInGroup` (creatives).
 - `server/src/recommendations/explainer.ts` → `pauseAudience(..., basis)`.
 
 **Lock-in tests:**
 - `lead-quality-attribution.test.ts` — attribution, thresholds, zero-relevant.
-- `rules.test.ts` → "pause_adset — quality-adjusted comparison (AIC-133)".
+- `rules.test.ts` → "pause_adset / pause_creative — quality-adjusted comparison".
 - `explainer.test.ts` → "the copy names which basis was used".
 
 ---
@@ -46,6 +47,20 @@ philosophy calls "looks like progress".
 So attribution is deliberately strict: a review counts **only when exactly one
 ad set produced leads in its window**. Everything else is reported as
 `unattributable` and simply doesn't exist for ranking purposes.
+
+## Both grains, one mechanism
+
+The attribution math is keyed on an object id and knows nothing about what that
+object is, so the same review windows answer both questions:
+
+- **audiences** — `pause_adset`, from `grain = 'adset'` snapshots;
+- **creatives** — `pause_creative`, from `grain = 'creative'` snapshots. A
+  discount-led ad pulls cheap volume and no intent in exactly the way a broad
+  audience does.
+
+Creatives are the sparser of the two: a campaign usually runs several ads at
+once, so most reviews have no sole source and come back unattributable. That is
+the design working, not a gap to paper over.
 
 ## The window
 

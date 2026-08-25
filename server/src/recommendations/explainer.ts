@@ -10,10 +10,22 @@ export const EXPLAINER_HE = {
   // other ads"), which is wrong for the commonest small-business shape —
   // exactly two ads, i.e. one other. The peer count was computed in the rule
   // and simply never passed on; it is now part of the evidence.
-  pauseCreative: (spend: string, leads: string, otherCount: number) =>
-    `מודעה אחת הוציאה ${spend} וקיבלה ${leads} פניות בלבד, בזמן ש${
+  // AIC-133: like the audience copy, this names the basis it judged on. Framed
+  // as the AD's fit, never as the quality of the people who enquired.
+  pauseCreative: (
+    spend: string,
+    leads: string,
+    otherCount: number,
+    basis: "relevant_leads" | "lead_volume" = "lead_volume",
+  ) => {
+    const others = otherCount === 1 ? "המודעה האחרת" : "המודעות האחרות";
+    if (basis === "relevant_leads") {
+      return `מודעה אחת מביאה פניות שפחות מהן מתאימות לעסק לעומת ${others} — כך שגם אם המחיר לפנייה נראה דומה, העלות לפנייה רלוונטית גבוהה יותר. אנחנו ממליצים לעצור אותה. (מבוסס על המשוב שלכם על איכות הפניות.)`;
+    }
+    return `מודעה אחת הוציאה ${spend} וקיבלה ${leads} פניות בלבד, בזמן ש${
       otherCount === 1 ? "המודעה האחרת מביאה" : "המודעות האחרות מביאות"
-    } פניות בעלות נמוכה משמעותית. אנחנו ממליצים לעצור אותה.`,
+    } פניות בעלות נמוכה משמעותית. אנחנו ממליצים לעצור אותה. (מבוסס על כמות הפניות בלבד — עדיין אין לנו מספיק משוב על איכותן.)`;
+  },
   increaseBudget: (from: string, to: string) =>
     `הקמפיין מביא פניות בעלות טובה כבר כמה ימים. אנחנו ממליצים להגדיל את התקציב היומי מ־${from} ל־${to}.`,
   decreaseBudget: (from: string, to: string) =>
@@ -169,6 +181,8 @@ export function explain(rec: RecommendationRecord): string {
         // phrasing they were written with, so an existing recommendation's
         // wording never changes underneath a customer mid-decision.
         typeof rec.evidence.otherCreativeCount === "number" ? rec.evidence.otherCreativeCount : 2,
+        // Older rows predate this field and were written on volume alone.
+        rec.evidence.basis === "relevant_leads" ? "relevant_leads" : "lead_volume",
       );
     case "pause_adset":
       return EXPLAINER_HE.pauseAudience(
