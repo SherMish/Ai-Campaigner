@@ -168,48 +168,114 @@ function drawImageLayout(ctx: CanvasRenderingContext2D, slide: CarouselSlide, im
   drawLogo(ctx, options.logo);
 }
 
-function drawHook(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options: DrawOptions) {
+function drawHookImage(ctx: CanvasRenderingContext2D, image: HTMLImageElement, overlay: string) {
+  drawImageCover(ctx, image, 0, 0, CAROUSEL_WIDTH, CAROUSEL_HEIGHT, 0);
+  ctx.fillStyle = overlay;
+  ctx.fillRect(0, 0, CAROUSEL_WIDTH, CAROUSEL_HEIGHT);
+}
+
+function drawHookAccent(
+  ctx: CanvasRenderingContext2D,
+  text: string | undefined,
+  x: number,
+  y: number,
+  width: number,
+  background: string,
+  color: string,
+) {
+  if (!text) return;
+  ctx.fillStyle = background;
+  roundedRect(ctx, x, y, width, 78, 39);
+  ctx.fill();
+  drawText(ctx, text, {
+    x: x + width - 30, y: y + 20, maxWidth: width - 60, fontSize: 28, minFontSize: 24, maxLines: 1,
+    color, weight: 700,
+  });
+}
+
+function drawMythHook(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options: DrawOptions) {
   ctx.fillStyle = CONTENT_PALETTE.ink;
   ctx.fillRect(0, 0, CAROUSEL_WIDTH, CAROUSEL_HEIGHT);
-
-  if (options.image) {
-    drawImageCover(ctx, options.image, 0, 0, CAROUSEL_WIDTH, CAROUSEL_HEIGHT, 0);
-    const gradient = ctx.createLinearGradient(0, 0, 0, CAROUSEL_HEIGHT);
-    gradient.addColorStop(0, "rgba(23,23,23,.45)");
-    gradient.addColorStop(.55, "rgba(23,23,23,.72)");
-    gradient.addColorStop(1, "rgba(23,23,23,.96)");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, CAROUSEL_WIDTH, CAROUSEL_HEIGHT);
-  } else {
+  if (options.image) drawHookImage(ctx, options.image, "rgba(23,23,23,.78)");
+  else {
     ctx.save();
-    ctx.translate(26, 745);
+    ctx.translate(20, 760);
     ctx.rotate(-0.09);
     ctx.fillStyle = CONTENT_PALETTE.orange;
-    roundedRect(ctx, 0, 0, 550, 330, 50);
+    roundedRect(ctx, 0, 0, 570, 320, 50);
     ctx.fill();
     ctx.restore();
     ctx.fillStyle = CONTENT_PALETTE.indigo;
     ctx.beginPath();
-    ctx.arc(95, 1125, 240, 0, Math.PI * 2);
+    ctx.arc(90, 1135, 245, 0, Math.PI * 2);
     ctx.fill();
   }
-
-  drawEyebrow(ctx, slide.eyebrow.toUpperCase(), CONTENT_PALETTE.orange);
   drawText(ctx, slide.title, {
-    x: 930, y: 275, maxWidth: 830, fontSize: 94, minFontSize: 72, maxLines: 5,
-    color: CONTENT_PALETTE.cream, weight: 900, lineHeight: 108,
+    x: 930, y: 225, maxWidth: 830, fontSize: 98, minFontSize: 72, maxLines: 5,
+    color: CONTENT_PALETTE.cream, weight: 900, lineHeight: 111,
   });
-  if (slide.accent) {
-    ctx.fillStyle = CONTENT_PALETTE.orange;
-    roundedRect(ctx, 690, 1000, 296, 74, 37);
-    ctx.fill();
-    drawText(ctx, slide.accent, {
-      x: 950, y: 1018, maxWidth: 230, fontSize: 27, minFontSize: 24, maxLines: 1,
-      color: CONTENT_PALETTE.white, weight: 700,
-    });
-  }
+  drawHookAccent(ctx, slide.accent, 690, 1010, 296, CONTENT_PALETTE.orange, CONTENT_PALETTE.white);
   drawProgress(ctx, options.index, options.total, true);
   drawLogo(ctx, options.logo, 94, 1227, 62, true);
+}
+
+function drawSignalHook(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options: DrawOptions) {
+  ctx.fillStyle = CONTENT_PALETTE.indigo;
+  ctx.fillRect(0, 0, CAROUSEL_WIDTH, CAROUSEL_HEIGHT);
+  if (options.image) drawHookImage(ctx, options.image, "rgba(73,63,210,.82)");
+  ctx.strokeStyle = CONTENT_PALETTE.orange;
+  ctx.lineWidth = 22;
+  ctx.beginPath();
+  ctx.arc(166, 988, 265, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = "rgba(247,242,234,.09)";
+  ctx.beginPath();
+  ctx.arc(166, 988, 190, 0, Math.PI * 2);
+  ctx.fill();
+  drawText(ctx, "?", {
+    x: 176, y: 795, maxWidth: 210, fontSize: 238, minFontSize: 238, maxLines: 1,
+    color: CONTENT_PALETTE.orange, weight: 900, align: "center", direction: "ltr",
+  });
+  drawText(ctx, slide.title, {
+    x: 930, y: 230, maxWidth: 810, fontSize: 94, minFontSize: 70, maxLines: 5,
+    color: CONTENT_PALETTE.cream, weight: 900, lineHeight: 108,
+  });
+  drawHookAccent(ctx, slide.accent, 710, 1010, 276, CONTENT_PALETTE.cream, CONTENT_PALETTE.indigo);
+  drawProgress(ctx, options.index, options.total, true);
+  drawLogo(ctx, options.logo, 94, 1227, 62, true);
+}
+
+function drawChecklistHook(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options: DrawOptions) {
+  ctx.fillStyle = CONTENT_PALETTE.cream;
+  ctx.fillRect(0, 0, CAROUSEL_WIDTH, CAROUSEL_HEIGHT);
+  if (options.image) drawHookImage(ctx, options.image, "rgba(247,242,234,.88)");
+  const tiles = [
+    { x: 94, y: 900, color: CONTENT_PALETTE.ink, text: "01" },
+    { x: 230, y: 986, color: CONTENT_PALETTE.orange, text: "02" },
+    { x: 366, y: 900, color: CONTENT_PALETTE.green, text: "03" },
+  ];
+  for (const tile of tiles) {
+    ctx.fillStyle = tile.color;
+    roundedRect(ctx, tile.x, tile.y, 174, 174, 46);
+    ctx.fill();
+    drawText(ctx, tile.text, {
+      x: tile.x + 87, y: tile.y + 52, maxWidth: 120, fontSize: 58, minFontSize: 58, maxLines: 1,
+      color: CONTENT_PALETTE.cream, weight: 900, align: "center", direction: "ltr",
+    });
+  }
+  drawText(ctx, slide.title, {
+    x: 930, y: 225, maxWidth: 830, fontSize: 94, minFontSize: 70, maxLines: 5,
+    color: CONTENT_PALETTE.ink, weight: 900, lineHeight: 108,
+  });
+  drawHookAccent(ctx, slide.accent, 680, 1010, 306, CONTENT_PALETTE.orange, CONTENT_PALETTE.white);
+  drawProgress(ctx, options.index, options.total);
+  drawLogo(ctx, options.logo);
+}
+
+function drawHook(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options: DrawOptions) {
+  if (slide.hookStyle === "signal") return drawSignalHook(ctx, slide, options);
+  if (slide.hookStyle === "checklist") return drawChecklistHook(ctx, slide, options);
+  return drawMythHook(ctx, slide, options);
 }
 
 function drawMyth(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options: DrawOptions) {
@@ -298,7 +364,7 @@ function drawCheck(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options:
   roundedRect(ctx, 94, 265, 176, 176, 50);
   ctx.fill();
   drawText(ctx, slide.number ?? "✓", {
-    x: 236, y: 307, maxWidth: 112, fontSize: 74, minFontSize: 60, maxLines: 1,
+    x: 182, y: 307, maxWidth: 112, fontSize: 74, minFontSize: 60, maxLines: 1,
     color: CONTENT_PALETTE.orange, weight: 900, align: "center", direction: "ltr",
   });
   const titleHeight = drawText(ctx, slide.title, {
@@ -350,18 +416,17 @@ function drawCta(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options: D
   ctx.fillRect(0, 0, CAROUSEL_WIDTH, CAROUSEL_HEIGHT);
   ctx.fillStyle = CONTENT_PALETTE.ink;
   ctx.beginPath();
-  ctx.arc(115, 1120, 410, 0, Math.PI * 2);
+  ctx.arc(-5, 1160, 350, 0, Math.PI * 2);
   ctx.fill();
   drawProgress(ctx, options.index, options.total, true);
   drawEyebrow(ctx, slide.eyebrow, CONTENT_PALETTE.ink);
-  if (options.logo) ctx.drawImage(options.logo, 94, 215, 174, 130);
   const titleHeight = drawText(ctx, slide.title, {
-    x: 930, y: 410, maxWidth: 830, fontSize: 86, minFontSize: 64, maxLines: 4,
-    color: CONTENT_PALETTE.ink, weight: 900, lineHeight: 101,
+    x: 930, y: 300, maxWidth: 830, fontSize: 86, minFontSize: 60, maxLines: 3,
+    color: CONTENT_PALETTE.ink, weight: 900, lineHeight: 99,
   });
   if (slide.body) drawText(ctx, slide.body, {
-    x: 930, y: 410 + titleHeight + 50, maxWidth: 790, fontSize: 39, minFontSize: 32, maxLines: 6,
-    color: "rgba(23,23,23,.78)", weight: 500, lineHeight: 54,
+    x: 930, y: 300 + titleHeight + 44, maxWidth: 560, fontSize: 36, minFontSize: 30, maxLines: 5,
+    color: CONTENT_PALETTE.ink, weight: 500, lineHeight: 48,
   });
   if (slide.accent) {
     ctx.fillStyle = CONTENT_PALETTE.cream;

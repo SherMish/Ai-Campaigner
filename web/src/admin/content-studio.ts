@@ -18,6 +18,7 @@ export type CarouselSlide = {
   layout: SlideLayout;
   eyebrow: string;
   title: string;
+  hookStyle?: TemplateId;
   body?: string;
   accent?: string;
   number?: string;
@@ -86,7 +87,7 @@ const myth: TemplateDefinition = {
   ],
   defaults: mythCopy.defaults,
   build: (v) => [
-    { layout: "hook", eyebrow: mythCopy.slides.hookEyebrow, title: v.hook, accent: mythCopy.slides.hookAccent },
+    { layout: "hook", hookStyle: "myth", eyebrow: "", title: v.hook, accent: mythCopy.slides.hookAccent },
     { layout: "myth", eyebrow: mythCopy.slides.mythEyebrow, title: v.myth, accent: mythCopy.slides.mythAccent },
     { layout: "explain", eyebrow: mythCopy.slides.whyEyebrow, title: mythCopy.slides.whyTitle, body: v.why },
     { layout: "reality", eyebrow: mythCopy.slides.truthEyebrow, title: mythCopy.slides.truthTitle, body: v.truth },
@@ -113,7 +114,7 @@ const signal: TemplateDefinition = {
   ],
   defaults: signalCopy.defaults,
   build: (v) => [
-    { layout: "hook", eyebrow: signalCopy.slides.hookEyebrow, title: v.hook, accent: signalCopy.slides.hookAccent },
+    { layout: "hook", hookStyle: "signal", eyebrow: "", title: v.hook, accent: signalCopy.slides.hookAccent },
     { layout: "signal", eyebrow: signalCopy.slides.signalEyebrow, title: v.bigNumber, body: v.fact, accent: signalCopy.slides.signalAccent },
     { layout: "explain", eyebrow: signalCopy.slides.contextEyebrow, title: signalCopy.slides.contextTitle, body: v.context },
     { layout: "example", eyebrow: signalCopy.slides.exampleEyebrow, title: signalCopy.slides.exampleTitle, body: v.example },
@@ -143,7 +144,7 @@ const checklist: TemplateDefinition = {
   ],
   defaults: checklistCopy.defaults,
   build: (v) => [
-    { layout: "hook", eyebrow: checklistCopy.slides.hookEyebrow, title: v.hook, accent: checklistCopy.slides.hookAccent },
+    { layout: "hook", hookStyle: "checklist", eyebrow: "", title: v.hook, accent: checklistCopy.slides.hookAccent },
     { layout: "check", eyebrow: checklistCopy.slides.check1Eyebrow, title: v.check1Title, body: v.check1Body, number: "01" },
     { layout: "check", eyebrow: checklistCopy.slides.check2Eyebrow, title: v.check2Title, body: v.check2Body, number: "02" },
     { layout: "check", eyebrow: checklistCopy.slides.check3Eyebrow, title: v.check3Title, body: v.check3Body, number: "03" },

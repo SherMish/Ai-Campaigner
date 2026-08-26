@@ -215,7 +215,6 @@ export const strings = {
             ctaBody: "Ads Agent עוקב אחרי המספרים ומסביר בפשטות מתי כדאי לפעול — ומתי עדיף לתת לקמפיין לעבוד.",
           },
           slides: {
-            hookEyebrow: "לא כל תזוזה היא התקדמות",
             hookAccent: "מיתוס נפוץ",
             mythEyebrow: "המיתוס",
             mythAccent: "לא בהכרח",
@@ -255,7 +254,6 @@ export const strings = {
             ctaBody: "Ads Agent מחבר בין נתוני הקמפיין למשוב שלכם על איכות הפניות — כדי לא לייעל את המספר הלא נכון.",
           },
           slides: {
-            hookEyebrow: "סימן שכדאי להכיר",
             hookAccent: "ידעתם?",
             signalEyebrow: "המספר לבדו מטעה",
             signalAccent: "לפנייה",
@@ -301,7 +299,6 @@ export const strings = {
             ctaBody: "Ads Agent עוקב אחרי המדידה, המודעות והפניות ומראה מה באמת דורש טיפול — בלי להציף אתכם במונחים.",
           },
           slides: {
-            hookEyebrow: "לפני שמוציאים עוד כסף",
             hookAccent: "שמרו את הפוסט",
             check1Eyebrow: "בדיקה ראשונה",
             check2Eyebrow: "בדיקה שנייה",

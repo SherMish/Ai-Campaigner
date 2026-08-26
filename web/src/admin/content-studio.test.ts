@@ -27,6 +27,16 @@ describe("Ads Agent Content Studio (AIC-142)", () => {
     expect(slides.length).toBeLessThanOrEqual(MAX_CAROUSEL_SLIDES);
   });
 
+  it("gives every format its own hook treatment and no top-right eyebrow", () => {
+    const hooks = ids.map((id) => buildSlides(id, createDraft(id))[0] as {
+      hookStyle?: string;
+      eyebrow?: string;
+    });
+
+    expect(new Set(hooks.map((slide) => slide.hookStyle)).size).toBe(3);
+    expect(hooks.every((slide) => !slide.eyebrow)).toBe(true);
+  });
+
   it.each(ids)("%s sample copy is complete and exportable immediately", (id) => {
     expect(validateDraft(id, createDraft(id))).toEqual([]);
   });

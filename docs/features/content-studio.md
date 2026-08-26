@@ -4,7 +4,7 @@
 
 **Source of truth:** `web/src/admin/AdminContentStudio.tsx`, `web/src/admin/content-studio.ts`, `web/src/admin/content-studio-renderer.ts`, `web/src/admin/content-studio.css`, `web/src/strings.ts`, `web/src/App.tsx`, `web/src/admin/AdminSidebar.tsx`.
 
-**Lock-in tests:** `web/src/admin/content-studio.test.ts` pins the three formats, their distinct purposes, hook-first/CTA-last structure, Instagram dimensions, text validation, optional source field and deterministic export filenames. Browser verification covers the rendered compositions, template switching, image insertion/removal, successful PNG generation and the canvas's exact 1080×1350 dimensions.
+**Lock-in tests:** `web/src/admin/content-studio.test.ts` pins the three formats, their distinct hook styles, hook-first/CTA-last structure, Instagram dimensions, text validation, optional source field and deterministic export filenames. `web/src/admin/content-studio-renderer.test.ts` pins the checklist-number center and the CTA's readable text column/no-duplicate-logo geometry. Browser verification covers the rendered compositions, template switching, image insertion/removal, successful PNG generation and the canvas's exact 1080×1350 dimensions.
 
 ---
 
@@ -18,7 +18,7 @@ The operator chooses one of three editorial formats:
 2. **One useful signal / “Did you know?”** — turns one metric, fact or behavior into a simple business implication. It provides a source/qualification field so an external statistic is never presented without context.
 3. **Practical teardown / checklist** — gives the owner four short checks before a decision that could increase spend.
 
-These are different editorial jobs, not color variants. Each starts from useful Hebrew sample copy written for Ads Agent's Israeli small-business ICP. Every generated carousel starts with a bold hook and ends with a soft Ads Agent CTA; the CTA is built by the template and cannot be moved earlier or accidentally removed. All formats stay below Instagram's ten-slide carousel limit.
+These are different editorial jobs and use three visibly different opening compositions: myth opens on ink with orange/indigo disruption, signal opens on indigo with an orange question motif, and checklist opens on cream with a numbered tile stack. Hook slides do not carry a small top-right eyebrow; the central hook is the only message competing for attention. Each starts from useful Hebrew sample copy written for Ads Agent's Israeli small-business ICP. Every generated carousel ends with a soft Ads Agent CTA; the CTA is built by the template and cannot be moved earlier or accidentally removed. All formats stay below Instagram's ten-slide carousel limit.
 
 ## Editing and validation
 
@@ -34,6 +34,6 @@ The operator can download the selected slide or every slide in order. Filenames 
 
 ## Brand and editorial constraints
 
-The renderer uses the production palette (`#171717`, `#F7F2EA`, `#EDE6DA`, `#FF5A36`, `#2FA36B`, `#665CFF`), Rubik/IBM Plex Mono typography and `/favicon.png`. Opening slides are intentionally high-contrast and sparse; content slides hold one idea; CTA slides mention Ads Agent gently rather than turning the carousel into an ad.
+The renderer uses the production palette (`#171717`, `#F7F2EA`, `#EDE6DA`, `#FF5A36`, `#2FA36B`, `#665CFF`), Rubik/IBM Plex Mono typography and `/favicon.png`. Opening slides are intentionally high-contrast and sparse; content slides hold one idea. Checklist numbers are centered from the badge geometry rather than by eye. CTA slides mention Ads Agent gently, use one text brand marker rather than a duplicate image logo, and keep all dark copy outside the dark decorative shape.
 
 V1 deliberately does not generate claims, statistics or copy with an LLM. The operator is responsible for the facts entered, and the source/qualification field exists for claims that need one. Saving drafts, generating captions, importing business context and posting directly to Instagram are not part of this feature today.

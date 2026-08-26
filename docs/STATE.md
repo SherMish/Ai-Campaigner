@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-26 — Carousel visual hierarchy and readability correction (AIC-142)
+
+The three Content Studio formats no longer share one interchangeable opening
+slide. Myth, signal and checklist now have distinct compositions and color
+hierarchies, while the small top-right hook eyebrow was removed so it cannot
+compete with the headline. Screenshot review also exposed two geometry defects:
+checklist numbers were drawn 54px away from the badge center, and dark CTA copy
+could cross a dark decorative circle and disappear. Both are now locked by
+renderer tests; the CTA also drops its redundant second image logo. Owning doc:
+[docs/features/content-studio.md](features/content-studio.md).
+
 ### 2026-08-26 — Three reusable Instagram carousel systems (AIC-142)
 
 Ads Agent's organic content no longer starts from a blank design. The internal
