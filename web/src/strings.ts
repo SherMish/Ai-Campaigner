@@ -243,7 +243,7 @@ export const strings = {
             truthEyebrow: "מה קורה בפועל",
             truthTitle: "לפעמים שינוי הוא דווקא הסיכון",
             ruleEyebrow: "הכלל שכדאי לזכור",
-            ctaAccent: "ניהול קמפיינים בלי כאב הראש",
+            ctaAccent: "התחילו בחינם",
           },
         },
         signal: {
@@ -282,7 +282,7 @@ export const strings = {
             exampleTitle: "זול יותר לא תמיד משתלם יותר",
             actionEyebrow: "מה בודקים",
             actionTitle: "אל תעצרו במחיר לפנייה",
-            ctaAccent: "המספרים, בשפה של העסק",
+            ctaAccent: "התחילו בחינם",
           },
         },
         checklist: {
@@ -321,7 +321,7 @@ export const strings = {
             warningEyebrow: "רגע לפני שמגדילים",
             warningTitle: "עוד תקציב לא מתקן תשתית שבורה",
             warningAccent: "עצרו ובדקו",
-            ctaAccent: "מישהו שומר על הקמפיין",
+            ctaAccent: "התחילו בחינם",
           },
         },
         shared: {
@@ -1589,7 +1589,14 @@ export const strings = {
           // נתונים" reads as the product contradicting itself — it isn't: we
           // deliberately evaluate on complete days so a half-finished day
           // never triggers a recommendation.
-          completeDaysNote: "את ההמלצות אנחנו מחשבים על ימים מלאים בלבד, כך שהפעילות של היום עוד לא נכללת.",
+          //
+          // Reworded 2026-08-26, reported live: the old sentence — "הפעילות של
+          // היום עוד לא נכללת" — sat on a dashboard that was, at that moment,
+          // displaying today's ₪33.75 and its lead on the היום tab. It meant
+          // "not included IN THE RECOMMENDATIONS" and was read as "today's
+          // numbers are not shown". Naming both halves is what removes the
+          // ambiguity: the numbers do include today, only the engine waits.
+          completeDaysNote: "המספרים כאן כוללים גם את היום. את ההמלצות אנחנו מחשבים על ימים מלאים בלבד, ולכן היום עוד לא משפיע עליהן.",
         },
         // AIC-67: incremental delta review — only ever asks about NEW leads
         // since the last review (never a cumulative total the customer has
