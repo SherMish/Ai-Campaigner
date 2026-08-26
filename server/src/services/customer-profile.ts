@@ -61,18 +61,13 @@ export interface CustomerProfile {
   contactEmail: string;
 }
 
-/** The caller's OWN profile, resolved from their user id — never from a body. */
-export async function getCustomerProfile(pool: pg.Pool, userId: string): Promise<CustomerProfile | null> {
-  const { rows } = await pool.query<Record<string, string | null>>(
-    `SELECT c.business_name, c.category, c.main_service, c.geo_area, c.primary_customer,
+const PROFILE_COLUMNS = `c.business_name, c.category, c.main_service, c.geo_area, c.primary_customer,
             c.offer, c.differentiators, c.objections, c.price_range, c.copy_constraints,
-            c.lead_followup, c.contact_name, c.contact_phone, c.contact_email
-       FROM app_users u JOIN customers c ON c.id = u.customer_id
-      WHERE u.id = $1`,
-    [userId],
-  );
-  const r = rows[0];
-  if (!r) return null;
+            c.lead_followup, c.contact_name, c.contact_phone, c.contact_email`;
+
+// Every absent value becomes "", never null — the profile is read by form
+// inputs and by the AIC-132 quality rules, and both want a string.
+function mapProfileRow(r: Record<string, string | null>): CustomerProfile {
   return {
     businessName: r.business_name ?? "",
     category: r.category ?? "",
@@ -89,6 +84,31 @@ export async function getCustomerProfile(pool: pg.Pool, userId: string): Promise
     contactPhone: r.contact_phone ?? "",
     contactEmail: r.contact_email ?? "",
   };
+}
+
+/** The caller's OWN profile, resolved from their user id — never from a body. */
+export async function getCustomerProfile(pool: pg.Pool, userId: string): Promise<CustomerProfile | null> {
+  const { rows } = await pool.query<Record<string, string | null>>(
+    `SELECT ${PROFILE_COLUMNS}
+       FROM app_users u JOIN customers c ON c.id = u.customer_id
+      WHERE u.id = $1`,
+    [userId],
+  );
+  return rows[0] ? mapProfileRow(rows[0]) : null;
+}
+
+/**
+ * By customer id, for callers that have ALREADY resolved ownership — the
+ * additions routes resolve the acting customer from the JWT before they get
+ * here. Never reachable with an id from a request body; that is what the
+ * user-scoped loader above is for.
+ */
+export async function getCustomerProfileById(pool: pg.Pool, customerId: string): Promise<CustomerProfile | null> {
+  const { rows } = await pool.query<Record<string, string | null>>(
+    `SELECT ${PROFILE_COLUMNS} FROM customers c WHERE c.id = $1`,
+    [customerId],
+  );
+  return rows[0] ? mapProfileRow(rows[0]) : null;
 }
 
 export type SaveResult = "saved" | "no_customer" | "invalid";

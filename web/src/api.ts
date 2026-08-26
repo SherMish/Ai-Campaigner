@@ -737,6 +737,36 @@ export interface AdditionContext {
 export type AdditionUnavailableReason = "no_campaign" | "not_launched" | "missing_page" | "connection_issue";
 export const getAdditionContext = () => api<AdditionContext>("/app/additions/context");
 
+// AIC-78: what we know about this business and what its ads already tried.
+// Fetched separately from the context above because it makes live Meta reads
+// (one per ad) and the form must not wait on them.
+export interface PastAd {
+  adId: string;
+  name: string | null;
+  headline: string | null;
+  primaryText: string | null;
+  angle: string | null;
+  angles: string[];
+  spendAgorot: number | null;
+  leads: number | null;
+  cplAgorot: number | null;
+  relevantRate: number | null;
+  costPerRelevantAgorot: number | null;
+  fromExistingPost: boolean;
+}
+export interface CreativeContext {
+  business: Record<string, string>;
+  businessQuality: { state: "ok" | "thin" | "broken"; reason: string | null; missing: string[]; vague: string[] };
+  pastAds: PastAd[];
+  anglesTested: string[];
+  unclassifiedAds: number;
+  adsRead: number;
+  adsTotal: number;
+  singleAngle: string | null;
+  market: null;
+}
+export const getCreativeContext = () => api<CreativeContext>("/app/additions/creative-context");
+
 export interface ExistingAdSet {
   id: string;
   name: string;

@@ -29,6 +29,7 @@ See also: [STATE.md](STATE.md) (dated changelog) · [POSTMORTEM-2026-08-19.md](P
 | Manual object controls — pause/resume (all users), archive/delete (admin) | [features/manual-controls.md](features/manual-controls.md) |
 | Removed ads — the customer's "delete", and Meta's (AIC-128) | [features/removed-ads.md](features/removed-ads.md) |
 | Orphaned creatives — the ones that never became ads (AIC-131) | [features/creative-reaper.md](features/creative-reaper.md) |
+| Creative context — what we know about the business + what its ads already tried (AIC-78) | [features/creative-context.md](features/creative-context.md) |
 | Lead-quality attribution — audiences ranked on relevant leads (AIC-133) | [features/lead-quality-attribution.md](features/lead-quality-attribution.md) |
 | Security posture — tenant isolation, authn/authz, TLS, rate limits | [features/security.md](features/security.md) |
 | Profile quality gate — do we know enough to advertise? (AIC-132) | [features/profile-quality.md](features/profile-quality.md) |

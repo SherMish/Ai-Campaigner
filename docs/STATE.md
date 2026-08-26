@@ -6,6 +6,21 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-26 — AIC-78: the creative context, shown where an ad is written
+
+A per-customer assembly of the business facts (AIC-138), how good they are
+(AIC-132), the copy that already ran, the ANGLE each ad took, what each achieved,
+and lead quality per ad (AIC-133) — surfaced on the create-ad screen and sent to
+the ops Telegram channel when a customer opens it. Assembled rather than stored:
+a `creative_context` table would be a second copy of facts that already live on
+`customers` and in the snapshots. The headline it produces is `singleAngle` —
+"every ad you have run argues price" — which was true on two of the three real
+accounts. The angle classifier is rules-based and returns null rather than
+guessing; running it over live ads caught two Hebrew substring collisions
+(`מבצע` inside `ומבצע שינויים`, `שנות` inside `לשנות`) and a price vocabulary
+that missed the words Israelis actually use for cost. Owning doc:
+[docs/features/creative-context.md](features/creative-context.md).
+
 ### 2026-08-26 — the ▲/▼ line ignored the range switcher
 
 Found while dogfooding test@test.com: the KPI numbers followed the day/week/

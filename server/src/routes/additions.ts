@@ -16,6 +16,9 @@ import { approveAddition, listPendingAdditions } from "../additions/approve.js";
 import { createCreativeIdempotent, uploadCreativeMedia, type CreativeSpec } from "../builder/creative-create.js";
 import type { CreativeMedia } from "../builder/creative-types.js";
 import { gendersOf } from "./builder.js";
+import { buildCreativeContext, describeCreativeContext } from "../services/creative-context.js";
+import type { AdDetailReader } from "../meta/ad-detail.js";
+import { sendTelegram } from "../notify/telegram.js";
 
 // Adding content to a campaign we ALREADY manage (AIC-63) — the everyday
 // management action, distinct from the first-time builder (routes/builder.ts):
@@ -123,6 +126,68 @@ additionsRouter.get("/context", requireAuth, async (req, res) => {
     res.status(500).json({ error: "failed to load context" });
   }
 });
+
+// ── AIC-78: the creative context ─────────────────────────────────────────────
+//
+// Everything an ad writer needs to write copy about THIS business rather than
+// generic filler: the business facts, and what has already been tried.
+//
+// Its own route rather than a field on /context, deliberately: assembling it
+// makes live Meta reads (one per ad, for the copy), and the form must not wait
+// on them. The screen loads, the panel fills in.
+//
+// Ad ids come from OUR ad_meta rows for the caller's OWN campaign, never from
+// the request — so there is no id here for a client to tamper with.
+additionsRouter.get("/creative-context", requireAuth, async (req, res) => {
+  try {
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    if (!ctx) {
+      res.status(409).json({ error: "no managed campaign" });
+      return;
+    }
+    const reader = buildAdditionWriter() as AdDetailReader | null;
+    const context = await buildCreativeContext(pool, reader, ctx.customerId, ctx.localCampaignId);
+    res.json(context);
+
+    // After responding: the notification must never delay or fail the screen.
+    void notifyContextOpened(ctx.customerId, context, (req as AuthedRequest).userId!);
+  } catch (e) {
+    console.error("[additions] creative context failed", e);
+    res.status(500).json({ error: "failed to load the creative context" });
+  }
+});
+
+// One message per customer per half hour. The screen is opened, abandoned and
+// reopened while someone writes an ad — without this, a single sitting would
+// produce a dozen identical messages and the channel would be trained to be
+// ignored. In memory on purpose: a redeploy resetting it costs one extra
+// message, which is not worth a table.
+const CONTEXT_NOTIFY_THROTTLE_MS = 30 * 60 * 1000;
+const lastContextNotify = new Map<string, number>();
+
+async function notifyContextOpened(
+  customerId: string,
+  context: Awaited<ReturnType<typeof buildCreativeContext>>,
+  userId: string,
+): Promise<void> {
+  try {
+    const now = Date.now();
+    const last = lastContextNotify.get(customerId) ?? 0;
+    if (now - last < CONTEXT_NOTIFY_THROTTLE_MS) return;
+    lastContextNotify.set(customerId, now);
+
+    const { rows } = await pool.query<{ email: string }>(`SELECT email FROM app_users WHERE id = $1`, [userId]);
+    await sendTelegram(
+      describeCreativeContext(context, {
+        businessName: context.business.businessName,
+        email: rows[0]?.email ?? null,
+      }),
+      { dedupe: true },
+    );
+  } catch (e) {
+    console.error("[additions] creative-context notification failed", (e as Error).message);
+  }
+}
 
 // GET /ad-sets — the campaign's current ad sets, live (not the ad_set_meta
 // cache, which only refreshes on the hourly engine tick and would miss one

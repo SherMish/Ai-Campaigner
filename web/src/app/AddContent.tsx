@@ -5,8 +5,9 @@ import { strings } from "../strings";
 import {
   getAdditionContext, getExistingAdSets, getPendingAdditions, approveAddition, getConnectedPage,
   addAd, addAdSet, ApiError, getConfig,
-  uploadAdditionFile, getAdditionPosts, createAdditionCreative,
+  uploadAdditionFile, getAdditionPosts, createAdditionCreative, getCreativeContext,
   type ExistingAdSet, type PendingAddition, type AdditionUnavailableReason,
+  type CreativeContext as CreativeCtx,
 } from "../api";
 import { StatusPill, SupportCard, WA } from "./components";
 import { AudienceFields, type Gender } from "./AudienceFields";
@@ -17,6 +18,107 @@ const c = strings.he.app.connect;
 
 function freshKey(): string {
   return Math.random().toString(36).slice(2, 10);
+}
+
+const shekels = (agorot: number) => `₪${(agorot / 100).toFixed(agorot % 100 === 0 ? 0 : 1)}`;
+
+// AIC-78: what we know about this business and what its ads already tried,
+// shown at the moment someone is about to write the next one. The point is
+// memory — without it the fifth ad repeats the angle of the first four, which
+// is exactly what the live data showed on two of the three real accounts.
+function CreativeContextPanel({ ctx }: { ctx: CreativeCtx | null | undefined }) {
+  const [open, setOpen] = useState(true);
+  if (ctx === undefined) return null; // still loading — no skeleton for a side panel
+  if (ctx === null) return <p className="muted" style={{ marginBottom: 20, fontSize: "0.85rem" }}>{s.ctx.loadError}</p>;
+
+  const angleName = (a: string) => s.ctx.angleNames[a] ?? a;
+  const b = ctx.business;
+  const facts = ([
+    ["offer", b.offer], ["differentiators", b.differentiators],
+    ["objections", b.objections], ["priceRange", b.priceRange],
+  ] as const).filter(([, v]) => (v ?? "").trim().length > 0);
+
+  return (
+    <div className="card" style={{ marginBottom: 24 }}>
+      <button
+        className="row between"
+        onClick={() => setOpen((v) => !v)}
+        style={{ width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", textAlign: "start" }}
+        aria-expanded={open}
+      >
+        <b style={{ fontSize: "1.05rem" }}>{s.ctx.title}</b>
+        <span className="muted">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 14, display: "grid", gap: 18 }}>
+          <div>
+            <div className="eyebrow" style={{ marginBottom: 6 }}>{s.ctx.businessTitle}</div>
+            {facts.length > 0 ? (
+              <ul style={{ margin: 0, paddingInlineStart: 20 }}>
+                {facts.map(([k, v]) => <li key={k} style={{ marginBottom: 2 }}>{v}</li>)}
+              </ul>
+            ) : null}
+            {/* AIC-132 already knows whether these fields are worth anything.
+                Saying "the more we know, the sharper the writing" beats a
+                score, and links to the screen that fixes it. */}
+            {ctx.businessQuality.state !== "ok" && (
+              <p className="muted" style={{ marginTop: facts.length ? 8 : 0, fontSize: "0.85rem" }}>
+                {s.ctx.profileThin} <Link to="/app/settings">{s.ctx.profileFix}</Link>
+              </p>
+            )}
+          </div>
+
+          {ctx.adsTotal === 0 ? (
+            <p className="muted" style={{ margin: 0 }}>{s.ctx.noAds}</p>
+          ) : (
+            <>
+              <div>
+                <div className="eyebrow" style={{ marginBottom: 6 }}>{s.ctx.anglesTitle}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {ctx.anglesTested.map((a) => (
+                    <span key={a} className="pill neutral">{angleName(a)}</span>
+                  ))}
+                </div>
+                {ctx.singleAngle && (
+                  <p style={{ marginTop: 10, marginBottom: 0, fontSize: "0.85rem" }}>
+                    {s.ctx.singleAngle(angleName(ctx.singleAngle))}
+                  </p>
+                )}
+                {/* The honest floor. Without these two lines "we tried price"
+                    reads as "we tried everything except price". */}
+                {ctx.unclassifiedAds > 0 && (
+                  <p className="muted" style={{ marginTop: 8, fontSize: "0.8rem" }}>{s.ctx.unreadable(ctx.unclassifiedAds)}</p>
+                )}
+                {ctx.adsRead < ctx.adsTotal && (
+                  <p className="muted" style={{ marginTop: 4, fontSize: "0.8rem" }}>{s.ctx.partial(ctx.adsRead, ctx.adsTotal)}</p>
+                )}
+              </div>
+
+              <div>
+                <div className="eyebrow" style={{ marginBottom: 6 }}>{s.ctx.pastTitle}</div>
+                <div style={{ display: "grid", gap: 10 }}>
+                  {ctx.pastAds.map((a) => (
+                    <div key={a.adId} style={{ borderInlineStart: "3px solid rgba(23,23,23,.12)", paddingInlineStart: 10 }}>
+                      <div style={{ fontSize: "0.8rem", marginBottom: 2 }} className="muted">
+                        {a.angle ? angleName(a.angle) : s.ctx.noAngle}
+                        {a.fromExistingPost && ` · ${s.ctx.fromPost}`}
+                        {" · "}
+                        {a.leads === null
+                          ? s.ctx.noData
+                          : `${a.leads === 1 ? s.ctx.oneLead : `${a.leads} ${s.ctx.leadsSuffix}`}${a.cplAgorot !== null ? ` · ${shekels(a.cplAgorot)} ${s.ctx.perLead}` : ""}`}
+                      </div>
+                      <div style={{ fontSize: "0.9rem" }}>{a.headline ?? a.name ?? a.adId}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function AddContent() {
@@ -63,6 +165,12 @@ export function AddContent() {
   // as before, just no longer the normal one.
   const [justAddedLive, setJustAddedLive] = useState(true);
 
+  // AIC-78. Loaded separately from the page context: it makes live Meta reads
+  // (one per ad, for the copy), and the form must not wait on them.
+  // `undefined` = still loading, `null` = we could not load it — the panel says
+  // so rather than silently rendering an empty history.
+  const [creativeCtx, setCreativeCtx] = useState<CreativeCtx | null | undefined>(undefined);
+
   const [pending, setPending] = useState<PendingAddition[]>([]);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [approveError, setApproveError] = useState<string | null>(null);
@@ -88,6 +196,7 @@ export function AddContent() {
         setPhase("error");
       });
     refreshPending();
+    getCreativeContext().then(setCreativeCtx).catch(() => setCreativeCtx(null));
     getConfig().then((c) => setPortfolioId(c.businessPortfolioId)).catch(() => {});
   }, []);
 
@@ -279,6 +388,8 @@ export function AddContent() {
         <div className="eyebrow">{s.eyebrow}</div>
         <h1 style={{ marginTop: 10 }}>{s.title}</h1>
       </div>
+
+      <CreativeContextPanel ctx={creativeCtx} />
 
       {missingConfigFields.length > 0 && (
         <div className="card" style={{ marginBottom: 24 }}>

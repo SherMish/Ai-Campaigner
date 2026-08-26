@@ -1882,6 +1882,45 @@ export const strings = {
     // action, distinct from the builder (first campaign only).
     additions: {
       navLabel: "הוספת תוכן",
+      // AIC-78: what we know about this business, and what its ads already
+      // tried, shown where an ad is about to be written.
+      ctx: {
+        title: "מה שכדאי לדעת לפני שכותבים",
+        businessTitle: "העסק שלכם",
+        anglesTitle: "זוויות שכבר ניסינו",
+        // Named by the angle the copy commits to, in the customer's words —
+        // never the internal key.
+        angleNames: {
+          price: "מחיר / מבצע",
+          speed: "זמינות ומהירות",
+          experience: "ניסיון ומומחיות",
+          trust: "אמון והמלצות",
+          outcome: "התוצאה שמקבלים",
+          objection: "הסרת חשש",
+          local: "מקומיות",
+        } as Record<string, string>,
+        // A floor, not a census — said out loud rather than implied.
+        unreadable: (n: number) =>
+          n === 1 ? "מודעה אחת לא לקחה זווית ברורה." : `${n} מודעות לא לקחו זווית ברורה.`,
+        partial: (read: number, total: number) => `הצלחנו לקרוא ${read} מתוך ${total} מודעות.`,
+        // The most useful line on the panel: several ads arguing one thing is
+        // one test repeated, not several tests. Framed as an opening, not a
+        // telling-off — the person reading it is about to write the next ad.
+        singleAngle: (angle: string) =>
+          `כל המודעות שרצו עד היום מדברות על ${angle}. זווית אחרת היא ההזדמנות הכי גדולה שיש כאן.`,
+        pastTitle: "המודעות שכבר רצו",
+        noAds: "עוד לא רצו מודעות בקמפיין הזה — אין היסטוריה ללמוד ממנה.",
+        noAngle: "בלי זווית ברורה",
+        fromPost: "מפוסט קיים",
+        noData: "עדיין בלי נתונים",
+        leadsSuffix: "פניות",
+        // Hebrew has a real singular; "1 פניות" reads as broken copy.
+        oneLead: "פנייה אחת",
+        perLead: "לפנייה",
+        profileThin: "ככל שנדע יותר על העסק, כך הכתיבה תהיה מדויקת יותר.",
+        profileFix: "להשלמת הפרטים",
+        loadError: "לא הצלחנו לטעון את הרקע הזה כרגע.",
+      },
       eyebrow: "הקמפיין הקיים שלכם",
       title: "הוספת תוכן לקמפיין",
       // Three distinct reasons GET /context can 409 with — never collapsed
