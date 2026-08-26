@@ -238,7 +238,7 @@ this panel always read the engine's own fixed 7-complete-day window,
 unrelated to the switcher, and only disclosed the mismatch in small print —
 that disclaimer is gone because the underlying disagreement is gone.)
 
-**So does the ▲/▼ comparison line (2026-08-26).** The same class of bug
+**So does the ▲/▼ comparison line (AIC-141).** The same class of bug
 survived one layer higher: the KPI cards followed the switcher while the
 movement underneath them was a single figure over the engine's fixed
 7-complete-day window. On היום that produced "—" for the number with "▲20%

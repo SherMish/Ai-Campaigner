@@ -21,7 +21,7 @@ guessing; running it over live ads caught two Hebrew substring collisions
 that missed the words Israelis actually use for cost. Owning doc:
 [docs/features/creative-context.md](features/creative-context.md).
 
-### 2026-08-26 — the ▲/▼ line ignored the range switcher
+### 2026-08-26 — AIC-141: the ▲/▼ line ignored the range switcher
 
 Found while dogfooding test@test.com: the KPI numbers followed the day/week/
 month switcher but the movement underneath them didn't — it was one figure over
