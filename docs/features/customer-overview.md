@@ -638,3 +638,35 @@ reasonable follow-up, not required by this fix.
 `condense(listCustomerActionHistory(...))`, newest first, capped at 8. Empty
 until the safe-execute pipeline records real actions — the screen shows an honest
 "nothing changed yet" line rather than sample events.
+
+## The `collecting` hero says what it is waiting for (AIC-144)
+
+It used to read *"עדיין אוספים נתונים / עוד קצת פעילות ונוכל להמליץ בביטחון"* —
+a sentence that can sit unchanged on the screen for three weeks while the
+customer has no way to tell whether anything is moving. Meanwhile the engine
+already recorded exactly which minimum-evidence gate was unmet and by how much
+(`evidenceGapDetail` → `managed_campaigns.no_rec_detail`), and the copy threw
+all of it away.
+
+`collectingCopy(detail, visibleLeads)` names the gate **furthest from being
+met** — naming the nearest would promise an answer sooner than it can arrive —
+with the real numbers:
+
+> **עוד 4 פניות ונדע מה לשנות**
+> יש 1 מתוך 5 פניות שאנחנו צריכים כדי להשוות בין המודעות. המלצה על סמך פחות
+> מזה היא ניחוש, ולא נעשה את זה על התקציב שלכם.
+
+It falls back to the generic wording when the detail is absent, rather than
+inventing a number, and drops a gate that is already met.
+
+**The lead count is the one the customer can SEE.** Found in the browser on the
+live account: the hero rendered "יש 0 מתוך 5 פניות" directly above a KPI card
+reading "1 פנייה". Both were correct — the lead arrived today, and the engine
+evaluates complete days — and the screen contradicted itself anyway. The visible
+figure now wins when it is higher. The engine acts a day later than the sentence
+implies, which is the right way round: being a day early costs nothing, while
+telling a customer they have none of the leads they can see destroys trust in
+every number beside it.
+
+The recommendations screen reads the same function with the same detail, so the
+two surfaces cannot describe the wait differently.

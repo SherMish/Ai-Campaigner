@@ -57,6 +57,55 @@ export interface NoRecCopy {
 // campaign" — so `delivery_blocked` and `tracking_broken` (both real, both
 // reachable) rendered a message that was, for them, false: we are NOT simply
 // watching, something is broken and we know what. Now exhaustive.
+/**
+ * The `collecting` card, told with the actual numbers.
+ *
+ * The engine stores exactly which minimum-evidence gate is unmet and by how
+ * much (`evidenceGapDetail`); the copy used to discard all of it and say "עוד
+ * קצת פעילות ונוכל להמליץ בביטחון" — a sentence that can sit unchanged on the
+ * screen for three weeks while the customer has no idea whether anything is
+ * moving. A number they can watch approach is the difference between waiting
+ * and being strung along.
+ *
+ * The gate named is the one FURTHEST from being met, measured as a share of
+ * what it needs — naming the nearest would promise an answer sooner than it
+ * can arrive.
+ *
+ * Falls back to the generic copy when the detail is absent (an older row, or a
+ * reason recorded before this existed), rather than inventing a number.
+ */
+export function collectingCopy(
+  detail: Record<string, unknown> | null | undefined,
+  // The lead count the customer can SEE on this screen. The engine evaluates
+  // complete days only, so a lead that arrived today is real, visible in the
+  // KPI, and still absent from `leadsSoFar` — which rendered "יש 0 מתוך 5
+  // פניות" directly above a card reading "1 פנייה". Caught in the browser on a
+  // live account.
+  //
+  // The visible number wins when it is higher. The engine will act a day later
+  // than this sentence implies, and that is the right way round: telling a
+  // customer they have none of the leads they can see on the screen destroys
+  // trust in every other number we show, while being a day early costs
+  // nothing.
+  visibleLeads?: number | null,
+): NoRecCopy {
+  const num = (k: string): number | null => (typeof detail?.[k] === "number" ? (detail[k] as number) : null);
+  const storedLeads = num("leadsSoFar");
+  const leadsSoFar =
+    storedLeads === null ? null : typeof visibleLeads === "number" ? Math.max(storedLeads, visibleLeads) : storedLeads;
+  const gaps = [
+    { kind: "leads" as const, have: leadsSoFar, need: num("leadsNeeded") },
+    { kind: "days" as const, have: num("daysSoFar"), need: num("daysNeeded") },
+    { kind: "delivery" as const, have: num("deliveryDaysSoFar"), need: num("deliveryDaysNeeded") },
+  ].filter((g): g is { kind: "leads" | "days" | "delivery"; have: number; need: number } =>
+    g.have !== null && g.need !== null && g.need > 0 && g.have < g.need,
+  );
+  if (gaps.length === 0) return h.noRec.collecting;
+
+  const worst = gaps.reduce((a, b) => (a.have / a.need <= b.have / b.need ? a : b));
+  return h.noRec.collectingSpecific[worst.kind](worst.have, worst.need);
+}
+
 export const NO_REC_COPY: Record<NoActionReason, NoRecCopy> = {
   stable: h.noRec.stable,
   collecting: h.noRec.collecting,
@@ -83,8 +132,16 @@ export const NO_REC_COPY: Record<NoActionReason, NoRecCopy> = {
 // `null` is legitimately "the engine hasn't classified anything yet" (before
 // its first tick for this campaign) — a real state with its own honest copy,
 // not an unknown value being swallowed.
-export function noRecCopy(reason: NoActionReason | null): NoRecCopy {
+export function noRecCopy(
+  reason: NoActionReason | null,
+  detail?: Record<string, unknown> | null,
+  visibleLeads?: number | null,
+): NoRecCopy {
   if (reason === null) return { title: h.noActionTitle, body: h.noAction };
+  // `collecting` is the one reason whose honest wording depends on HOW MUCH is
+  // still missing — every other reason is the same sentence whatever the
+  // numbers behind it.
+  if (reason === "collecting") return collectingCopy(detail, visibleLeads);
   return NO_REC_COPY[reason];
 }
 

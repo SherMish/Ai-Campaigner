@@ -169,7 +169,7 @@ const PILL: Record<HomeState, "ok" | "info" | "neutral" | "attn"> = {
 // states now read through the SAME noRecCard() reasoning the pending-rec
 // teaser already used, so the hero and the "why (not)" card can never again
 // say different things about the same campaign.
-function hero(state: HomeState, attentionKind: AttentionKind | null, readyToBuild: boolean, noRecReason: NoActionReason | null, wasBuiltHere: boolean): { badge: string; title: string; body: string; cta?: { to: string; label: string }; launch?: { label: string } } {
+function hero(state: HomeState, attentionKind: AttentionKind | null, readyToBuild: boolean, noRecReason: NoActionReason | null, wasBuiltHere: boolean, noRecDetail?: Record<string, unknown> | null, visibleLeads?: number | null): { badge: string; title: string; body: string; cta?: { to: string; label: string }; launch?: { label: string } } {
   switch (state) {
     case "attention": {
       // AIC-98: the three causes come from ATTENTION_COPY, an exhaustive
@@ -200,7 +200,7 @@ function hero(state: HomeState, attentionKind: AttentionKind | null, readyToBuil
       return { ...h.states.setup, cta: { to: "/onboarding", label: h.states.setup.cta } };
     case "collecting":
     case "ok": {
-      const nr = noRecCard(noRecReason);
+      const nr = noRecCard(noRecReason, noRecDetail, visibleLeads);
       return { badge: HOME_STATE_BADGE[state], title: nr.title, body: nr.body, cta: nr.cta };
     }
     default:
@@ -338,7 +338,16 @@ export function Home() {
 
   const state = ov.homeState;
   const readyToBuild = ov.connection?.accessHealth === "ok" && !!ov.connection.adAccount && !!ov.connection.pageId;
-  const hd = hero(state, ov.attentionKind, readyToBuild, ov.campaign?.noRecReason ?? null, ov.campaign?.wasBuiltHere ?? false);
+  const hd = hero(
+    state, ov.attentionKind, readyToBuild,
+    ov.campaign?.noRecReason ?? null, ov.campaign?.wasBuiltHere ?? false,
+    // AIC-144: the engine already recorded WHICH evidence gate is unmet and by
+    // how much; the hero says it instead of "a bit more activity".
+    ov.campaign?.noRecDetail,
+    // The same 7-day figure the KPI card shows, so the hero can never claim
+    // the customer has fewer leads than the screen beside it displays.
+    ov.readout?.ranges.week.leads ?? null,
+  );
   const tooltipKey = statusTooltipKey(state, ov.attentionKind, readyToBuild);
   // A pending recommendation (including the AIC-86 advisory type, which fires
   // before any evidence gate) outranks the "nothing to report" hero — it IS

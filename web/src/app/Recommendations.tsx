@@ -58,8 +58,10 @@ export function Recommendations() {
                     nothing; a drill-down owes at least as much as its
                     summary. Same copy source as the dashboard card, so the
                     two can never drift apart. */}
-                <b style={{ fontSize: "1.1rem" }}>{noRecCopy(data.noRecReason).title}</b>
-                <p className="muted" style={{ marginTop: 8 }}>{noRecCopy(data.noRecReason).body}</p>
+                {/* Same detail the hero reads, so the two screens can never
+                    describe the wait differently. */}
+                <b style={{ fontSize: "1.1rem" }}>{noRecCopy(data.noRecReason, data.noRecDetail).title}</b>
+                <p className="muted" style={{ marginTop: 8 }}>{noRecCopy(data.noRecReason, data.noRecDetail).body}</p>
               </div>
             ) : (
               data.pending.map((r) => (

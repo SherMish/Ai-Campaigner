@@ -6,6 +6,18 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-26 — AIC-144: the "collecting" hero now says what it is waiting for
+
+"עוד קצת פעילות ונוכל להמליץ בביטחון" can sit unchanged for three weeks while
+the customer has no idea whether anything is moving — and the engine had already
+recorded exactly which evidence gate was unmet and by how much. The hero now
+names the gate furthest from being met with real numbers ("עוד 4 פניות ונדע מה
+לשנות · יש 1 מתוך 5"). Rendering it caught a contradiction it inherited: the
+stored count says 0 while the KPI beside it shows 1, because the lead arrived
+today and the engine evaluates complete days — so the copy now takes the
+customer-visible count whenever it is higher. Owning doc:
+[docs/features/customer-overview.md](features/customer-overview.md).
+
 ### 2026-08-26 — AIC-143: "add 3–4 ads" was advice the budget couldn't pay for
 
 Spotted from the other side of a conversation about when to kill an ad: the

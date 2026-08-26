@@ -1509,7 +1509,30 @@ export const strings = {
         // engine hasn't classified a reason yet (e.g. before its first tick).
         noRec: {
           stable: { title: "אין כרגע משהו שצריך לעשות", body: "הקמפיין יציב, אין כרגע צורך בשינוי." },
+          // Kept as the fallback for when the engine hasn't stored WHAT it is
+          // waiting for. Whenever it has — which is almost always — the
+          // specific version below is used instead: "עוד קצת פעילות" is the
+          // kind of sentence that could sit on the screen for three weeks
+          // without the customer ever knowing whether anything is happening.
           collecting: { title: "עדיין אוספים נתונים", body: "עוד קצת פעילות ונוכל להמליץ בביטחון." },
+          // The engine already records exactly which gate is unmet and by how
+          // much (evidenceGapDetail) — the copy simply threw it away. A number
+          // the customer can watch move is the difference between waiting and
+          // being strung along.
+          collectingSpecific: {
+            leads: (have: number, need: number) => ({
+              title: need - have === 1 ? "עוד פנייה אחת ונדע מה לשנות" : `עוד ${need - have} פניות ונדע מה לשנות`,
+              body: `יש ${have} מתוך ${need} פניות שאנחנו צריכים כדי להשוות בין המודעות. המלצה על סמך פחות מזה היא ניחוש, ולא נעשה את זה על התקציב שלכם.`,
+            }),
+            days: (have: number, need: number) => ({
+              title: need - have === 1 ? "עוד יום אחד של נתונים" : `עוד ${need - have} ימים של נתונים`,
+              body: `הקמפיין רץ ${have} מתוך ${need} הימים שאנחנו צריכים. יום-יומיים ראשונים הם רעש — מה שנראה בהם טוב או רע לרוב מתהפך.`,
+            }),
+            delivery: (have: number, need: number) => ({
+              title: "המודעות עוד לומדות",
+              body: `Meta עדיין לומדת למי להציג את המודעות (${have} מתוך ${need} ימים). עד שזה מתייצב, כל מסקנה מהמספרים תהיה מוקדמת מדי.`,
+            }),
+          },
           budgetBelowThreshold: {
             title: "התקציב לא מספיק כדי לזהות מגמות",
             body: "בתקציב הנוכחי אנחנו לא יכולים לזהות מה עובד ומה לא. שווה לשקול להעלות אותו.",
