@@ -30,8 +30,9 @@ import {
   RANGE_KEYS,
 } from "../api";
 import { assertNever } from "@aic/shared";
-import { ATTENTION_COPY, HOME_STATE_BADGE, noRecCopy, STATUS_TOOLTIP_COPY, statusTooltipKey, thresholdLine } from "./state-copy";
+import { ATTENTION_COPY, HERO_TONE, HOME_STATE_BADGE, noRecCopy, STATUS_TOOLTIP_COPY, statusTooltipKey, thresholdLine } from "./state-copy";
 import { AD_DELIVERY_BADGE, AD_DELIVERY_TONE, deliveryStatus } from "./delivery-status";
+import { InfoTip } from "./InfoTip";
 import { StatusPill } from "./components";
 import { useSharedOverview, invalidateOverview } from "./overview-store";
 
@@ -388,6 +389,14 @@ export function Home() {
   const activeAds =
     ov.campaign?.deliveringAdCount ??
     new Set((r?.perCreative ?? []).map((c) => c.creativeName ?? c.metaObjectId)).size;
+  // AIC-143, second pass. A full-size card is a claim on the customer's
+  // attention, and most no-recommendation states have no claim to make.
+  // "Nothing should change right now" is a real engine conclusion and should
+  // read as calm judgement — not as a product waiting for a counter to reach
+  // five. Only a problem, or something they must do, earns the card.
+  const quietHero =
+    (state === "ok" || state === "collecting") &&
+    HERO_TONE[ov.campaign?.noRecReason ?? "stable"] === "quiet";
   const threshold = thresholdLine(ov.campaign?.noRecReason ?? null, ov.campaign?.noRecDetail, shekels);
   const period = ov.campaign?.budgetPeriod === "monthly" ? L.perMonth : L.perDay;
 
@@ -408,6 +417,19 @@ export function Home() {
               than sitting in a second card that could say the opposite. */}
           {hasPendingHero ? (
             <RecTeaser ov={ov} />
+          ) : quietHero ? (
+            /* One line, no card. The evidence that produced this verdict lives
+               behind the "i" — a customer who wants to know why can ask, and
+               nobody else is made to read our internal thresholds. */
+            <div className="row" style={{ gap: 8, alignItems: "center", padding: "4px 2px 8px", flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 600 }}>{h.quiet.title}</span>
+              <span className="muted">{h.quiet.body}</span>
+              <InfoTip label={h.quiet.why}>
+                <b style={{ display: "block", marginBottom: 6 }}>{hd.title}</b>
+                <p style={{ margin: 0 }}>{hd.body}</p>
+                {threshold && <p style={{ margin: "8px 0 0" }}>{threshold}</p>}
+              </InfoTip>
+            </div>
           ) : (
             <div className="card">
               <div className="row between" style={{ flexWrap: "wrap", gap: 14 }}>

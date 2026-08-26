@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-26 — AIC-143 (second pass): most of the time, no hero at all
+
+The first pass kept a card for every state and improved its sentence. Wrong
+lever: a full-size card is a claim on the customer's attention, and "nothing
+should change right now" has no such claim to make. The lead countdown was the
+clearest symptom — it made the product sound like a counter, promised that four
+more leads would produce an answer (which may be false), and explained the
+engine instead of helping the customer. `HERO_TONE` now classifies every reason
+as problem / action / quiet; quiet renders one line — "אין כרגע שינוי שמצדיק
+פעולה · הקמפיין פעיל ואנחנו ממשיכים לעקוב" — with the evidence behind an ⓘ.
+
 ### 2026-08-26 — AIC-143: the hero describes instead of judging
 
 A slot that must contain a sentence fills with reassurance when there is nothing

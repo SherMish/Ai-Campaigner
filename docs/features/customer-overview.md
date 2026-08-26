@@ -677,7 +677,39 @@ A UI slot that must always contain a sentence will always contain one — and
 when there is nothing true to say, it fills with reassurance. That is where a
 campaign with ₪49 of spend and one lead got told everything was fine.
 
-The hero is now two parts:
+### Most of the time there is no hero at all
+
+The first pass kept a full-size card for every state and worked on making its
+sentence better. Wrong lever. **A big card is a claim on the customer's
+attention, and most no-recommendation states have no claim to make.** A lead
+countdown in particular ("עוד 4 פניות ונדע מה לשנות") does three bad things at
+once: it makes the product sound like a counter, it promises that exactly four
+more leads will produce an answer — which may be false — and it explains the
+engine instead of telling the customer something useful.
+
+`HERO_TONE` decides how loudly each reason is presented:
+
+| tone | reasons | presentation |
+| --- | --- | --- |
+| `problem` | account can't spend, lead event stopped, delivery / tracking / CTA broken | full card |
+| `action` | budget below threshold | full card with a CTA |
+| `quiet` | stable, collecting, cooling down, either no-comparable, below evidence floor, profile incomplete | **one line, no card** |
+
+The quiet line is:
+
+> **אין כרגע שינוי שמצדיק פעולה** · הקמפיין פעיל ואנחנו ממשיכים לעקוב. ⓘ
+
+The evidence that produced it lives behind the ⓘ ("למה אין המלצה?") — a
+customer who wants to know can ask, and nobody else is made to read our
+internal thresholds. `profile_incomplete` is `quiet` deliberately: it is our
+homework, and nagging someone about it is not a status update.
+
+Our value is not that we can count to five. It is judging whether a difference
+is meaningful, whether the measurement is trustworthy, whether lead quality
+supports it, and whether changing anything is wise. The dashboard should sound
+like that.
+
+### When a card IS shown, it is two parts
 
 | line | source | rule |
 | --- | --- | --- |

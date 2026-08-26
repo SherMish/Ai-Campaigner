@@ -131,6 +131,48 @@ export function thresholdLine(
   return null;
 }
 
+/**
+ * How loudly a no-recommendation state should be presented.
+ *
+ * AIC-143, second pass. The first pass kept a full-size hero card for every
+ * reason and worked on making its sentence better. That was the wrong lever:
+ * a big card is a claim on the customer's attention, and most of these reasons
+ * have no claim to make. "Nothing should change right now" is a legitimate
+ * engine conclusion, and it should read as calm professional judgement — not
+ * as a product waiting for a counter to reach five.
+ *
+ *   problem — something is broken or costing money. Prominent.
+ *   action  — the customer has to do something. Prominent, with a CTA.
+ *   quiet   — nothing for them to do. One line, no card.
+ *
+ * Exhaustive on purpose: a new reason cannot ship without someone deciding how
+ * much of the customer's attention it deserves.
+ */
+export type HeroTone = "problem" | "action" | "quiet";
+
+export const HERO_TONE: Record<NoActionReason, HeroTone> = {
+  // Money is being spent into a hole, or the numbers themselves are wrong.
+  account_cannot_spend: "problem",
+  lead_event_stopped: "problem",
+  // Routed to the attention badge before they reach here, but classified
+  // anyway — reachability is a routing detail a refactor can change.
+  delivery_blocked: "problem",
+  tracking_broken: "problem",
+  cta_broken: "problem",
+  // The one thing on this list the customer alone can fix.
+  budget_below_threshold: "action",
+  // Ours to fix, not theirs — so it does not get to interrupt them.
+  profile_incomplete: "quiet",
+  // All of these mean "we are watching and it is fine / too early". None of
+  // them is worth a card.
+  stable: "quiet",
+  collecting: "quiet",
+  cooling_down: "quiet",
+  no_comparable_creatives: "quiet",
+  no_comparable_audiences: "quiet",
+  below_object_evidence_floor: "quiet",
+};
+
 export const NO_REC_COPY: Record<NoActionReason, NoRecCopy> = {
   stable: h.noRec.stable,
   collecting: h.noRec.collecting,

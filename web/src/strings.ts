@@ -1509,6 +1509,15 @@ export const strings = {
         // engine reason, so "stable" and "still collecting data" never look
         // the same. Falls back to noActionTitle/noAction above when the
         // engine hasn't classified a reason yet (e.g. before its first tick).
+        // AIC-143, second pass: what a campaign with nothing to act on shows.
+        // One quiet line, no card. The evidence behind it lives behind the "i"
+        // — a customer who wants to know why can ask, and everyone else is not
+        // made to read our internal thresholds.
+        quiet: {
+          title: "אין כרגע שינוי שמצדיק פעולה",
+          body: "הקמפיין פעיל ואנחנו ממשיכים לעקוב.",
+          why: "למה אין המלצה?",
+        },
         noRec: {
           stable: { title: "אין כרגע משהו שצריך לעשות", body: "הקמפיין יציב, אין כרגע צורך בשינוי." },
           // Kept as the fallback for when the engine hasn't stored WHAT it is
