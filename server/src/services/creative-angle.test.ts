@@ -64,3 +64,51 @@ describe("classifyAngle — Hebrew substring collisions found on live ads", () =
     expect(classifyAngle(null, "100 הנרשמים הראשונים יקבלו גישה מלאה בחינם.").angle).toBe("price");
   });
 });
+
+// The two Ads Agent ads that were tagged identically, and must not be. This is
+// the case that matters most: the provocation ad is the ONLY one on that
+// account that produced a lead, so mislabelling it teaches the wrong lesson
+// from the single data point there is.
+describe("classifyAngle — the headline is the ad's claim, not the body", () => {
+  const PROVOCATION = [
+    "אל תהיו חמורים. יש דרך אחרת לנהל קמפיין.",
+    "לא חייבים לשלם לקמפיינר אלפי שקלים בחודש כדי שהפרסום שלכם יהיה מנוהל. Ads Agent עוקב, מנתח, ממליץ ומבצע שינויים באישורכם - עם בן אדם אמיתי כשצריך.",
+  ] as const;
+  const COST_COMPLAINT = [
+    "עדיין משלמים אלפי שקלים על ניהול קמפיינים?",
+    "Ads Agent מנהל את הקמפיין בשבילכם - עוקב אחרי הביצועים, מזהה מה כדאי לשנות. בלי ריטיינר מנופח.",
+  ] as const;
+
+  it("reads the provocation ad as contrarian, not price", () => {
+    // Its body DOES mention paying thousands — but that is the setup being
+    // argued against, not the claim. The claim is "there is another way".
+    expect(classifyAngle(...PROVOCATION).angle).toBe("contrarian");
+  });
+
+  it("still reads the cost-complaint ad as price", () => {
+    // Both ads are rhetorical questions about a freelancer's fee. Only one
+    // LEADS with the money, and the two must not collapse together.
+    expect(classifyAngle(...COST_COMPLAINT).angle).toBe("price");
+  });
+
+  it("the two live ads no longer share an angle", () => {
+    expect(classifyAngle(...PROVOCATION).angle).not.toBe(classifyAngle(...COST_COMPLAINT).angle);
+  });
+
+  it("keeps the body's angles in `all` — they were used, just not led with", () => {
+    // Erasing them would lose that the ad argued cost at all.
+    expect(classifyAngle(...PROVOCATION).all).toContain("price");
+  });
+
+  it("falls back to the body when the headline commits to nothing", () => {
+    expect(classifyAngle("הכירו את פסגה", "100 הנרשמים הראשונים - בחינם").angle).toBe("price");
+  });
+
+  it("reports weak confidence only when another angle nearly tied", () => {
+    // Weak means AMBIGUOUS, not thin. One unambiguous term with nothing
+    // competing is a clear read — an earlier, stricter rule marked every ad on
+    // the account weak, which is the same as marking none of them.
+    expect(classifyAngle("במחיר טוב", null).confidence).toBe("clear");
+    expect(classifyAngle("מחיר טוב, בלי התחייבות", null).confidence).toBe("weak");
+  });
+});

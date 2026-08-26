@@ -55,9 +55,43 @@ copy doesn't commit, and the context reports `unclassifiedAds` alongside the
 list. Without that number, "we tried price" reads as "we tried everything except
 price".
 
-Seven angles: price, speed, experience, trust, outcome, objection, local.
-Matching is occurrence-weighted with the headline counted twice — the headline
-is the ad's actual claim; the body can wander.
+Eight angles: price, speed, experience, trust, outcome, objection, local,
+contrarian.
+
+### The headline decides; the body only votes when the headline is silent
+
+The headline used to be merely weighted double against a body many times its
+length, which is not the same thing. A live ad proved the difference:
+
+> **אל תהיו חמורים. יש דרך אחרת לנהל קמפיין.**
+> *body:* לא חייבים לשלם לקמפיינר אלפי שקלים בחודש…
+
+It was filed as `price`, because the body mentions paying a freelancer
+thousands. But that cost line is the setup being argued *against* — the ad's
+claim is a provocation plus an alternative. It sat next to a genuine price ad
+("עדיין משלמים אלפי שקלים על ניהול קמפיינים?") wearing the same tag.
+
+**Why that one mattered more than the others:** it is the only ad on that
+account that produced a lead, at ₪6. Left as `price`, the system's single data
+point would have taught it that price works, and AIC-79 would have proposed the
+wrong next test.
+
+Two changes: `contrarian` now exists as an angle, and the headline is decisive —
+the body only gets a vote when the headline commits to nothing. The body's
+angles stay in `all`, because the ad did argue cost; it just did not lead with
+it.
+
+### Confidence
+
+Each verdict carries `clear` or `weak`. **Weak means AMBIGUOUS — another angle
+scored nearly as high — not merely thin.** A first attempt marked an angle weak
+whenever it rested on a single term, which put the caveat on every ad on the
+account; a caveat on everything is a caveat on nothing. One unambiguous term
+with nothing competing is a clear read.
+
+`AngleRecord.clearAdCount` carries this up to the angle level: an angle held by
+four ads, three of them weakly read, is not the same claim as one held by four
+clear ones, and both the panel and the Telegram line say which.
 
 ### Hebrew substring collisions
 
@@ -157,12 +191,27 @@ from the JWT — never from the request. There is no id here for a client to
 tamper with, which is what makes this route safe without an extra ownership
 assertion.
 
+## Naming an ad in any surface
+
+Always the COPY — the headline, falling back to the start of the body. Printing
+the internal ad name made a perfectly readable ad show up as `מודעה 1`, which
+looks exactly like an ad we could not read. Those are very different claims, and
+the second one is much worse.
+
+For the same reason the "every readable ad argues X" line names the count it
+rests on: over two ads that is a far weaker statement than over eight, and the
+reader cannot tell which without being told.
+
 ## Known limits
 
 - **Capped at 8 ads.** One live Meta read each, on a page load. The newest ads
   are the ones worth learning from. `adsRead < adsTotal` is reported so a
   partial read never looks like a customer who ran fewer ads than they did.
-- **The angle list is a floor, not a census.** See `unclassifiedAds`.
+- **The angle list is a floor, not a census.** See `unclassifiedAds`, and
+  `clearAdCount` for how firmly each angle was read.
+- **The taxonomy grows from observed copy, not from imagination.** `contrarian`
+  exists because a real ad had nowhere else to go. Expect more gaps of that
+  shape; the fix for each is a new bucket, not a forced fit into an old one.
 - **Angles are not tagged at launch.** The ticket describes appending an angle
   when a creative goes live. Reading it back from the copy achieves the same
   list without a capture UI, and works retroactively — but it means an ad whose

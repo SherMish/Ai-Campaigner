@@ -746,6 +746,7 @@ export interface PastAd {
   headline: string | null;
   primaryText: string | null;
   angle: string | null;
+  angleConfidence: "clear" | "weak";
   angles: string[];
   spendAgorot: number | null;
   leads: number | null;
@@ -760,7 +761,10 @@ export interface CreativeContext {
   pastAds: PastAd[];
   // Each angle with the spend behind it. "attempted" means we do NOT know
   // whether it works — four ads sharing ₪26 have tested nothing.
-  angles: Array<{ angle: string; adCount: number; spendAgorot: number; leads: number; state: "tested" | "attempted" }>;
+  angles: Array<{
+    angle: string; adCount: number; spendAgorot: number; leads: number;
+    state: "tested" | "attempted"; clearAdCount: number;
+  }>;
   unclassifiedAds: number;
   adsRead: number;
   adsTotal: number;

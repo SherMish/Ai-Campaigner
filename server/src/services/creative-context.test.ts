@@ -6,7 +6,7 @@ const names = (r: { angles: Array<{ angle: string }> }) => r.angles.map((a) => a
 function ad(over: Partial<PastAd> = {}): PastAd {
   return {
     adId: "ad_1", name: null, headline: "כותרת", primaryText: "גוף",
-    angle: "price", angles: ["price"],
+    angle: "price", angleConfidence: "clear", angles: ["price"],
     spendAgorot: 10000, leads: 5, cplAgorot: 2000,
     relevantRate: null, costPerRelevantAgorot: null, fromExistingPost: false, ...over,
   };
@@ -110,7 +110,7 @@ describe("describeCreativeContext — the operator's copy", () => {
     },
     businessQuality: { state: "broken", missing: ["differentiators"], vague: [], reason: "missing: differentiators" },
     pastAds: [ad(), ad({ adId: "b" })],
-    angles: [{ angle: "price", adCount: 2, spendAgorot: 20000, leads: 10, state: "tested" }],
+    angles: [{ angle: "price", adCount: 2, spendAgorot: 20000, leads: 10, state: "tested", clearAdCount: 2 }],
     unclassifiedAds: 0, adsRead: 2, adsTotal: 2, singleAngle: "price", market: null,
   };
 
@@ -121,14 +121,16 @@ describe("describeCreativeContext — the operator's copy", () => {
     expect(t).toContain("missing: differentiators");
   });
 
-  it("says out loud when every ad argues the same thing", () => {
-    expect(describeCreativeContext(base, { businessName: "מספרה" })).toContain("EVERY readable ad");
+  it("says out loud when every ad argues the same thing, and how many that is", () => {
+    // "every readable ad" over two ads is a far weaker statement than over
+    // eight, and the reader cannot tell which without being told the count.
+    expect(describeCreativeContext(base, { businessName: "מספרה" })).toContain("All 2 readable ad(s) argue");
   });
 
   it("refuses to imply a verdict on an angle that never got the budget", () => {
     const thin: CreativeContext = {
       ...base,
-      angles: [{ angle: "price", adCount: 4, spendAgorot: 2600, leads: 0, state: "attempted" }],
+      angles: [{ angle: "price", adCount: 4, spendAgorot: 2600, leads: 0, state: "attempted", clearAdCount: 4 }],
     };
     const t = describeCreativeContext(thin, { businessName: "מספרה" });
     expect(t).toContain("ATTEMPTED, not judged");

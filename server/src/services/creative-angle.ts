@@ -23,6 +23,13 @@ export const ANGLES = [
   "outcome",      // what the customer ends up with
   "objection",    // copy that pre-empts the hesitation ("בלי התחייבות")
   "local",        // באזור, קרוב אליכם, שם היישוב
+  // Added 2026-08-26 from review of a live ad the taxonomy could not hold:
+  // "אל תהיו חמורים. יש דרך אחרת לנהל קמפיין." Its body mentions paying a
+  // freelancer thousands, so it scored as `price` — but the ad's CLAIM is a
+  // provocation plus an alternative ("there is another way"), and the cost
+  // line is the setup, not the argument. Without this bucket, the only ad on
+  // that account which produced a lead was filed under the wrong lesson.
+  "contrarian",   // אל תהיו, יש דרך אחרת, לא חייבים, תפסיקו
 ] as const;
 
 export type Angle = (typeof ANGLES)[number];
@@ -50,6 +57,10 @@ const TERMS: Record<Angle, readonly string[]> = {
   outcome: ["תוצאה", "תוצאות", "לפני ואחרי", "תיהנו", "תקבלו", "תחסכו", "בלי כאב", "שקט נפשי"],
   objection: ["בלי התחייבות", "ללא התחייבות", "בלי מחויבות", "אפשר לבטל", "בדיקה חינם", "ייעוץ ללא", "לא משלמים", "בלי הפתעות"],
   local: ["באזור", "קרוב אליכם", "בקרבת", "תושבי", "אזור ה", "בכל אזור"],
+  // Deliberately narrow. "עדיין משלמים אלפי שקלים?" is ALSO rhetorical, and it
+  // is a price ad — so the rhetorical framing alone must not qualify. What
+  // qualifies is naming an alternative or rejecting the default outright.
+  contrarian: ["יש דרך אחרת", "אל תהיו", "אל תשלמו", "לא חייבים", "תפסיקו", "די ל", "אחרת לגמרי", "לא חייב להיות"],
 };
 
 // Punctuation and repeated whitespace only — never strip Hebrew niqqud or
@@ -79,6 +90,11 @@ function countTerm(haystack: string, term: string): number {
 
 export interface AngleVerdict {
   angle: Angle | null;
+  // How safely this was decided. `weak` means the winner beat the runner-up by
+  // a single hit, or rests on one matched term — a real answer, but not one to
+  // build a conclusion on. Surfaced rather than hidden, and never silently
+  // promoted to a confident label.
+  confidence: "clear" | "weak";
   // Every angle the copy touches, strongest first. An ad usually leads with one
   // and mentions another; the LIST is what stops "we tried price" from erasing
   // the fact that the same ad also carried the experience claim.
@@ -89,28 +105,60 @@ export interface AngleVerdict {
  * Classify one ad's copy. `null` when nothing commits — an honest gap, not a
  * default bucket.
  */
-export function classifyAngle(headline: string | null, primaryText: string | null): AngleVerdict {
-  let text = normalize(`${headline ?? ""} ${primaryText ?? ""}`);
-  if (text.length === 0) return { angle: null, all: [] };
+const strip = (text: string) => {
+  let out = normalize(text);
   // Remove the known collisions before counting, so the words inside them
   // cannot be read as the terms they merely contain.
-  for (const c of COLLISIONS) text = text.split(c).join(" ");
+  for (const c of COLLISIONS) out = out.split(c).join(" ");
+  return out;
+};
 
-  // Weighted by OCCURRENCES, not by how many distinct synonyms matched —
-  // otherwise an angle simply having more words in its list wins, and copy
-  // that says "מחיר" twice loses to copy that mentions experience once in two
-  // ways. The headline counts double: it is the ad's actual claim, the line
-  // next to the button, while the body can wander.
-  let head = normalize(headline ?? "");
-  for (const c of COLLISIONS) head = head.split(c).join(" ");
-  const scored = ANGLES.map((angle) => ({
+function score(text: string): Array<{ angle: Angle; hits: number }> {
+  if (text.length === 0) return [];
+  return ANGLES.map((angle) => ({
     angle,
-    hits: TERMS[angle].reduce((n, t) => n + countTerm(text, t) + countTerm(head, t), 0),
-  })).filter((s) => s.hits > 0);
+    hits: TERMS[angle].reduce((n, t) => n + countTerm(text, t), 0),
+  }))
+    .filter((s) => s.hits > 0)
+    // Stable order on a tie: ANGLES order. A tie means the copy carries both
+    // equally, and the list keeps both.
+    .sort((a, b) => b.hits - a.hits);
+}
 
-  if (scored.length === 0) return { angle: null, all: [] };
-  // Stable order on a tie: ANGLES order, which runs cheapest-to-reach-for
-  // first. A tie means the copy carries both equally, and the list keeps both.
-  scored.sort((a, b) => b.hits - a.hits);
-  return { angle: scored[0].angle, all: scored.map((s) => s.angle) };
+export function classifyAngle(headline: string | null, primaryText: string | null): AngleVerdict {
+  const head = strip(headline ?? "");
+  const body = strip(primaryText ?? "");
+  if (`${head}${body}`.length === 0) return { angle: null, all: [], confidence: "weak" };
+
+  const headScores = score(head);
+  const bodyScores = score(body);
+
+  // THE HEADLINE DECIDES WHEN IT SAYS ANYTHING.
+  //
+  // It used to be merely weighted double against a body many times its length,
+  // which is not the same thing — and a live ad proved the difference:
+  // "אל תהיו חמורים. יש דרך אחרת לנהל קמפיין." was filed as `price` because its
+  // body mentions paying a freelancer thousands. The headline is the ad's
+  // claim, the line beside the button; the body elaborates and often wanders
+  // through the very thing being argued AGAINST.
+  //
+  // So the body only gets a vote when the headline commits to nothing.
+  const decisive = headScores.length > 0 ? headScores : bodyScores;
+  if (decisive.length === 0) return { angle: null, all: [], confidence: "weak" };
+
+  const top = decisive[0];
+  const runnerUp = decisive[1]?.hits ?? 0;
+  // `weak` means AMBIGUOUS — another angle scored nearly as high — not merely
+  // thin. One unambiguous term with nothing competing is a clear read, and an
+  // earlier stricter rule that marked it weak put the caveat on every single
+  // ad, which is the same as putting it on none.
+  const confidence: "clear" | "weak" = runnerUp === 0 || top.hits - runnerUp >= 2 ? "clear" : "weak";
+
+  // `all` still spans BOTH halves: the body genuinely carries angles the ad
+  // touches, and losing them would erase that they were used at all. Only the
+  // headline decides which one LEADS.
+  const all: Angle[] = [];
+  for (const s of [...decisive, ...headScores, ...bodyScores]) if (!all.includes(s.angle)) all.push(s.angle);
+
+  return { angle: top.angle, all, confidence };
 }

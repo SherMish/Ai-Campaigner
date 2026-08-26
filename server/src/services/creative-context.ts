@@ -28,6 +28,10 @@ export interface PastAd {
   primaryText: string | null;
   // Null when the copy commits to no clear angle — see creative-angle.ts.
   angle: Angle | null;
+  // How safely that was decided. `weak` is a real answer resting on thin
+  // evidence — carried so a consumer can weigh it rather than treating every
+  // label as equally solid.
+  angleConfidence: "clear" | "weak";
   angles: Angle[];
   // Its own performance, where we have it. Null means it has no snapshot rows
   // yet (a brand-new ad), NOT that it performed at zero.
@@ -59,6 +63,10 @@ export interface AngleRecord {
   spendAgorot: number;
   leads: number;
   state: "tested" | "attempted";
+  // How many of the ads behind this angle were classified with confidence. An
+  // angle carried by four ads, three of them weakly read, is not the same
+  // claim as one carried by four clear ones.
+  clearAdCount: number;
 }
 
 export interface CreativeContext {
@@ -158,6 +166,7 @@ export async function buildCreativeContext(
       headline: d.headline,
       primaryText: d.primaryText,
       angle: v.angle,
+      angleConfidence: v.confidence,
       angles: v.all,
       spendAgorot: s?.spendAgorot ?? null,
       leads: s?.leads ?? null,
@@ -201,12 +210,13 @@ export function summarizeAngles(
   // not really tried, and ordering says so without throwing it away.
   const ranked = [...pastAds].sort((a, b) => cost(a) - cost(b));
   const order: Angle[] = [];
-  const totals = new Map<Angle, { adCount: number; spendAgorot: number; leads: number }>();
+  const totals = new Map<Angle, { adCount: number; spendAgorot: number; leads: number; clearAdCount: number }>();
   for (const ad of ranked) {
     for (const a of ad.angles) {
       if (!order.includes(a)) order.push(a);
-      const t = totals.get(a) ?? { adCount: 0, spendAgorot: 0, leads: 0 };
+      const t = totals.get(a) ?? { adCount: 0, spendAgorot: 0, leads: 0, clearAdCount: 0 };
       t.adCount++;
+      if (ad.angleConfidence === "clear") t.clearAdCount++;
       t.spendAgorot += ad.spendAgorot ?? 0;
       t.leads += ad.leads ?? 0;
       totals.set(a, t);
@@ -289,7 +299,10 @@ async function adTotals(
 
 // Cut on a word boundary where there is one nearby — a field that stops
 // mid-word reads as corrupted data rather than as a deliberate summary.
-function ellipsis(text: string, max: number): string {
+function ellipsis(raw: string, max: number): string {
+  // Collapse the newlines first: ad copy is multi-line, and a raw \n inside a
+  // Telegram bullet breaks the list into what looks like two entries.
+  const text = raw.replace(/\s+/g, " ").trim();
   if (text.length <= max) return text;
   const cut = text.slice(0, max);
   const lastSpace = cut.lastIndexOf(" ");
@@ -340,10 +353,13 @@ export function describeCreativeContext(
       const spend = `₪${(a.spendAgorot / 100).toFixed(0)}`;
       // "attempted" is not a softer word for "failed" — it means we do not
       // know. Spelling out the spend is what makes that checkable.
+      // Flag when the angle's own label is shaky, so a thin reading cannot be
+      // mistaken for a firm one.
+      const weak = a.clearAdCount < a.adCount ? ` · ${a.adCount - a.clearAdCount} weakly classified` : "";
       L.push(
         a.state === "tested"
-          ? `   • ${a.angle} — ${a.adCount} ad(s) · ${spend} · ${a.leads} leads`
-          : `   • ${a.angle} — ATTEMPTED, not judged (${a.adCount} ad(s) · only ${spend})`,
+          ? `   • ${a.angle} — ${a.adCount} ad(s) · ${spend} · ${a.leads} leads${weak}`
+          : `   • ${a.angle} — ATTEMPTED, not judged (${a.adCount} ad(s) · only ${spend})${weak}`,
       );
     }
   }
@@ -351,8 +367,11 @@ export function describeCreativeContext(
     const rec = ctx.angles.find((a) => a.angle === ctx.singleAngle);
     L.push(
       rec?.state === "tested"
-        ? `   ⚠️ EVERY readable ad argues "${ctx.singleAngle}" — one angle run ${rec.adCount} times, not ${rec.adCount} tests.`
-        : `   ⚠️ EVERY readable ad argues "${ctx.singleAngle}", and it has NOT had enough spend to judge. Nothing here has been ruled out.`,
+        // Name the number of ads the claim rests on. "every readable ad" over
+        // two ads is a much weaker statement than over eight, and the reader
+        // cannot tell which without being told.
+        ? `   ⚠️ All ${rec.adCount} readable ad(s) argue "${ctx.singleAngle}" — one angle run ${rec.adCount} times, not ${rec.adCount} tests.`
+        : `   ⚠️ All ${rec?.adCount ?? 0} readable ad(s) argue "${ctx.singleAngle}", and it has NOT had enough spend to judge. Nothing here has been ruled out.`,
     );
   }
   if (ctx.unclassifiedAds > 0) L.push(`   (${ctx.unclassifiedAds} ad(s) took no clear angle)`);
@@ -365,7 +384,12 @@ export function describeCreativeContext(
       : `${a.leads} leads · ${a.spendAgorot !== null ? `₪${(a.spendAgorot / 100).toFixed(0)}` : "?"}${
           a.cplAgorot !== null ? ` · ₪${(a.cplAgorot / 100).toFixed(0)}/lead` : ""
         }`;
-    L.push(`• [${a.angle ?? "?"}] ${a.headline ?? a.name ?? a.adId} — ${perf}`);
+    // Show the COPY, falling back to the body when an ad has no headline —
+    // printing the internal ad name ("מודעה 1") made a classified ad look
+    // like one we could not read, which is a different and much worse claim.
+    const shown = a.headline ?? (a.primaryText ? ellipsis(a.primaryText, 70) : null) ?? a.name ?? a.adId;
+    const tag = a.angle ? `${a.angle}${a.angleConfidence === "weak" ? "?" : ""}` : "?";
+    L.push(`• [${tag}] ${shown} — ${perf}`);
   }
   return L.join("\n").slice(0, 3800);
 }

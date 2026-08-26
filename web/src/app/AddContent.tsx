@@ -88,6 +88,9 @@ function CreativeContextPanel({ ctx }: { ctx: CreativeCtx | null | undefined }) 
                       {a.state === "attempted" && (
                         <span style={{ opacity: 0.7, fontWeight: 400 }}>· {s.ctx.angleAttempted}</span>
                       )}
+                      {a.clearAdCount < a.adCount && (
+                        <span style={{ opacity: 0.7, fontWeight: 400 }}>· {s.ctx.angleWeak}</span>
+                      )}
                     </span>
                   ))}
                 </div>
@@ -115,13 +118,19 @@ function CreativeContextPanel({ ctx }: { ctx: CreativeCtx | null | undefined }) 
                     <div key={a.adId} style={{ borderInlineStart: "3px solid rgba(23,23,23,.12)", paddingInlineStart: 10 }}>
                       <div style={{ fontSize: "0.8rem", marginBottom: 2 }} className="muted">
                         {a.angle ? angleName(a.angle) : s.ctx.noAngle}
+                        {a.angle && a.angleConfidence === "weak" && ` (${s.ctx.angleWeak})`}
                         {a.fromExistingPost && ` · ${s.ctx.fromPost}`}
                         {" · "}
                         {a.leads === null
                           ? s.ctx.noData
                           : `${a.leads === 1 ? s.ctx.oneLead : `${a.leads} ${s.ctx.leadsSuffix}`}${a.cplAgorot !== null ? ` · ${shekels(a.cplAgorot)} ${s.ctx.perLead}` : ""}`}
                       </div>
-                      <div style={{ fontSize: "0.9rem" }}>{a.headline ?? a.name ?? a.adId}</div>
+                      {/* The COPY, falling back to the body when an ad has no
+                          headline — showing the internal name ("מודעה 1") made
+                          a classified ad look like one we could not read. */}
+                      <div style={{ fontSize: "0.9rem" }}>
+                        {a.headline ?? (a.primaryText ? `${a.primaryText.slice(0, 90)}…` : null) ?? a.name ?? a.adId}
+                      </div>
                     </div>
                   ))}
                 </div>

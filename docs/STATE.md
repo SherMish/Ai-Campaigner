@@ -6,6 +6,21 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-26 — AIC-78: the angle classifier was reading the body, not the claim
+
+Review of the second live digest caught the tagging wrong on the one ad that
+matters. "אל תהיו חמורים. יש דרך אחרת לנהל קמפיין." was filed as `price` because
+its BODY mentions paying a freelancer thousands — but that is the setup being
+argued against; the claim is a provocation plus an alternative. It is also the
+only ad on that account that produced a lead (₪6), so the single data point
+would have taught the wrong lesson. Fixed by adding a `contrarian` angle and by
+making the headline decisive — the body now only votes when the headline commits
+to nothing. Verdicts also carry `clear`/`weak` confidence, where weak means
+another angle nearly tied rather than merely thin. Ads are named by their copy
+everywhere, because printing the internal name made a readable ad look
+unreadable. Owning doc:
+[docs/features/creative-context.md](features/creative-context.md).
+
 ### 2026-08-26 — AIC-78 follow-up: an angle nobody funded was being called "tried"
 
 Review of the first live Telegram digest caught a real bug. The Ads Agent
