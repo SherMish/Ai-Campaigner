@@ -26,6 +26,7 @@ describe("Ads Agent Content Studio (AIC-142)", () => {
     const slides = buildSlides(id, createDraft(id));
     expect(slides[0].layout).toBe("hook");
     expect(slides.at(-1)?.layout).toBe("cta");
+    expect(slides.at(-1)?.accent).toBe("התחילו בחינם");
     expect(slides.length).toBeLessThanOrEqual(MAX_CAROUSEL_SLIDES);
   });
 

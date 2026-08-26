@@ -89,15 +89,6 @@ function drawText(ctx: CanvasRenderingContext2D, text: string, options: TextOpti
   return Math.min(lines.length, maxLines) * lineHeight;
 }
 
-function drawEyebrow(ctx: CanvasRenderingContext2D, text: string, color: string, y = 128) {
-  ctx.fillStyle = color;
-  ctx.font = "600 26px 'IBM Plex Mono', monospace";
-  ctx.textAlign = "right";
-  ctx.textBaseline = "top";
-  ctx.direction = "rtl";
-  ctx.fillText(text, 930, y);
-}
-
 function drawProgress(ctx: CanvasRenderingContext2D, index: number, total: number, light = false) {
   ctx.fillStyle = light ? "rgba(247,242,234,.64)" : "rgba(23,23,23,.45)";
   ctx.font = "500 23px 'IBM Plex Mono', monospace";
@@ -154,7 +145,6 @@ function drawImageCover(
 function drawImageLayout(ctx: CanvasRenderingContext2D, slide: CarouselSlide, image: HTMLImageElement, options: DrawOptions) {
   ctx.fillStyle = CONTENT_PALETTE.cream;
   ctx.fillRect(0, 0, CAROUSEL_WIDTH, CAROUSEL_HEIGHT);
-  drawEyebrow(ctx, slide.eyebrow.toUpperCase(), CONTENT_PALETTE.orange, 96);
   drawProgress(ctx, options.index, options.total);
   drawImageCover(ctx, image, 94, 180, 892, 510, 38);
   const titleHeight = drawText(ctx, slide.title, {
@@ -294,7 +284,6 @@ function drawMyth(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options: 
   ctx.font = "900 410px Rubik, sans-serif";
   ctx.textAlign = "right";
   ctx.fillText("״", 995, 180);
-  drawEyebrow(ctx, slide.eyebrow, CONTENT_PALETTE.ink);
   drawText(ctx, slide.title, {
     x: 930, y: 350, maxWidth: 830, fontSize: 86, minFontSize: 66, maxLines: 5,
     color: CONTENT_PALETTE.ink, weight: 900, lineHeight: 102,
@@ -317,7 +306,6 @@ function drawContent(ctx: CanvasRenderingContext2D, slide: CarouselSlide, option
   ctx.fillStyle = reality ? CONTENT_PALETTE.indigo : CONTENT_PALETTE.cream;
   ctx.fillRect(0, 0, CAROUSEL_WIDTH, CAROUSEL_HEIGHT);
   drawProgress(ctx, options.index, options.total, reality);
-  drawEyebrow(ctx, slide.eyebrow, reality ? CONTENT_PALETTE.cream : CONTENT_PALETTE.orange);
 
   if (example) {
     ctx.fillStyle = CONTENT_PALETTE.cream2;
@@ -342,7 +330,6 @@ function drawSignal(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options
   ctx.fillStyle = CONTENT_PALETTE.indigo;
   ctx.fillRect(0, 0, CAROUSEL_WIDTH, CAROUSEL_HEIGHT);
   drawProgress(ctx, options.index, options.total, true);
-  drawEyebrow(ctx, slide.eyebrow, CONTENT_PALETTE.cream);
   drawText(ctx, slide.title, {
     x: 930, y: 235, maxWidth: 840, fontSize: 210, minFontSize: 132, maxLines: 2,
     color: CONTENT_PALETTE.cream, weight: 900, lineHeight: 210,
@@ -367,9 +354,8 @@ function drawCheck(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options:
   ctx.fillStyle = CONTENT_PALETTE.cream;
   ctx.fillRect(0, 0, CAROUSEL_WIDTH, CAROUSEL_HEIGHT);
   drawProgress(ctx, options.index, options.total);
-  drawEyebrow(ctx, slide.eyebrow, CONTENT_PALETTE.orange);
   ctx.fillStyle = CONTENT_PALETTE.ink;
-  roundedRect(ctx, 94, 265, 176, 176, 50);
+  roundedRect(ctx, 810, 265, 176, 176, 50);
   ctx.fill();
   const badgeMark = slide.number ?? "✓";
   ctx.fillStyle = CONTENT_PALETTE.orange;
@@ -377,7 +363,7 @@ function drawCheck(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options:
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.direction = "ltr";
-  ctx.fillText(badgeMark, 94 + 176 / 2, 265 + 176 / 2);
+  ctx.fillText(badgeMark, 810 + 176 / 2, 265 + 176 / 2);
   const titleHeight = drawText(ctx, slide.title, {
     x: 930, y: 510, maxWidth: 836, fontSize: 78, minFontSize: 60, maxLines: 4,
     color: CONTENT_PALETTE.ink, weight: 900,
@@ -397,7 +383,6 @@ function drawWarning(ctx: CanvasRenderingContext2D, slide: CarouselSlide, option
   ctx.fillStyle = CONTENT_PALETTE.ink;
   ctx.fillRect(0, 0, CAROUSEL_WIDTH, CAROUSEL_HEIGHT);
   drawProgress(ctx, options.index, options.total, true);
-  drawEyebrow(ctx, slide.eyebrow, CONTENT_PALETTE.orange);
   ctx.strokeStyle = CONTENT_PALETTE.orange;
   ctx.lineWidth = 18;
   roundedRect(ctx, 94, 265, 892, 700, 56);
@@ -430,7 +415,6 @@ function drawCta(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options: D
   ctx.arc(-5, 1160, 350, 0, Math.PI * 2);
   ctx.fill();
   drawProgress(ctx, options.index, options.total, true);
-  drawEyebrow(ctx, slide.eyebrow, CONTENT_PALETTE.ink);
   const titleHeight = drawText(ctx, slide.title, {
     x: 930, y: 300, maxWidth: 830, fontSize: 86, minFontSize: 60, maxLines: 3,
     color: CONTENT_PALETTE.ink, weight: 900, lineHeight: 99,

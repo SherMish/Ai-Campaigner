@@ -59,7 +59,7 @@ function fakeCanvas() {
 }
 
 describe("Content Studio renderer geometry", () => {
-  it("centers a checklist number inside its 176px badge", () => {
+  it("centers a checklist number inside a right-aligned 176px badge", () => {
     const { canvas, textCalls } = fakeCanvas();
     const slide: CarouselSlide = {
       layout: "check",
@@ -73,7 +73,7 @@ describe("Content Studio renderer geometry", () => {
 
     const number = textCalls.find((call) => call.text === "01");
     expect(number).toMatchObject({
-      x: 94 + 176 / 2,
+      x: 810 + 176 / 2,
       y: 265 + 176 / 2,
       align: "center",
       baseline: "middle",
@@ -93,12 +93,30 @@ describe("Content Studio renderer geometry", () => {
     drawCarouselSlide(canvas, slide, { index: 4, total: 6 });
 
     expect(textCalls.find((call) => call.text === "✓")).toMatchObject({
-      x: 94 + 176 / 2,
+      x: 810 + 176 / 2,
       y: 265 + 176 / 2,
       align: "center",
       baseline: "middle",
     });
   });
+
+  it.each(["myth", "explain", "signal", "check", "warning", "cta"] as const)(
+    "does not render the top-right eyebrow on %s slides",
+    (layout) => {
+      const { canvas, textCalls } = fakeCanvas();
+      const slide: CarouselSlide = {
+        layout,
+        eyebrow: "SMALL TOP TITLE",
+        title: "title",
+        body: "body",
+        number: layout === "check" ? "01" : undefined,
+      };
+
+      drawCarouselSlide(canvas, slide, { index: 1, total: 6 });
+
+      expect(textCalls.some((call) => call.text === "SMALL TOP TITLE")).toBe(false);
+    },
+  );
 
   it("centers the signal question and keeps its circle clear of the footer", () => {
     const { canvas, context, textCalls } = fakeCanvas();
