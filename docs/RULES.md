@@ -134,7 +134,7 @@ half the real delivery in a ₪50/week one). **10% is a chosen, scale-free
 number — provisional, same treatment as `BUDGET_CPL_RISE_PCT`**, meant to be
 recalibrated once AIC-76 has produced real outcomes to look at.
 
-**How MANY ads to recommend is a budget question (AIC-143).** The advisory used
+**How MANY ads to recommend is a budget question (AIC-144).** The advisory used
 to say "3–4 ads" to everyone. The engine will not judge a creative until it has
 spent `MIN_CREATIVE_SPEND_AGOROT` (₪150), so every extra ad divides the same
 budget into slower piles and pushes the first real answer further away. On the

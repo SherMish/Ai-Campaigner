@@ -6,7 +6,7 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
-### 2026-08-26 — AIC-144: the "collecting" hero now says what it is waiting for
+### 2026-08-26 — AIC-145: the "collecting" hero now says what it is waiting for
 
 "עוד קצת פעילות ונוכל להמליץ בביטחון" can sit unchanged for three weeks while
 the customer has no idea whether anything is moving — and the engine had already
@@ -18,7 +18,7 @@ today and the engine evaluates complete days — so the copy now takes the
 customer-visible count whenever it is higher. Owning doc:
 [docs/features/customer-overview.md](features/customer-overview.md).
 
-### 2026-08-26 — AIC-143: "add 3–4 ads" was advice the budget couldn't pay for
+### 2026-08-26 — AIC-144: "add 3–4 ads" was advice the budget couldn't pay for
 
 Spotted from the other side of a conversation about when to kill an ad: the
 product tells every customer to run 3–4 ads regardless of budget, while the

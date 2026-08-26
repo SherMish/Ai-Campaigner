@@ -341,7 +341,7 @@ export function Home() {
   const hd = hero(
     state, ov.attentionKind, readyToBuild,
     ov.campaign?.noRecReason ?? null, ov.campaign?.wasBuiltHere ?? false,
-    // AIC-144: the engine already recorded WHICH evidence gate is unmet and by
+    // AIC-145: the engine already recorded WHICH evidence gate is unmet and by
     // how much; the hero says it instead of "a bit more activity".
     ov.campaign?.noRecDetail,
     // The same 7-day figure the KPI card shows, so the hero can never claim
@@ -389,15 +389,6 @@ export function Home() {
     ov.campaign?.deliveringAdCount ??
     new Set((r?.perCreative ?? []).map((c) => c.creativeName ?? c.metaObjectId)).size;
   const period = ov.campaign?.budgetPeriod === "monthly" ? L.perMonth : L.perDay;
-  // True when the selected window reaches back further than we have data for,
-  // i.e. the range is padded with days the campaign didn't exist.
-  const rangeStartsBeforeData = (() => {
-    if (!r?.firstDataDate || range === "day") return false;
-    if (range === "allTime") return false; // all-time is by definition exactly what exists
-    const days = range === "week" ? 7 : 30;
-    const start = new Date(Date.now() - (days - 1) * 86400000).toISOString().slice(0, 10);
-    return start < r.firstDataDate;
-  })();
 
   return (
     <div className="wrap page dash">
@@ -450,23 +441,9 @@ export function Home() {
             </div>
           </div>
 
-          {/* AIC-98's house rule applied to the ▲/▼ line: when there is no
-              comparison, say why rather than leave a gap that reads as "no
-              change". "day" already has its own provisional note below, and
-              "all time" has no previous period to explain. */}
-          {rd === null && hasRangeData && range !== "day" && range !== "allTime" && (
-            <p className="muted" style={{ fontSize: "0.8rem", paddingInline: 20 }}>{h.noComparison}</p>
-          )}
           {/* Only "today" is a still-updating partial window. */}
           {range === "day" && (
             <p className="muted" style={{ fontSize: "0.8rem", paddingInline: 20 }}>{h.provisional}</p>
-          )}
-          {/* Honest thin-data: a campaign that started 4 days ago shouldn't
-              let "חודש" imply a flat, empty month of bad performance. */}
-          {rangeStartsBeforeData && r?.firstDataDate && (
-            <p className="muted" style={{ fontSize: "0.8rem", paddingInline: 20 }}>
-              {h.newCampaignPrefix} {fmtDate(r.firstDataDate)} {h.newCampaignSuffix}
-            </p>
           )}
 
           {/* opt-in per-audience / per-creative details (AIC-37) — collapsed by default */}

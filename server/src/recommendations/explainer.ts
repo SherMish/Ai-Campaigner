@@ -117,7 +117,7 @@ export const EXPLAINER_HE = {
   // measured DATA. On a young campaign that reads 0 while two ads run, so a real
   // customer was told one ad was running when two were. When we can't establish
   // the count, the copy now makes no claim about it rather than guessing.
-  // AIC-143: the ad COUNT is now a number the budget can actually pay for, not
+  // AIC-144: the ad COUNT is now a number the budget can actually pay for, not
   // a flat "3–4". Splitting ₪20/day four ways gives each ad ₪5/day, and the
   // engine will not judge a creative until it has spent ₪150 — so the old copy
   // recommended a structure it could never form an opinion about. Where we can
@@ -225,7 +225,7 @@ export function explain(rec: RecommendationRecord): string {
       const live = rec.evidence.liveCreativeCount;
       const oneAdRunning =
         typeof live === "number" ? live === 1 : n(rec.evidence.comparableCreativeCount) === 1;
-      // Rows written before AIC-143 carry neither field. Defaulting to 3 keeps
+      // Rows written before AIC-144 carry neither field. Defaulting to 3 keeps
       // their original "3–4 ads" sense rather than retroactively narrowing a
       // recommendation the customer may already have acted on.
       const adCount = typeof rec.evidence.recommendedAdCount === "number" ? rec.evidence.recommendedAdCount : 3;

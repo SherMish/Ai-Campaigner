@@ -1066,12 +1066,12 @@ describe("pause_creative — quality-adjusted comparison (AIC-133)", () => {
   });
 });
 
-// AIC-143. The advisory told every customer to run 3–4 ads, whatever they
+// AIC-144. The advisory told every customer to run 3–4 ads, whatever they
 // spend. The engine will not judge a creative below MIN_CREATIVE_SPEND_AGOROT
 // (₪150), so on the real ₪20/day account four ads get ₪5/day each and reach
 // that bar in a month apiece — advice for a structure the product could never
 // form an opinion about.
-describe("affordableAdCount — how many ads the budget can EVIDENCE (AIC-143)", () => {
+describe("affordableAdCount — how many ads the budget can EVIDENCE (AIC-144)", () => {
   it("₪20/day supports two ads, not four", () => {
     // 2000 × 14 days = ₪280 of evidence to spend; one ad needs ₪150.
     expect(affordableAdCount(2000, T)).toBe(2);

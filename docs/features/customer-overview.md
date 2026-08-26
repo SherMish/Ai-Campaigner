@@ -639,7 +639,7 @@ reasonable follow-up, not required by this fix.
 until the safe-execute pipeline records real actions — the screen shows an honest
 "nothing changed yet" line rather than sample events.
 
-## The `collecting` hero says what it is waiting for (AIC-144)
+## The `collecting` hero says what it is waiting for (AIC-145)
 
 It used to read *"עדיין אוספים נתונים / עוד קצת פעילות ונוכל להמליץ בביטחון"* —
 a sentence that can sit unchanged on the screen for three weeks while the

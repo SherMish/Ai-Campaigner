@@ -30,7 +30,7 @@ export const RULE_THRESHOLDS = {
   // resolveThresholds' per-account override for free, same as every other
   // value here — see docs/RULES.md.
   COOLDOWN_DAYS: 7,
-  // AIC-143: how long a customer should have to wait before the engine can say
+  // AIC-144: how long a customer should have to wait before the engine can say
   // ANYTHING about which of their ads works. Used only to answer "how many ads
   // can this budget actually evidence" — see affordableAdCount. 14 days is two
   // Meta learning windows: long enough to be reachable on a small budget,
@@ -497,15 +497,6 @@ function classifyNoAction(
     return { reason: "no_comparable_creatives", rationale: "fewer than 2 real creatives; can't compare", detail: comparabilityDetail(creatives) };
   }
   const adsets = comparableAdsets(ev, thresholds);
-  // AIC-143: how many ads this budget can actually produce evidence about.
-  // The advice used to be a flat "3–4 ads", regardless of budget — and the
-  // engine will not judge a creative until it has spent
-  // MIN_CREATIVE_SPEND_AGOROT. At ₪20/day, four ads get ₪5/day each and reach
-  // that bar in a month apiece, so the product was recommending a structure it
-  // could never form an opinion about. Telling a small advertiser to split
-  // their budget four ways is not neutral advice; it is advice that guarantees
-  // they learn nothing.
-  const recommendedAdCount = affordableAdCount(ev.currentBudgetAgorot, thresholds);
   if (adsets.comparableCount < 2) {
     return { reason: "no_comparable_audiences", rationale: "fewer than 2 real audiences; can't compare", detail: comparabilityDetail(adsets) };
   }
@@ -574,7 +565,7 @@ function addCreativesForComparison(
   if (!oneAdRunning) return null;
 
   const adsets = comparableAdsets(ev, thresholds);
-  // AIC-143: how many ads this budget can actually produce evidence about.
+  // AIC-144: how many ads this budget can actually produce evidence about.
   // The advice used to be a flat "3–4 ads", regardless of budget — and the
   // engine will not judge a creative until it has spent
   // MIN_CREATIVE_SPEND_AGOROT. At ₪20/day, four ads get ₪5/day each and reach
@@ -609,7 +600,7 @@ function addCreativesForComparison(
       dormantAdsetIds: adsets.dormantIds,
       currentLeads: ev.current.leads,
       currentCplAgorot: ev.current.cplAgorot,
-      // AIC-143: the number this budget can actually evidence, and roughly how
+      // AIC-144: the number this budget can actually evidence, and roughly how
       // long until it can. Both travel with the recommendation so the copy
       // never has to guess and an older row keeps its own wording.
       recommendedAdCount,
