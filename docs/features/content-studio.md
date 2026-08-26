@@ -1,6 +1,6 @@
 # Content Studio
 
-**Status:** code complete, pending deployment — internal Ads Agent operators can produce branded Hebrew Instagram carousels and export them as PNG files without a design tool or backend job.
+**Status:** live — internal Ads Agent operators can produce branded Hebrew Instagram carousels and export them as PNG files without a design tool or backend job.
 
 **Source of truth:** `web/src/admin/AdminContentStudio.tsx`, `web/src/admin/content-studio.ts`, `web/src/admin/content-studio-renderer.ts`, `web/src/admin/content-studio.css`, `web/src/strings.ts`, `web/src/App.tsx`, `web/src/admin/AdminSidebar.tsx`.
 
