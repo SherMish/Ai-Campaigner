@@ -117,22 +117,32 @@ export const EXPLAINER_HE = {
   // measured DATA. On a young campaign that reads 0 while two ads run, so a real
   // customer was told one ad was running when two were. When we can't establish
   // the count, the copy now makes no claim about it rather than guessing.
-  addCreativesWithData: (leads: string, avgCpl: string, isFlexibleAd: boolean, oneAdRunning: boolean) =>
+  // AIC-143: the ad COUNT is now a number the budget can actually pay for, not
+  // a flat "3–4". Splitting ₪20/day four ways gives each ad ₪5/day, and the
+  // engine will not judge a creative until it has spent ₪150 — so the old copy
+  // recommended a structure it could never form an opinion about. Where we can
+  // say how long the comparison will take, we say that too: "2 ads, about two
+  // weeks" is a plan; "3–4 ads" is a slogan.
+  addCreativesWithData: (
+    leads: string, avgCpl: string, isFlexibleAd: boolean, oneAdRunning: boolean,
+    adCount: number, days: number | null,
+  ) =>
     `הקמפיין רץ יפה — ${leads} פניות בעלות ממוצעת של ${avgCpl}. ` +
     (isFlexibleAd
       ? `המודעה שרצה היא מודעה גמישה שמשלבת כמה עיצובים וטקסטים יחד, ולכן אין לנו איך לדעת איזה שילוב ` +
         `הכי טוב. עם כמה מודעות נפרדות נוכל לזהות מה עובד, לעצור את החלש ולהעביר את התקציב למה שמביא תוצאות.`
       : (oneAdRunning ? `כרגע רצה מודעה אחת בלבד, ולכן אין לנו מה להשוות` : `אין לנו מספיק מודעות להשוואה`) +
-        ` — אנחנו לא יכולים לדעת איזה עיצוב מביא את הפניות ` +
-        `הזולות ביותר. עם 3–4 מודעות במקביל נוכל לזהות מה עובד, לעצור את החלשות ולהעביר את התקציב למה שמביא תוצאות.`),
-  addCreativesNoData: (isFlexibleAd: boolean, oneAdRunning: boolean) =>
+        ` — אנחנו לא יכולים לדעת איזה עיצוב מביא את הפניות הזולות ביותר. ` +
+        `בתקציב הנוכחי ${adCount} מודעות במקביל זה המספר שמאפשר לנו להגיע לתשובה` +
+        `${days ? ` תוך כ-${days} ימים` : ""} — יותר מזה מפצל את התקציב כך שאף מודעה לא תצבור מספיק נתונים.`),
+  addCreativesNoData: (isFlexibleAd: boolean, oneAdRunning: boolean, adCount: number, days: number | null) =>
     `הקמפיין רק התחיל לרוץ. ` +
     (isFlexibleAd
       ? `המודעה שרצה היא מודעה גמישה שמשלבת כמה עיצובים וטקסטים יחד — כדי שבעתיד נוכל לדעת איזה שילוב ` +
         `עובד הכי טוב, כדאי כבר עכשיו לפצל אותה למספר מודעות נפרדות.`
       : (oneAdRunning ? `כרגע רצה מודעה אחת בלבד — ` : ``) +
-        `כדי שבעתיד נוכל לדעת איזה עיצוב עובד הכי טוב, כדאי כבר עכשיו להוסיף ` +
-        `עוד 2–3 מודעות, כך שברגע שיהיו תוצאות יהיה עם מה להשוות.`),
+        `כדי שנוכל לדעת איזה עיצוב עובד הכי טוב, כדאי כבר עכשיו להוסיף מודעות כך שירוצו ${adCount} במקביל — ` +
+        `זה המספר שהתקציב הנוכחי יכול להביא אליו תשובה${days ? ` תוך כ-${days} ימים` : ""}.`),
   weeklyStable: (leads: string, avgCpl: string) =>
     `השבוע התקבלו ${leads} פניות בעלות ממוצעת של ${avgCpl}. הביצועים יציבים ואין כרגע צורך בשינוי.`,
 } as const;
@@ -215,9 +225,14 @@ export function explain(rec: RecommendationRecord): string {
       const live = rec.evidence.liveCreativeCount;
       const oneAdRunning =
         typeof live === "number" ? live === 1 : n(rec.evidence.comparableCreativeCount) === 1;
+      // Rows written before AIC-143 carry neither field. Defaulting to 3 keeps
+      // their original "3–4 ads" sense rather than retroactively narrowing a
+      // recommendation the customer may already have acted on.
+      const adCount = typeof rec.evidence.recommendedAdCount === "number" ? rec.evidence.recommendedAdCount : 3;
+      const days = typeof rec.evidence.daysToComparison === "number" ? rec.evidence.daysToComparison : null;
       return leads > 0
-        ? EXPLAINER_HE.addCreativesWithData(String(leads), formatShekel(n(rec.evidence.currentCplAgorot)), isFlexibleAd, oneAdRunning)
-        : EXPLAINER_HE.addCreativesNoData(isFlexibleAd, oneAdRunning);
+        ? EXPLAINER_HE.addCreativesWithData(String(leads), formatShekel(n(rec.evidence.currentCplAgorot)), isFlexibleAd, oneAdRunning, adCount, days)
+        : EXPLAINER_HE.addCreativesNoData(isFlexibleAd, oneAdRunning, adCount, days);
     }
     case "no_action": {
       // `evidence` is a loose bag (Record<string, unknown>), so this switch was

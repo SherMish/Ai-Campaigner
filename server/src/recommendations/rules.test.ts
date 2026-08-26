@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  affordableAdCount,
   evaluateCampaign,
   resolveThresholds,
   ruleClassOf,
@@ -1062,5 +1063,52 @@ describe("pause_creative — quality-adjusted comparison (AIC-133)", () => {
   it("falls back to CPL when only ONE side has quality data", () => {
     const q = new Map([["cr_good", { costPerRelevantAgorot: 8333, relevantRate: 0.75, reviewCount: 3 }]]);
     expect(__rulesForTest.pauseWeakCreative(evidence(q), T)?.evidence.basis).toBe("lead_volume");
+  });
+});
+
+// AIC-143. The advisory told every customer to run 3–4 ads, whatever they
+// spend. The engine will not judge a creative below MIN_CREATIVE_SPEND_AGOROT
+// (₪150), so on the real ₪20/day account four ads get ₪5/day each and reach
+// that bar in a month apiece — advice for a structure the product could never
+// form an opinion about.
+describe("affordableAdCount — how many ads the budget can EVIDENCE (AIC-143)", () => {
+  it("₪20/day supports two ads, not four", () => {
+    // 2000 × 14 days = ₪280 of evidence to spend; one ad needs ₪150.
+    expect(affordableAdCount(2000, T)).toBe(2);
+  });
+
+  it("never drops below two — one ad has nothing to be compared against", () => {
+    // Below the floor the honest answer is not "one ad", it is "this budget
+    // cannot support a comparison at all" — which is budget_below_threshold's
+    // job, not this rule's. Two keeps the advice coherent.
+    expect(affordableAdCount(100, T)).toBe(2);
+    expect(affordableAdCount(0, T)).toBe(2);
+  });
+
+  it("a real budget earns more ads", () => {
+    expect(affordableAdCount(5000, T)).toBe(4);
+  });
+
+  it("caps at four — past that the limit is Meta's delivery, not our arithmetic", () => {
+    expect(affordableAdCount(100000, T)).toBe(4);
+  });
+
+  it("respects a per-account spend bar rather than the global default", () => {
+    // A campaign whose MIN_CREATIVE_SPEND was raised needs proportionally more
+    // budget per ad, and the count has to follow it — otherwise the advice and
+    // the evidence gate disagree on the same account.
+    expect(affordableAdCount(5000, { ...T, MIN_CREATIVE_SPEND_AGOROT: 60000 })).toBe(2);
+  });
+
+  it("the advisory carries the count and the wait, so the copy never guesses", () => {
+    const ev = baseEvidence({
+      creatives: [cr("cr_a", 25000, 8, 3125)],
+      liveCreativeCount: 1,
+      currentBudgetAgorot: 2000,
+    });
+    const d = __rulesForTest.addCreativesForComparison(ev, T);
+    expect(d?.evidence.recommendedAdCount).toBe(2);
+    // ₪150 × 2 ÷ ₪20/day = 15 days.
+    expect(d?.evidence.daysToComparison).toBe(15);
   });
 });

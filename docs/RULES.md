@@ -134,6 +134,40 @@ half the real delivery in a ₪50/week one). **10% is a chosen, scale-free
 number — provisional, same treatment as `BUDGET_CPL_RISE_PCT`**, meant to be
 recalibrated once AIC-76 has produced real outcomes to look at.
 
+**How MANY ads to recommend is a budget question (AIC-143).** The advisory used
+to say "3–4 ads" to everyone. The engine will not judge a creative until it has
+spent `MIN_CREATIVE_SPEND_AGOROT` (₪150), so every extra ad divides the same
+budget into slower piles and pushes the first real answer further away. On the
+live ₪20/day account, four ads get ₪5/day each and clear the bar in **a month
+apiece** — the product was recommending a structure it could never form an
+opinion about, which is not neutral advice: it guarantees the customer learns
+nothing.
+
+`affordableAdCount(dailyBudget, thresholds)` answers how many ads a budget can
+produce EVIDENCE about:
+
+```
+floor(dailyBudget × COMPARISON_TARGET_DAYS ÷ MIN_CREATIVE_SPEND_AGOROT), clamped to [2, 4]
+```
+
+- **Floor of 2** — one ad has nothing to be compared against (`PAUSE_MIN_PEERS`).
+  Below the floor the honest answer is not "one ad" but "this budget cannot
+  support a comparison at all", which is `budget_below_threshold`'s job.
+- **Cap of 4** — past that the limit is Meta spreading delivery thin, not our
+  arithmetic.
+- `COMPARISON_TARGET_DAYS` (14) is a threshold key, so it inherits per-account
+  overrides like every other value. Two Meta learning windows: reachable on a
+  small budget, still inside a prep month.
+- It reads the RESOLVED `MIN_CREATIVE_SPEND_AGOROT`, so an account whose spend
+  bar was raised gets proportionally fewer ads — the advice and the evidence
+  gate can never disagree about the same account.
+
+The recommendation carries `recommendedAdCount` and `daysToComparison`, and the
+copy states both: *"2 ads in parallel is the number this budget can reach an
+answer with, in about 15 days"*. "2 ads, about two weeks" is a plan; "3–4 ads"
+was a slogan. Rows written before this carry neither field and keep their
+original wording.
+
 **Comparable ≠ EXISTING either — the third question, added AIC-117.** Both
 counts above are derived from insight rows, so both answer questions about ads
 that have *measured data*. Neither answers "how many ads are actually running",

@@ -6,6 +6,28 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-26 — AIC-143: "add 3–4 ads" was advice the budget couldn't pay for
+
+Spotted from the other side of a conversation about when to kill an ad: the
+product tells every customer to run 3–4 ads regardless of budget, while the
+engine refuses to judge a creative below ₪150 of spend. On the live ₪20/day
+account those four ads get ₪5/day each and reach that bar in a month apiece — a
+structure the product could never form an opinion about. `affordableAdCount`
+now derives the number from the budget and the account's own spend bar, clamped
+to [2, 4], and the copy states the count and the wait ("2 ads, about 15 days")
+instead of a flat range. Also removed the complete-days note from the hero
+entirely, at the user's call — a caveat that needs re-explaining twice is not
+earning its place. Owning doc: [docs/RULES.md](RULES.md).
+
+### 2026-08-26 — Stronger carousel CTA and cleaner RTL hierarchy (AIC-142)
+
+All final slides now end with the direct `התחילו בחינם` action instead of a
+descriptive brand phrase. Small top-right eyebrow labels were removed from every
+slide layout so they no longer compete with the main message, and checklist
+number badges moved to the right to match the Hebrew reading direction. Tests
+cover every layout and browser rendering confirmed the final compositions.
+Owning doc: [docs/features/content-studio.md](features/content-studio.md).
+
 ### 2026-08-26 — Checklist count and hook-label alignment (AIC-142)
 
 The checklist carousel no longer promises four checks while its opening artwork
