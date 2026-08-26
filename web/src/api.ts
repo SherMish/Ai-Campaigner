@@ -128,6 +128,11 @@ export interface CustomerOverview {
     // AIC-130: does the window contain ANY measured rows? A zero summed over
     // an empty set is not the same claim as a measured zero.
     rangeHasData: Record<RangeKey, boolean>;
+    // The ▲/▼ movement for each window, or null where an honest comparison
+    // isn't available (today is partial; all-time has no "before"; the
+    // previous window may reach past the data we hold). Server-side reasoning
+    // lives in computeRangeDeltas.
+    rangeDeltas: Record<RangeKey, { spendPct: number | null; leadsPct: number | null; cplPct: number | null } | null>;
     daily: DailyPoint[];
     firstDataDate: string | null;
     delta: { spendPct: number | null; leadsPct: number | null; cplPct: number | null };

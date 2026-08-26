@@ -6,6 +6,19 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-26 — the ▲/▼ line ignored the range switcher
+
+Found while dogfooding test@test.com: the KPI numbers followed the day/week/
+month switcher but the movement underneath them didn't — it was one figure over
+the engine's fixed 7-complete-day window, rendered under whichever range was
+selected. On היום that meant "—" for the number with "▲20% מהתקופה הקודמת"
+below it; on חודש, a month's total above a week's movement. The comparison is
+now computed over the selected window and is **null** where an honest one isn't
+available (today is partial; all-time has no before; a 30-day comparison needs
+60 days and the per-day rows only reach back 45). Where it's missing for a
+reason, the UI says why. Owning doc:
+[docs/features/customer-overview.md](features/customer-overview.md).
+
 ### 2026-08-26 — AIC-133: audiences judged on relevant leads, not cheap ones
 
 `pause_adset` ranked audiences on CPL, and cheap leads are very often the wrong

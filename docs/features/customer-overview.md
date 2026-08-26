@@ -238,6 +238,32 @@ this panel always read the engine's own fixed 7-complete-day window,
 unrelated to the switcher, and only disclosed the mismatch in small print —
 that disclaimer is gone because the underlying disagreement is gone.)
 
+**So does the ▲/▼ comparison line (2026-08-26).** The same class of bug
+survived one layer higher: the KPI cards followed the switcher while the
+movement underneath them was a single figure over the engine's fixed
+7-complete-day window. On היום that produced "—" for the number with "▲20%
+מהתקופה הקודמת" beneath it — a confident comparison of a window we had
+measured nothing in — and on חודש it put a month's total above a week's
+movement. `computeRangeDeltas` now derives the comparison from the selected
+window, and returns **null** wherever an honest one isn't available:
+
+| range | comparison | why |
+| --- | --- | --- |
+| היום | none | today is still filling up; against a complete yesterday it always reads as a fall |
+| שבוע | trailing 7 days vs the 7 before | fully inside the 45-day per-day lookback |
+| חודש | 30 vs 30 **only when 60 days exist** | the per-day rows reach back `DAILY_LOOKBACK_DAYS` (45), so usually null |
+| הכל | none | there is no previous period |
+
+A previous window that starts before the campaign's first data is also null —
+half a week of real data against half a week of nonexistence would report a
+doubling that is really just the start date.
+
+Where the line is absent for a reason, the UI says so (`h.noComparison`)
+rather than leaving a gap that reads as "no change" — AIC-98's house rule.
+`readout.delta` still exists and still means the engine's fixed 7-day window;
+the ops console shows it beside `readout.current`, which is the same window,
+so that pair agrees.
+
 This needed a new read path, not just a new query: the pre-existing
 `creativeStats`/`adsetStats` return one ROLLING-window row per object — the
 engine's own evidence for recommendations, structurally incapable of serving

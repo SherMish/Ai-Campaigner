@@ -1044,6 +1044,9 @@ export const strings = {
         // month of bad performance.
         newCampaignPrefix: "הקמפיין רץ מאז",
         newCampaignSuffix: "— לטווחים ארוכים יותר עדיין אין נתונים מלאים.",
+        // Why the ▲/▼ line is missing. Silence would read as "no change";
+        // it actually means we can't see far enough back to compare.
+        noComparison: "אין עדיין מספיק היסטוריה כדי להשוות לתקופה הקודמת באותו אורך.",
         graphTitle: "פניות לפי שבוע",
         graphEmpty: "עדיין אין מספיק נתונים לגרף.",
         graphWeekPrefix: "שבוע",

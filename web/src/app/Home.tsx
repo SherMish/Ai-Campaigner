@@ -365,6 +365,12 @@ export function Home() {
   // and the zero is the half that isn't true. Same rule the per-ad rows
   // already follow with hasData.
   const hasRangeData = r?.rangeHasData?.[range] ?? true;
+  // The comparison line belongs to the SELECTED window. It used to be one
+  // fixed 7-day figure shown under every range — so היום rendered "—" for the
+  // number with "▲20% מהתקופה הקודמת" beneath it, and חודש put a month's
+  // total above a week's movement. Null means we have no honest comparison
+  // and the line simply doesn't render.
+  const rd = r?.rangeDeltas?.[range] ?? null;
   const leads = agg?.leads ?? 0;
   const cpl = agg?.cplAgorot ?? null;
   const spend = agg?.spendAgorot ?? 0;
@@ -428,20 +434,27 @@ export function Home() {
             <div className="kpi">
               <b>{cpl === null ? L.none : shekels(cpl)}</b>
               <div className="lbl">{isEngagementCampaign ? h.kpiCplEngagement : h.kpiCpl}</div>
-              <Delta pct={r?.delta.cplPct ?? null} goodDown />
+              <Delta pct={rd?.cplPct ?? null} goodDown />
             </div>
             <div className="kpi">
               <b>{hasRangeData ? leads : L.none}</b>
               <div className="lbl">{isEngagementCampaign ? h.kpiLeadsEngagement : h.kpiLeads}</div>
-              <Delta pct={r?.delta.leadsPct ?? null} />
+              <Delta pct={rd?.leadsPct ?? null} />
             </div>
             <div className="kpi">
               <b>{hasRangeData ? shekels(spend) : L.none}</b>
               <div className="lbl">{h.kpiSpend}</div>
-              <Delta pct={r?.delta.spendPct ?? null} />
+              <Delta pct={rd?.spendPct ?? null} />
             </div>
           </div>
 
+          {/* AIC-98's house rule applied to the ▲/▼ line: when there is no
+              comparison, say why rather than leave a gap that reads as "no
+              change". "day" already has its own provisional note below, and
+              "all time" has no previous period to explain. */}
+          {rd === null && hasRangeData && range !== "day" && range !== "allTime" && (
+            <p className="muted" style={{ fontSize: "0.8rem", paddingInline: 20 }}>{h.noComparison}</p>
+          )}
           {/* Only "today" is a still-updating partial window. */}
           {range === "day" && (
             <p className="muted" style={{ fontSize: "0.8rem", paddingInline: 20 }}>{h.provisional}</p>

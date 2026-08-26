@@ -35,6 +35,59 @@ export function resolveRangeWindow(range: RangeKey, ref: Date): { start: string;
   return { start, end };
 }
 
+export interface RangeDelta {
+  spendPct: number | null;
+  leadsPct: number | null;
+  cplPct: number | null;
+}
+
+// The ▲/▼ line under each KPI, computed over the SAME window the number above
+// it came from.
+//
+// Found live 2026-08-26: this line used to be a single figure over the
+// engine's fixed 7-complete-day window, rendered under whichever range the
+// customer had selected. On היום that meant "—" for the number and "▲20%
+// מהתקופה הקודמת" underneath it — a confident comparison of a window we had
+// measured nothing in. On חודש it put a month's total above a week's movement.
+//
+// `null` is a first-class answer here, and three cases earn it:
+//
+//  * DAY — today is still filling up. Against a complete yesterday it would
+//    always read as a fall, which is a fact about the clock, not the campaign.
+//  * ALL TIME — there is no previous period, by definition.
+//  * A PREVIOUS WINDOW WE CANNOT SEE IN FULL — the per-day rows reach back
+//    DAILY_LOOKBACK_DAYS (45), so "the 30 days before the last 30" needs 60
+//    and isn't there. Comparing a full window against a partial one invents a
+//    collapse. The same applies when the campaign simply didn't exist yet:
+//    half a week of real data against half a week of nothing reports a
+//    doubling that is really just the start date.
+export function computeRangeDeltas(
+  daily: DailyPoint[],
+  ref: Date,
+  coveredFrom: string,
+): Record<RangeKey, RangeDelta | null> {
+  const day = 24 * 60 * 60 * 1000;
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const between = (start: string, end: string) => daily.filter((p) => p.date >= start && p.date <= end);
+
+  const forRange = (k: Exclude<RangeKey, "allTime" | "day">): RangeDelta | null => {
+    const days = RANGE_DAYS[k];
+    const curStart = resolveRangeWindow(k, ref).start;
+    const prevEnd = iso(new Date(new Date(curStart + "T00:00:00Z").getTime() - day));
+    const prevStart = iso(new Date(new Date(prevEnd + "T00:00:00Z").getTime() - (days - 1) * day));
+    if (prevStart < coveredFrom) return null; // not visible in full — see above
+    const cur = sumDays(between(curStart, iso(ref)));
+    const prev = sumDays(between(prevStart, prevEnd));
+    return {
+      spendPct: deltaPct(cur.spendAgorot, prev.spendAgorot),
+      leadsPct: deltaPct(cur.leads, prev.leads),
+      cplPct: cur.cplAgorot !== null && prev.cplAgorot !== null ? deltaPct(cur.cplAgorot, prev.cplAgorot) : null,
+    };
+  };
+
+  return { day: null, week: forRange("week"), month: forRange("month"), allTime: null };
+}
+
 function sumDays(points: DailyPoint[]): PeriodAgg {
   const spendAgorot = points.reduce((s, p) => s + p.spendAgorot, 0);
   const leads = points.reduce((s, p) => s + p.leads, 0);
@@ -78,11 +131,16 @@ export interface CampaignReadout {
   // Earliest day we have real data for, so the UI can say "this campaign is
   // new" instead of implying a flat empty month.
   firstDataDate: string | null;
+  // The engine's fixed 7-complete-day movement. Kept for the ops console,
+  // which shows it beside `current` — the same window, so the pair agrees.
   delta: {
     spendPct: number | null;
     leadsPct: number | null;
     cplPct: number | null;
   };
+  // Per-range movement for the customer's range switcher. Null where an
+  // honest comparison isn't available — see computeRangeDeltas.
+  rangeDeltas: Record<RangeKey, RangeDelta | null>;
   perCreative: CreativeRow[];
 }
 
@@ -181,6 +239,15 @@ export async function buildCampaignReadout(
     rangeHasData,
     daily,
     firstDataDate: daily.find((p) => p.spendAgorot > 0 || p.leads > 0)?.date ?? null,
+    rangeDeltas: computeRangeDeltas(
+      daily,
+      ref,
+      // The later of "how far the per-day rows reach" and "when this campaign
+      // first had data" — a comparison window has to be fully inside both.
+      [dailyWindow.start, daily.find((p) => p.spendAgorot > 0 || p.leads > 0)?.date ?? dailyWindow.start]
+        .sort()
+        .at(-1)!,
+    ),
     delta: {
       spendPct: deltaPct(cur.spendAgorot, prev.spendAgorot),
       leadsPct: deltaPct(cur.leads, prev.leads),
