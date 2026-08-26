@@ -1584,19 +1584,6 @@ export const strings = {
             title: "עוקבים אחרי השינוי האחרון",
             body: "ביצענו שינוי בקמפיין לאחרונה ונותנים לו כמה ימים להשפיע לפני שנבדוק שוב אם צריך לשנות עוד.",
           },
-          // Shown only when today already has activity but the engine hasn't
-          // acted. Without it, seeing "3 פניות היום" next to "עדיין אוספים
-          // נתונים" reads as the product contradicting itself — it isn't: we
-          // deliberately evaluate on complete days so a half-finished day
-          // never triggers a recommendation.
-          //
-          // Reworded 2026-08-26, reported live: the old sentence — "הפעילות של
-          // היום עוד לא נכללת" — sat on a dashboard that was, at that moment,
-          // displaying today's ₪33.75 and its lead on the היום tab. It meant
-          // "not included IN THE RECOMMENDATIONS" and was read as "today's
-          // numbers are not shown". Naming both halves is what removes the
-          // ambiguity: the numbers do include today, only the engine waits.
-          completeDaysNote: "המספרים כאן כוללים גם את היום. את ההמלצות אנחנו מחשבים על ימים מלאים בלבד, ולכן היום עוד לא משפיע עליהן.",
         },
         // AIC-67: incremental delta review — only ever asks about NEW leads
         // since the last review (never a cumulative total the customer has

@@ -347,10 +347,6 @@ export function Home() {
   // rather than contradictory, and stays in its own small fallback card below.
   const hasPendingHero = (state === "ok" || state === "collecting") && ov.pendingRecommendations > 0;
   const r = ov.readout;
-  // The dashboard shows today while the engine still evaluates on complete
-  // days — so "3 פניות היום" can sit next to "עדיין אוספים נתונים". Said
-  // explicitly below the hero, rather than let it read as a contradiction.
-  const todayActive = !!r && (r.today.leads > 0 || r.today.spendAgorot > 0);
   // One explicit window, chosen by the customer — replaces the old
   // "today card + separate 7-day KPIs" split, which showed two sets of
   // numbers for the same campaign and read as a contradiction.
@@ -418,9 +414,6 @@ export function Home() {
                   <StatusPill variant={PILL[state]}>{hd.badge}</StatusPill>
                   <h2 style={{ fontSize: "1.35rem", margin: "12px 0 8px" }}>{hd.title}</h2>
                   <p className="muted" style={{ maxWidth: "42em" }}>{hd.body}</p>
-                  {todayActive && (state === "ok" || state === "collecting") && (
-                    <p className="muted" style={{ marginTop: 8, fontSize: "0.85rem" }}>{h.noRec.completeDaysNote}</p>
-                  )}
                 </div>
                 {hd.cta && <Link className="btn btn-primary btn-sm" to={hd.cta.to}>{hd.cta.label}</Link>}
                 {hd.launch && <button className="btn btn-primary btn-sm" onClick={() => setLaunchOpen(true)}>{hd.launch.label}</button>}
