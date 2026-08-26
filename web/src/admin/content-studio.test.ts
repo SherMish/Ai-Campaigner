@@ -37,6 +37,13 @@ describe("Ads Agent Content Studio (AIC-142)", () => {
     expect(hooks.every((slide) => !slide.eyebrow)).toBe(true);
   });
 
+  it("uses the complete Did-you-know label and keeps the metric slide free of a redundant unit", () => {
+    const slides = buildSlides("signal", createDraft("signal"));
+
+    expect(slides[0].accent).toBe("הידעתם?");
+    expect(slides[1].accent).toBeUndefined();
+  });
+
   it.each(ids)("%s sample copy is complete and exportable immediately", (id) => {
     expect(validateDraft(id, createDraft(id))).toEqual([]);
   });

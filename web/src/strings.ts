@@ -254,9 +254,8 @@ export const strings = {
             ctaBody: "Ads Agent מחבר בין נתוני הקמפיין למשוב שלכם על איכות הפניות — כדי לא לייעל את המספר הלא נכון.",
           },
           slides: {
-            hookAccent: "ידעתם?",
+            hookAccent: "הידעתם?",
             signalEyebrow: "המספר לבדו מטעה",
-            signalAccent: "לפנייה",
             contextEyebrow: "למה זה קורה",
             contextTitle: "המערכת רואה ליד. אתם רואים בן אדם.",
             exampleEyebrow: "דוגמה פשוטה",

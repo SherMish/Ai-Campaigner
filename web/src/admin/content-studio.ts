@@ -115,7 +115,7 @@ const signal: TemplateDefinition = {
   defaults: signalCopy.defaults,
   build: (v) => [
     { layout: "hook", hookStyle: "signal", eyebrow: "", title: v.hook, accent: signalCopy.slides.hookAccent },
-    { layout: "signal", eyebrow: signalCopy.slides.signalEyebrow, title: v.bigNumber, body: v.fact, accent: signalCopy.slides.signalAccent },
+    { layout: "signal", eyebrow: signalCopy.slides.signalEyebrow, title: v.bigNumber, body: v.fact },
     { layout: "explain", eyebrow: signalCopy.slides.contextEyebrow, title: signalCopy.slides.contextTitle, body: v.context },
     { layout: "example", eyebrow: signalCopy.slides.exampleEyebrow, title: signalCopy.slides.exampleTitle, body: v.example },
     { layout: "check", eyebrow: signalCopy.slides.actionEyebrow, title: signalCopy.slides.actionTitle, body: v.action, footnote: v.source, number: "✓" },

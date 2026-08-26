@@ -4,7 +4,7 @@
 
 **Source of truth:** `web/src/admin/AdminContentStudio.tsx`, `web/src/admin/content-studio.ts`, `web/src/admin/content-studio-renderer.ts`, `web/src/admin/content-studio.css`, `web/src/strings.ts`, `web/src/App.tsx`, `web/src/admin/AdminSidebar.tsx`.
 
-**Lock-in tests:** `web/src/admin/content-studio.test.ts` pins the three formats, their distinct hook styles, hook-first/CTA-last structure, Instagram dimensions, text validation, optional source field and deterministic export filenames. `web/src/admin/content-studio-renderer.test.ts` pins the checklist-number center and the CTA's readable text column/no-duplicate-logo geometry. Browser verification covers the rendered compositions, template switching, image insertion/removal, successful PNG generation and the canvas's exact 1080×1350 dimensions.
+**Lock-in tests:** `web/src/admin/content-studio.test.ts` pins the three formats, their distinct hook styles, hook-first/CTA-last structure, Instagram dimensions, text validation, optional source field, the signal format's exact label/content hierarchy and deterministic export filenames. `web/src/admin/content-studio-renderer.test.ts` pins true badge-symbol centering, the signal question's center/footer clearance, content-fit hook tags and the CTA's readable text column/no-duplicate-logo geometry. Browser verification covers the rendered compositions, template switching, image insertion/removal, successful PNG generation and the canvas's exact 1080×1350 dimensions.
 
 ---
 
@@ -34,6 +34,6 @@ The operator can download the selected slide or every slide in order. Filenames 
 
 ## Brand and editorial constraints
 
-The renderer uses the production palette (`#171717`, `#F7F2EA`, `#EDE6DA`, `#FF5A36`, `#2FA36B`, `#665CFF`), Rubik/IBM Plex Mono typography and `/favicon.png`. Opening slides are intentionally high-contrast and sparse; content slides hold one idea. Checklist numbers are centered from the badge geometry rather than by eye. CTA slides mention Ads Agent gently, use one text brand marker rather than a duplicate image logo, and keep all dark copy outside the dark decorative shape.
+The renderer uses the production palette (`#171717`, `#F7F2EA`, `#EDE6DA`, `#FF5A36`, `#2FA36B`, `#665CFF`), Rubik/IBM Plex Mono typography and `/favicon.png`. Opening slides are intentionally high-contrast and sparse; content slides hold one idea. Hook labels size themselves to their copy rather than occupying a generic wide pill. The signal question motif stays above the footer and shares one geometric center with its question mark. Checklist numbers and symbols are likewise centered from the badge geometry rather than by eye. The signal metric slide presents the entered metric once without inserting a second orange unit label. CTA slides mention Ads Agent gently, use one text brand marker rather than a duplicate image logo, and keep all dark copy outside the dark decorative shape.
 
 V1 deliberately does not generate claims, statistics or copy with an LLM. The operator is responsible for the facts entered, and the source/qualification field exists for claims that need one. Saving drafts, generating captions, importing business context and posting directly to Instagram are not part of this feature today.

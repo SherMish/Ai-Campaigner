@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-26 — Content Studio symbol and label alignment (AIC-142)
+
+Screenshot review exposed four remaining visual defects in the useful-signal
+carousel: its question motif crossed the footer, the `ידעתם?` pill was wider
+than its content, the metric slide repeated `לפנייה`, and the action check used
+top-aligned rather than truly centered geometry. The renderer now centers both
+symbols from their containing shapes, keeps the question circle above the
+footer, sizes hook labels from measured text and removes the redundant metric
+unit. Focused geometry and slide-model tests lock the correction. Owning doc:
+[docs/features/content-studio.md](features/content-studio.md).
+
 ### 2026-08-26 — Carousel visual hierarchy and readability correction (AIC-142)
 
 The three Content Studio formats no longer share one interchangeable opening

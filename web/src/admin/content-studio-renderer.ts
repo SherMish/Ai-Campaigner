@@ -177,13 +177,15 @@ function drawHookImage(ctx: CanvasRenderingContext2D, image: HTMLImageElement, o
 function drawHookAccent(
   ctx: CanvasRenderingContext2D,
   text: string | undefined,
-  x: number,
+  right: number,
   y: number,
-  width: number,
   background: string,
   color: string,
 ) {
   if (!text) return;
+  ctx.font = "700 28px Rubik, Arial, sans-serif";
+  const width = Math.max(150, Math.ceil(ctx.measureText(text).width) + 64);
+  const x = right - width;
   ctx.fillStyle = background;
   roundedRect(ctx, x, y, width, 78, 39);
   ctx.fill();
@@ -214,7 +216,7 @@ function drawMythHook(ctx: CanvasRenderingContext2D, slide: CarouselSlide, optio
     x: 930, y: 225, maxWidth: 830, fontSize: 98, minFontSize: 72, maxLines: 5,
     color: CONTENT_PALETTE.cream, weight: 900, lineHeight: 111,
   });
-  drawHookAccent(ctx, slide.accent, 690, 1010, 296, CONTENT_PALETTE.orange, CONTENT_PALETTE.white);
+  drawHookAccent(ctx, slide.accent, 986, 1010, CONTENT_PALETTE.orange, CONTENT_PALETTE.white);
   drawProgress(ctx, options.index, options.total, true);
   drawLogo(ctx, options.logo, 94, 1227, 62, true);
 }
@@ -225,22 +227,26 @@ function drawSignalHook(ctx: CanvasRenderingContext2D, slide: CarouselSlide, opt
   if (options.image) drawHookImage(ctx, options.image, "rgba(73,63,210,.82)");
   ctx.strokeStyle = CONTENT_PALETTE.orange;
   ctx.lineWidth = 22;
+  const circleX = 170;
+  const circleY = 890;
   ctx.beginPath();
-  ctx.arc(166, 988, 265, 0, Math.PI * 2);
+  ctx.arc(circleX, circleY, 245, 0, Math.PI * 2);
   ctx.stroke();
   ctx.fillStyle = "rgba(247,242,234,.09)";
   ctx.beginPath();
-  ctx.arc(166, 988, 190, 0, Math.PI * 2);
+  ctx.arc(circleX, circleY, 176, 0, Math.PI * 2);
   ctx.fill();
-  drawText(ctx, "?", {
-    x: 176, y: 795, maxWidth: 210, fontSize: 238, minFontSize: 238, maxLines: 1,
-    color: CONTENT_PALETTE.orange, weight: 900, align: "center", direction: "ltr",
-  });
+  ctx.fillStyle = CONTENT_PALETTE.orange;
+  ctx.font = "900 238px Rubik, Arial, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.direction = "ltr";
+  ctx.fillText("?", circleX, circleY);
   drawText(ctx, slide.title, {
     x: 930, y: 230, maxWidth: 810, fontSize: 94, minFontSize: 70, maxLines: 5,
     color: CONTENT_PALETTE.cream, weight: 900, lineHeight: 108,
   });
-  drawHookAccent(ctx, slide.accent, 710, 1010, 276, CONTENT_PALETTE.cream, CONTENT_PALETTE.indigo);
+  drawHookAccent(ctx, slide.accent, 986, 1010, CONTENT_PALETTE.cream, CONTENT_PALETTE.indigo);
   drawProgress(ctx, options.index, options.total, true);
   drawLogo(ctx, options.logo, 94, 1227, 62, true);
 }
@@ -267,7 +273,7 @@ function drawChecklistHook(ctx: CanvasRenderingContext2D, slide: CarouselSlide, 
     x: 930, y: 225, maxWidth: 830, fontSize: 94, minFontSize: 70, maxLines: 5,
     color: CONTENT_PALETTE.ink, weight: 900, lineHeight: 108,
   });
-  drawHookAccent(ctx, slide.accent, 680, 1010, 306, CONTENT_PALETTE.orange, CONTENT_PALETTE.white);
+  drawHookAccent(ctx, slide.accent, 986, 1010, CONTENT_PALETTE.orange, CONTENT_PALETTE.white);
   drawProgress(ctx, options.index, options.total);
   drawLogo(ctx, options.logo);
 }
@@ -363,10 +369,13 @@ function drawCheck(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options:
   ctx.fillStyle = CONTENT_PALETTE.ink;
   roundedRect(ctx, 94, 265, 176, 176, 50);
   ctx.fill();
-  drawText(ctx, slide.number ?? "✓", {
-    x: 182, y: 307, maxWidth: 112, fontSize: 74, minFontSize: 60, maxLines: 1,
-    color: CONTENT_PALETTE.orange, weight: 900, align: "center", direction: "ltr",
-  });
+  const badgeMark = slide.number ?? "✓";
+  ctx.fillStyle = CONTENT_PALETTE.orange;
+  ctx.font = `900 ${badgeMark === "✓" ? 92 : 74}px Rubik, Arial, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.direction = "ltr";
+  ctx.fillText(badgeMark, 94 + 176 / 2, 265 + 176 / 2);
   const titleHeight = drawText(ctx, slide.title, {
     x: 930, y: 510, maxWidth: 836, fontSize: 78, minFontSize: 60, maxLines: 4,
     color: CONTENT_PALETTE.ink, weight: 900,
