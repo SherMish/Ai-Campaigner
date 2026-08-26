@@ -6,6 +6,15 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-26 — Checklist count and hook-label alignment (AIC-142)
+
+The checklist carousel no longer promises four checks while its opening artwork
+shows only three. It now contains exactly three checks from the opening headline
+and numbered tiles through the editable fields, JSON contract and rendered slide
+sequence. Hook-label copy is also centered vertically from the pill geometry
+instead of relying on a top offset. Tests and browser rendering lock both fixes.
+Owning doc: [docs/features/content-studio.md](features/content-studio.md).
+
 ### 2026-08-26 — One-paste JSON authoring in Content Studio (AIC-142)
 
 Operators no longer have to copy a prepared post into every carousel field by

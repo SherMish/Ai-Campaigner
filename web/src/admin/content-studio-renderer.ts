@@ -189,10 +189,12 @@ function drawHookAccent(
   ctx.fillStyle = background;
   roundedRect(ctx, x, y, width, 78, 39);
   ctx.fill();
-  drawText(ctx, text, {
-    x: x + width - 30, y: y + 20, maxWidth: width - 60, fontSize: 28, minFontSize: 24, maxLines: 1,
-    color, weight: 700,
-  });
+  ctx.fillStyle = color;
+  ctx.font = "700 28px Rubik, Arial, sans-serif";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  ctx.direction = "rtl";
+  ctx.fillText(text, right - 30, y + 78 / 2, width - 60);
 }
 
 function drawMythHook(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options: DrawOptions) {

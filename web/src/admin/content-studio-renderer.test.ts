@@ -128,6 +128,25 @@ describe("Content Studio renderer geometry", () => {
     expect(pillRight - pillX).toBe("הידעתם?".length * 20 + 64);
   });
 
+  it("centers checklist hook accent copy vertically inside its pill", () => {
+    const { canvas, textCalls } = fakeCanvas();
+    const slide: CarouselSlide = {
+      layout: "hook",
+      hookStyle: "checklist",
+      eyebrow: "",
+      title: "title",
+      accent: "שמרו את הפוסט",
+    };
+
+    drawCarouselSlide(canvas, slide, { index: 0, total: 6 });
+
+    expect(textCalls.find((call) => call.text === "שמרו את הפוסט")).toMatchObject({
+      y: 1010 + 78 / 2,
+      align: "right",
+      baseline: "middle",
+    });
+  });
+
   it("keeps CTA copy out of the dark decoration and removes the redundant top logo", () => {
     const { canvas, textCalls, imageCalls } = fakeCanvas();
     const slide: CarouselSlide = {

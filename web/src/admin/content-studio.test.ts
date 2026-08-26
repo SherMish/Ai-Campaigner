@@ -46,6 +46,16 @@ describe("Ads Agent Content Studio (AIC-142)", () => {
     expect(slides[1].accent).toBeUndefined();
   });
 
+  it("keeps the checklist promise aligned with exactly three numbered checks", () => {
+    const draft = createDraft("checklist");
+    const slides = buildSlides("checklist", draft);
+
+    expect(draft.values.hook).toContain("3 בדיקות");
+    expect(slides.filter((slide) => slide.layout === "check")).toHaveLength(3);
+    expect(slides).toHaveLength(6);
+    expect(getTemplate("checklist").fields.some((field) => field.id.startsWith("check4"))).toBe(false);
+  });
+
   it.each(ids)("%s sample copy is complete and exportable immediately", (id) => {
     expect(validateDraft(id, createDraft(id))).toEqual([]);
   });
