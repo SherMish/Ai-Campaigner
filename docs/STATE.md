@@ -10,10 +10,10 @@ owning doc under [features/](features/), not here.
 
 A slot that must contain a sentence fills with reassurance when there is nothing
 true to say — which is how a campaign with ₪49 and one lead got told it was
-fine. The hero now leads with facts (spend, leads, ads delivering, from the
-window the customer selected), then the gap, then the threshold WITH its number
+fine. The hero now states the gap and then the threshold WITH its number
 ("נצטרך בערך ₪150 על כל מודעה"), returning null rather than inventing one where
-no numeric gate exists. The no-reason fallback, previously the most assertive
+no numeric gate exists. A facts line was built first and removed on sight: it
+restated the KPI cards directly below it, which already lead with the facts. The no-reason fallback, previously the most assertive
 copy in the product and backed by nothing, now just says the campaign is
 running. Two rules added to CLAUDE.md: never render a verdict where evidence
 does not exist, and create the Linear ticket before the commit so the id in the

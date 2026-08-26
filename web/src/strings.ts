@@ -1500,15 +1500,6 @@ export const strings = {
         // the state and nothing more.
         noActionTitle: "הקמפיין רץ",
         noAction: "עוד לא סיכמנו את הביצועים. ברגע שיהיה מספיק מידע נגיד מה כדאי לשנות.",
-        // AIC-143: the facts line. Always available, never a judgement — the
-        // spend and leads for the window the customer selected, plus how many
-        // ads are actually delivering.
-        heroFacts: (spend: string, leads: string, ads: string) => `${spend} הוצאו · ${leads} · ${ads}`,
-        heroLeadsOne: "פנייה אחת",
-        heroLeadsMany: (n: number) => `${n} פניות`,
-        heroLeadsNone: "עדיין בלי פניות",
-        heroAdsOne: "מודעה אחת פעילה",
-        heroAdsMany: (n: number) => `${n} מודעות פעילות`,
         // AIC-143: what has to be true before we can say anything, WITH the
         // number. "עוד מוקדם" on its own is the same non-answer in politer
         // clothes; a shekel figure is a commitment the customer can hold us to.

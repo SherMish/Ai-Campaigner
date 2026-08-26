@@ -388,14 +388,6 @@ export function Home() {
   const activeAds =
     ov.campaign?.deliveringAdCount ??
     new Set((r?.perCreative ?? []).map((c) => c.creativeName ?? c.metaObjectId)).size;
-  // AIC-143 — the facts line, built from the selected window so it can never
-  // disagree with the cards directly below it.
-  const heroFacts = (() => {
-    if (!hasRangeData || (spend === 0 && leads === 0 && activeAds === 0)) return null;
-    const leadsText = leads === 0 ? h.heroLeadsNone : leads === 1 ? h.heroLeadsOne : h.heroLeadsMany(leads);
-    const adsText = activeAds === 1 ? h.heroAdsOne : h.heroAdsMany(activeAds);
-    return h.heroFacts(shekels(spend), leadsText, adsText);
-  })();
   const threshold = thresholdLine(ov.campaign?.noRecReason ?? null, ov.campaign?.noRecDetail, shekels);
   const period = ov.campaign?.budgetPeriod === "monthly" ? L.perMonth : L.perDay;
 
@@ -421,16 +413,11 @@ export function Home() {
               <div className="row between" style={{ flexWrap: "wrap", gap: 14 }}>
                 <div>
                   <StatusPill variant={PILL[state]}>{hd.badge}</StatusPill>
-                  {/* AIC-143: facts first. Spend, leads and ads running are
-                      always available and never wrong, unlike the judgement
-                      that used to open this card. Uses the SAME window the KPI
-                      cards below show, so the screen never carries two sets of
-                      numbers for one campaign. Hidden when there is nothing
-                      measured — "₪0 הוצאו" is not a fact worth leading with. */}
-                  {heroFacts && (
-                    <p className="muted" style={{ margin: "12px 0 4px", fontSize: "0.85rem" }}>{heroFacts}</p>
-                  )}
-                  <h2 style={{ fontSize: "1.35rem", margin: "6px 0 8px" }}>{hd.title}</h2>
+                  {/* AIC-143: no facts line here. It restated the KPI cards
+                      immediately below it — same window, same figures — so the
+                      hero said everything twice. The cards ARE the facts; this
+                      card's job is only the gap and the threshold. */}
+                  <h2 style={{ fontSize: "1.35rem", margin: "12px 0 8px" }}>{hd.title}</h2>
                   <p className="muted" style={{ maxWidth: "42em" }}>{hd.body}</p>
                   {/* AIC-143: the threshold, with its number — a commitment
                       rather than "עוד מוקדם". Null wherever no numeric gate

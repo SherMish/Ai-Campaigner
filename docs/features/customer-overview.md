@@ -677,18 +677,19 @@ A UI slot that must always contain a sentence will always contain one — and
 when there is nothing true to say, it fills with reassurance. That is where a
 campaign with ₪49 of spend and one lead got told everything was fine.
 
-The hero is now three parts, in order:
+The hero is now two parts:
 
 | line | source | rule |
 | --- | --- | --- |
-| facts | the selected range's spend + leads, and the delivering-ad count | always available, never wrong |
 | what we cannot yet say | the engine's `no_rec_reason` | honest about the gap |
 | the threshold | `no_rec_detail.requiredSpendAgorot` | a number, not "too early" |
 
-**The facts line uses the window the customer selected**, the same one the KPI
-cards read, so the screen can never carry two different sets of numbers for one
-campaign. It is hidden entirely when nothing has been measured — "₪0 הוצאו" is
-not a fact worth leading with.
+**There is deliberately no facts line.** The first build put spend, leads and
+ad count at the top of the hero, per the ticket — and on screen it restated the
+KPI cards sitting directly below it, same window and same figures. The cards
+ARE the facts; the hero's only job is the gap and the threshold. "Lead with
+facts" was right about the principle and wrong about the place: the screen
+already led with them.
 
 **The threshold line returns null rather than inventing a number.** It fires for
 `below_object_evidence_floor` and `budget_below_threshold`, which carry
