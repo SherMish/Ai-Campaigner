@@ -37,6 +37,30 @@
 }
 .dash .card.cs-editor, .dash .card.cs-preview-card, .dash .card.cs-image-card { background: #fff; }
 .cs-editor { display: flex; flex-direction: column; gap: 16px; }
+.cs-json-import {
+  display: grid; gap: 12px; padding: 18px;
+  border: 1px solid var(--line); border-radius: 16px; background: var(--paper);
+}
+.cs-json-head { display: flex; justify-content: space-between; align-items: start; gap: 14px; }
+.cs-json-head h3 { margin: 0 0 5px; font-size: 1rem; }
+.cs-json-head p { margin: 0; color: var(--muted); font-size: .82rem; line-height: 1.5; }
+.cs-json-import textarea {
+  min-height: 170px; resize: vertical; text-align: left;
+  font: 500 .76rem/1.65 var(--mono); background: #fff;
+}
+.cs-json-actions { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.cs-json-actions details { flex: 1 1 210px; }
+.cs-json-actions summary {
+  padding: 8px 0; cursor: pointer; color: var(--muted); font-size: .8rem; font-weight: 600;
+}
+.cs-json-actions pre {
+  max-height: 320px; margin: 8px 0 0; padding: 14px; overflow: auto;
+  border-radius: 12px; background: var(--ink); color: var(--paper);
+  direction: ltr; text-align: left; font: 500 .7rem/1.65 var(--mono); white-space: pre;
+}
+.cs-json-status { margin: 0; font-size: .8rem; font-weight: 600; }
+.cs-json-status.ok { color: var(--green); }
+.cs-json-status.error { color: #a43b23; }
 .cs-name-field { padding-bottom: 18px; border-bottom: 1px solid var(--line); }
 .cs-field { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
 .cs-field:last-child { border-bottom: 0; padding-bottom: 0; }
@@ -114,4 +138,5 @@
   .cs-workspace { grid-template-columns: minmax(0, 1fr); }
   .cs-export-actions { grid-template-columns: 1fr; }
   .cs-main-canvas { width: 100%; }
+  .cs-json-head { flex-direction: column; }
 }

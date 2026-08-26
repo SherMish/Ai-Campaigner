@@ -8,6 +8,8 @@ import {
   createDraft,
   exportFilename,
   getTemplate,
+  importContentJson,
+  jsonTemplate,
   validateDraft,
   type TemplateId,
 } from "./content-studio.js";
@@ -85,5 +87,57 @@ describe("Ads Agent Content Studio (AIC-142)", () => {
     expect(exportFilename("מחיר לפנייה", 0)).toBe("ads-agent-מחיר-לפנייה-01.png");
     expect(exportFilename("מחיר לפנייה", 8)).toBe("ads-agent-מחיר-לפנייה-09.png");
     expect(exportFilename("   ", 0)).toBe("ads-agent-carousel-01.png");
+  });
+
+  it.each(ids)("%s exposes a copyable JSON contract with every content field", (id) => {
+    const parsed = JSON.parse(jsonTemplate(id)) as Record<string, unknown>;
+
+    expect(parsed.template).toBe(id);
+    expect(parsed.name).toBeTypeOf("string");
+    for (const field of getTemplate(id).fields) {
+      expect(parsed).toHaveProperty(field.id);
+      expect(parsed[field.id]).toBeTypeOf("string");
+    }
+  });
+
+  it("imports a complete JSON string and identifies its target template", () => {
+    const source = JSON.parse(jsonTemplate("signal")) as Record<string, string>;
+    source.name = "איכות פניות";
+    source.hook = "הוק חדש";
+    source.bigNumber = "₪31";
+
+    expect(importContentJson(JSON.stringify(source))).toMatchObject({
+      ok: true,
+      templateId: "signal",
+      name: "איכות פניות",
+      values: {
+        hook: "הוק חדש",
+        bigNumber: "₪31",
+      },
+    });
+  });
+
+  it("rejects malformed JSON and missing or misspelled fields instead of partially importing", () => {
+    expect(importContentJson("{not-json")).toEqual({ ok: false, code: "invalid_json", fields: [] });
+
+    const source = JSON.parse(jsonTemplate("myth")) as Record<string, string>;
+    delete source.truth;
+    source.truht = "טעות כתיב";
+    expect(importContentJson(JSON.stringify(source))).toEqual({
+      ok: false,
+      code: "unknown_fields",
+      fields: ["truht"],
+    });
+  });
+
+  it("rejects JSON that would overflow a slide", () => {
+    const source = JSON.parse(jsonTemplate("checklist")) as Record<string, string>;
+    source.hook = "א".repeat(getTemplate("checklist").fields[0].maxLength + 1);
+
+    expect(importContentJson(JSON.stringify(source))).toEqual({
+      ok: false,
+      code: "too_long",
+      fields: ["hook"],
+    });
   });
 });

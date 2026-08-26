@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, ImagePlus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, ClipboardPaste, Copy, Download, ImagePlus, Trash2 } from "lucide-react";
 import { strings } from "../strings";
 import {
   CONTENT_TEMPLATES,
@@ -7,9 +7,12 @@ import {
   createDraft,
   exportFilename,
   getTemplate,
+  importContentJson,
+  jsonTemplate,
   validateDraft,
   type CarouselDraft,
   type CarouselSlide,
+  type ContentJsonImportErrorCode,
   type TemplateId,
 } from "./content-studio";
 import {
@@ -20,6 +23,11 @@ import {
 import "./content-studio.css";
 
 const t = strings.he.contentStudio;
+
+type JsonFeedback =
+  | { kind: "imported" | "copied" | "copy_error" }
+  | { kind: "error"; code: ContentJsonImportErrorCode; fields: string[] }
+  | null;
 
 const initialDrafts = (): Record<TemplateId, CarouselDraft> => ({
   myth: createDraft("myth"),
@@ -91,6 +99,8 @@ export function AdminContentStudio() {
   const [exporting, setExporting] = useState(false);
   const [status, setStatus] = useState<"ready" | "error" | null>(null);
   const [imageError, setImageError] = useState(false);
+  const [jsonInput, setJsonInput] = useState("");
+  const [jsonFeedback, setJsonFeedback] = useState<JsonFeedback>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const template = getTemplate(templateId);
@@ -98,6 +108,7 @@ export function AdminContentStudio() {
   const slides = useMemo(() => buildSlides(templateId, draft), [templateId, draft]);
   const issues = useMemo(() => validateDraft(templateId, draft), [templateId, draft]);
   const issueByField = useMemo(() => new Map(issues.map((issue) => [issue.fieldId, issue])), [issues]);
+  const jsonContract = useMemo(() => jsonTemplate(templateId), [templateId]);
 
   useEffect(() => {
     let current = true;
@@ -113,6 +124,8 @@ export function AdminContentStudio() {
     setSelectedSlide(0);
     setStatus(null);
     setImageError(false);
+    setJsonInput("");
+    setJsonFeedback(null);
   }
 
   function updateDraft(recipe: (current: CarouselDraft) => CarouselDraft) {
@@ -122,6 +135,47 @@ export function AdminContentStudio() {
 
   function updateValue(fieldId: string, value: string) {
     updateDraft((current) => ({ ...current, values: { ...current.values, [fieldId]: value } }));
+  }
+
+  async function copyJsonContract() {
+    try {
+      await navigator.clipboard.writeText(jsonContract);
+      setJsonFeedback({ kind: "copied" });
+    } catch {
+      setJsonFeedback({ kind: "copy_error" });
+    }
+  }
+
+  function importJson() {
+    const result = importContentJson(jsonInput);
+    if (!result.ok) {
+      setJsonFeedback({ kind: "error", code: result.code, fields: result.fields });
+      return;
+    }
+
+    setDrafts((current) => ({
+      ...current,
+      [result.templateId]: {
+        ...current[result.templateId],
+        name: result.name,
+        values: result.values,
+      },
+    }));
+    setTemplateId(result.templateId);
+    setSelectedSlide(0);
+    setStatus(null);
+    setImageError(false);
+    setJsonFeedback({ kind: "imported" });
+  }
+
+  function jsonFieldNames(fields: string[]): string {
+    const sourceTemplate = jsonInput.trim() ? importContentJson(jsonInput) : null;
+    const resolvedTemplate = sourceTemplate?.ok ? getTemplate(sourceTemplate.templateId) : template;
+    return fields.map((fieldId) => {
+      if (fieldId === "template") return t.jsonTemplateField;
+      if (fieldId === "name") return t.carouselName;
+      return resolvedTemplate.fields.find((field) => field.id === fieldId)?.label ?? fieldId;
+    }).join(", ");
   }
 
   async function chooseImage(file?: File) {
@@ -220,6 +274,46 @@ export function AdminContentStudio() {
       <div className="cs-workspace">
         <section className="card cs-editor" aria-labelledby="cs-editor-title">
           <h2 id="cs-editor-title">{t.editContent}</h2>
+          <section className="cs-json-import" aria-labelledby="cs-json-title">
+            <div className="cs-json-head">
+              <div>
+                <h3 id="cs-json-title">{t.jsonTitle}</h3>
+                <p>{t.jsonHint}</p>
+              </div>
+              <button type="button" className="btn btn-outline btn-sm" onClick={copyJsonContract}>
+                <Copy size={16} /> {t.jsonCopy}
+              </button>
+            </div>
+            <textarea
+              value={jsonInput}
+              onChange={(event) => {
+                setJsonInput(event.target.value);
+                setJsonFeedback(null);
+              }}
+              rows={8}
+              dir="ltr"
+              aria-label={t.jsonInputLabel}
+              placeholder={t.jsonPlaceholder}
+            />
+            <div className="cs-json-actions">
+              <button type="button" className="btn btn-primary btn-sm" disabled={!jsonInput.trim()} onClick={importJson}>
+                <ClipboardPaste size={16} /> {t.jsonImport}
+              </button>
+              <details>
+                <summary>{t.jsonShowFormat}</summary>
+                <pre dir="ltr">{jsonContract}</pre>
+              </details>
+            </div>
+            {jsonFeedback?.kind === "imported" && <p className="cs-json-status ok">{t.jsonImported}</p>}
+            {jsonFeedback?.kind === "copied" && <p className="cs-json-status ok">{t.jsonCopied}</p>}
+            {jsonFeedback?.kind === "copy_error" && <p className="cs-json-status error">{t.jsonCopyError}</p>}
+            {jsonFeedback?.kind === "error" && (
+              <p className="cs-json-status error" role="alert">
+                {t.jsonErrors[jsonFeedback.code]}
+                {jsonFeedback.fields.length > 0 ? ` ${jsonFieldNames(jsonFeedback.fields)}` : ""}
+              </p>
+            )}
+          </section>
           <div className="field cs-name-field">
             <label htmlFor="carousel-name">{t.carouselName}</label>
             <input

@@ -57,6 +57,28 @@ export type ValidationIssue = {
   kind: "required" | "too_long";
 };
 
+export type ContentJsonImportErrorCode =
+  | "invalid_json"
+  | "invalid_shape"
+  | "unsupported_template"
+  | "unknown_fields"
+  | "missing_fields"
+  | "non_string_values"
+  | "too_long";
+
+export type ContentJsonImportResult =
+  | {
+      ok: true;
+      templateId: TemplateId;
+      name: string;
+      values: Record<string, string>;
+    }
+  | {
+      ok: false;
+      code: ContentJsonImportErrorCode;
+      fields: string[];
+    };
+
 const f = (
   id: string,
   slideIndex: number,
@@ -187,6 +209,74 @@ export function validateDraft(templateId: TemplateId, draft: CarouselDraft): Val
     else if (value.length > field.maxLength) issues.push({ fieldId: field.id, slideIndex: field.slideIndex, kind: "too_long" });
   }
   return issues;
+}
+
+export function jsonTemplate(templateId: TemplateId): string {
+  const template = getTemplate(templateId);
+  const contract: Record<string, string> = {
+    template: templateId,
+    name: `<${strings.he.contentStudio.carouselName}>`,
+  };
+  for (const field of template.fields) {
+    contract[field.id] = field.required === false ? "" : `<${field.label}>`;
+  }
+  return JSON.stringify(contract, null, 2);
+}
+
+function jsonError(code: ContentJsonImportErrorCode, fields: string[] = []): ContentJsonImportResult {
+  return { ok: false, code, fields };
+}
+
+export function importContentJson(raw: string): ContentJsonImportResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return jsonError("invalid_json");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return jsonError("invalid_shape");
+
+  const source = parsed as Record<string, unknown>;
+  const templateId = source.template;
+  if (templateId !== "myth" && templateId !== "signal" && templateId !== "checklist") {
+    return jsonError("unsupported_template", ["template"]);
+  }
+
+  const template = getTemplate(templateId);
+  const allowed = new Set(["template", "name", ...template.fields.map((field) => field.id)]);
+  const unknown = Object.keys(source).filter((key) => !allowed.has(key));
+  if (unknown.length) return jsonError("unknown_fields", unknown);
+
+  const stringFields = ["name", ...template.fields.filter((field) => source[field.id] !== undefined).map((field) => field.id)];
+  const nonStrings = stringFields.filter((field) => typeof source[field] !== "string");
+  if (nonStrings.length) return jsonError("non_string_values", nonStrings);
+
+  const missing = [
+    ...(typeof source.name === "string" && source.name.trim() ? [] : ["name"]),
+    ...template.fields
+      .filter((field) => field.required !== false)
+      .filter((field) => typeof source[field.id] !== "string" || !(source[field.id] as string).trim())
+      .map((field) => field.id),
+  ];
+  if (missing.length) return jsonError("missing_fields", missing);
+
+  const values: Record<string, string> = {};
+  for (const field of template.fields) {
+    const value = source[field.id];
+    values[field.id] = typeof value === "string" ? value : "";
+  }
+  const candidate: CarouselDraft = { name: source.name as string, values, images: {} };
+  const tooLong = validateDraft(templateId, candidate)
+    .filter((issue) => issue.kind === "too_long")
+    .map((issue) => issue.fieldId);
+  if (tooLong.length) return jsonError("too_long", tooLong);
+
+  return {
+    ok: true,
+    templateId,
+    name: (source.name as string).trim(),
+    values,
+  };
 }
 
 export function exportFilename(name: string, index: number): string {

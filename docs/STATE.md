@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-26 — One-paste JSON authoring in Content Studio (AIC-142)
+
+Operators no longer have to copy a prepared post into every carousel field by
+hand. Each of the three formats now exposes a copyable JSON contract; one pasted
+object identifies its template and fills every text field in the correct slide.
+The import is atomic and refuses malformed JSON, unsupported templates, missing
+required content, non-text values, unknown/misspelled keys and text that would
+overflow. Browser verification confirmed automatic myth-to-checklist switching
+and that a rejected import leaves the previous draft untouched. Owning doc:
+[docs/features/content-studio.md](features/content-studio.md).
+
 ### 2026-08-26 — Content Studio symbol and label alignment (AIC-142)
 
 Screenshot review exposed four remaining visual defects in the useful-signal

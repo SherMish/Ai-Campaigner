@@ -4,7 +4,7 @@
 
 **Source of truth:** `web/src/admin/AdminContentStudio.tsx`, `web/src/admin/content-studio.ts`, `web/src/admin/content-studio-renderer.ts`, `web/src/admin/content-studio.css`, `web/src/strings.ts`, `web/src/App.tsx`, `web/src/admin/AdminSidebar.tsx`.
 
-**Lock-in tests:** `web/src/admin/content-studio.test.ts` pins the three formats, their distinct hook styles, hook-first/CTA-last structure, Instagram dimensions, text validation, optional source field, the signal format's exact label/content hierarchy and deterministic export filenames. `web/src/admin/content-studio-renderer.test.ts` pins true badge-symbol centering, the signal question's center/footer clearance, content-fit hook tags and the CTA's readable text column/no-duplicate-logo geometry. Browser verification covers the rendered compositions, template switching, image insertion/removal, successful PNG generation and the canvas's exact 1080×1350 dimensions.
+**Lock-in tests:** `web/src/admin/content-studio.test.ts` pins the three formats, their distinct hook styles, hook-first/CTA-last structure, Instagram dimensions, text validation, optional source field, the signal format's exact label/content hierarchy, the per-template JSON contract/import validation and deterministic export filenames. `web/src/admin/content-studio-renderer.test.ts` pins true badge-symbol centering, the signal question's center/footer clearance, content-fit hook tags and the CTA's readable text column/no-duplicate-logo geometry. Browser verification covers the rendered compositions, JSON copy/paste and automatic template switching, safe import rejection, template switching, image insertion/removal, successful PNG generation and the canvas's exact 1080×1350 dimensions.
 
 ---
 
@@ -23,6 +23,8 @@ These are different editorial jobs and use three visibly different opening compo
 ## Editing and validation
 
 The editor exposes structured fields tied to their real slide. Focusing a field selects that slide in the preview. Character limits are declared per field, visible while typing, and enforced before export. A required blank or overlong field disables export and names the problem instead of silently clipping text in the image.
+
+The same fields can be filled in one operation through the JSON importer. Each template exposes a copyable, human-readable JSON contract containing `template`, `name` and that template's stable content keys. Pasting a valid object selects the template named in the JSON and fills every text field while preserving any images already attached to that template. Import is atomic: malformed JSON, unsupported templates, missing required values, non-text values, unknown keys (including spelling mistakes), and text that exceeds a slide's limit are rejected before any current draft changes.
 
 Every non-CTA slide accepts an optional PNG or JPEG. Images are read locally as data URLs, can be replaced or removed, and use a center-crop cover treatment so their aspect ratio is never stretched. Hook images become full-bleed backgrounds beneath a legibility overlay; content-slide images use a dedicated image-and-copy composition. CTA slides always use the controlled brand composition.
 
