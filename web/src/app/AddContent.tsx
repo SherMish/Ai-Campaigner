@@ -33,7 +33,10 @@ function CreativeContextPanel({ ctx }: { ctx: CreativeCtx | null | undefined }) 
 
   const angleName = (a: string) => s.ctx.angleNames[a] ?? a;
   const b = ctx.business;
+  // Who it is for comes first — copy written without knowing the audience is
+  // guessing, and the first version of this panel left it out entirely.
   const facts = ([
+    ["primaryCustomer", b.primaryCustomer], ["geoArea", b.geoArea], ["mainService", b.mainService],
     ["offer", b.offer], ["differentiators", b.differentiators],
     ["objections", b.objections], ["priceRange", b.priceRange],
   ] as const).filter(([, v]) => (v ?? "").trim().length > 0);
@@ -76,13 +79,23 @@ function CreativeContextPanel({ ctx }: { ctx: CreativeCtx | null | undefined }) 
               <div>
                 <div className="eyebrow" style={{ marginBottom: 6 }}>{s.ctx.anglesTitle}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {ctx.anglesTested.map((a) => (
-                    <span key={a} className="pill neutral">{angleName(a)}</span>
+                  {/* An angle nobody funded is not an angle that failed. The
+                      chip says which it is rather than letting a bare label
+                      imply a verdict. */}
+                  {ctx.angles.map((a) => (
+                    <span key={a.angle} className="pill neutral">
+                      {angleName(a.angle)}
+                      {a.state === "attempted" && (
+                        <span style={{ opacity: 0.7, fontWeight: 400 }}>· {s.ctx.angleAttempted}</span>
+                      )}
+                    </span>
                   ))}
                 </div>
                 {ctx.singleAngle && (
                   <p style={{ marginTop: 10, marginBottom: 0, fontSize: "0.85rem" }}>
-                    {s.ctx.singleAngle(angleName(ctx.singleAngle))}
+                    {ctx.angles.find((a) => a.angle === ctx.singleAngle)?.state === "tested"
+                      ? s.ctx.singleAngle(angleName(ctx.singleAngle))
+                      : s.ctx.singleAngleUntested(angleName(ctx.singleAngle))}
                   </p>
                 )}
                 {/* The honest floor. Without these two lines "we tried price"

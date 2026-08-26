@@ -23,6 +23,7 @@ copy about **this** business rather than generic marketing filler:
 
 | part | where it comes from |
 | --- | --- |
+| who it is for (audience, service area, main service) | `customers` columns |
 | business facts (offer, differentiators, objections, price, constraints) | `customers` columns, captured in the wizard (AIC-138) |
 | whether those facts are worth anything | `summarizeProfile` (AIC-132) |
 | the copy that already ran | live Meta read, one per ad, capped at 8 |
@@ -78,6 +79,45 @@ price angle in every sense and matched nothing, because the vocabulary lacked
 the words Israeli small businesses actually use for cost — משלמים, לשלם, שקלים,
 ריטיינר.
 
+## Attempted is not the same as tested
+
+The first version reported `angles: price` for an account whose four ads had
+spent **₪1, ₪16, ₪3 and ₪6 between them**, with zero leads. Zero leads at ₪26 is
+the *expected* outcome at that spend, not a result — and an angle recorded as
+tried-and-failed would be excluded from future proposals **permanently**, on no
+evidence at all.
+
+So every angle carries the spend behind it and one of two states:
+
+| state | meaning |
+| --- | --- |
+| `tested` | the ads carrying it cleared `MIN_CREATIVE_SPEND_AGOROT` (₪150) |
+| `attempted` | they did not — we do **not** know whether it works |
+
+The threshold is inherited, not invented: it is the same bar the engine already
+requires before it will judge a single creative. Spend is summed **across** the
+ads carrying an angle — three ads at ₪60 each is a real test of the angle even
+though no single ad clears the bar alone.
+
+`singleAngle` is unaffected by any of this: "every ad you have run argues price"
+is a statement about VARIETY and is true whatever they spent. What changes is
+whether we may also imply it did not work. The untested wording says both facts:
+*every ad argues price, and none of them has had enough budget to know.*
+
+### The window that spend is measured over
+
+Not `store.creativeStats`. That method looks lifetime-ish and in fact returns
+each ad's most recent **7-day rolling** row — the right answer for "how is this
+ad doing now", the wrong one for "has this angle ever had a fair test". Using it
+judged an angle on one week of a campaign's life, and hid a lead: switching to
+the summed per-day rows moved the same account from ₪26/0 leads to ₪48/1 lead.
+
+Totals are summed over `insight_snapshot_daily` (never the raw table, which
+mixes per-day with overlapping rolling rows — migration 030). Those rows are
+retained for `DAILY_LOOKBACK_DAYS` (45), so this is "the last 45 days", not all
+time. An older campaign's earliest spend goes uncounted, which can only make the
+evidence bar harder to clear, never easier.
+
 ## What the screen says
 
 The panel sits at the top of the create-ad screen, above the form. Its headline
@@ -103,6 +143,12 @@ not worth a table.
 
 It is sent **after** the response and inside a `catch`: a notification must never
 delay or fail the screen.
+
+Fields are truncated to 160 characters **in the message only**, on a word
+boundary — Telegram caps at ~4k and eight full fields would blow it. The API
+response, the on-screen panel and anything a generator reads carry the complete
+text. Cutting mid-word made a field read as corrupted data, which is why the cut
+looks for a nearby space.
 
 ## Ownership
 

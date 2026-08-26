@@ -6,6 +6,22 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-26 — AIC-78 follow-up: an angle nobody funded was being called "tried"
+
+Review of the first live Telegram digest caught a real bug. The Ads Agent
+account's four ads had spent ₪26 between them with zero leads, and the context
+reported "angles tried: price" — which would have excluded price from future
+proposals permanently, on no evidence. Zero leads at ₪26 is the expected outcome
+at that spend, not a result. Angles now carry their spend and are `tested` only
+once they clear the engine's own creative-spend bar (₪150); below it they are
+`attempted`, and every surface says so. Two smaller fixes from the same review:
+the audience/area/service fields were missing from the context entirely, and the
+Telegram truncation now cuts on a word boundary. Fixing this also exposed that
+the spend was being read from `creativeStats`, which returns a 7-day rolling row
+rather than a total — the same account reads ₪48 and one lead once summed over
+the per-day rows. Owning doc:
+[docs/features/creative-context.md](features/creative-context.md).
+
 ### 2026-08-26 — AIC-78: the creative context, shown where an ad is written
 
 A per-customer assembly of the business facts (AIC-138), how good they are

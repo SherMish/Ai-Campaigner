@@ -1908,6 +1908,14 @@ export const strings = {
         // telling-off — the person reading it is about to write the next ad.
         singleAngle: (angle: string) =>
           `כל המודעות שרצו עד היום מדברות על ${angle}. זווית אחרת היא ההזדמנות הכי גדולה שיש כאן.`,
+        // The same fact, when the angle never got enough budget to judge. It
+        // must NOT read as "price didn't work" — zero פניות on ₪26 is what you
+        // would expect at that spend, and ruling an angle out on it is ruling
+        // it out on nothing.
+        singleAngleUntested: (angle: string) =>
+          `כל המודעות שרצו עד היום מדברות על ${angle} — ואף אחת מהן עוד לא קיבלה מספיק תקציב כדי לדעת אם זה עובד. שווה גם לנסות זווית אחרת וגם לתת לזו הזדמנות אמיתית.`,
+        // Marks a chip whose angle hasn't had the spend to be judged.
+        angleAttempted: "עוד לא נבדק",
         pastTitle: "המודעות שכבר רצו",
         noAds: "עוד לא רצו מודעות בקמפיין הזה — אין היסטוריה ללמוד ממנה.",
         noAngle: "בלי זווית ברורה",

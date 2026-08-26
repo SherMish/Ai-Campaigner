@@ -4,8 +4,8 @@ import { summarizeProfile, type ProfileSummary } from "./profile-quality.js";
 import { listAdMeta } from "./ad-meta-cache.js";
 import { loadLeadQuality } from "./lead-quality-source.js";
 import { classifyAngle, type Angle } from "./creative-angle.js";
-import { PgSnapshotStore } from "../meta/snapshot-store.js";
 import type { AdDetailReader } from "../meta/ad-detail.js";
+import { RULE_THRESHOLDS } from "../recommendations/rules.js";
 
 // AIC-78: everything an ad writer — a person today, a generator later — needs
 // to write copy about THIS business rather than generic marketing filler.
@@ -42,6 +42,25 @@ export interface PastAd {
   fromExistingPost: boolean;
 }
 
+// An angle, with the evidence behind it.
+//
+// THE DISTINCTION THIS TYPE EXISTS FOR. Four ads that between them spent ₪26
+// and returned no leads have not TESTED anything — zero leads is the expected
+// outcome at that spend, not a result. Calling that angle "tried" and excluding
+// it from future proposals would rule it out on no evidence, permanently.
+//
+// So an angle is only `tested` once the ads carrying it clear the same spend
+// bar the engine already uses before it will judge a creative
+// (MIN_CREATIVE_SPEND_AGOROT, ₪150). Below that it is `attempted`, and every
+// surface says so rather than implying a verdict.
+export interface AngleRecord {
+  angle: Angle;
+  adCount: number;
+  spendAgorot: number;
+  leads: number;
+  state: "tested" | "attempted";
+}
+
 export interface CreativeContext {
   business: CustomerProfile;
   // AIC-132's verdict on whether the business half is worth anything yet. A
@@ -49,9 +68,10 @@ export interface CreativeContext {
   // back a confident-looking object full of empty strings.
   businessQuality: ProfileSummary;
   pastAds: PastAd[];
-  // Angles the copy already ran, best-performing first where we can rank.
-  // A FLOOR, never a census — see `unclassifiedAds`.
-  anglesTested: Angle[];
+  // Angles the copy already ran, best-performing first where we can rank, each
+  // carrying the spend behind it. A FLOOR, never a census — see
+  // `unclassifiedAds`.
+  angles: AngleRecord[];
   // How many ads we could not read an angle out of. Without this number,
   // "we tried price" reads as "we tried everything except price".
   unclassifiedAds: number;
@@ -62,10 +82,14 @@ export interface CreativeContext {
   adsTotal: number;
   // Set only when EVERY classified ad takes the same angle and there are at
   // least two of them. This is the single most useful thing on the panel: four
-  // ads that all argue price are not four tests, they are one test run four
-  // times — and it was true on two of the three real accounts the first time
-  // this ran. Null when the ads genuinely vary, or when there is too little to
-  // say so.
+  // ads that all argue price are not four tests — and it was true on two of the
+  // three real accounts the first time this ran. Null when the ads genuinely
+  // vary, or when there is too little to say so.
+  //
+  // It is a statement about VARIETY, which is why it holds regardless of spend.
+  // Whether that one angle has actually been judged is a separate question, and
+  // `angles` carries the answer: with ₪26 behind it, the honest line is "every
+  // ad argues price AND none of them has had enough budget to know".
   singleAngle: Angle | null;
   // Reserved for the P1 market-intelligence work (AIC-81/82). Explicitly null
   // rather than absent, so a consumer can tell "not built yet" from "nothing
@@ -97,18 +121,14 @@ export async function buildCreativeContext(
 
   if (!campaignId) {
     return {
-      business, businessQuality, pastAds: [], anglesTested: [],
+      business, businessQuality, pastAds: [], angles: [],
       unclassifiedAds: 0, adsRead: 0, adsTotal: 0, singleAngle: null, market: null,
     };
   }
 
-  const store = new PgSnapshotStore(pool);
-  // The ad's standing over the engine's own window — the same figures the
-  // dashboard shows, so the context can never quietly rank ads differently
-  // from the screen the customer just came from.
   const [ads, stats, quality] = await Promise.all([
     listAdMeta(pool, campaignId),
-    lifetimeCreativeStats(store, campaignId),
+    adTotals(pool, campaignId),
     loadLeadQuality(pool, campaignId, "creative").then((q) => q.byAdSet).catch(() => new Map()),
   ]);
 
@@ -148,13 +168,13 @@ export async function buildCreativeContext(
     });
   }
 
-  const { anglesTested, singleAngle, unclassifiedAds } = summarizeAngles(pastAds);
+  const { angles, singleAngle, unclassifiedAds } = summarizeAngles(pastAds);
 
   return {
     business,
     businessQuality,
     pastAds,
-    anglesTested,
+    angles,
     singleAngle,
     unclassifiedAds,
     adsRead: pastAds.length,
@@ -168,8 +188,11 @@ export async function buildCreativeContext(
  * Separated from the DB/Meta assembly above so it can be tested on shapes that
  * would take a live account to produce.
  */
-export function summarizeAngles(pastAds: readonly PastAd[]): {
-  anglesTested: Angle[];
+export function summarizeAngles(
+  pastAds: readonly PastAd[],
+  minSpendAgorot: number = RULE_THRESHOLDS.MIN_CREATIVE_SPEND_AGOROT,
+): {
+  angles: AngleRecord[];
   singleAngle: Angle | null;
   unclassifiedAds: number;
 } {
@@ -177,10 +200,24 @@ export function summarizeAngles(pastAds: readonly PastAd[]): {
   // no spend last. An angle that was "tried" on an ad that never delivered was
   // not really tried, and ordering says so without throwing it away.
   const ranked = [...pastAds].sort((a, b) => cost(a) - cost(b));
-  const anglesTested: Angle[] = [];
+  const order: Angle[] = [];
+  const totals = new Map<Angle, { adCount: number; spendAgorot: number; leads: number }>();
   for (const ad of ranked) {
-    for (const a of ad.angles) if (!anglesTested.includes(a)) anglesTested.push(a);
+    for (const a of ad.angles) {
+      if (!order.includes(a)) order.push(a);
+      const t = totals.get(a) ?? { adCount: 0, spendAgorot: 0, leads: 0 };
+      t.adCount++;
+      t.spendAgorot += ad.spendAgorot ?? 0;
+      t.leads += ad.leads ?? 0;
+      totals.set(a, t);
+    }
   }
+  // Spend is summed across every ad carrying the angle: three ads at ₪60 each
+  // is a real test of the angle even though no single ad clears the bar alone.
+  const angles: AngleRecord[] = order.map((angle) => {
+    const t = totals.get(angle)!;
+    return { angle, ...t, state: t.spendAgorot >= minSpendAgorot ? "tested" : "attempted" };
+  });
 
   // Judged on the ads we could actually classify — an unreadable ad is not
   // evidence of variety any more than it is evidence of sameness.
@@ -191,7 +228,7 @@ export function summarizeAngles(pastAds: readonly PastAd[]): {
       : null;
 
   return {
-    anglesTested,
+    angles,
     singleAngle,
     // Counts every ad with TEXT we could not read an angle out of. An ad built
     // from an existing post still has copy that ran — we just didn't write it —
@@ -208,16 +245,39 @@ function cost(a: PastAd): number {
   return a.spendAgorot ? Number.MAX_SAFE_INTEGER - 1 : Number.MAX_SAFE_INTEGER;
 }
 
-// Per-ad standing over a wide window. Uses the ad-grain rows rather than the
-// creative-grain ones because `getAdDetail` is keyed by AD id, and mixing the
-// two keys is how a join silently returns nothing.
-async function lifetimeCreativeStats(
-  store: PgSnapshotStore,
+/**
+ * Everything each ad has spent and produced, summed over the per-day rows.
+ *
+ * NOT `store.creativeStats`, which looks lifetime-ish but returns each ad's
+ * most recent 7-day ROLLING row — the right answer for "how is this ad doing
+ * now", the wrong one for "has this angle ever had a fair test". Using it here
+ * would have judged an angle on one week of a campaign's life.
+ *
+ * Summed over `insight_snapshot_daily`, never the raw table, which mixes
+ * per-day rows with overlapping rolling ones and would double-count
+ * (migration 030). The daily rows are retained for DAILY_LOOKBACK_DAYS, so
+ * this is "the last 45 days", not all time — an older campaign's earliest
+ * spend is not counted, which can only ever make the evidence bar HARDER to
+ * clear, never easier.
+ */
+async function adTotals(
+  pool: pg.Pool,
   campaignId: string,
 ): Promise<Map<string, { spendAgorot: number; leads: number; cplAgorot: number | null }>> {
-  const end = new Date().toISOString().slice(0, 10);
-  const rows = await store.creativeStats(campaignId, "1970-01-01", end);
-  return new Map(rows.map((r) => [r.metaObjectId, { spendAgorot: r.spendAgorot, leads: r.leads, cplAgorot: r.cplAgorot }]));
+  const { rows } = await pool.query<{ meta_object_id: string; spend: string; leads: string }>(
+    `SELECT meta_object_id, SUM(spend_agorot)::int AS spend, SUM(leads)::int AS leads
+       FROM insight_snapshot_daily
+      WHERE campaign_id = $1 AND grain = 'creative'
+      GROUP BY meta_object_id`,
+    [campaignId],
+  );
+  return new Map(
+    rows.map((r) => {
+      const spendAgorot = Number(r.spend);
+      const leads = Number(r.leads);
+      return [r.meta_object_id, { spendAgorot, leads, cplAgorot: leads > 0 ? Math.round(spendAgorot / leads) : null }];
+    }),
+  );
 }
 
 // ── The operator's copy of it ────────────────────────────────────────────────
@@ -226,6 +286,15 @@ async function lifetimeCreativeStats(
 // The reason to want it there: at that exact moment someone is about to write
 // an ad, and this is when a human can help — "all four of your ads run the
 // same angle" is worth saying before the fifth one is written, not after.
+
+// Cut on a word boundary where there is one nearby — a field that stops
+// mid-word reads as corrupted data rather than as a deliberate summary.
+function ellipsis(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > max - 25 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+}
 
 export function describeCreativeContext(
   ctx: CreativeContext,
@@ -243,10 +312,16 @@ export function describeCreativeContext(
   L.push(`${flag} Business profile: ${q.state}${q.reason ? ` — ${q.reason}` : ""}`);
   const b = ctx.business;
   for (const [label, value] of [
+    // Who it is for comes FIRST: copy written without knowing the audience is
+    // guessing, and this was missing from the first version.
+    ["Audience", b.primaryCustomer], ["Area", b.geoArea], ["Service", b.mainService],
     ["Offer", b.offer], ["Differentiators", b.differentiators], ["Objections", b.objections],
     ["Price", b.priceRange], ["Constraints", b.copyConstraints],
   ] as const) {
-    if (value.trim()) L.push(`   ${label}: ${value.trim().slice(0, 160)}`);
+    // Truncated for the MESSAGE ONLY — Telegram caps at ~4k and eight full
+    // fields would blow it. The API response and the on-screen panel carry the
+    // complete text, and so would any generator reading this model.
+    if (value.trim()) L.push(`   ${label}: ${ellipsis(value.trim(), 160)}`);
   }
   L.push("");
 
@@ -257,8 +332,29 @@ export function describeCreativeContext(
 
   // "Angles tried" is a floor, and says so. A count of what we could not read
   // is the difference between a fact and a claim.
-  L.push(`🎯 Angles already tried: ${ctx.anglesTested.join(", ") || "(none readable)"}`);
-  if (ctx.singleAngle) L.push(`   ⚠️ EVERY readable ad argues "${ctx.singleAngle}" — one test run ${ctx.pastAds.filter((a) => a.angle !== null).length} times, not ${ctx.pastAds.filter((a) => a.angle !== null).length} tests.`);
+  if (ctx.angles.length === 0) {
+    L.push("🎯 Angles already tried: (none readable)");
+  } else {
+    L.push("🎯 Angles already tried:");
+    for (const a of ctx.angles) {
+      const spend = `₪${(a.spendAgorot / 100).toFixed(0)}`;
+      // "attempted" is not a softer word for "failed" — it means we do not
+      // know. Spelling out the spend is what makes that checkable.
+      L.push(
+        a.state === "tested"
+          ? `   • ${a.angle} — ${a.adCount} ad(s) · ${spend} · ${a.leads} leads`
+          : `   • ${a.angle} — ATTEMPTED, not judged (${a.adCount} ad(s) · only ${spend})`,
+      );
+    }
+  }
+  if (ctx.singleAngle) {
+    const rec = ctx.angles.find((a) => a.angle === ctx.singleAngle);
+    L.push(
+      rec?.state === "tested"
+        ? `   ⚠️ EVERY readable ad argues "${ctx.singleAngle}" — one angle run ${rec.adCount} times, not ${rec.adCount} tests.`
+        : `   ⚠️ EVERY readable ad argues "${ctx.singleAngle}", and it has NOT had enough spend to judge. Nothing here has been ruled out.`,
+    );
+  }
   if (ctx.unclassifiedAds > 0) L.push(`   (${ctx.unclassifiedAds} ad(s) took no clear angle)`);
   if (ctx.adsRead < ctx.adsTotal) L.push(`   (read ${ctx.adsRead} of ${ctx.adsTotal} ads)`);
   L.push("");

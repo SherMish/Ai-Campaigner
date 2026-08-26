@@ -758,7 +758,9 @@ export interface CreativeContext {
   business: Record<string, string>;
   businessQuality: { state: "ok" | "thin" | "broken"; reason: string | null; missing: string[]; vague: string[] };
   pastAds: PastAd[];
-  anglesTested: string[];
+  // Each angle with the spend behind it. "attempted" means we do NOT know
+  // whether it works — four ads sharing ₪26 have tested nothing.
+  angles: Array<{ angle: string; adCount: number; spendAgorot: number; leads: number; state: "tested" | "attempted" }>;
   unclassifiedAds: number;
   adsRead: number;
   adsTotal: number;
