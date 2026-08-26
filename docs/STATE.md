@@ -6,6 +6,19 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-26 — Three reusable Instagram carousel systems (AIC-142)
+
+Ads Agent's organic content no longer starts from a blank design. The internal
+Content Studio turns structured Hebrew copy and optional images into one of
+three editorial formats — myth correction, useful signal, or practical
+checklist — each with a bold hook, legible content sequence and gentle branded
+CTA. The 1080×1350 preview is the exact canvas used for PNG export, so a design
+cannot look correct in the editor and change on download. Per-field limits
+block export before text clips; image uploads are local, replaceable and
+center-cropped without stretching. Sample posts speak to the Israeli
+small-business ICP and demonstrate useful judgment before mentioning the
+product. Owning doc: [docs/features/content-studio.md](features/content-studio.md).
+
 ### 2026-08-26 — AIC-78: the angle classifier was reading the body, not the claim
 
 Review of the second live digest caught the tagging wrong on the one ad that

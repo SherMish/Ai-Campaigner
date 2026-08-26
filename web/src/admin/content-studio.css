@@ -1,0 +1,117 @@
+.content-studio { max-width: 1480px; }
+
+.cs-title-row {
+  display: flex; justify-content: space-between; align-items: flex-end; gap: 24px;
+  margin-bottom: 30px;
+}
+.cs-title-row .eyebrow { margin-bottom: 9px; }
+.cs-title-row .muted { margin-top: 8px; max-width: 680px; }
+
+.cs-template-section { margin-bottom: 28px; }
+.cs-template-section h2, .cs-editor h2, .cs-preview-card h2 {
+  font-size: 1.15rem; margin-bottom: 14px;
+}
+.cs-template-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.cs-template-card {
+  min-height: 148px; padding: 22px; text-align: right; cursor: pointer;
+  border: 1.5px solid var(--line); border-radius: 18px;
+  background: #fff; color: var(--ink); font: inherit;
+  display: grid; grid-template-columns: auto 1fr; align-content: start; gap: 6px 12px;
+  transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+}
+.cs-template-card:hover { transform: translateY(-2px); border-color: rgba(23,23,23,.35); }
+.cs-template-card.active {
+  border-color: var(--orange); box-shadow: 0 12px 30px -22px rgba(255,90,54,.8);
+}
+.cs-template-card b { font-size: 1.04rem; align-self: center; }
+.cs-template-card > span:last-child {
+  grid-column: 1 / -1; color: var(--muted); font-size: .86rem; line-height: 1.55;
+}
+.cs-template-number {
+  font-family: var(--mono); color: var(--orange); font-size: .76rem; direction: ltr;
+}
+
+.cs-workspace {
+  display: grid; grid-template-columns: minmax(360px, .82fr) minmax(460px, 1.18fr);
+  gap: 22px; align-items: start;
+}
+.dash .card.cs-editor, .dash .card.cs-preview-card, .dash .card.cs-image-card { background: #fff; }
+.cs-editor { display: flex; flex-direction: column; gap: 16px; }
+.cs-name-field { padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.cs-field { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.cs-field:last-child { border-bottom: 0; padding-bottom: 0; }
+.cs-field textarea { min-height: 92px; }
+.cs-field.invalid input, .cs-field.invalid textarea { border-color: var(--orange); background: #fff8f5; }
+.cs-field-meta {
+  display: flex; justify-content: space-between; gap: 12px;
+  color: var(--muted); font-family: var(--mono); font-size: .68rem;
+}
+.cs-field-meta .over, .cs-error { color: #a43b23; }
+.cs-error { font-size: .78rem; font-weight: 600; }
+
+.cs-preview-column { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 14px; }
+.cs-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cs-preview-head h2 { margin: 0; }
+.cs-preview-head .muted { font-family: var(--mono); font-size: .76rem; }
+.cs-preview-nav { display: flex; gap: 6px; direction: rtl; }
+.cs-preview-nav button {
+  width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 50%;
+  background: #fff; color: var(--ink); cursor: pointer;
+  display: grid; place-items: center;
+}
+.cs-preview-nav button:disabled { opacity: .3; cursor: default; }
+.cs-main-canvas {
+  display: block; width: min(100%, 520px); height: auto; aspect-ratio: 4 / 5;
+  margin: 18px auto 0; border-radius: 12px; box-shadow: 0 24px 54px -34px rgba(23,23,23,.65);
+  background: var(--ink);
+}
+.cs-thumbnails {
+  display: flex; gap: 9px; overflow-x: auto; padding: 15px 2px 4px;
+  scrollbar-width: thin; direction: rtl;
+}
+.cs-thumbnails > button {
+  position: relative; flex: 0 0 70px; padding: 0; border: 2px solid transparent;
+  border-radius: 10px; overflow: hidden; background: transparent; cursor: pointer;
+}
+.cs-thumbnails > button.active { border-color: var(--orange); }
+.cs-thumbnails canvas { display: block; width: 100%; height: auto; aspect-ratio: 4 / 5; }
+.cs-thumbnails button > span {
+  position: absolute; inset-inline-start: 4px; bottom: 4px;
+  width: 20px; height: 20px; display: grid; place-items: center;
+  border-radius: 50%; background: rgba(23,23,23,.78); color: #fff;
+  font: 600 .65rem var(--mono);
+}
+
+.cs-image-card { padding: 20px 22px; }
+.cs-image-card h3 { font-size: 1rem; margin-bottom: 5px; }
+.cs-image-card .muted { font-size: .82rem; }
+.cs-image-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
+.cs-validation {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  background: #fbe4de; color: #8e321e; border-radius: 14px; padding: 13px 16px;
+  font-size: .86rem;
+}
+.cs-validation span {
+  min-width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--orange); color: #fff; font-family: var(--mono);
+}
+.cs-export-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cs-export-actions .btn { padding-inline: 16px; }
+.cs-status { font-size: .82rem; font-weight: 600; padding: 0 4px; }
+.cs-status.ok { color: var(--green); }
+.cs-status.error { color: #a43b23; }
+
+@media (max-width: 1080px) {
+  .cs-workspace { grid-template-columns: 1fr; }
+  .cs-preview-column { position: static; }
+  .cs-editor { order: 2; }
+  .cs-preview-column { order: 1; }
+}
+
+@media (max-width: 700px) {
+  .cs-template-grid { grid-template-columns: 1fr; }
+  .cs-template-card { min-height: auto; }
+  .cs-workspace { grid-template-columns: minmax(0, 1fr); }
+  .cs-export-actions { grid-template-columns: 1fr; }
+  .cs-main-canvas { width: 100%; }
+}

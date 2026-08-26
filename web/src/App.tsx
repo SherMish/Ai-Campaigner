@@ -7,6 +7,7 @@ import { AdminCustomers } from "./admin/AdminCustomers";
 import { AdminUsers } from "./admin/AdminUsers";
 import { AdminMeta } from "./admin/AdminMeta";
 import { AdminRecommendations } from "./admin/AdminRecommendations";
+import { AdminContentStudio } from "./admin/AdminContentStudio";
 import { AdminOperators } from "./admin/AdminOperators";
 import { AdminOnboarding } from "./admin/AdminOnboarding";
 import { AdminBuilder } from "./admin/AdminBuilder";
@@ -68,6 +69,7 @@ export function App() {
           <Route path="/admin/onboarding/:id/builder" element={<AdminBuilder />} />
           <Route path="/admin/meta" element={<AdminMeta />} />
           <Route path="/admin/recommendations" element={<AdminRecommendations />} />
+          <Route path="/admin/content-studio" element={<AdminContentStudio />} />
           <Route path="/admin/operators" element={<AdminOperators />} />
         </Route>
         {/* back-compat: the old single-page dashboard routes fold into /admin/customers */}

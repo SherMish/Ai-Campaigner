@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutGrid, Users, UserRound, Database, Sparkles, ShieldCheck, LogOut } from "lucide-react";
+import { LayoutGrid, Users, UserRound, Database, Sparkles, PanelsTopLeft, ShieldCheck, LogOut } from "lucide-react";
 import { strings } from "../strings";
 import { clearAuthToken } from "../api";
 
@@ -33,6 +33,9 @@ export function AdminSidebar() {
         </NavLink>
         <NavLink to="/admin/recommendations" className={cls}>
           <span className="ic"><Sparkles size={18} /></span><span>{n.navRecs}</span>
+        </NavLink>
+        <NavLink to="/admin/content-studio" className={cls}>
+          <span className="ic"><PanelsTopLeft size={18} /></span><span>{n.navContent}</span>
         </NavLink>
         <NavLink to="/admin/operators" className={cls}>
           <span className="ic"><ShieldCheck size={18} /></span><span>{n.navOperators}</span>

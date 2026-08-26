@@ -36,6 +36,7 @@ See also: [STATE.md](STATE.md) (dated changelog) · [POSTMORTEM-2026-08-19.md](P
 | Action history surface (audit trail + condensed projection) | [features/action-history.md](features/action-history.md) |
 | Ops console — customers, needs-attention, review, billing | [features/ops-console.md](features/ops-console.md) |
 | Ops notifications — Telegram relay for changes, failures and errors | [features/notifications.md](features/notifications.md) |
+| Internal marketing carousel studio — 3 post formats, live preview, PNG export (AIC-142) | [features/content-studio.md](features/content-studio.md) |
 | Landing page (static marketing, Ads Agent brand) | [features/landing.md](features/landing.md) |
 | Guides / blog — static SEO pages at `/guides`, Markdown-authored | [features/guides-blog.md](features/guides-blog.md) |
 | Customer app — auth, onboarding, connect, home, recommendations, settings (frontend) | [features/customer-app.md](features/customer-app.md) |
