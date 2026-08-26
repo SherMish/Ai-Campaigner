@@ -6,6 +6,15 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-26 — Compact CTA and aligned checklist geometry (AIC-142)
+
+The final CTA no longer occupies a generic 466px pill. Its width follows the
+actual action copy and includes a left-pointing arrow inside the button. On
+check and numbered slides, the badge, title, body and footnote now share the
+same right edge instead of stepping left by 56px. Focused geometry tests and a
+browser render lock the corrected compositions. Owning doc:
+[docs/features/content-studio.md](features/content-studio.md).
+
 ### 2026-08-26 — AIC-143 (second pass): most of the time, no hero at all
 
 The first pass kept a card for every state and improved its sentence. Wrong

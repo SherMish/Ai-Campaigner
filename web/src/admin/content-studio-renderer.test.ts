@@ -78,6 +78,8 @@ describe("Content Studio renderer geometry", () => {
       align: "center",
       baseline: "middle",
     });
+    expect(textCalls.find((call) => call.text === "title")?.x).toBe(986);
+    expect(textCalls.find((call) => call.text === "body")?.x).toBe(986);
   });
 
   it("centers the check mark inside the same badge geometry", () => {
@@ -166,13 +168,13 @@ describe("Content Studio renderer geometry", () => {
   });
 
   it("keeps CTA copy out of the dark decoration and removes the redundant top logo", () => {
-    const { canvas, textCalls, imageCalls } = fakeCanvas();
+    const { canvas, context, textCalls, imageCalls } = fakeCanvas();
     const slide: CarouselSlide = {
       layout: "cta",
       eyebrow: "ADS AGENT",
       title: "A title",
       body: "Body text that should remain readable",
-      accent: "CTA",
+      accent: "התחילו בחינם",
     };
 
     drawCarouselSlide(canvas, slide, {
@@ -182,7 +184,16 @@ describe("Content Studio renderer geometry", () => {
     });
 
     const body = textCalls.find((call) => call.text.includes("Body text"));
+    const buttonX = context.moveTo.mock.calls[0][0] - 47;
+    const buttonRight = context.arcTo.mock.calls[0][0];
     expect(body?.maxWidth).toBeLessThanOrEqual(560);
+    expect(buttonRight).toBe(986);
+    expect(buttonRight - buttonX).toBeLessThan(466);
+    expect(textCalls.find((call) => call.text === "←")).toMatchObject({
+      x: buttonX + 30,
+      y: 1050 + 94 / 2,
+      baseline: "middle",
+    });
     expect(imageCalls).toHaveLength(0);
   });
 });

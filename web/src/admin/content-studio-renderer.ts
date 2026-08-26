@@ -365,15 +365,15 @@ function drawCheck(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options:
   ctx.direction = "ltr";
   ctx.fillText(badgeMark, 810 + 176 / 2, 265 + 176 / 2);
   const titleHeight = drawText(ctx, slide.title, {
-    x: 930, y: 510, maxWidth: 836, fontSize: 78, minFontSize: 60, maxLines: 4,
+    x: 986, y: 510, maxWidth: 892, fontSize: 78, minFontSize: 60, maxLines: 4,
     color: CONTENT_PALETTE.ink, weight: 900,
   });
   if (slide.body) drawText(ctx, slide.body, {
-    x: 930, y: 510 + titleHeight + 46, maxWidth: 836, fontSize: 39, minFontSize: 32, maxLines: 6,
+    x: 986, y: 510 + titleHeight + 46, maxWidth: 892, fontSize: 39, minFontSize: 32, maxLines: 6,
     color: "rgba(23,23,23,.68)", weight: 400, lineHeight: 54,
   });
   if (slide.footnote) drawText(ctx, slide.footnote, {
-    x: 930, y: 1122, maxWidth: 836, fontSize: 24, minFontSize: 21, maxLines: 2,
+    x: 986, y: 1122, maxWidth: 892, fontSize: 24, minFontSize: 21, maxLines: 2,
     color: "rgba(23,23,23,.44)", weight: 400,
   });
   drawLogo(ctx, options.logo);
@@ -424,13 +424,25 @@ function drawCta(ctx: CanvasRenderingContext2D, slide: CarouselSlide, options: D
     color: CONTENT_PALETTE.ink, weight: 500, lineHeight: 48,
   });
   if (slide.accent) {
+    const buttonRight = 986;
+    const buttonY = 1050;
+    const buttonHeight = 94;
+    ctx.font = "700 30px Rubik, Arial, sans-serif";
+    const buttonWidth = Math.max(280, Math.ceil(ctx.measureText(slide.accent).width) + 126);
+    const buttonX = buttonRight - buttonWidth;
     ctx.fillStyle = CONTENT_PALETTE.cream;
-    roundedRect(ctx, 520, 1050, 466, 94, 47);
+    roundedRect(ctx, buttonX, buttonY, buttonWidth, buttonHeight, 47);
     ctx.fill();
-    drawText(ctx, slide.accent, {
-      x: 944, y: 1078, maxWidth: 380, fontSize: 30, minFontSize: 26, maxLines: 1,
-      color: CONTENT_PALETTE.ink, weight: 700,
-    });
+    ctx.fillStyle = CONTENT_PALETTE.ink;
+    ctx.font = "700 30px Rubik, Arial, sans-serif";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.direction = "rtl";
+    ctx.fillText(slide.accent, buttonRight - 30, buttonY + buttonHeight / 2);
+    ctx.font = "700 34px Rubik, Arial, sans-serif";
+    ctx.textAlign = "left";
+    ctx.direction = "ltr";
+    ctx.fillText("←", buttonX + 30, buttonY + buttonHeight / 2);
   }
 }
 
