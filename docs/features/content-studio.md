@@ -18,6 +18,8 @@ The operator chooses one of three editorial formats:
 2. **One useful signal / “Did you know?”** — turns one metric, fact or behavior into a simple business implication. It provides a source/qualification field so an external statistic is never presented without context.
 3. **Practical teardown / checklist** — gives the owner three short checks before a decision that could increase spend.
 
+The reusable editorial backlog lives in [50 Instagram post ideas](../marketing/instagram-post-ideas.md). It contains hooks and template choices only; full slide copy is created later and still requires a factual review before publication.
+
 These are different editorial jobs and use three visibly different opening compositions: myth opens on ink with orange/indigo disruption, signal opens on indigo with an orange question motif, and checklist opens on cream with a numbered tile stack. Slides do not carry small top-right eyebrow labels; the main message is the only title competing for attention. Each starts from useful Hebrew sample copy written for Ads Agent's Israeli small-business ICP. Every generated carousel ends with a clear `התחילו בחינם` button; the CTA is built by the template and cannot be moved earlier or accidentally removed. All formats stay below Instagram's ten-slide carousel limit.
 
 ## Editing and validation

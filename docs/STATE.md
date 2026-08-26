@@ -6,6 +6,15 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-26 — 50-post Instagram idea bank (AIC-142)
+
+Organic marketing no longer starts from a blank topic list. A new editorial
+backlog contains 50 concise Hebrew post ideas for Ads Agent's Israeli small-
+business ICP, distributed across the three Content Studio formats and the real
+problems the product handles. The ideas deliberately stop before full copy so
+claims and examples can be researched when each post is produced. Owning file:
+[docs/marketing/instagram-post-ideas.md](marketing/instagram-post-ideas.md).
+
 ### 2026-08-26 — Compact CTA and aligned checklist geometry (AIC-142)
 
 The final CTA no longer occupies a generic 466px pill. Its width follows the
