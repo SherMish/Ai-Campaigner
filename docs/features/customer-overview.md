@@ -670,3 +670,37 @@ every number beside it.
 
 The recommendations screen reads the same function with the same detail, so the
 two surfaces cannot describe the wait differently.
+
+## The hero describes, it does not evaluate (AIC-143)
+
+A UI slot that must always contain a sentence will always contain one — and
+when there is nothing true to say, it fills with reassurance. That is where a
+campaign with ₪49 of spend and one lead got told everything was fine.
+
+The hero is now three parts, in order:
+
+| line | source | rule |
+| --- | --- | --- |
+| facts | the selected range's spend + leads, and the delivering-ad count | always available, never wrong |
+| what we cannot yet say | the engine's `no_rec_reason` | honest about the gap |
+| the threshold | `no_rec_detail.requiredSpendAgorot` | a number, not "too early" |
+
+**The facts line uses the window the customer selected**, the same one the KPI
+cards read, so the screen can never carry two different sets of numbers for one
+campaign. It is hidden entirely when nothing has been measured — "₪0 הוצאו" is
+not a fact worth leading with.
+
+**The threshold line returns null rather than inventing a number.** It fires for
+`below_object_evidence_floor` and `budget_below_threshold`, which carry
+`requiredSpendAgorot`. It stays silent for `collecting`, whose own copy already
+names its gate and its number — two demands in one card reads as a moving
+target.
+
+**The no-reason fallback was the worst offender and is now the plainest.** It is
+reached when the engine recorded no reason at all — the one case where we
+genuinely know nothing — and it used to assert "אין כרגע משהו שצריך לעשות". It
+now says the campaign is running and that we have not summarised it yet.
+
+Rule of thumb, recorded in CLAUDE.md: **the badge may never claim performance,
+and the headline may never claim delivery.** Every collision so far has come
+from one machine borrowing the other's vocabulary.

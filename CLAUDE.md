@@ -60,6 +60,13 @@ is worse, because it is what the next session builds against.
 - **Tests ship with the change.** Every feature or behaviour change comes with tests.
 - **Bug fixes are test-first**: write a test that fails *because of the bug*,
   confirm it fails for the right reason, then fix.
+- **Create the Linear ticket BEFORE the commit, and use the id it returned.**
+  Never guess an id, never write one into a commit message that Linear has not
+  yet assigned. The failure mode is not hypothetical: it happened three times
+  (AIC-129 records the first batch; two more on 2026-08-26), and every time
+  Linear gave that number to an unrelated ticket, so the commit, the code
+  comments and the docs all pointed somewhere false. One API call before
+  committing removes the entire class.
 
 ### Data
 - The database is **Neon** (serverless Postgres). Schema changes go through the
@@ -99,6 +106,33 @@ reaches the screen.
 
 This applies to adding, changing, AND removing states. A new variant of
 any customer-visible enum ships with its copy in the same change.
+
+## Never render a verdict where evidence does not exist
+
+The mirror of the rule above, and the same underlying failure: a gap between
+what the code knows and what the screen claims.
+
+**A UI slot that must always contain a sentence will always contain one — and
+when there is nothing true to say, it fills with reassurance.** That is where
+"הכל עובד כרגיל" on a campaign with ₪49 of spend and one lead comes from. It is
+not badly worded; it is a judgement rendered without the evidence to support it.
+
+- **Describe, don't evaluate, until the evidence gates are met.** Facts —
+  spend, leads, ads running — are always available and never wrong. A verdict
+  ("stable", "working well", "nothing to worry about") requires the same
+  evidence the engine itself demands before it will act.
+- **State the threshold, with its number.** "עוד מוקדם" is a non-answer in
+  polite clothes. "נצטרך בערך ₪150 כדי להתחיל להמליץ" is a commitment that can
+  be held against us, and it turns "is this working?" from a feeling into a
+  countdown. The evidence gates already hold these numbers — the bug is that
+  they never reach the screen.
+- **The badge may never claim performance; the headline may never claim
+  delivery.** They are separate machines answering different questions (is it
+  running / what do we know), and every collision so far has come from one
+  borrowing the other's vocabulary.
+- **When a slot has nothing evidenced to say, it is allowed to be quiet.**
+  Prefer showing the numbers alone over filling the space with an explanation
+  of our own restraint.
 
 ### How this is enforced (not a code-review checklist)
 

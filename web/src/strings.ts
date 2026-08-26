@@ -1494,8 +1494,26 @@ export const strings = {
         // "view and approve" — since not every type has an approval step.
         recWaitingTitle: "המלצה שמחכה לך",
         view: "לצפייה",
-        noActionTitle: "אין כרגע משהו שצריך לעשות",
-        noAction: "אנחנו ממשיכים לעקוב אחר הקמפיין.",
+        // AIC-143: reached when the engine has recorded NO reason at all — the
+        // one case where we genuinely know nothing. It used to render a verdict
+        // ("אין משהו שצריך לעשות") on no evidence whatsoever; now it describes
+        // the state and nothing more.
+        noActionTitle: "הקמפיין רץ",
+        noAction: "עוד לא סיכמנו את הביצועים. ברגע שיהיה מספיק מידע נגיד מה כדאי לשנות.",
+        // AIC-143: the facts line. Always available, never a judgement — the
+        // spend and leads for the window the customer selected, plus how many
+        // ads are actually delivering.
+        heroFacts: (spend: string, leads: string, ads: string) => `${spend} הוצאו · ${leads} · ${ads}`,
+        heroLeadsOne: "פנייה אחת",
+        heroLeadsMany: (n: number) => `${n} פניות`,
+        heroLeadsNone: "עדיין בלי פניות",
+        heroAdsOne: "מודעה אחת פעילה",
+        heroAdsMany: (n: number) => `${n} מודעות פעילות`,
+        // AIC-143: what has to be true before we can say anything, WITH the
+        // number. "עוד מוקדם" on its own is the same non-answer in politer
+        // clothes; a shekel figure is a commitment the customer can hold us to.
+        heroThresholdSpendPerAd: (amount: string) => `נצטרך בערך ${amount} על כל מודעה כדי להתחיל להשוות ביניהן.`,
+        heroThresholdBudget: (amount: string) => `בתקציב הנוכחי לא נגיע ל-${amount} על מודעה בזמן סביר — זו הסיבה שאין המלצות.`,
         // AIC-64: WHY there's no recommendation — distinct, honest copy per
         // engine reason, so "stable" and "still collecting data" never look
         // the same. Falls back to noActionTitle/noAction above when the

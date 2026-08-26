@@ -106,6 +106,31 @@ export function collectingCopy(
   return h.noRec.collectingSpecific[worst.kind](worst.have, worst.need);
 }
 
+/**
+ * AIC-143 — the third line: what has to be true before we can say anything,
+ * with its number.
+ *
+ * "עוד מוקדם" is a non-answer in polite clothes. A shekel figure is a
+ * commitment the customer can hold us to, and it turns "is this working?" from
+ * a feeling into a countdown. The engine's evidence gates already carry these
+ * numbers — until now they simply never reached the screen.
+ *
+ * Returns null where no numeric threshold exists for the reason, rather than
+ * inventing one. `collecting` returns null too: its own copy already carries
+ * the gate and the number, and repeating it would read as two demands.
+ */
+export function thresholdLine(
+  reason: NoActionReason | null,
+  detail: Record<string, unknown> | null | undefined,
+  shekels: (agorot: number) => string,
+): string | null {
+  const required = typeof detail?.requiredSpendAgorot === "number" ? (detail.requiredSpendAgorot as number) : null;
+  if (required === null) return null;
+  if (reason === "below_object_evidence_floor") return h.heroThresholdSpendPerAd(shekels(required));
+  if (reason === "budget_below_threshold") return h.heroThresholdBudget(shekels(required));
+  return null;
+}
+
 export const NO_REC_COPY: Record<NoActionReason, NoRecCopy> = {
   stable: h.noRec.stable,
   collecting: h.noRec.collecting,

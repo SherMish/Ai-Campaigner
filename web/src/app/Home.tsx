@@ -30,7 +30,7 @@ import {
   RANGE_KEYS,
 } from "../api";
 import { assertNever } from "@aic/shared";
-import { ATTENTION_COPY, HOME_STATE_BADGE, noRecCopy, STATUS_TOOLTIP_COPY, statusTooltipKey } from "./state-copy";
+import { ATTENTION_COPY, HOME_STATE_BADGE, noRecCopy, STATUS_TOOLTIP_COPY, statusTooltipKey, thresholdLine } from "./state-copy";
 import { AD_DELIVERY_BADGE, AD_DELIVERY_TONE, deliveryStatus } from "./delivery-status";
 import { StatusPill } from "./components";
 import { useSharedOverview, invalidateOverview } from "./overview-store";
@@ -388,6 +388,15 @@ export function Home() {
   const activeAds =
     ov.campaign?.deliveringAdCount ??
     new Set((r?.perCreative ?? []).map((c) => c.creativeName ?? c.metaObjectId)).size;
+  // AIC-143 — the facts line, built from the selected window so it can never
+  // disagree with the cards directly below it.
+  const heroFacts = (() => {
+    if (!hasRangeData || (spend === 0 && leads === 0 && activeAds === 0)) return null;
+    const leadsText = leads === 0 ? h.heroLeadsNone : leads === 1 ? h.heroLeadsOne : h.heroLeadsMany(leads);
+    const adsText = activeAds === 1 ? h.heroAdsOne : h.heroAdsMany(activeAds);
+    return h.heroFacts(shekels(spend), leadsText, adsText);
+  })();
+  const threshold = thresholdLine(ov.campaign?.noRecReason ?? null, ov.campaign?.noRecDetail, shekels);
   const period = ov.campaign?.budgetPeriod === "monthly" ? L.perMonth : L.perDay;
 
   return (
@@ -412,8 +421,23 @@ export function Home() {
               <div className="row between" style={{ flexWrap: "wrap", gap: 14 }}>
                 <div>
                   <StatusPill variant={PILL[state]}>{hd.badge}</StatusPill>
-                  <h2 style={{ fontSize: "1.35rem", margin: "12px 0 8px" }}>{hd.title}</h2>
+                  {/* AIC-143: facts first. Spend, leads and ads running are
+                      always available and never wrong, unlike the judgement
+                      that used to open this card. Uses the SAME window the KPI
+                      cards below show, so the screen never carries two sets of
+                      numbers for one campaign. Hidden when there is nothing
+                      measured — "₪0 הוצאו" is not a fact worth leading with. */}
+                  {heroFacts && (
+                    <p className="muted" style={{ margin: "12px 0 4px", fontSize: "0.85rem" }}>{heroFacts}</p>
+                  )}
+                  <h2 style={{ fontSize: "1.35rem", margin: "6px 0 8px" }}>{hd.title}</h2>
                   <p className="muted" style={{ maxWidth: "42em" }}>{hd.body}</p>
+                  {/* AIC-143: the threshold, with its number — a commitment
+                      rather than "עוד מוקדם". Null wherever no numeric gate
+                      exists, or where the body already carries it. */}
+                  {threshold && (
+                    <p style={{ marginTop: 8, maxWidth: "42em", fontSize: "0.9rem" }}>{threshold}</p>
+                  )}
                 </div>
                 {hd.cta && <Link className="btn btn-primary btn-sm" to={hd.cta.to}>{hd.cta.label}</Link>}
                 {hd.launch && <button className="btn btn-primary btn-sm" onClick={() => setLaunchOpen(true)}>{hd.launch.label}</button>}

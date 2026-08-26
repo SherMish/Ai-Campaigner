@@ -6,6 +6,20 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-26 — AIC-143: the hero describes instead of judging
+
+A slot that must contain a sentence fills with reassurance when there is nothing
+true to say — which is how a campaign with ₪49 and one lead got told it was
+fine. The hero now leads with facts (spend, leads, ads delivering, from the
+window the customer selected), then the gap, then the threshold WITH its number
+("נצטרך בערך ₪150 על כל מודעה"), returning null rather than inventing one where
+no numeric gate exists. The no-reason fallback, previously the most assertive
+copy in the product and backed by nothing, now just says the campaign is
+running. Two rules added to CLAUDE.md: never render a verdict where evidence
+does not exist, and create the Linear ticket before the commit so the id in the
+message is one Linear actually assigned. Owning doc:
+[docs/features/customer-overview.md](features/customer-overview.md).
+
 ### 2026-08-26 — AIC-145: the "collecting" hero now says what it is waiting for
 
 "עוד קצת פעילות ונוכל להמליץ בביטחון" can sit unchanged for three weeks while
