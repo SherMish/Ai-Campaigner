@@ -60,6 +60,7 @@ describe("landing-page positioning", () => {
     expect(html).not.toContain("פייסבוק + אינסטגרם");
     expect(html).not.toContain("וואטסאפ + אתר");
     expect(html).not.toContain("₪299 הקמה חד-פעמית");
+    expect(html).not.toContain(".stage::after");
   });
 
   it("keeps pricing in the dedicated pricing section only", () => {
