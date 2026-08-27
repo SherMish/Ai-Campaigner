@@ -3,7 +3,12 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const landingPath = fileURLToPath(new URL("../../landing/index.html", import.meta.url));
-const heroCreativePath = fileURLToPath(new URL("../../web/public/landing-hero-creative.png", import.meta.url));
+const heroCreativePaths = [
+  "landing-reel-nails.jpg",
+  "landing-reel-pilates.jpg",
+  "landing-reel-grooming.jpg",
+  "landing-reel-ceramics.jpg",
+].map((filename) => fileURLToPath(new URL(`../../web/public/${filename}`, import.meta.url)));
 const html = fs.readFileSync(landingPath, "utf8");
 
 function sectionStartingAt(marker: string): string {
@@ -38,10 +43,23 @@ describe("landing-page positioning", () => {
     expect(html).not.toContain("demo-dashboard");
   });
 
-  it("labels the fictional local-business creative as an example", () => {
-    expect(html).toContain('src="/landing-hero-creative.png"');
-    expect(html).toContain("דוגמה לקריאייטיב של עסק מקומי");
-    expect(fs.existsSync(heroCreativePath)).toBe(true);
+  it("rotates four local-business creatives with distinct actions", () => {
+    const hero = sectionStartingAt('<section class="hero">');
+    expect(hero.match(/class="ad-slide/g)).toHaveLength(4);
+    expect(hero).toContain("לקביעת תור");
+    expect(hero).toContain("להרשמה לשיעור ניסיון");
+    expect(hero).toContain("שלחו וואטסאפ");
+    expect(hero).toContain("להרשמה לסדנה");
+    expect(html).toContain("@keyframes hero-reel");
+    expect(html).toContain("prefers-reduced-motion: reduce");
+    for (const path of heroCreativePaths) expect(fs.existsSync(path)).toBe(true);
+  });
+
+  it("omits removed hero labels and the one-time setup fee", () => {
+    expect(html).not.toContain("דוגמה לקריאייטיב של עסק מקומי");
+    expect(html).not.toContain("פייסבוק + אינסטגרם");
+    expect(html).not.toContain("וואטסאפ + אתר");
+    expect(html).not.toContain("₪299 הקמה חד-פעמית");
   });
 
   it("keeps pricing in the dedicated pricing section only", () => {

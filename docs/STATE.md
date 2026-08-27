@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-27 — Diverse rotating hero creatives (AIC-148)
+
+The landing hero phone now rotates through four fictional local businesses -
+nails, Pilates, dog grooming and a ceramics workshop - instead of presenting one
+static example. The set includes women and men, keeps all messages and action
+labels in accessible HTML, and uses a relevant CTA for each business. The
+platform/destination chips, example label and one-time setup fee were removed.
+Reduced-motion visitors see a stable first creative, and the optimized carousel
+assets total under 1 MB rather than loading the multi-megabyte sources. Owning
+doc: [docs/features/landing.md](features/landing.md).
+
 ### 2026-08-27 — Hebrew Meta lead-campaign setup guide (AIC-147)
 
 The guides section gained a complete Hebrew tutorial for small businesses

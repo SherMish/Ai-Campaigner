@@ -187,12 +187,29 @@
         border-radius: 34px;
         background: var(--cream);
       }
-      .phone-screen img { width: 100%; height: 100%; object-fit: cover; display: block; }
-      .phone-screen::after {
+      .ad-slide {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        opacity: 0;
+        transform: translateY(8%);
+        animation: hero-reel 20s infinite both;
+      }
+      .ad-slide:nth-child(2) { animation-delay: -15s; }
+      .ad-slide:nth-child(3) { animation-delay: -10s; }
+      .ad-slide:nth-child(4) { animation-delay: -5s; }
+      .ad-slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .ad-slide::after {
         content: "";
         position: absolute;
         inset: 45% 0 0;
         background: linear-gradient(to top, rgba(23, 23, 23, 0.94), transparent);
+      }
+      @keyframes hero-reel {
+        0%, 21% { opacity: 1; transform: translateY(0); }
+        25%, 96% { opacity: 0; transform: translateY(-8%); }
+        97% { opacity: 0; transform: translateY(8%); }
+        100% { opacity: 1; transform: translateY(0); }
       }
       .ad-top {
         position: absolute;
@@ -213,37 +230,6 @@
       .ad-copy b { display: block; font-size: 1.45rem; line-height: 1.12; }
       .ad-copy span { display: block; margin-top: 9px; font-size: 0.9rem; }
       .ad-copy .ad-cta { display: inline-flex; margin-top: 15px; padding: 9px 16px; border-radius: 999px; color: var(--ink); background: var(--cream); font-weight: 800; }
-      .example-label {
-        position: absolute;
-        z-index: 4;
-        bottom: 24px;
-        right: 4px;
-        padding: 9px 15px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: var(--cream);
-        font-family: var(--mono);
-        font-size: 0.72rem;
-        transform: rotate(-3deg);
-      }
-      .support-chip {
-        position: absolute;
-        z-index: 4;
-        display: flex;
-        align-items: center;
-        gap: 9px;
-        padding: 12px 17px;
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        background: #fff;
-        box-shadow: 0 18px 36px -24px rgba(23,23,23,.45);
-        font-size: 0.86rem;
-        font-weight: 700;
-      }
-      .support-chip .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
-      .support-chip.one { top: 22px; left: 0; }
-      .support-chip.two { top: 145px; right: -10px; }
-
       .proof-row {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -327,7 +313,6 @@
       .price-card { padding: clamp(34px, 5vw, 56px); border-radius: 28px; color: var(--cream); background: var(--ink); }
       .price-card .amount { font-size: clamp(4.2rem, 10vw, 7.5rem); font-weight: 900; line-height: .86; letter-spacing: -.06em; }
       .price-card .amount small { font-size: .18em; letter-spacing: 0; color: #d2cbc2; }
-      .price-card .setup { margin-top: 21px; color: #d2cbc2; font-family: var(--mono); font-size: .88rem; }
       .price-card .btn { margin-top: 30px; }
       .include-card { padding: 38px; border: 1px solid var(--line); border-radius: 28px; background: var(--cream); }
       .include-card ul { list-style: none; display: grid; gap: 15px; margin: 26px 0 0; padding: 0; }
@@ -401,11 +386,14 @@
         .stage::before { width: 330px; height: 330px; top: 90px; }
         .stage::after { display: none; }
         .phone { width: 270px; }
-        .support-chip.one { top: 8px; left: -6px; }
-        .support-chip.two { top: auto; right: -4px; bottom: 72px; }
-        .example-label { right: -4px; bottom: 18px; }
         .creative-block { min-height: 320px; }
         .include-card, .price-card { padding: 30px 24px; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        .ad-slide { display: none; animation: none; }
+        .ad-slide:first-child { display: block; opacity: 1; transform: none; }
       }
     </style>
   </head>
@@ -445,20 +433,46 @@
           </div>
 
           <div class="stage">
-            <div class="support-chip one"><span class="dot"></span> פייסבוק + אינסטגרם</div>
-            <div class="support-chip two"><span class="dot"></span> וואטסאפ + אתר</div>
-            <div class="phone" aria-label="דוגמה למודעת אינסטגרם של עסק מקומי">
+            <div class="phone" aria-label="קריאייטיבים מתחלפים לעסקים מקומיים">
               <div class="phone-screen">
-                <img src="/landing-hero-creative.png" alt="דוגמה לקריאייטיב של סטודיו ציפורניים מקומי" />
-                <div class="ad-top"><span><span class="avatar">N</span> NOA STUDIO</span><span>ממומן</span></div>
-                <div class="ad-copy">
-                  <b>צבע מדויק.<br />גימור נקי.</b>
-                  <span>מניקור מקצועי באווירה שקטה.</span>
-                  <span class="ad-cta">לקביעת תור</span>
+                <div class="ad-slide">
+                  <img src="/landing-reel-nails.jpg" alt="מניקור בסטודיו ציפורניים מקומי" />
+                  <div class="ad-top"><span><span class="avatar">N</span> NOA STUDIO</span><span>ממומן</span></div>
+                  <div class="ad-copy">
+                    <b>צבע מדויק.<br />גימור נקי.</b>
+                    <span>מניקור מקצועי באווירה שקטה.</span>
+                    <span class="ad-cta">לקביעת תור</span>
+                  </div>
+                </div>
+                <div class="ad-slide">
+                  <img src="/landing-reel-pilates.jpg" alt="אימון בסטודיו פילאטיס מקומי" />
+                  <div class="ad-top"><span><span class="avatar">P</span> PILATES HOUSE</span><span>ממומן</span></div>
+                  <div class="ad-copy">
+                    <b>להתחזק.<br />בקצב שלך.</b>
+                    <span>קבוצות קטנות וליווי אישי לאורך האימון.</span>
+                    <span class="ad-cta">להרשמה לשיעור ניסיון</span>
+                  </div>
+                </div>
+                <div class="ad-slide">
+                  <img src="/landing-reel-grooming.jpg" alt="ספר כלבים מטפל בכלב בסטודיו מקומי" />
+                  <div class="ad-top"><span><span class="avatar">B</span> BARK STUDIO</span><span>ממומן</span></div>
+                  <div class="ad-copy">
+                    <b>נקי, נעים.<br />בלי לחץ.</b>
+                    <span>טיפוח מקצועי וסבלני לכלבים.</span>
+                    <span class="ad-cta">שלחו וואטסאפ</span>
+                  </div>
+                </div>
+                <div class="ad-slide">
+                  <img src="/landing-reel-ceramics.jpg" alt="אמן קרמיקה מדריך בסדנה מקומית" />
+                  <div class="ad-top"><span><span class="avatar">C</span> CLAY HOUSE</span><span>ממומן</span></div>
+                  <div class="ad-copy">
+                    <b>ערב של חימר.<br />משהו משלך.</b>
+                    <span>סדנת אובניים למתחילים בקבוצה קטנה.</span>
+                    <span class="ad-cta">להרשמה לסדנה</span>
+                  </div>
                 </div>
               </div>
             </div>
-            <div class="example-label">דוגמה לקריאייטיב של עסק מקומי</div>
           </div>
         </div>
       </section>
@@ -586,7 +600,6 @@
           <div class="price-grid">
             <div class="price-card">
               <div class="amount">₪299 <small>לחודש</small></div>
-              <p class="setup">₪299 הקמה חד-פעמית</p>
               <a href="mailto:hello@ads-agent.co.il?subject=הצטרפות ל-Ads Agent" class="btn btn-primary">בדקו התאמה <span class="arrow">←</span></a>
             </div>
             <div class="include-card">

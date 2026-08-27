@@ -2,10 +2,10 @@
 
 **Status:** live - the static RTL marketing page for Ads Agent (AIC-146).
 
-**Source of truth:** `landing/index.html` for structure, copy and styling;
-`web/public/landing-hero-creative.png` for the explicitly labelled fictional
-local-service ad. The web build copies the landing to `web/dist/index.html`;
-see [scaffold.md](scaffold.md).
+**Source of truth:** `landing/index.html` for structure, copy, styling and the
+CSS-only hero rotation; `web/public/landing-reel-*.jpg` for the four fictional
+local-service creatives. The web build copies the landing to
+`web/dist/index.html`; see [scaffold.md](scaffold.md).
 
 **Lock-in tests:** `server/src/landing-copy.test.ts` protects the positioning
 boundary, hero removals, one-section pricing, evidence rules, required assets
@@ -33,8 +33,11 @@ support. It explicitly refuses guarantees of more leads, lower CPL or growth.
 A single fluid, responsive RTL page in the Ads Agent cream/ink/orange system:
 
 1. **Hero:** `פרסום במטא. בלי לחיות בתוך Ads Manager.` plus the operational
-   promise and a fictional, clearly labelled local nail-studio ad inside a
-   phone. There are no recommendation, WhatsApp-message, result or price cards.
+   promise and a phone rotating between four fictional local businesses: nails,
+   Pilates, dog grooming and a ceramics workshop. Each creative has its own
+   relevant action copy. There are no recommendation, WhatsApp-message, result,
+   platform, destination or price cards around the phone. The rotation is CSS
+   only and stays on the first creative when reduced motion is requested.
 2. **Proof strip and manifesto:** non-numeric service facts and the need for
    delivery/measurement certainty rather than another analytics dashboard.
 3. **Value:** connection/setup, operational-health monitoring and a quiet,
@@ -48,16 +51,17 @@ A single fluid, responsive RTL page in the Ads Agent cream/ink/orange system:
 ## Evidence and search rules
 
 - CSS result mockups and fabricated metrics are not used as product proof.
-- Generated creative is visibly labelled as an example and contains no result
-  claim.
+- Generated creatives contain no result claims, interface chrome, metrics or
+  baked-in text. Business names, messages and action labels remain editable HTML.
 - Customer dashboard screenshots are not published without explicit approval,
   even after cropping. A future approved screenshot must remove personal
   account information and state nearby that its figures are not a performance
   promise.
 - Copy may describe what Ads Agent monitors; it may not imply that every failure
   is detectable.
-- Pricing appears in the dedicated section, not in the hero, comparison bands,
-  FAQ or final CTA.
+- The monthly price appears in the dedicated section, not in the hero,
+  comparison bands, FAQ or final CTA. The landing does not advertise a separate
+  one-time setup fee.
 - Title, description, H1 and body naturally cover `ניהול קמפיינים בפייסבוק`,
   `ניהול קמפיינים באינסטגרם`, `עסקים קטנים`, `קמפיין לידים`, Meta and Ads
   Manager. Canonical, Open Graph and `Service` JSON-LD are included.
