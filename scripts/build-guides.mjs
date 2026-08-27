@@ -216,9 +216,9 @@ function renderArticle(post, all) {
   </div>
   ${relatedHtml}
   <section class="g-cta-box">
-    <h2>${escapeHtml(post.ctaTitle || "רוצים שנעשה את זה בשבילכם?")}</h2>
-    <p>${escapeHtml(post.ctaText || "אנחנו מנהלים את הקמפיין, ממליצים על שיפורים, ומבצעים רק מה שאישרתם.")}</p>
-    <a class="g-btn" href="/signup">מתחילים</a>
+    <h2>${escapeHtml(post.ctaTitle || "רוצים עזרה עם הצד הטכני?")}</h2>
+    <p>${escapeHtml(post.ctaText || "Ads Agent מחבר או מקים קמפיין לידים אחד, עוקב אחרי פרסום ומדידה, ומציג את הנתונים בעברית.")}</p>
+    <a class="g-btn" href="/signup">בדיקת התאמה</a>
   </section>
 </main>
 ${footer}`;

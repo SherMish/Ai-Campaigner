@@ -6,6 +6,36 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-27 — Hebrew Meta lead-campaign setup guide (AIC-147)
+
+The guides section gained a complete Hebrew tutorial for small businesses
+setting up a Meta lead campaign for WhatsApp or a website. It explains the
+campaign, ad-set and ad decisions, operational prerequisites, measurement,
+budget reasoning, creative checks and post-launch verification without copying
+unsupported learning thresholds or universal budget formulas. The article uses
+primary Meta references, original 1200x630 title artwork, SEO metadata, FAQ
+schema and a product CTA that makes no performance promise. Owning doc:
+[docs/features/guides-blog.md](features/guides-blog.md).
+
+The same evidence pass corrected the existing budget guide: fixed 3-5x budget
+rules, exact learning durations and automatic-reset claims were replaced with
+unit economics, an explicit test budget and decisions based on actual spend,
+relevant leads and the business's capacity to respond.
+
+### 2026-08-27 — Honest landing-page positioning (AIC-146)
+
+The landing no longer sells an unproven recommendation engine as full campaign
+management. It now leads with the operational value Ads Agent can deliver today:
+guided setup, delivery/measurement monitoring, a simple Hebrew dashboard and
+human support. Fabricated recommendation, WhatsApp, result and stepper UI was
+removed; pricing moved to one dedicated section after the value story. A clearly
+labelled fictional local-service creative now occupies the hero phone. The
+customer dashboard screenshot considered for product proof was not published
+without explicit approval, and no fake dashboard replaced it. SEO copy now
+targets the supported Facebook/Instagram lead-campaign intent without promising
+growth or lower CPL. Owning doc:
+[docs/features/landing.md](features/landing.md).
+
 ### 2026-08-26 — 50-post Instagram idea bank (AIC-142)
 
 Organic marketing no longer starts from a blank topic list. A new editorial

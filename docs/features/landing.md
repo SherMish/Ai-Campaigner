@@ -1,40 +1,72 @@
 # Landing page
 
-**Status:** live — the static marketing page (AIC-20), implementing the **Ads
-Agent** design directions (RTL Hebrew, cream/ink/orange).
+**Status:** live - the static RTL marketing page for Ads Agent (AIC-146).
 
-**Source of truth:** `landing/index.html` (self-contained static HTML/CSS). Served
-at `/` by the server (`web/dist/index.html` after build) and by the Vite dev
-plugin; see [scaffold.md](scaffold.md).
+**Source of truth:** `landing/index.html` for structure, copy and styling;
+`web/public/landing-hero-creative.png` for the explicitly labelled fictional
+local-service ad. The web build copies the landing to `web/dist/index.html`;
+see [scaffold.md](scaffold.md).
 
-**Lock-in tests:** none (static). The build copies it into `web/dist/index.html`
-(`server/src/app.ts` serves it single-origin); `app.static.test.ts` covers that the
-server serves the landing at `/`.
+**Lock-in tests:** `server/src/landing-copy.test.ts` protects the positioning
+boundary, hero removals, one-section pricing, evidence rules, required assets
+and supported SEO terms. `server/src/app.static.test.ts` verifies that
+the built landing is served at `/`.
 
 ---
 
-## How it works today
+## Positioning
 
-A single fluid, responsive RTL page in the Ads Agent brand:
-- **Palette:** orange `#FF5A36`, cream `#F7F2EA`/`#EDE6DA`, ink `#171717`, green
-  `#2FA36B`, indigo `#665CFF`, WhatsApp `#DCF8C6`. Fonts: **Rubik** + **IBM Plex
-  Mono** (Google Fonts).
-- **Sections:** sticky header · hero (headline + phone/collage + price) · dark
-  ₪299-vs-₪1,200 comparison · "you don't need to learn to run campaigns" band ·
-  how-it-works (01/02/03) · "no Ads Manager" dashboard mock · creative comparison ·
-  weekly lead-quality · human support + approval guarantee · pricing (₪299 + fit
-  list) · FAQ (native `<details>` accordion, 8 Qs) · final CTA · footer.
-- **Responsive:** grids collapse to one column ≤900px; nav links hide on mobile;
-  `overflow-x: hidden` guards the hero collage's negative insets. Verified: no
-  horizontal overflow at 375px or desktop.
-- **Mockups** (phone, dashboard, cards) are pure CSS — no external images. Real
-  creative photos can drop into the hero creative slot later.
+The page sells the product that exists today:
 
-## Placeholders to fill before go-live
-- Contact CTAs (`דברו איתנו`, WhatsApp, `קבעו שיחה`) point to
-  `https://wa.me/972500000000` and `#contact` — replace with the real WhatsApp
-  number + booking link.
-- `כניסה` → `/login` (the SPA login lands with AIC-21).
+> Meta advertising for Israeli small businesses, without living inside Ads
+> Manager.
+
+Ads Agent is presented as the operational layer above Meta, not as a general
+marketing suite, a full-service creative agency or an autonomous performance
+manager. The promise is deliberately limited to guided connection, one lead
+campaign, WhatsApp/website destinations, operational-health monitoring, a
+simple Hebrew dashboard, basic controls, lead-quality feedback and human
+support. It explicitly refuses guarantees of more leads, lower CPL or growth.
+
+## Page structure
+
+A single fluid, responsive RTL page in the Ads Agent cream/ink/orange system:
+
+1. **Hero:** `פרסום במטא. בלי לחיות בתוך Ads Manager.` plus the operational
+   promise and a fictional, clearly labelled local nail-studio ad inside a
+   phone. There are no recommendation, WhatsApp-message, result or price cards.
+2. **Proof strip and manifesto:** non-numeric service facts and the need for
+   delivery/measurement certainty rather than another analytics dashboard.
+3. **Value:** connection/setup, operational-health monitoring and a quiet,
+   business-language surface.
+4. **Process:** a factual three-step flow with no fabricated campaign numbers.
+5. **Lead quality and creative boundary:** why a Meta lead is not necessarily a
+   relevant enquiry, and what Ads Agent does and does not do with creative.
+6. **Pricing:** the only visible price presentation, after the value story.
+7. **Human support, FAQ and final fit-check CTA.**
+
+## Evidence and search rules
+
+- CSS result mockups and fabricated metrics are not used as product proof.
+- Generated creative is visibly labelled as an example and contains no result
+  claim.
+- Customer dashboard screenshots are not published without explicit approval,
+  even after cropping. A future approved screenshot must remove personal
+  account information and state nearby that its figures are not a performance
+  promise.
+- Copy may describe what Ads Agent monitors; it may not imply that every failure
+  is detectable.
+- Pricing appears in the dedicated section, not in the hero, comparison bands,
+  FAQ or final CTA.
+- Title, description, H1 and body naturally cover `ניהול קמפיינים בפייסבוק`,
+  `ניהול קמפיינים באינסטגרם`, `עסקים קטנים`, `קמפיין לידים`, Meta and Ads
+  Manager. Canonical, Open Graph and `Service` JSON-LD are included.
+
+## Contact path
+
+Until a real business WhatsApp number or booking URL is supplied, acquisition
+CTAs use `hello@ads-agent.co.il`. The landing must never ship a placeholder
+`wa.me/972500000000` link. `כניסה` points to `/login`.
 
 ## Legal pages (terms of use, privacy policy)
 `web/public/terms.html` and `web/public/privacy.html` — self-contained static

@@ -1,10 +1,11 @@
 # Guides (the blog) — `/guides`
 
-**Status:** live. Static HTML generated at build time from Markdown. One example
-guide ships; adding more is a Markdown file and nothing else.
+**Status:** live. Static HTML generated at build time from Markdown. Two guides
+ship; adding more is a Markdown file and, when needed, a tracked public image.
 
 **Source of truth:**
-`content/guides/*.md` (the content — this is the only thing an author edits),
+`content/guides/*.md` (article content and metadata),
+`web/public/<guide-image>.png` (tracked 1200x630 title images),
 `scripts/build-guides.mjs` (the generator),
 `scripts/guides-lib.mjs` (its pure helpers),
 `scripts/guides.css` (the standalone stylesheet),
@@ -14,6 +15,8 @@ guide ships; adding more is a Markdown file and nothing else.
 **Lock-in tests:**
 `web/src/guides/guides-lib.test.ts` (escaping, slugs, TOC ids/dedupe, validation,
 SEO warnings),
+`server/src/guide-content.test.ts` (AIC-147 source quality, primary-source
+links, short-hyphen rule and exact title-image dimensions),
 `server/src/routes/guides-static.integration.test.ts` (the URLs serve real HTML
 and **not** the SPA shell; sitemap/robots; SPA routes still work).
 

@@ -3,18 +3,43 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ads Agent — ניהול קמפיינים לעסק קטן</title>
+    <title>Ads Agent | ניהול קמפיינים בפייסבוק ובאינסטגרם לעסקים קטנים</title>
     <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="canonical" href="https://ads-agent.co.il/" />
     <meta
       name="description"
-      content="ניהול קמפיינים בפייסבוק ובאינסטגרם לעסקים קטנים — בלי ריטיינר של אלפי שקלים. עוקבים, מנתחים וממליצים; כל שינוי בתקציב או בקמפיין מתבצע רק באישור שלכם. ₪299 לחודש."
+      content="Ads Agent מחבר, מקים ועוקב אחרי קמפיינים בפייסבוק ובאינסטגרם לעסקים קטנים. דשבורד פשוט בעברית, מעקב אחר פרסום ומדידה, ותמיכה אנושית - בלי לחיות בתוך Ads Manager."
     />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="he_IL" />
+    <meta property="og:site_name" content="Ads Agent" />
+    <meta property="og:title" content="פרסום במטא. בלי לחיות בתוך Ads Manager." />
+    <meta
+      property="og:description"
+      content="ניהול הצד הטכני של קמפיינים בפייסבוק ובאינסטגרם לעסקים קטנים - חיבור, מעקב, מדידה ודשבורד פשוט בעברית."
+    />
+    <meta property="og:url" content="https://ads-agent.co.il/" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Service",
+        "name": "Ads Agent",
+        "url": "https://ads-agent.co.il/",
+        "description": "ניהול תפעולי של קמפיינים בפייסבוק ובאינסטגרם לעסקים קטנים בישראל",
+        "areaServed": "IL",
+        "audience": {
+          "@type": "BusinessAudience",
+          "audienceType": "עסקים קטנים בישראל"
+        },
+        "serviceType": "Meta Ads campaign operations and monitoring"
+      }
+    </script>
     <style>
       :root {
         --cream: #f7f2ea;
@@ -24,545 +49,614 @@
         --orange: #ff5a36;
         --green: #2fa36b;
         --indigo: #665cff;
-        --wa: #dcf8c6;
-        --line: rgba(23, 23, 23, 0.12);
-        --muted: rgba(23, 23, 23, 0.58);
+        --line: rgba(23, 23, 23, 0.14);
+        --muted: #6f6a63;
         --maxw: 1180px;
         --mono: "IBM Plex Mono", ui-monospace, monospace;
       }
+
       * { box-sizing: border-box; }
       html { scroll-behavior: smooth; }
       body {
         margin: 0;
         font-family: Rubik, system-ui, "Segoe UI", Arial, sans-serif;
-        background: var(--page);
         color: var(--ink);
+        background: var(--page);
         line-height: 1.6;
         -webkit-font-smoothing: antialiased;
-        overflow-x: hidden; /* the hero collage uses negative insets */
+        overflow-x: hidden;
       }
+      img { max-width: 100%; }
       a { color: inherit; text-decoration: none; }
-      .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
-      section { padding: clamp(56px, 9vw, 120px) 0; }
-      .eyebrow {
-        font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.14em;
-        color: var(--orange); margin: 0 0 18px;
-      }
-      h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.02; margin: 0; }
-      h2 { font-size: clamp(1.8rem, 4.2vw, 3.1rem); font-weight: 800; }
-      p { margin: 0 0 1em; }
-      .lead { font-size: clamp(1.05rem, 1.6vw, 1.25rem); color: #2a2a2a; }
-      .strong { font-weight: 700; }
+      .wrap { width: min(var(--maxw), calc(100% - 48px)); margin-inline: auto; }
+      section { padding: clamp(68px, 9vw, 124px) 0; }
+      h1, h2, h3 { margin: 0; line-height: 1.03; letter-spacing: -0.035em; }
+      h2 { font-size: clamp(2rem, 4.6vw, 3.55rem); font-weight: 850; }
+      h3 { font-size: 1.55rem; font-weight: 800; }
+      p { margin: 0; }
+      .lead { font-size: clamp(1.08rem, 1.65vw, 1.28rem); line-height: 1.65; }
       .muted { color: var(--muted); }
+      .eyebrow {
+        margin-bottom: 18px;
+        color: var(--orange);
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        letter-spacing: 0.12em;
+      }
 
-      /* buttons */
       .btn {
-        display: inline-flex; align-items: center; gap: 10px; cursor: pointer;
-        font: inherit; font-weight: 600; border: 0; border-radius: 999px;
-        padding: 14px 26px; transition: transform 0.15s ease, background 0.15s ease;
-        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        min-height: 52px;
+        padding: 13px 25px;
+        border: 0;
+        border-radius: 999px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 150ms ease, background 150ms ease;
       }
-      .btn:hover { transform: translateY(-1px); }
-      .btn-primary { background: var(--orange); color: #fff; }
-      .btn-primary:hover { background: #ff4a22; }
-      .btn-dark { background: var(--ink); color: var(--cream); }
-      .btn-ghost { background: transparent; color: var(--ink); padding: 14px 8px; }
-      .btn-ghost .arrow { transition: transform 0.15s ease; }
-      .btn-ghost:hover .arrow { transform: translateX(-6px); }
+      .btn:hover { transform: translateY(-2px); }
+      .btn-primary { color: #fff; background: var(--orange); }
+      .btn-primary:hover { background: #f94b25; }
+      .btn-dark { color: var(--cream); background: var(--ink); }
+      .btn-ghost { padding-inline: 6px; background: transparent; }
+      .btn .arrow { font-size: 1.2em; }
 
-      /* header */
       header {
-        position: sticky; top: 0; z-index: 50;
-        background: color-mix(in srgb, var(--page) 88%, transparent);
-        backdrop-filter: blur(8px); border-bottom: 1px solid var(--line);
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        border-bottom: 1px solid var(--line);
+        background: color-mix(in srgb, var(--page) 90%, transparent);
+        backdrop-filter: blur(10px);
       }
-      .nav { display: flex; align-items: center; justify-content: space-between; height: 74px; }
+      .nav {
+        min-height: 74px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+      .nav-cluster { display: flex; align-items: center; gap: 42px; }
       .brand {
-        display: inline-flex; align-items: center; gap: 9px;
-        font-size: 1.5rem; font-weight: 800; letter-spacing: -0.03em; direction: ltr;
-        color: inherit; text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        direction: ltr;
+        font-size: 1.45rem;
+        font-weight: 800;
+        letter-spacing: -0.04em;
       }
-      .brand .dot { color: var(--orange); }
-      .brand-icon { width: 26px; height: 26px; display: block; flex-shrink: 0; }
-      .nav-links { display: flex; gap: 28px; font-weight: 500; }
-      .nav-links a:hover { color: var(--orange); }
-      .nav-right { display: flex; align-items: center; gap: 20px; }
-      .nav-login { font-weight: 500; }
-      .nav-login:hover { color: var(--orange); }
+      .brand-icon { width: 28px; height: 28px; object-fit: contain; }
+      .nav-links { display: flex; gap: 27px; font-weight: 500; }
+      .nav-links a:hover, .nav-login:hover { color: var(--orange); }
+      .nav-actions { display: flex; align-items: center; gap: 20px; }
+      .nav-login { font-weight: 600; }
 
-      /* hero */
+      .hero { padding-top: clamp(62px, 8vw, 108px); }
       .hero-grid {
-        display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 56px; align-items: center;
+        display: grid;
+        grid-template-columns: 1.08fr 0.92fr;
+        align-items: center;
+        gap: clamp(42px, 7vw, 94px);
       }
-      .hero h1 { font-size: clamp(2.5rem, 6.6vw, 5rem); font-weight: 800; }
-      .hero h1 .ink2 { color: var(--indigo); }
-      .hl {
-        display: inline-block; background: var(--orange); color: var(--cream);
-        padding: 0 0.18em; border-radius: 10px; transform: rotate(-1.6deg);
-      }
-      .hero .lead { margin-top: 28px; max-width: 30em; }
-      .hero .promise { font-weight: 700; font-size: clamp(1.1rem, 1.7vw, 1.35rem); margin-top: 6px; }
-      .hero-cta { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-top: 32px; }
-      .price-tag { margin-top: 26px; font-family: var(--mono); }
-      .price-tag b { font-size: 1.15rem; font-weight: 700; font-family: Rubik; }
-      .price-tag .sub { color: var(--muted); font-size: 0.85rem; }
+      .hero h1 { font-size: clamp(3rem, 7.4vw, 6.25rem); font-weight: 900; max-width: 8.8em; }
+      .hero h1 .accent { color: var(--orange); }
+      .hero-copy .lead { margin-top: 30px; max-width: 31em; color: #302e2b; }
+      .hero-promise { margin-top: 14px; font-size: clamp(1.12rem, 1.8vw, 1.4rem); font-weight: 800; }
+      .hero-cta { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; margin-top: 34px; }
 
-      /* hero visual */
-      .stage { position: relative; min-height: 520px; }
+      .stage { position: relative; min-height: 600px; display: grid; place-items: center; }
+      .stage::before {
+        content: "";
+        position: absolute;
+        width: 420px;
+        height: 420px;
+        border-radius: 50%;
+        background: var(--orange);
+        inset: 86px auto auto 50%;
+        transform: translateX(-50%);
+      }
+      .stage::after {
+        content: "";
+        position: absolute;
+        width: 200px;
+        height: 86px;
+        border: 2px solid var(--ink);
+        border-radius: 999px;
+        inset: 50px auto auto 16px;
+        transform: rotate(-8deg);
+      }
       .phone {
-        position: relative; width: min(300px, 78%); margin-inline: auto; aspect-ratio: 300 / 610;
-        background: var(--ink); border-radius: 40px; padding: 12px;
-        box-shadow: 0 30px 60px -24px rgba(23, 23, 23, 0.5);
+        position: relative;
+        z-index: 2;
+        width: min(320px, 78vw);
+        padding: 11px;
+        border-radius: 44px;
+        background: var(--ink);
+        box-shadow: 0 36px 70px -25px rgba(23, 23, 23, 0.55);
+        transform: rotate(2deg);
       }
       .phone-screen {
-        height: 100%; border-radius: 30px; background: var(--cream-2);
-        display: flex; flex-direction: column; overflow: hidden; position: relative;
+        position: relative;
+        overflow: hidden;
+        aspect-ratio: 9 / 17.6;
+        border-radius: 34px;
+        background: var(--cream);
       }
-      .creative {
-        flex: 1; display: flex; align-items: center; justify-content: center;
-        color: var(--muted); font-size: 0.9rem; text-align: center; padding: 20px;
-        background: repeating-linear-gradient(45deg, #e7e0d4 0 14px, #ece5d9 14px 28px);
+      .phone-screen img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .phone-screen::after {
+        content: "";
+        position: absolute;
+        inset: 45% 0 0;
+        background: linear-gradient(to top, rgba(23, 23, 23, 0.94), transparent);
       }
-      .creative .ph { font-size: 2rem; opacity: 0.5; }
-      .ad-bar {
-        font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
-        padding: 12px 16px; background: var(--ink); color: var(--cream);
-        display: flex; justify-content: space-between;
+      .ad-top {
+        position: absolute;
+        z-index: 3;
+        top: 18px;
+        right: 18px;
+        left: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: #fff;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-shadow: 0 1px 8px rgba(0,0,0,.45);
       }
-      .float {
-        position: absolute; background: #fff; border: 1px solid var(--line);
-        border-radius: 16px; box-shadow: 0 18px 40px -20px rgba(23, 23, 23, 0.4);
+      .ad-top .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--orange); display: inline-grid; place-items: center; margin-left: 7px; }
+      .ad-copy { position: absolute; z-index: 3; right: 22px; bottom: 25px; left: 22px; color: #fff; }
+      .ad-copy b { display: block; font-size: 1.45rem; line-height: 1.12; }
+      .ad-copy span { display: block; margin-top: 9px; font-size: 0.9rem; }
+      .ad-copy .ad-cta { display: inline-flex; margin-top: 15px; padding: 9px 16px; border-radius: 999px; color: var(--ink); background: var(--cream); font-weight: 800; }
+      .example-label {
+        position: absolute;
+        z-index: 4;
+        bottom: 24px;
+        right: 4px;
+        padding: 9px 15px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--cream);
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        transform: rotate(-3deg);
       }
-      .pill {
-        position: absolute; display: inline-flex; align-items: center; gap: 8px;
-        background: var(--ink); color: var(--cream); font-weight: 600; font-size: 0.85rem;
-        padding: 9px 16px; border-radius: 999px;
+      .support-chip {
+        position: absolute;
+        z-index: 4;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 12px 17px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 18px 36px -24px rgba(23,23,23,.45);
+        font-size: 0.86rem;
+        font-weight: 700;
       }
-      .pill .led { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
-      .tag-good {
-        position: absolute; background: var(--green); color: #fff; font-weight: 600;
-        font-size: 0.8rem; padding: 6px 14px; border-radius: 999px; transform: rotate(-3deg);
-      }
-      .stat { padding: 16px 22px; text-align: center; }
-      .stat b { font-size: 2rem; font-weight: 800; display: block; }
-      .stat span { font-size: 0.85rem; color: var(--muted); }
-      .rec { padding: 18px; width: 250px; }
-      .rec .k { font-family: var(--mono); font-size: 0.72rem; color: var(--orange); letter-spacing: 0.08em; }
-      .rec .t { font-weight: 700; margin: 8px 0 14px; line-height: 1.3; }
-      .rec .row { display: flex; align-items: center; gap: 12px; }
-      .rec .b1 { background: var(--ink); color: var(--cream); border-radius: 999px; padding: 8px 18px; font-size: 0.85rem; font-weight: 600; }
-      .rec .b2 { color: var(--muted); font-size: 0.85rem; }
-      .wa {
-        max-width: 240px; background: var(--wa); border: 0; border-radius: 16px 16px 16px 4px;
-        padding: 12px 14px; font-size: 0.9rem;
-      }
-      .wa .meta { font-family: var(--mono); font-size: 0.68rem; color: #4a6a45; margin-top: 6px; }
+      .support-chip .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
+      .support-chip.one { top: 22px; left: 0; }
+      .support-chip.two { top: 145px; right: -10px; }
 
-      /* comparison (dark) */
-      .dark { background: var(--ink); color: var(--cream); }
-      .cmp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
-      .cmp h2 { color: var(--cream); max-width: 12em; }
-      .cmp-big { font-size: clamp(4rem, 12vw, 9rem); font-weight: 900; letter-spacing: -0.04em; line-height: 0.9; }
-      .cmp-big small { font-size: 0.22em; font-weight: 600; color: rgba(247, 242, 234, 0.6); display: block; margin-top: 16px; letter-spacing: normal; line-height: 1.5; }
-      .cmp-rows { border-top: 1px solid rgba(247, 242, 234, 0.18); }
-      .cmp-row {
-        display: flex; justify-content: space-between; align-items: baseline;
-        padding: 22px 0; border-bottom: 1px solid rgba(247, 242, 234, 0.18);
+      .proof-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
       }
-      .cmp-row .label { color: rgba(247, 242, 234, 0.7); }
-      .cmp-row .val { font-size: 1.6rem; font-weight: 800; }
-      .cmp-row.strike .val { color: var(--orange); text-decoration: line-through; text-decoration-color: #7a3326; }
-      .cmp-note { color: rgba(247, 242, 234, 0.6); font-size: 0.95rem; margin-top: 14px; }
+      .proof-item { padding: 24px 28px; text-align: center; font-weight: 700; }
+      .proof-item + .proof-item { border-right: 1px solid var(--line); }
+      .proof-item span { color: var(--orange); }
 
-      /* band */
-      .band { text-align: center; }
-      .band h2 { max-width: 16em; margin: 0 auto; }
-      .band .accent { color: var(--orange); }
+      .dark { color: var(--cream); background: var(--ink); }
+      .dark .eyebrow { color: #ff7b5d; }
+      .manifesto-grid { display: grid; grid-template-columns: 0.92fr 1.08fr; align-items: end; gap: 60px; }
+      .manifesto-grid h2 { max-width: 10em; color: var(--cream); }
+      .manifesto-copy { font-size: clamp(1.2rem, 2vw, 1.55rem); line-height: 1.65; color: #d8d1c8; }
+      .manifesto-copy strong { color: #fff; }
 
-      /* steps */
-      .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+      .section-head { display: grid; grid-template-columns: .9fr 1.1fr; gap: 46px; align-items: end; margin-bottom: 44px; }
+      .section-head .lead { color: var(--muted); max-width: 35em; }
+      .value-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+      .value-card {
+        min-height: 330px;
+        display: flex;
+        flex-direction: column;
+        padding: 30px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: var(--cream);
+      }
+      .value-card .number { color: var(--orange); font-family: var(--mono); font-size: .82rem; }
+      .value-card h3 { margin-top: 62px; }
+      .value-card p { margin-top: 18px; color: var(--muted); }
+      .value-card .plain-list { margin-top: auto; padding-top: 24px; font-weight: 700; }
+
+      .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
       .step {
-        background: var(--cream); border: 1px solid var(--line); border-radius: 22px; padding: 30px;
+        padding: 32px;
+        border-top: 3px solid var(--ink);
+        background: transparent;
       }
-      .step .n { font-family: var(--mono); font-size: 0.9rem; color: var(--orange); }
-      .step h3 { font-size: 1.5rem; font-weight: 800; margin: 14px 0 12px; }
-      .step p { color: var(--muted); margin: 0 0 20px; }
-      .mini {
-        background: var(--cream-2); border-radius: 14px; padding: 14px 16px; font-size: 0.9rem;
-        display: flex; justify-content: space-between; align-items: center;
+      .step .n { color: var(--orange); font-family: var(--mono); font-size: .9rem; }
+      .step h3 { margin-top: 28px; }
+      .step p { margin-top: 16px; color: var(--muted); }
+      .step .who { display: block; margin-top: 28px; font-weight: 700; }
+
+      .quality-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
+      .quality-title { font-size: clamp(3.4rem, 8vw, 7rem); line-height: .9; color: var(--cream); }
+      .quality-title span { color: var(--orange); }
+      .quality-copy .lead { color: #d8d1c8; }
+      .quality-rule { margin-top: 28px; padding-top: 24px; border-top: 1px solid rgba(247,242,234,.24); color: #fff; font-size: 1.15rem; font-weight: 700; }
+
+      .creative-grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 56px; align-items: center; }
+      .creative-block {
+        min-height: 390px;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: flex-end;
+        padding: 34px;
+        border-radius: 28px;
+        color: var(--cream);
+        background: var(--orange);
       }
-      .mini b { font-weight: 700; }
-      .mini .up { color: var(--green); font-weight: 700; }
-
-      /* dashboard section */
-      .split { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
-      .dash {
-        background: var(--cream); border: 1px solid var(--line); border-radius: 24px;
-        padding: 26px; box-shadow: 0 24px 50px -30px rgba(23, 23, 23, 0.4);
+      .creative-block::before {
+        content: "A";
+        position: absolute;
+        inset: -70px auto auto -22px;
+        font-size: 24rem;
+        font-weight: 900;
+        line-height: 1;
+        color: rgba(23,23,23,.14);
+        direction: ltr;
       }
-      .dash .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
-      .dash .head .st { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.9rem; }
-      .dash .head .led { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
-      .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
-      .kpi { background: var(--cream-2); border-radius: 16px; padding: 16px; text-align: center; }
-      .kpi b { display: block; font-size: 1.7rem; font-weight: 800; }
-      .kpi span { font-size: 0.8rem; color: var(--muted); }
-      .ok-row { display: flex; align-items: center; gap: 10px; color: var(--green); font-weight: 600; }
-      .ok-row .c { width: 22px; height: 22px; border-radius: 50%; background: var(--green); color: #fff; display: grid; place-items: center; font-size: 0.8rem; }
+      .creative-block p { position: relative; max-width: 13em; font-size: 1.45rem; font-weight: 800; line-height: 1.25; }
+      .creative-copy .lead { margin-top: 22px; color: var(--muted); }
+      .creative-copy .boundary { margin-top: 22px; font-weight: 800; }
 
-      /* lead quality */
-      .lq { background: var(--cream); border: 1px solid var(--line); border-radius: 24px; padding: 34px; text-align: center; max-width: 560px; margin: 30px auto 0; }
-      .lq .q { font-size: 1.3rem; font-weight: 700; margin-bottom: 22px; }
-      .stepper { display: inline-flex; align-items: center; gap: 20px; background: var(--cream-2); border-radius: 999px; padding: 8px 10px; margin-bottom: 22px; }
-      .stepper button { width: 42px; height: 42px; border-radius: 50%; border: 0; background: #fff; font-size: 1.4rem; cursor: pointer; font-family: inherit; }
-      .stepper .v { font-size: 2rem; font-weight: 800; min-width: 44px; }
+      .price-head { max-width: 760px; margin-bottom: 42px; }
+      .price-head .lead { margin-top: 20px; color: var(--muted); }
+      .price-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 26px; }
+      .price-card { padding: clamp(34px, 5vw, 56px); border-radius: 28px; color: var(--cream); background: var(--ink); }
+      .price-card .amount { font-size: clamp(4.2rem, 10vw, 7.5rem); font-weight: 900; line-height: .86; letter-spacing: -.06em; }
+      .price-card .amount small { font-size: .18em; letter-spacing: 0; color: #d2cbc2; }
+      .price-card .setup { margin-top: 21px; color: #d2cbc2; font-family: var(--mono); font-size: .88rem; }
+      .price-card .btn { margin-top: 30px; }
+      .include-card { padding: 38px; border: 1px solid var(--line); border-radius: 28px; background: var(--cream); }
+      .include-card ul { list-style: none; display: grid; gap: 15px; margin: 26px 0 0; padding: 0; }
+      .include-card li { display: flex; align-items: flex-start; gap: 12px; }
+      .include-card li::before { content: "✓"; color: var(--green); font-weight: 900; }
+      .include-note { margin-top: 25px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--muted); font-size: .92rem; }
 
-      /* support */
-      .support { text-align: center; }
-      .support .cta { display: inline-flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 30px; }
+      .human { text-align: center; padding-top: 10px; }
+      .human h2 { max-width: 14em; margin-inline: auto; }
+      .human .lead { max-width: 37em; margin: 22px auto 0; color: var(--muted); }
+      .human .btn { margin-top: 30px; }
 
-      /* pricing */
-      .price-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
-      .price-card { background: var(--ink); color: var(--cream); border-radius: 28px; padding: 40px; }
-      .price-card .amt { font-size: clamp(3rem, 8vw, 5rem); font-weight: 900; letter-spacing: -0.03em; }
-      .price-card .amt small { font-size: 0.24em; font-weight: 600; color: rgba(247, 242, 234, 0.65); }
-      .price-card .setup { color: rgba(247, 242, 234, 0.6); font-family: var(--mono); font-size: 0.85rem; }
-      .feat { list-style: none; padding: 0; margin: 26px 0 0; display: grid; gap: 12px; }
-      .feat li { display: flex; align-items: center; gap: 12px; }
-      .feat .c { color: var(--green); font-weight: 800; }
-      .fit { background: var(--cream); border: 1px solid var(--line); border-radius: 28px; padding: 40px; }
-      .fit h3 { font-size: 1.4rem; font-weight: 800; margin-bottom: 20px; }
-      .fit ul { list-style: none; padding: 0; margin: 0 0 24px; display: grid; gap: 16px; }
-      .fit li { display: flex; gap: 12px; color: #2a2a2a; }
-      .fit li::before { content: "←"; color: var(--orange); font-weight: 800; }
-
-      /* faq */
-      .faq { max-width: 820px; margin: 0 auto; }
+      .faq { max-width: 850px; margin-inline: auto; }
+      .faq h2 { margin-bottom: 30px; }
       details { border-bottom: 1px solid var(--line); }
-      summary { list-style: none; cursor: pointer; padding: 22px 0; display: flex; justify-content: space-between; align-items: center; gap: 20px; font-weight: 600; font-size: 1.15rem; }
-      summary::-webkit-details-marker { display: none; }
-      summary .pm { font-size: 1.5rem; color: var(--orange); transition: transform 0.2s ease; flex: none; }
-      details[open] summary .pm { transform: rotate(45deg); }
-      details p { color: var(--muted); padding: 0 0 22px; margin: 0; max-width: 60ch; }
-
-      /* final cta */
-      .final { text-align: center; }
-      .final h2 { max-width: 14em; margin: 0 auto 10px; }
-      .final .sub { color: var(--muted); margin-bottom: 30px; }
-
-      /* footer */
-      footer { background: var(--ink); color: var(--cream); padding: 60px 0 40px; }
-      .foot { display: flex; justify-content: space-between; gap: 30px; flex-wrap: wrap; align-items: flex-start; }
-      .foot .brand { color: var(--cream); }
-      .foot .tag { color: rgba(247, 242, 234, 0.6); max-width: 22em; margin-top: 12px; }
-      .foot-links { display: flex; gap: 26px; flex-wrap: wrap; color: rgba(247, 242, 234, 0.8); }
-      .foot-links a:hover { color: var(--orange); }
-
-      /* responsive */
-      @media (max-width: 900px) {
-        .hero-grid, .cmp-grid, .split, .price-wrap { grid-template-columns: 1fr; gap: 40px; }
-        .steps { grid-template-columns: 1fr; }
-        .nav-links { display: none; }
-        .stage { min-height: 440px; }
-        .cmp .cmp-big { order: -1; }
+      summary {
+        list-style: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 23px 0;
+        font-size: 1.15rem;
+        font-weight: 700;
       }
-      @media (max-width: 560px) {
-        .kpis { grid-template-columns: 1fr; }
-        .hero-cta { gap: 12px; }
-        .btn { padding: 13px 22px; }
+      summary::-webkit-details-marker { display: none; }
+      summary .pm { flex: none; color: var(--orange); font-size: 1.6rem; transition: transform 160ms ease; }
+      details[open] summary .pm { transform: rotate(45deg); }
+      details p { max-width: 66ch; padding: 0 0 24px; color: var(--muted); }
+
+      .final { text-align: center; }
+      .final h2 { max-width: 13em; margin-inline: auto; }
+      .final .lead { max-width: 32em; margin: 22px auto 0; color: var(--muted); }
+      .final .btn { margin-top: 30px; }
+
+      footer { padding: 58px 0 36px; color: var(--cream); background: var(--ink); }
+      .foot { display: flex; align-items: flex-start; justify-content: space-between; gap: 32px; flex-wrap: wrap; }
+      .foot .tag { max-width: 25em; margin-top: 13px; color: #c8c0b6; }
+      .foot-links { display: flex; gap: 24px; flex-wrap: wrap; color: #ddd5cc; }
+      .foot-links a:hover { color: #fff; }
+
+      @media (max-width: 900px) {
+        .hero-grid, .manifesto-grid, .section-head, .quality-grid, .creative-grid, .price-grid { grid-template-columns: 1fr; }
+        .hero-copy { text-align: center; }
+        .hero h1, .hero-copy .lead { margin-inline: auto; }
+        .hero-cta { justify-content: center; }
+        .stage { min-height: 560px; }
+        .value-grid, .steps { grid-template-columns: 1fr; }
+        .value-card { min-height: 0; }
+        .value-card h3 { margin-top: 38px; }
+        .section-head { align-items: start; }
+        .quality-title { max-width: 7em; }
+      }
+
+      @media (max-width: 720px) {
+        .wrap { width: min(100% - 32px, var(--maxw)); }
+        .nav-links { display: none; }
+        .nav-actions .nav-login { display: none; }
+        .nav-actions .btn { min-height: 44px; padding: 10px 17px; }
+        .proof-row { grid-template-columns: 1fr; }
+        .proof-item + .proof-item { border-right: 0; border-top: 1px solid var(--line); }
+      }
+
+      @media (max-width: 520px) {
+        section { padding: 66px 0; }
+        .hero h1 { font-size: clamp(2.7rem, 15vw, 4rem); }
+        .hero-cta { flex-direction: column; align-items: stretch; }
+        .hero-cta .btn { width: 100%; }
+        .stage { min-height: 510px; }
+        .stage::before { width: 330px; height: 330px; top: 90px; }
+        .stage::after { display: none; }
+        .phone { width: 270px; }
+        .support-chip.one { top: 8px; left: -6px; }
+        .support-chip.two { top: auto; right: -4px; bottom: 72px; }
+        .example-label { right: -4px; bottom: 18px; }
+        .creative-block { min-height: 320px; }
+        .include-card, .price-card { padding: 30px 24px; }
       }
     </style>
   </head>
   <body>
-    <!-- NOTE: contact CTAs point to placeholders — replace with the real WhatsApp
-         number + booking link before going live. -->
     <header>
       <div class="wrap nav">
-        <div style="display:flex;align-items:center;gap:44px">
+        <div class="nav-cluster">
           <a href="#top" class="brand"><img src="/favicon.png" alt="" class="brand-icon" />Ads Agent</a>
-          <nav class="nav-links">
+          <nav class="nav-links" aria-label="ניווט ראשי">
+            <a href="#value">מה מקבלים</a>
             <a href="#how">איך זה עובד</a>
-            <a href="#what">מה מקבלים</a>
             <a href="#price">מחיר</a>
-            <a href="#faq">שאלות</a>
-            <!-- AIC-126: the guides section. A real href, not an in-page
-                 anchor — it is a separate indexable surface, and internal
-                 links from the homepage are how it gets crawled. -->
             <a href="/guides">מדריכים</a>
           </nav>
         </div>
-        <div class="nav-right">
+        <div class="nav-actions">
           <a href="/login" class="nav-login">כניסה</a>
-          <a href="#contact" class="btn btn-dark">דברו איתנו</a>
+          <a href="mailto:hello@ads-agent.co.il?subject=בדיקת התאמה ל-Ads Agent" class="btn btn-dark">בדיקת התאמה</a>
         </div>
       </div>
     </header>
 
     <main id="top">
-      <!-- HERO -->
       <section class="hero">
         <div class="wrap hero-grid">
-          <div>
-            <p class="eyebrow">ניהול קמפיינים לעסקים קטנים</p>
-            <h1>
-              אתם מנהלים את העסק.<br />
-              <span class="ink2">אנחנו מנהלים</span> את <span class="hl">הקמפיין.</span>
-            </h1>
+          <div class="hero-copy">
+            <h1>פרסום במטא.<br /><span class="accent">בלי לחיות</span> בתוך Ads Manager.</h1>
             <p class="lead">
-              ניהול קמפיינים בפייסבוק ובאינסטגרם לעסקים קטנים — בלי לשלם ריטיינר
-              של אלפי שקלים למנהל קמפיינים.
+              Ads Agent מחבר, מקים ועוקב אחרי קמפיינים בפייסבוק ובאינסטגרם לעסקים קטנים -
+              בלי שתצטרכו ללמוד את המערכת של Meta.
             </p>
-            <p class="promise">אנחנו עוקבים, מנתחים ומציעים שיפורים.<br />אתם מאשרים — ואנחנו מבצעים.</p>
+            <p class="hero-promise">אתם מנהלים את העסק. אנחנו מנהלים את הצד הטכני של הפרסום.</p>
             <div class="hero-cta">
-              <a href="#contact" class="btn btn-primary">דברו איתנו</a>
-              <a href="#how" class="btn btn-ghost">איך זה עובד <span class="arrow">←</span></a>
-            </div>
-            <div class="price-tag">
-              <b>₪299 לחודש</b> &nbsp;·&nbsp; <span class="sub">₪299 הקמה חד־פעמית</span>
+              <a href="mailto:hello@ads-agent.co.il?subject=בדיקת התאמה ל-Ads Agent" class="btn btn-primary">בדקו אם זה מתאים <span class="arrow">←</span></a>
+              <a href="#value" class="btn btn-ghost">ראו מה מקבלים</a>
             </div>
           </div>
 
-          <div class="stage" aria-hidden="true">
-            <div class="phone">
+          <div class="stage">
+            <div class="support-chip one"><span class="dot"></span> פייסבוק + אינסטגרם</div>
+            <div class="support-chip two"><span class="dot"></span> וואטסאפ + אתר</div>
+            <div class="phone" aria-label="דוגמה למודעת אינסטגרם של עסק מקומי">
               <div class="phone-screen">
-                <div class="tag-good" style="top:14px;inset-inline-start:14px">עובדת מצוין</div>
-                <div class="creative">
-                  <div>
-                    <div class="ph">▦</div>
-                    קריאייטיב אנכי (Reels)<br />
-                    <span style="font-size:0.78rem">קוסמטיקאית / מאמנת</span>
-                  </div>
+                <img src="/landing-hero-creative.png" alt="דוגמה לקריאייטיב של סטודיו ציפורניים מקומי" />
+                <div class="ad-top"><span><span class="avatar">N</span> NOA STUDIO</span><span>ממומן</span></div>
+                <div class="ad-copy">
+                  <b>צבע מדויק.<br />גימור נקי.</b>
+                  <span>מניקור מקצועי באווירה שקטה.</span>
+                  <span class="ad-cta">לקביעת תור</span>
                 </div>
-                <div class="ad-bar"><span>AD 02 · REELS</span><span>●</span></div>
               </div>
             </div>
-            <div class="pill" style="bottom:64px;inset-inline-end:-8px">
-              <span class="led"></span> הקמפיין עובד כרגיל
-            </div>
-            <div class="float stat" style="top:0;inset-inline-start:0">
-              <b>14</b><span>פניות · השבוע</span>
-            </div>
-            <div class="float rec" style="bottom:-10px;inset-inline-start:-4px">
-              <div class="k">המלצה חדשה</div>
-              <div class="t">מודעה אחת נחלשה — מומלץ לעצור</div>
-              <div class="row"><span class="b1">אישור</span><span class="b2">לא עכשיו</span></div>
-            </div>
-            <div class="wa" style="position:absolute;bottom:120px;inset-inline-end:-10px">
-              היי, ראיתי את המודעה — אפשר לקבל מחיר?
-              <div class="meta">09:41 · WhatsApp</div>
-            </div>
+            <div class="example-label">דוגמה לקריאייטיב של עסק מקומי</div>
           </div>
         </div>
       </section>
 
-      <!-- COMPARISON -->
-      <section class="dark cmp">
-        <div class="wrap cmp-grid">
+      <div class="wrap proof-row" aria-label="סוגי השירות">
+        <div class="proof-item"><span>01</span> חיבור או הקמת קמפיין</div>
+        <div class="proof-item"><span>02</span> מעקב אחר פרסום ומדידה</div>
+        <div class="proof-item"><span>03</span> תמיכה אנושית בעברית</div>
+      </div>
+
+      <section class="dark">
+        <div class="wrap manifesto-grid">
           <div>
-            <h2>למה לשלם כמעט כמו תקציב הפרסום רק כדי שמישהו ינהל אותו?</h2>
-            <div class="cmp-big" style="margin-top:30px">₪299<small>אצלנו: ₪299 לחודש. ניהול מלא של הקמפיין.</small></div>
+            <p class="eyebrow">לא עוד דשבורד</p>
+            <h2>פחות רעש.<br />יותר ודאות.</h2>
           </div>
-          <div>
-            <div class="cmp-rows" style="border-top:0">
-              <div class="cmp-row"><span class="label">תקציב פרסום</span><span class="val">₪3,000</span></div>
-              <div class="cmp-row strike"><span class="label">מנהל קמפיינים</span><span class="val">₪1,200</span></div>
-            </div>
-            <p class="cmp-note">עוד לפני שהגיעה פנייה אחת.</p>
-          </div>
+          <p class="manifesto-copy">
+            בעל עסק לא צריך עוד גרפים. הוא צריך לדעת שהקמפיין <strong>באמת מפרסם</strong>,
+            שהפניות <strong>באמת נספרות</strong>, ואם משהו דורש טיפול - להבין מה עושים עכשיו.
+          </p>
         </div>
       </section>
 
-      <!-- BAND -->
-      <section class="band">
+      <section id="value">
         <div class="wrap">
-          <h2>אתם לא צריכים ללמוד לנהל קמפיינים.<br /><span class="accent">בשביל זה אנחנו כאן.</span></h2>
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">מה מקבלים</p>
+              <h2>שכבת ניהול מעל המערכת של Meta.</h2>
+            </div>
+            <p class="lead">
+              לא מבטיחים קסמים ולא ממציאים פעילות. מסדרים את החיבור, עוקבים אחרי הצד התפעולי,
+              ומציגים את הקמפיין בשפה של עסק.
+            </p>
+          </div>
+          <div class="value-grid">
+            <article class="value-card">
+              <span class="number">01</span>
+              <h3>מחברים או מקימים</h3>
+              <p>בשיחת הקמה עוברים יחד על העסק, חשבון הפרסום והקמפיין הקיים. אם אין קמפיין, אפשר להקים קמפיין לידים חדש.</p>
+              <div class="plain-list">פניות בוואטסאפ או דרך האתר</div>
+            </article>
+            <article class="value-card">
+              <span class="number">02</span>
+              <h3>עוקבים אחרי מה שעלול להישבר</h3>
+              <p>המערכת עוקבת אחר הגישה לחשבון, מצב הפרסום, מדידת הפניות וכפתור המודעה - ומציפה תקלות שהיא מזהה.</p>
+              <div class="plain-list">חיבור · פרסום · מדידה · יעד</div>
+            </article>
+            <article class="value-card">
+              <span class="number">03</span>
+              <h3>משאירים את הרעש בחוץ</h3>
+              <p>הוצאה, פניות, עלות לפנייה ואיכות הפניות במסך אחד. אם אין פעולה מוצדקת, לא מייצרים המלצה רק כדי להיראות עסוקים.</p>
+              <div class="plain-list">רק מה שחשוב לעסק</div>
+            </article>
+          </div>
         </div>
       </section>
 
-      <!-- HOW IT WORKS -->
       <section id="how">
         <div class="wrap">
-          <p class="eyebrow">איך זה עובד</p>
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">איך זה עובד</p>
+              <h2>מתחילים עם בן אדם. ממשיכים בלי Ads Manager.</h2>
+            </div>
+            <p class="lead">ההקמה נעשית יחד אתכם. אחרי החיבור, העבודה השוטפת עוברת למסך פשוט ולתמיכה שלנו.</p>
+          </div>
           <div class="steps">
-            <div class="step">
-              <div class="n">01</div>
-              <h3>מתחברים לקמפיין הקיים</h3>
-              <p>בשיחת ההקמה אנחנו מכירים את העסק, מתחברים לחשבון הפרסום ובודקים את הקמפיין הקיים.</p>
-              <div class="mini"><span>חשבון הפרסום מחובר</span><b>Meta · Business</b></div>
-            </div>
-            <div class="step">
-              <div class="n">02</div>
-              <h3>אנחנו עוקבים</h3>
-              <p>המערכת בודקת באופן שוטף מה קורה בקמפיין ומה דורש תשומת לב.</p>
-              <div class="mini"><span>₪38 לפנייה · הקמפיין פעיל</span><b class="up">14 פניות</b></div>
-            </div>
-            <div class="step">
-              <div class="n">03</div>
-              <h3>אתם מאשרים. אנחנו מבצעים.</h3>
-              <p>אם צריך לעצור מודעה או לשנות תקציב, נסביר למה ונבקש אישור.</p>
-              <div class="mini"><span>כדאי לעצור את המודעה הזאת</span><b>₪184 → פנייה אחת</b></div>
-            </div>
+            <article class="step">
+              <span class="n">01</span>
+              <h3>שיחת היכרות וחיבור</h3>
+              <p>מכירים את העסק, מגדירים מה נחשב פנייה ומחברים את נכסי Meta בצורה מסודרת - בלי למסור סיסמה.</p>
+              <span class="who">אנחנו עושים את זה יחד.</span>
+            </article>
+            <article class="step">
+              <span class="n">02</span>
+              <h3>קמפיין קיים או חדש</h3>
+              <p>מחברים קמפיין לידים קיים, או מקימים קמפיין חדש שמוביל לוואטסאפ או לדף באתר.</p>
+              <span class="who">קמפיין אחד, מטרה ברורה.</span>
+            </article>
+            <article class="step">
+              <span class="n">03</span>
+              <h3>עוקבים ומטפלים</h3>
+              <p>אתם רואים את התמונה הפשוטה. כשמזוהה תקלה או שינוי מהותי, מסבירים מה קרה ומי צריך לפעול.</p>
+              <span class="who">המלצות שמשנות תקציב מחכות לאישור.</span>
+            </article>
           </div>
         </div>
       </section>
 
-      <!-- DASHBOARD / NO ADS MANAGER -->
-      <section id="what" class="dark">
-        <div class="wrap split">
-          <div>
-            <h2 style="color:var(--cream)">בלי לצלול ל־Ads Manager.</h2>
-            <p class="lead" style="color:rgba(247,242,234,0.75);margin-top:20px">
-              אתם לא צריכים לדעת מה זה CTR. <span style="color:var(--orange);font-weight:700">אנחנו כן.</span>
+      <section class="dark">
+        <div class="wrap quality-grid">
+          <h2 class="quality-title">פנייה היא לא בהכרח <span>פנייה טובה.</span></h2>
+          <div class="quality-copy">
+            <p class="lead">
+              Meta יודעת שנשלח טופס או נפתחה שיחת וואטסאפ. היא לא יודעת אם זו הייתה התעניינות אמיתית,
+              טעות או ספאם. לכן Ads Agent שואל כמה מהפניות באמת היו רלוונטיות לעסק.
             </p>
-          </div>
-          <div class="dash">
-            <div class="head">
-              <b>הקמפיין שלך</b>
-              <span class="st"><span class="led"></span> הכל עובד כרגיל</span>
-            </div>
-            <div class="kpis">
-              <div class="kpi"><b>₪734</b><span>הוצאה החודש</span></div>
-              <div class="kpi"><b>18</b><span>פניות</span></div>
-              <div class="kpi"><b>₪41</b><span>לפנייה</span></div>
-            </div>
-            <div class="ok-row"><span class="c">✓</span> אין כרגע צורך לעשות שום דבר.</div>
+            <p class="quality-rule">ליד זול שלא מתאים לעסק הוא לא הצלחה.</p>
           </div>
         </div>
       </section>
 
-      <!-- CREATIVE -->
       <section>
-        <div class="wrap split">
-          <div class="dash">
-            <div class="head"><b>המודעות שלכם</b><span class="st muted">7 ימים אחרונים</span></div>
-            <div class="mini" style="margin-bottom:12px"><span>וידאו — לפני/אחרי</span><b class="up">עובדת מצוין · ₪38</b></div>
-            <div class="mini"><span>תמונה — הצעה</span><b style="color:var(--orange)">נחלשה · מומלץ להחליף</b></div>
-          </div>
-          <div>
-            <h2>אנחנו לא רק מסתכלים על מספרים.<br />אנחנו מסתכלים על מה שאתם מפרסמים.</h2>
-            <p class="lead" style="margin-top:20px">
-              אנחנו משווים בין המודעות שרצות ומזהים כשקריאייטיב מפסיק להביא תוצאות.
+        <div class="wrap creative-grid">
+          <div class="creative-block"><p>הקריאייטיב הוא לא קישוט. הוא הדבר שהלקוח שלכם פוגש.</p></div>
+          <div class="creative-copy">
+            <p class="eyebrow">המודעות</p>
+            <h2>מעלים תוכן בלי להיכנס למערכת של Meta.</h2>
+            <p class="lead">
+              אפשר לבחור פוסט קיים מהעמוד או להעלות תמונה, וידאו וטקסט חדשים. Ads Agent מוסיף אותם לקמפיין ומציג את המודעות הפעילות במקום אחד.
             </p>
-            <p class="promise">הקריאייטיב שלכם. הניהול עלינו.</p>
+            <p class="boundary">לא נכריז על "מודעה מנצחת" אחרי יומיים. אם אין מספיק מידע, לא ננחש על התקציב שלכם.</p>
           </div>
         </div>
       </section>
 
-      <!-- LEAD QUALITY -->
-      <section class="band">
-        <div class="wrap">
-          <h2>לא כל ליד שווה אותו דבר.</h2>
-          <div class="lq">
-            <div class="q">היו לך 12 פניות השבוע.<br />כמה מהן היו רלוונטיות?</div>
-            <div class="stepper"><button type="button" aria-label="פחות">–</button><span class="v">7</span><button type="button" aria-label="יותר">+</button></div>
-            <div><a href="#contact" class="btn btn-dark">שמירה</a></div>
-            <p class="muted" style="margin:22px 0 0;font-size:0.95rem">
-              אתם אומרים לנו אם הפניות היו טובות — ואנחנו משתמשים בזה כדי להבין טוב יותר מה באמת עובד לעסק.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <!-- SUPPORT + APPROVAL -->
-      <section id="contact" class="support">
-        <div class="wrap">
-          <h2>וכן. יש גם עם מי לדבר.</h2>
-          <p class="lead" style="max-width:34em;margin:20px auto 0">
-            מתחילים בשיחת הקמה עם בן אדם אמיתי. צריכים עזרה גם אחרי שעליתם לאוויר?
-            אפשר לדבר איתנו בוואטסאפ או לקבוע שיחה.
-          </p>
-          <div class="cta">
-            <!-- TODO: real WhatsApp number -->
-            <a href="https://wa.me/972500000000" class="btn btn-primary">דברו איתנו בוואטסאפ</a>
-            <a href="#contact" class="btn btn-dark">קבעו שיחה</a>
-          </div>
-          <p class="promise" style="margin-top:44px">שום שינוי בתקציב בלי האישור שלכם.</p>
-        </div>
-      </section>
-
-      <!-- PRICING -->
       <section id="price">
         <div class="wrap">
-          <p class="eyebrow">מחיר</p>
-          <h2 style="margin-bottom:40px">מחיר אחד. בלי אחוז מהמדיה.</h2>
-          <div class="price-wrap">
+          <div class="price-head">
+            <p class="eyebrow">מחיר</p>
+            <h2>מחיר אחד. בלי אחוז מתקציב הפרסום.</h2>
+            <p class="lead">תשלום חודשי קבוע, בלי אחוז מתקציב הפרסום ובלי הפתעות. תקציב הפרסום עצמו משולם ישירות ל-Meta.</p>
+          </div>
+          <div class="price-grid">
             <div class="price-card">
-              <div class="amt">₪299 <small>לחודש</small></div>
-              <div class="setup">₪299 הקמה חד־פעמית</div>
-              <ul class="feat">
-                <li><span class="c">✓</span> ניהול קמפיין אחד</li>
-                <li><span class="c">✓</span> מעקב שוטף</li>
-                <li><span class="c">✓</span> המלצות ושינויים באישורכם</li>
-                <li><span class="c">✓</span> דשבורד פשוט</li>
-                <li><span class="c">✓</span> תמיכה בוואטסאפ</li>
-                <li><span class="c">✓</span> שיחות כשצריך</li>
-              </ul>
-              <p class="setup" style="margin-top:24px">תקציב הפרסום משולם ישירות למטא ואינו כלול במחיר.</p>
-              <a href="#contact" class="btn btn-primary" style="margin-top:14px">דברו איתנו</a>
+              <div class="amount">₪299 <small>לחודש</small></div>
+              <p class="setup">₪299 הקמה חד-פעמית</p>
+              <a href="mailto:hello@ads-agent.co.il?subject=הצטרפות ל-Ads Agent" class="btn btn-primary">בדקו התאמה <span class="arrow">←</span></a>
             </div>
-            <div class="fit">
-              <h3>מתאים במיוחד אם…</h3>
+            <div class="include-card">
+              <h3>מה כלול</h3>
               <ul>
-                <li>אתם כבר מפרסמים בפייסבוק או באינסטגרם.</li>
-                <li>המטרה שלכם היא לקבל פניות לעסק.</li>
-                <li>אתם רוצים שמישהו ינהל את הקמפיין — אבל ₪1,000+ בחודש מרגיש מוגזם.</li>
-                <li>יש לכם תקציב פרסום של כמה אלפי שקלים בחודש.</li>
+                <li>חיבור או הקמה של קמפיין לידים אחד</li>
+                <li>דשבורד פשוט בעברית</li>
+                <li>מעקב אחר חיבור, פרסום ומדידה</li>
+                <li>הוספת תוכן ושליטה בסיסית במודעות</li>
+                <li>משוב על איכות הפניות</li>
+                <li>תמיכה אנושית ושיחות כשצריך</li>
               </ul>
-              <p class="strong">נשמע כמוכם? בואו נדבר.</p>
-              <a href="#contact" class="btn btn-dark" style="margin-top:8px">דברו איתנו</a>
+              <p class="include-note">אין התחייבות לתוצאה או לכמות פניות. אנחנו מתחייבים להיות ברורים לגבי מה המערכת יודעת, מה היא לא יודעת ומה דורש פעולה.</p>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- FAQ -->
+      <section class="human">
+        <div class="wrap">
+          <h2>מערכת כשאפשר.<br />בן אדם כשצריך.</h2>
+          <p class="lead">מתחילים בשיחת הקמה, ואפשר לפנות אלינו גם אחר כך. לא נשאיר אתכם לבד מול הודעת שגיאה של Meta.</p>
+          <a href="mailto:hello@ads-agent.co.il?subject=שיחה על Ads Agent" class="btn btn-dark">דברו איתנו</a>
+        </div>
+      </section>
+
       <section id="faq">
         <div class="wrap faq">
           <p class="eyebrow">שאלות</p>
+          <h2>בלי אותיות קטנות.</h2>
           <details>
-            <summary>מי בפועל מנהל את הקמפיין?<span class="pm">+</span></summary>
-            <p>שילוב של מערכת אוטומטית וצוות אנושי. המערכת עוקבת ומזהה הזדמנויות; אנחנו מסבירים כל המלצה בעברית פשוטה, וכל שינוי בפועל מתבצע רק אחרי אישור שלכם.</p>
+            <summary>מה Ads Agent מנהל בפועל?<span class="pm">+</span></summary>
+            <p>את הצד התפעולי של קמפיין לידים אחד: חיבור או הקמה, מעקב אחר פרסום ומדידה, הצגת הנתונים, הוספת תוכן ושליטה בסיסית. אנחנו לא סוכנות קריאייטיב מלאה ולא מנהלים עבורכם את המכירות אחרי שהפנייה מגיעה.</p>
           </details>
           <details>
-            <summary>אתם משנים דברים בלי אישור שלי?<span class="pm">+</span></summary>
-            <p>לא. מעקב וניתוח קורים אוטומטית, אבל כל שינוי בתקציב או בקמפיין מתבצע רק אחרי שאתם מאשרים. אף פעם לא בלי אישור.</p>
+            <summary>אתם מבטיחים יותר פניות או עלות נמוכה יותר?<span class="pm">+</span></summary>
+            <p>לא. אף מערכת רצינית לא יכולה להבטיח תוצאה כזאת מראש. אנחנו עוזרים להפעיל את הקמפיין בצורה מסודרת, לזהות בעיות שאנחנו יודעים למדוד ולהציע פעולה רק כשיש לה בסיס.</p>
           </details>
           <details>
-            <summary>מה קורה עם מנהל הקמפיינים הנוכחי שלי?<span class="pm">+</span></summary>
-            <p>אפשר להיפרד ממנו ולחסוך את הריטיינר. אנחנו מתחברים לחשבון הפרסום הקיים וממשיכים מאיפה שהוא הפסיק.</p>
+            <summary>יש לי כבר קמפיין. צריך להתחיל מחדש?<span class="pm">+</span></summary>
+            <p>לא. בשיחת ההקמה אפשר לבחור קמפיין לידים קיים ולחבר אותו ל-Ads Agent. אם אין קמפיין מתאים, אפשר להקים חדש.</p>
           </details>
           <details>
-            <summary>אני צריך לתת לכם סיסמה לפייסבוק?<span class="pm">+</span></summary>
-            <p>לא. אתם נותנים לנו הרשאת שותף לחשבון הפרסום דרך מטא — בלי למסור סיסמה, ואפשר לבטל את ההרשאה בכל רגע.</p>
+            <summary>אילו קמפיינים נתמכים?<span class="pm">+</span></summary>
+            <p>כיום אנחנו מתמקדים בקמפיינים שמטרתם לקבל פניות לעסק - דרך וואטסאפ או דרך אתר עם אירוע המרה מוגדר.</p>
+          </details>
+          <details>
+            <summary>אתם משנים את התקציב בלי אישור?<span class="pm">+</span></summary>
+            <p>לא בעקבות המלצה של המערכת. שינוי תקציב מוצע רק עם הסבר ומחכה לאישור. פעולות שאתם מבקשים לבצע, כמו הוספת מודעה או הפעלתה, מתבצעות לפי הבקשה שלכם.</p>
+          </details>
+          <details>
+            <summary>צריך לתת לכם את הסיסמה לפייסבוק?<span class="pm">+</span></summary>
+            <p>לא. אתם משתפים הרשאת שותף לנכסים הרלוונטיים דרך הגדרות העסק של Meta. אפשר לבטל את ההרשאה בהמשך.</p>
           </details>
           <details>
             <summary>מי מכין את התמונות והסרטונים?<span class="pm">+</span></summary>
-            <p>אתם מספקים את הקריאייטיב (3–5 מודעות). אנחנו מנהלים אותן, מזהים מה עובד, וממליצים מתי כדאי להחליף.</p>
-          </details>
-          <details>
-            <summary>מה כלול ב־₪299?<span class="pm">+</span></summary>
-            <p>ניהול קמפיין אחד: מעקב שוטף, המלצות ושינויים באישורכם, דשבורד פשוט, תמיכה בוואטסאפ ושיחות כשצריך. תקציב הפרסום עצמו משולם ישירות למטא.</p>
-          </details>
-          <details>
-            <summary>מה קורה אם הקמפיין לא עובד?<span class="pm">+</span></summary>
-            <p>אנחנו לא ממציאים פעילות. אם אין מספיק נתונים שמצדיקים שינוי — נגיד לכם בכנות ונמשיך לעקוב. אם משהו דורש תשומת לב, נסביר ונציע פתרון.</p>
+            <p>אתם מספקים את התמונות, הסרטונים או הפוסטים הקיימים. Ads Agent עוזר להוסיף אותם לקמפיין. יצירת תוכן וצילום מלאים אינם כלולים כיום.</p>
           </details>
           <details>
             <summary>אפשר לדבר עם בן אדם?<span class="pm">+</span></summary>
-            <p>תמיד. מתחילים בשיחת הקמה עם אדם אמיתי, ואפשר לדבר איתנו בוואטסאפ או לקבוע שיחה בכל שלב.</p>
+            <p>כן. החיבור מתחיל בשיחה עם איש צוות, ואפשר לפנות אלינו גם בהמשך כשיש שאלה או בעיה.</p>
           </details>
         </div>
       </section>
 
-      <!-- FINAL CTA -->
       <section class="final">
         <div class="wrap">
-          <h2>העסק שלכם צריך את תשומת הלב שלכם.<br />הקמפיין לא.</h2>
-          <p class="sub">תנו לנו לבדוק אם אנחנו מתאימים לקמפיין שלכם.</p>
-          <a href="#contact" class="btn btn-primary">דברו איתנו</a>
-          <p class="muted" style="margin-top:18px;font-family:var(--mono);font-size:0.85rem">
-            ₪299 לחודש · חודשי, אפשר לבטל בכל עת
-          </p>
+          <h2>העסק שלכם צריך את תשומת הלב שלכם. Ads Manager לא.</h2>
+          <p class="lead">ספרו לנו איך אתם מפרסמים היום. נגיד בכנות אם Ads Agent מתאים לקמפיין שלכם.</p>
+          <a href="mailto:hello@ads-agent.co.il?subject=בדיקת התאמה ל-Ads Agent" class="btn btn-primary">בדקו התאמה <span class="arrow">←</span></a>
         </div>
       </section>
     </main>
@@ -570,16 +664,12 @@
     <footer>
       <div class="wrap foot">
         <div>
-          <div class="brand"><img src="/favicon.png" alt="" class="brand-icon" />Ads Agent</div>
-          <p class="tag">ניהול קמפיינים פשוט יותר לעסקים קטנים.</p>
+          <a href="#top" class="brand"><img src="/favicon.png" alt="" class="brand-icon" />Ads Agent</a>
+          <p class="tag">ניהול הצד הטכני של קמפיינים בפייסבוק ובאינסטגרם לעסקים קטנים.</p>
         </div>
-        <nav class="foot-links">
-          <!-- AIC-126: also in the footer, because .nav-links is display:none
-               below the mobile breakpoint — without this the guides section
-               would be unreachable from the homepage on a phone. -->
+        <nav class="foot-links" aria-label="קישורים נוספים">
           <a href="/guides">מדריכים</a>
-          <a href="https://wa.me/972500000000">וואטסאפ</a>
-          <a href="#contact">צרו קשר</a>
+          <a href="mailto:hello@ads-agent.co.il">צרו קשר</a>
           <a href="/terms.html">תקנון</a>
           <a href="/privacy.html">פרטיות</a>
           <a href="/login">כניסה</a>
