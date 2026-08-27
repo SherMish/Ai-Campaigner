@@ -77,4 +77,14 @@ describe("landing-page positioning", () => {
     expect(html).toContain("קמפיין לידים");
     expect(html).toContain("Ads Manager");
   });
+
+  it("routes every acquisition CTA to the real business WhatsApp", () => {
+    const links = [...html.matchAll(/href="(https:\/\/wa\.me\/972526964069\?text=[^"]+)"/g)].map((match) => match[1]);
+    expect(links).toHaveLength(6);
+    expect(html).not.toContain("mailto:");
+    for (const href of links) {
+      expect(new URL(href).searchParams.get("text")?.trim()).toBeTruthy();
+    }
+    expect(html.match(/target="_blank" rel="noopener"/g)).toHaveLength(6);
+  });
 });

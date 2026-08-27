@@ -68,9 +68,10 @@ A single fluid, responsive RTL page in the Ads Agent cream/ink/orange system:
 
 ## Contact path
 
-Until a real business WhatsApp number or booking URL is supplied, acquisition
-CTAs use `hello@ads-agent.co.il`. The landing must never ship a placeholder
-`wa.me/972500000000` link. `כניסה` points to `/login`.
+Every acquisition CTA opens WhatsApp for the business number
+`972526964069` in a new tab. Fit-check, joining and conversation links each
+carry a short matching Hebrew message so the visitor does not start from an
+empty chat. `כניסה` still points to `/login`; legal links remain internal.
 
 ## Legal pages (terms of use, privacy policy)
 `web/public/terms.html` and `web/public/privacy.html` — self-contained static

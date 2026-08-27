@@ -6,6 +6,14 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-27 — Landing acquisition moves to WhatsApp (AIC-149)
+
+All six public acquisition links now open a conversation with the real Ads
+Agent WhatsApp number instead of composing an email. Fit-check, joining and
+general-contact actions carry short matching Hebrew messages and open in a new
+tab, while login and legal navigation remain unchanged. Owning doc:
+[docs/features/landing.md](features/landing.md).
+
 ### 2026-08-27 — Diverse rotating hero creatives (AIC-148)
 
 The landing hero phone now rotates through four fictional local businesses -
