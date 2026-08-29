@@ -61,7 +61,39 @@ export class ConnectionService {
       );
     }
 
-    const health = worstHealth(checks.map((c) => c.health));
+    // AIC-150. Fold only the checks that actually ANSWERED. An `unknown` is
+    // the absence of a verdict, and it must not become one in either
+    // direction:
+    //
+    //   * as a loss — one `fetch failed` used to flip a live customer to
+    //     `needs_reconnect`, putting "איבדנו גישה לחשבון Meta" and a reconnect
+    //     button on their dashboard and halting execution;
+    //   * as an all-clear — folding it into `worstHealth` as a non-value made
+    //     it score below `ok`, so an unreachable ad account would have quietly
+    //     cleared a REAL prior revocation. The compiler caught this one when
+    //     `unknown` entered the type; nothing else would have.
+    //
+    // A definite non-ok still wins immediately: knowing the page grant is gone
+    // is knowledge, whatever happened to the other call.
+    const definite = checks.filter(
+      (c): c is AssetAccessResult & { health: AccessHealth } => c.health !== "unknown",
+    );
+    const unreachable = checks.filter((c) => c.health === "unknown");
+    const definiteWorst = worstHealth(definite.map((c) => c.health));
+
+    if (unreachable.length > 0 && definiteWorst === "ok") {
+      // Nothing is written — not the health, not last_verified_at, which would
+      // claim a verification that never happened. The previous answer stands
+      // until we can actually ask again.
+      console.warn(
+        `[connection] ${connectionId}: could not verify ${unreachable
+          .map((c) => `${c.kind}${c.detail ? ` (${c.detail})` : ""}`)
+          .join("; ")} — leaving access_health '${conn.accessHealth}' unchanged`,
+      );
+      return conn.accessHealth;
+    }
+
+    const health = definiteWorst;
     const at = this.now();
     const previous = conn.accessHealth;
 

@@ -6,6 +6,21 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-27 — AIC-150: a network blip told a customer we lost their Meta account
+
+Live on אבשלום's account: `access 'ok' → 'needs_reconnect' (network error
+verifying ad_account: fetch failed)`. A transport error says nothing about
+access — only that we could not ask — but `needs_reconnect` is customer-facing:
+it puts "איבדנו גישה לחשבון Meta" and a reconnect CTA on the dashboard, raises a
+high-severity alert, and halts execution. Every other health check in the engine
+already separates `broken` from `unknown`; this was the one that didn't, and the
+one that shouts. Transport failures, Meta 5xx and rate limits are now `unknown`,
+which writes nothing and re-asks next tick, while a definite revocation still
+alarms on the first look. Adding the type immediately exposed the mirror bug —
+an unknown scored below `ok` in `worstHealth`, so it would have silently cleared
+a REAL prior revocation. Owning doc:
+[docs/features/meta-connection.md](features/meta-connection.md).
+
 ### 2026-08-27 — Landing acquisition moves to WhatsApp (AIC-149)
 
 All six public acquisition links now open a conversation with the real Ads

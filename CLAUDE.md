@@ -7,6 +7,36 @@ code area to the doc that owns it. Start there before changing anything.
 
 ---
 
+## Live-account safety boundary (overrides everything else below)
+
+**Every managed campaign belongs to a real customer spending real money.**
+Nothing may be run against a live customer account — a test, a dummy ad, a
+budget change, a pause/resume, a live Meta write of any kind — unless it was
+either:
+
+- **initiated by that customer themselves**, through the customer dashboard, or
+- **done deliberately by an admin**, through the admin console, as a real
+  operational action.
+
+**The only accounts this does NOT apply to are our own**: Avshalom's account
+and Pisga's own account. Those are ours to use for verification, dogfooding,
+and live checks — everything else (every other customer's ad account, budget,
+ads, ad sets) is off-limits for anything exploratory.
+
+This means, concretely:
+- Never run a live Meta write (create/pause/resume/delete/budget-change) as a
+  verification step against a customer account other than Avshalom/Pisga —
+  read-only checks are fine, writes are not.
+- Never seed, dummy, or test data against a real customer's row without their
+  or an admin's explicit, deliberate action.
+- `META_WRITE_TEST` / `META_ADSET_WRITE_TEST` and similar env-gated probes must
+  only ever target Avshalom's or Pisga's own connection.
+- If a fix needs to be verified against real data, prefer read-only checks
+  first; if a write is genuinely required to verify something, ask before
+  running it against anything but our own accounts.
+
+---
+
 ## Working rules (non-negotiable)
 
 ### Documentation travels with the code

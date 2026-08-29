@@ -68,12 +68,17 @@ export class GraphMetaClient implements MetaClient {
       const { health, detail } = classifyGraphError(res.status, body);
       return { kind, id, health, detail };
     } catch (err) {
-      // Network/transport failure — unclassified; re-check next tick.
+      // AIC-150: transport failure — we could not ASK, which tells us nothing
+      // about whether we still have access. It used to return
+      // `needs_reconnect`, and one `fetch failed` in the Railway container put
+      // "איבדנו גישה לחשבון Meta" plus a reconnect button on a paying
+      // customer's dashboard, raised a high-severity alert, and gated
+      // execution. Re-checked next tick; nothing is written meanwhile.
       return {
         kind,
         id,
-        health: "needs_reconnect",
-        detail: `network error verifying ${kind} ${id}: ${(err as Error).message}`,
+        health: "unknown",
+        detail: `could not reach Meta to verify ${kind} ${id}: ${(err as Error).message}`,
       };
     }
   }

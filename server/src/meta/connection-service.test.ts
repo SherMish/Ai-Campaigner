@@ -110,3 +110,67 @@ describe("ConnectionService.assertExecutable (safety halt)", () => {
     );
   });
 });
+
+// AIC-150, from a live false alarm on אבשלום's account:
+//
+//   access 'ok' → 'needs_reconnect'
+//   (network error verifying ad_account act_…: fetch failed)
+//
+// `fetch failed` says nothing about whether we still have access — only that
+// we could not ask. It put "איבדנו גישה לחשבון Meta" and a reconnect CTA on a
+// paying customer's dashboard, raised a high-severity alert, and gated
+// execution. Every other health check in the engine already separates "broken"
+// from "unknown"; this was the one that didn't, and the one that shouts.
+describe("ConnectionService.verify — 'I could not ask' is not 'the answer is no'", () => {
+  it("a transport failure leaves health untouched and raises nothing", async () => {
+    const store = makeStore({ accessHealth: "ok" });
+    const client = new FakeMetaClient({ act_100: "unknown" });
+    const svc = new ConnectionService(store, client, () => FIXED);
+
+    expect(await svc.verify("conn-1")).toBe("ok"); // the PREVIOUS answer stands
+    expect(store.healthUpdates).toHaveLength(0);
+    expect(store.opsItems).toHaveLength(0);
+  });
+
+  it("does not silently clear a REAL problem either", async () => {
+    // Already known-revoked, and this tick could not reach Meta. Writing "ok"
+    // here would be the same bug pointing the other way.
+    const store = makeStore({ accessHealth: "revoked" });
+    const client = new FakeMetaClient({ act_100: "unknown" });
+    const svc = new ConnectionService(store, client, () => FIXED);
+
+    expect(await svc.verify("conn-1")).toBe("revoked");
+    expect(store.healthUpdates).toHaveLength(0);
+  });
+
+  it("an unknown asset never produces a false all-clear", async () => {
+    // Page and IG came back fine; the ad account could not be reached. That is
+    // not "everything is ok" — it is "we do not know yet".
+    const store = makeStore({ accessHealth: "needs_reconnect" });
+    const client = new FakeMetaClient({ act_100: "unknown", page_1: "ok", ig_1: "ok" });
+    const svc = new ConnectionService(store, client, () => FIXED);
+
+    expect(await svc.verify("conn-1")).toBe("needs_reconnect");
+    expect(store.healthUpdates).toHaveLength(0);
+  });
+
+  it("a DEFINITE revocation still wins, even when another asset is unknown", async () => {
+    // The alarm must stay loud for the case it exists for: we positively know
+    // the page grant is gone, whatever happened to the other call.
+    const store = makeStore({ accessHealth: "ok" });
+    const client = new FakeMetaClient({ act_100: "unknown", page_1: "revoked" });
+    const svc = new ConnectionService(store, client, () => FIXED);
+
+    expect(await svc.verify("conn-1")).toBe("revoked");
+    expect(store.healthUpdates).toHaveLength(1);
+    expect(store.opsItems).toHaveLength(1);
+  });
+
+  it("recovery still works once every asset answers ok", async () => {
+    const store = makeStore({ accessHealth: "needs_reconnect" });
+    const svc = new ConnectionService(store, new FakeMetaClient(), () => FIXED);
+
+    expect(await svc.verify("conn-1")).toBe("ok");
+    expect(store.healthUpdates).toHaveLength(1);
+  });
+});

@@ -32,7 +32,12 @@ export interface RawInsightRow {
 export interface AssetAccessResult {
   kind: AssetKind;
   id: string;
-  health: AccessHealth; // ok | revoked | invalid | needs_reconnect
+  // AIC-150: `unknown` is NOT a stored state — it is the absence of an answer
+  // (transport failure, Meta 5xx, rate limit). It never reaches the DB enum;
+  // ConnectionService refuses to write anything on it. Kept in the type so the
+  // difference between "access is gone" and "we could not ask" cannot be lost
+  // at a call site.
+  health: AccessHealth | "unknown"; // ok | revoked | invalid | needs_reconnect | unknown
   detail?: string; // internal explanation (never customer-facing)
 }
 
