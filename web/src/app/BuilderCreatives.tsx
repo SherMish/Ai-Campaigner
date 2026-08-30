@@ -34,6 +34,10 @@ export interface AdDraft {
 export function newAdDraft(index: number): AdDraft {
   return {
     clientKey: `adset-1-ad-${index}-${Math.random().toString(36).slice(2, 8)}`,
+    // A DRAFT LABEL for this screen only. AIC-154: the name the ad actually
+    // gets on Meta is assigned server-side, because the index here counts per
+    // drafting session — which is how add-content used to drop a second
+    // "מודעה 1" into an ad set that already had one.
     name: `${c.adTitle} ${index}`,
     source: "upload",
     headline: "",

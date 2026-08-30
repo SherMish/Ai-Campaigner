@@ -180,6 +180,20 @@ AIC-106).
 component and defaults the builder uses (`resolveAudienceDefault`) — one
 audience-input surface, not two.
 
+## Naming (AIC-154)
+
+The ad SET keeps the name the customer types — the one name in this flow a
+person chose on purpose. Its ads are named by `server/src/meta/naming.ts`:
+`מודעה <n>`, with n continuing from the ads already in that ad set on Meta.
+
+That last part is the fix. The index used to be counted per drafting session
+in the browser, so adding one ad to an ad set that already held `מודעה 1`
+produced a second `מודעה 1` — and two ads sharing a name are indistinguishable
+wherever the name identifies them, which for the Telegram digest means ads
+built from an existing IG/FB post (no headline, no primary text, so
+`creative-context.ts` falls through to the name). Full convention and
+rationale: [campaign-builder.md](campaign-builder.md).
+
 ## Destination shapes, shared with the builder
 
 `shared/src/recommended-defaults.ts`'s `DESTINATION_SHAPES` map is the single

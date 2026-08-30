@@ -10,6 +10,7 @@ import { resolveBuilderContext, ownsLocalCampaign, buildBuilderWriter } from "..
 import { startBuilderCampaign, buildCampaignOnMeta, type BuildCampaignInput } from "../builder/campaign-create.js";
 import { createCreativeIdempotent, uploadCreativeMedia, type CreativeSpec } from "../builder/creative-create.js";
 import type { CreativeMedia } from "../builder/creative-types.js";
+import { adSetName, campaignName } from "../meta/naming.js";
 
 // The guided builder's HTTP surface (AIC-52) — a thin layer over AIC-50's
 // create-writes and AIC-51's creative handling. Every route resolves the
@@ -247,7 +248,6 @@ builderRouter.post("/build", requireAuth, async (req, res) => {
       res.status(404).json({ error: "campaign not found" });
       return;
     }
-    if (!body.name?.trim()) { res.status(400).json({ error: "name is required" }); return; }
     if (!Number.isInteger(body.dailyBudgetAgorot) || (body.dailyBudgetAgorot as number) <= 0) {
       res.status(400).json({ error: "invalid budget" });
       return;
@@ -268,7 +268,10 @@ builderRouter.post("/build", requireAuth, async (req, res) => {
       localCampaignId: body.localCampaignId!,
       adAccountId: ctx.metaAdAccountId,
       pageId: ctx.pageId,
-      name: body.name,
+      // AIC-154: derived, never taken from the client. The customer builder
+      // never asks for a campaign name — it used to send strings.he.appName,
+      // so every campaign a customer built was called "Ads Agent".
+      name: campaignName({ destination: body.destination ?? FIXED_DESTINATION, createdAt: new Date() }),
       dailyBudgetAgorot: body.dailyBudgetAgorot!,
       specialAdCategories: specialCategories,
       bidStrategy: FIXED_BID_STRATEGY,
@@ -280,7 +283,9 @@ builderRouter.post("/build", requireAuth, async (req, res) => {
       adSets: [
         {
           clientKey: "adset-1",
-          name: `${body.name} — קהל 1`,
+          // AIC-154: the audience, in the same words the dashboard shows for
+          // it — not the campaign name plus a hardcoded "1".
+          name: adSetName({ ...body.targeting, genders: body.targeting.genders }),
           targeting: {
             ageMin: body.targeting.ageMin,
             ageMax: body.targeting.ageMax,

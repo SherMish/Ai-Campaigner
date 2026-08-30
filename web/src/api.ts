@@ -662,7 +662,18 @@ export async function createCreative(body: CreateCreativeBody, customerId?: stri
 
 export interface BuildCampaignBody {
   localCampaignId: string;
-  name: string;
+  /**
+   * AIC-154 — OPTIONAL, and the UI does not send it. The campaign name is
+   * derived server-side (`server/src/meta/naming.ts`) from the destination and
+   * the month, because this screen never asks for one: it used to send
+   * `strings.he.appName`, so every campaign a customer built was called
+   * "Ads Agent" in their own Ads Manager.
+   *
+   * Kept on the wire for the admin route, which lets an operator name a
+   * campaign deliberately — e.g. a takeover matching the customer's existing
+   * scheme. Nothing in the app sends it today.
+   */
+  name?: string;
   dailyBudgetAgorot: number;
   specialAdCategories: string[];
   destination?: string; // AIC-89 — defaults server-side to WhatsApp when omitted

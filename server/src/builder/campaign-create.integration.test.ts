@@ -350,6 +350,9 @@ d("campaign builder create-writes (DB)", () => {
     // separate launch step, and AIC-106 removed that step without revisiting it.)
     expect(writer.adSetCalls).toHaveLength(1);
     expect(writer.adCalls).toHaveLength(2);
+    // AIC-154: the ads are numbered by POSITION in a freshly-created ad set,
+    // from naming.ts — not from whatever label the client happened to send.
+    expect(writer.adCalls.map((a) => a.name)).toEqual(["מודעה 1", "מודעה 2"]);
 
     const camp = await pool.query(`SELECT meta_campaign_id, status, name, agreed_budget_agorot FROM managed_campaigns WHERE id = $1`, [localCampaignId]);
     expect(camp.rows[0].meta_campaign_id).toBe(result.metaCampaignId);

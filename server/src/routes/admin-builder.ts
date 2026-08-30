@@ -14,6 +14,7 @@ import type { CreativeMedia } from "../builder/creative-types.js";
 import { gendersOf } from "./builder.js";
 import { logAdminAction, type Actor } from "../services/admin-audit.js";
 import { PgUserStore } from "../auth/user-store.js";
+import { adSetName, campaignName } from "../meta/naming.js";
 
 // AIC-105 Branch A — the guided builder's HTTP surface (routes/builder.ts),
 // mirrored for an operator building a customer's FIRST campaign on their
@@ -240,7 +241,6 @@ adminBuilderRouter.post("/customers/:id/builder/build", async (req, res) => {
       res.status(404).json({ error: "campaign not found" });
       return;
     }
-    if (!body.name?.trim()) { res.status(400).json({ error: "name is required" }); return; }
     if (!Number.isInteger(body.dailyBudgetAgorot) || (body.dailyBudgetAgorot as number) <= 0) {
       res.status(400).json({ error: "invalid budget" });
       return;
@@ -261,7 +261,10 @@ adminBuilderRouter.post("/customers/:id/builder/build", async (req, res) => {
       localCampaignId: body.localCampaignId!,
       adAccountId: ctx.metaAdAccountId,
       pageId: ctx.pageId,
-      name: body.name,
+      // AIC-154: an operator may have a reason to name a campaign something
+      // specific — a takeover matching the customer's existing scheme, say —
+      // so a typed name still wins. Ours is the default, not a ceiling.
+      name: body.name?.trim() || campaignName({ destination: body.destination ?? FIXED_DESTINATION, createdAt: new Date() }),
       dailyBudgetAgorot: body.dailyBudgetAgorot!,
       specialAdCategories: specialCategories,
       bidStrategy: FIXED_BID_STRATEGY,
@@ -273,7 +276,7 @@ adminBuilderRouter.post("/customers/:id/builder/build", async (req, res) => {
       adSets: [
         {
           clientKey: "adset-1",
-          name: `${body.name} — קהל 1`,
+          name: adSetName({ ...body.targeting, genders: body.targeting.genders }),
           targeting: {
             ageMin: body.targeting.ageMin,
             ageMax: body.targeting.ageMax,

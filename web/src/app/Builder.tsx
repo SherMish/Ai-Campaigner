@@ -248,7 +248,8 @@ export function Builder({ customerId, onExit }: Props = {}) {
     try {
       const result = await buildCampaign({
         localCampaignId,
-        name: strings.he.appName,
+        // AIC-154: no name. The server derives it — this sent
+        // strings.he.appName, which named every campaign "Ads Agent".
         dailyBudgetAgorot: Math.round(wizard.dailyBudgetShekels * 100),
         specialAdCategories: wizard.specialCategory === "NONE" ? [] : [wizard.specialCategory],
         destination: wizard.destination,

@@ -7,6 +7,7 @@ import {
 import { WriteOutbox, builderKey, type WriteKind, type CreatingWriter } from "../execution/write-outbox.js";
 import { assertCreateWithinBudget } from "../execution/budget.js";
 import type { BuilderWriter, CreateAdSetTargeting } from "./types.js";
+import { adName } from "../meta/naming.js";
 
 // The builder's idempotent multi-step create (AIC-50): campaign → ad set(s) →
 // ad(s), always PAUSED. Every step goes through WriteOutbox.applyIdempotent,
@@ -277,7 +278,13 @@ export async function buildCampaignOnMeta(
     await logCreate(pool, input.localCampaignId, "create_ad_set", metaAdSetId, `created ad set "${as.name}"`);
 
     const adResults: Array<{ clientKey: string; metaAdId: string }> = [];
+    // AIC-154: the ad set is one we just created, so it is empty and the
+    // index simply follows position. No read needed — unlike add-content,
+    // which is putting ads into an ad set that already holds some.
+    let adIndex = 0;
     for (const ad of as.ads) {
+      adIndex += 1;
+      const thisAdName = adName(adIndex);
       const metaAdId = await outbox.applyIdempotent(
         {
           idempotencyKey: builderKey(input.localCampaignId, "create_ad", ad.clientKey),
@@ -287,14 +294,14 @@ export async function buildCampaignOnMeta(
           payload: {
             adAccountId: input.adAccountId,
             metaAdSetId,
-            name: ad.name,
+            name: thisAdName,
             creativeId: ad.creativeId,
           },
         },
         creator,
       );
       createdMetaIds.push(metaAdId);
-      await logCreate(pool, input.localCampaignId, "create_ad", metaAdId, `created ad "${ad.name}"`);
+      await logCreate(pool, input.localCampaignId, "create_ad", metaAdId, `created ad "${thisAdName}"`);
       adResults.push({ clientKey: ad.clientKey, metaAdId });
     }
     adSetResults.push({ clientKey: as.clientKey, metaAdSetId, ads: adResults });

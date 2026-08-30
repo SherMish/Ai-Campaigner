@@ -6,6 +6,21 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-30 — AIC-154: one naming convention for what we create on Meta
+
+There was none — six call sites built names inline. Every self-serve campaign
+was literally named "Ads Agent" (`strings.he.appName`); ad sets were
+`${campaign} — קהל 1` with a hardcoded 1; ad indices were counted per drafting
+session, so add-content dropped a second `מודעה 1` into an ad set that already
+had one. `server/src/meta/naming.ts` is now the only place any of the three is
+built: `Ads Agent · וואטסאפ · 2026-08`, the audience label itself for ad sets
+(sharing `composeAudienceLabel` with the dashboard so the two cannot drift),
+and `מודעה n` continuing from the ad set's live names on Meta. Create-time
+only — nothing existing is renamed, and adopted campaigns keep the customer's
+own names.
+
+---
+
 ### 2026-08-30 — wizard: "צור קמפיין חדש" was disabled with no reason given
 
 Reported live: Page picked, budget filled, button dead and the screen silent.

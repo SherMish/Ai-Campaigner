@@ -167,16 +167,38 @@ const GENERIC_AUDIENCE_LABEL = "קהל כללי";
 // If two ad sets end up with the identical composed label (same targeting,
 // only creative differs), a running "(2)", "(3)" suffix disambiguates them —
 // still never the raw name.
+/**
+ * One audience, in words: `נשים · 21–46 · תל אביב`.
+ *
+ * Extracted from deriveAudienceLabels (AIC-154) so the NAME we write to Meta
+ * when creating an ad set and the LABEL we show the customer for it come from
+ * the same function. They describe the same thing, and two formatters would
+ * have agreed on the day they were written and drifted afterwards — leaving
+ * an operator comparing the dashboard against Ads Manager unable to tell
+ * whether a difference in wording means a difference in audience.
+ *
+ * Takes the four fields it actually reads rather than a whole AdSetMeta: at
+ * create time there is no ad set yet, only the targeting we are about to send.
+ */
+export function composeAudienceLabel(a: {
+  genders: AdSetMeta["genders"];
+  ageMin: number | null;
+  ageMax: number | null;
+  geoSummary: string;
+}): string {
+  const parts: string[] = [];
+  if (a.genders !== "all") parts.push(GENDER_HE[a.genders]);
+  if (a.ageMin != null) parts.push(a.ageMax != null ? `${a.ageMin}–${a.ageMax}` : `${a.ageMin}+`);
+  if (a.geoSummary) parts.push(a.geoSummary);
+  return parts.length > 0 ? parts.join(" · ") : GENERIC_AUDIENCE_LABEL;
+}
+
 export function deriveAudienceLabels(adsets: AdSetMeta[]): Map<string, string> {
   const labels = new Map<string, string>();
   const seen = new Map<string, number>();
 
   for (const a of adsets) {
-    const parts: string[] = [];
-    if (a.genders !== "all") parts.push(GENDER_HE[a.genders]);
-    if (a.ageMin != null) parts.push(a.ageMax != null ? `${a.ageMin}–${a.ageMax}` : `${a.ageMin}+`);
-    if (a.geoSummary) parts.push(a.geoSummary);
-    const base = parts.length > 0 ? parts.join(" · ") : GENERIC_AUDIENCE_LABEL;
+    const base = composeAudienceLabel(a);
 
     const n = (seen.get(base) ?? 0) + 1;
     seen.set(base, n);

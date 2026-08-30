@@ -3,6 +3,7 @@ import { FIXED_DESTINATION } from "@aic/shared";
 import { markCreativesAttached } from "../services/creative-reaper.js";
 import { WriteOutbox, builderKey } from "../execution/write-outbox.js";
 import { asCreatingWriter } from "../builder/campaign-create.js";
+import { adName, nextAdIndex } from "../meta/naming.js";
 import type { BuilderWriter, CreateAdSetTargeting } from "../builder/types.js";
 import { approveAddition, type ApproveResult } from "./approve.js";
 import { refreshAdMetaNow, type AdMetaReader } from "../services/ad-meta-cache.js";
@@ -129,6 +130,26 @@ export async function addAdToExistingCampaign(
   const outbox = new WriteOutbox(pool);
   const creator = asCreatingWriter(writer);
 
+  // AIC-154 — THE COLLISION THIS FIXES. The name used to come from the
+  // client, where it was `מודעה ${i}` counted per DRAFTING SESSION: adding one
+  // ad to an ad set that already had "מודעה 1" produced a second "מודעה 1".
+  // Two ads with one name are indistinguishable wherever the name is what
+  // identifies them — the Telegram digest falls through to it for post-based
+  // ads, which have neither headline nor primary text.
+  //
+  // Read from META, not from anything we store: an ad added through Ads
+  // Manager between two of our calls exists and would otherwise be invisible
+  // to the count. Isolated, because a naming read must never be the reason an
+  // add fails — on a failed read we fall back to the client's label, which is
+  // the behaviour that shipped for months.
+  let name = input.name;
+  try {
+    const existing = await writer.listAds(input.metaCampaignId);
+    name = adName(nextAdIndex(existing.filter((a) => a.adSetId === input.metaAdSetId).map((a) => a.name)));
+  } catch (e) {
+    console.warn(`[additions] could not read existing ad names for numbering — ${(e as Error).message}`);
+  }
+
   const metaAdId = await outbox.applyIdempotent(
     {
       idempotencyKey: builderKey(input.localCampaignId, "create_ad", `add-${input.additionKey}`),
@@ -138,7 +159,7 @@ export async function addAdToExistingCampaign(
       payload: {
         adAccountId: input.metaAdAccountId,
         metaAdSetId: input.metaAdSetId,
-        name: input.name,
+        name,
         creativeId: input.creativeId,
       },
     },
@@ -150,9 +171,9 @@ export async function addAdToExistingCampaign(
   // use regardless. What it buys is that the common path settles immediately
   // instead of sitting as a candidate until the next reap.
   await markCreativesAttached(pool, [input.creativeId]);
-  await logAdd(pool, input.localCampaignId, "create_ad", metaAdId, `added ad "${input.name}" (paused) to an existing ad set`, input.actor);
+  await logAdd(pool, input.localCampaignId, "create_ad", metaAdId, `added ad "${name}" (paused) to an existing ad set`, input.actor);
 
-  const additionId = await recordPending(pool, input.localCampaignId, input.additionKey, "ad", input.name, input.metaAdSetId, [metaAdId]);
+  const additionId = await recordPending(pool, input.localCampaignId, input.additionKey, "ad", name, input.metaAdSetId, [metaAdId]);
   // Activate immediately (AIC-106). Note this activates the AD only — never
   // its parent ad set, which may be deliberately paused; approveAddition's
   // kind='ad' branch already encodes that.
@@ -209,7 +230,12 @@ export async function addAdSetToExistingCampaign(
   await logAdd(pool, input.localCampaignId, "create_ad_set", metaAdSetId, `added ad set "${input.name}" (paused)`, input.actor);
 
   const metaAdIds: string[] = [];
+  // A brand-new ad set holds nothing, so position is the index (AIC-154). The
+  // ad SET keeps the name the customer typed — that one they chose.
+  let adIndex = 0;
   for (const ad of input.ads) {
+    adIndex += 1;
+    const thisAdName = adName(adIndex);
     const metaAdId = await outbox.applyIdempotent(
       {
         idempotencyKey: builderKey(input.localCampaignId, "create_ad", `add-${input.additionKey}-${ad.clientKey}`),
@@ -219,13 +245,13 @@ export async function addAdSetToExistingCampaign(
         payload: {
           adAccountId: input.metaAdAccountId,
           metaAdSetId,
-          name: ad.name,
+          name: thisAdName,
           creativeId: ad.creativeId,
         },
       },
       creator,
     );
-    await logAdd(pool, input.localCampaignId, "create_ad", metaAdId, `added ad "${ad.name}" (paused)`, input.actor);
+    await logAdd(pool, input.localCampaignId, "create_ad", metaAdId, `added ad "${thisAdName}" (paused)`, input.actor);
     metaAdIds.push(metaAdId);
   }
 

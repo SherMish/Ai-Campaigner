@@ -1025,6 +1025,62 @@ prefill bug fix, and the mobile overflow fix — all confirmed zero
 `scrollWidth` overflow after the CSS fix. The actual create + activate
 against a real Meta campaign rides the same pending live dogfood as AIC-50.
 
+## What we name the things we create (AIC-154)
+
+`server/src/meta/naming.ts` is the only place a campaign, ad-set or ad name is
+constructed. Before it, six call sites each built one inline.
+
+| Object | Name | Example |
+| --- | --- | --- |
+| Campaign | `Ads Agent · <destination> · <YYYY-MM>` | `Ads Agent · וואטסאפ · 2026-08` |
+| Ad set | the audience, from `composeAudienceLabel` | `נשים · 35–55 · ישראל` |
+| Ad | `מודעה <n>`, n continuing from the ad set | `מודעה 3` |
+
+**The prefix is the point, and used to be the whole name.** The customer
+builder sent `strings.he.appName`, so every campaign a customer built was
+called "Ads Agent" — a second build produced a second identical row. The
+account is theirs and usually holds campaigns they made themselves (GelNails
+has five), so a marker for ours is genuinely useful; what it needed was the
+destination and the month beside it. An unknown destination **throws**, the
+same posture `resolveDestinationShape` takes: a destination nobody has named
+is an unfinished change, and a generic fallback would ship it onto a live
+account silently.
+
+**The ad-set name and the dashboard's audience label are one string, by
+construction.** `composeAudienceLabel` (`meta/audience-label.ts`) was
+extracted from `deriveAudienceLabels` so both callers share it. Two
+formatters for one concept would have agreed the day they were written and
+drifted after — leaving an operator comparing our dashboard against Ads
+Manager unable to tell whether different wording meant a different audience.
+The old format, `${campaign name} — קהל 1`, repeated what Meta's own nesting
+already shows and ended in a hardcoded `1` that was never a counter.
+
+**The ad name is an index and deliberately carries no meaning.** Naming an ad
+after its headline sounds better and is worse: the creative can be edited on
+Meta afterwards and the name would not follow, leaving a label that
+confidently describes copy the ad no longer runs. Nothing needs it to mean
+anything — every consumer identifying an ad by content already prefers the
+headline, then the primary text, and falls through to the name only when both
+are absent (`services/creative-context.ts`). Its one job is uniqueness inside
+its ad set, which is the job it was failing: the index was counted per
+DRAFTING SESSION, so add-content put a second `מודעה 1` beside the existing
+one. `nextAdIndex` now reads the ad set's live ad names from Meta and takes
+the higher of "one past our biggest index" and "one past the count" — the
+second half is what keeps it safe in an adopted ad set whose ads carry the
+customer's own unparsable names. The read is isolated: if it fails, the create
+still proceeds with the client's label, because a naming lookup must never be
+the reason an add fails.
+
+**Nothing is ever renamed.** Every name here is applied at create time only.
+Existing campaigns, ad sets and ads live in customers' accounts, and a rename
+is a Meta write nobody asked for — the live-account safety boundary in
+CLAUDE.md. Adopted campaigns keep the customer's own names permanently.
+
+**The one name a person still chooses** is an ad set added through
+add-content, where the customer types it (placeholder "למשל: נשים 35-55"), and
+a campaign name explicitly posted to the admin build route. The customer
+builder posts no name at all.
+
 ## The creative step: dropzone + ad preview (AIC-130)
 
 **Upload** was a bare `<input type="file">` — the browser's own grey "Choose

@@ -126,6 +126,57 @@ d("add content to an existing campaign (DB)", () => {
     ]);
   });
 
+  it("AIC-154: an ad added to an ad set that already has ours continues the numbering", async () => {
+    // THE COLLISION. The name used to come from the client, counted per
+    // drafting session, so this produced a SECOND "מודעה 1" in an ad set that
+    // already had one — and two ads with one name are indistinguishable
+    // wherever the name is what identifies them.
+    const { campaignId } = await makeExistingCampaign("ad-naming");
+    const writer = new FakeAddContentWriter();
+    writer.adsOnMeta = [
+      { adId: "ad_a", adSetId: "as_existing_1", name: "מודעה 1", effectiveStatus: "ACTIVE", createdTime: null },
+      // A different ad set's ad must not shift our numbering.
+      { adId: "ad_b", adSetId: "as_other", name: "מודעה 9", effectiveStatus: "ACTIVE", createdTime: null },
+    ];
+
+    await addAdToExistingCampaign(pool, writer, {
+      localCampaignId: campaignId,
+      metaAdAccountId: "act_123",
+      metaCampaignId: "meta_camp_it",
+      metaAdSetId: "as_existing_1",
+      name: "whatever the client called it",
+      creativeId: "crea_1",
+      additionKey: "attempt-naming", actor: "customer",
+    });
+
+    expect(writer.adCalls[0].name).toBe("מודעה 2");
+  });
+
+  it("AIC-154: a new ad set numbers its own ads from 1, and keeps the customer's set name", async () => {
+    const { campaignId } = await makeExistingCampaign("adset-naming");
+    const writer = new FakeAddContentWriter();
+
+    const result = await addAdSetToExistingCampaign(pool, writer, {
+      localCampaignId: campaignId,
+      metaAdAccountId: "act_123",
+      metaCampaignId: "meta_camp_existing",
+      pageId: "page_1",
+      name: "נשים 35-55",
+      targeting: { ageMin: 35, ageMax: 55, genders: [2], countries: ["IL"] },
+      ads: [
+        { clientKey: "ad-1", name: "Ad A", creativeId: "crea_a" },
+        { clientKey: "ad-2", name: "Ad B", creativeId: "crea_b" },
+      ],
+      additionKey: "attempt-adset-naming", actor: "customer",
+    });
+
+    expect(writer.adCalls.map((a) => a.name)).toEqual(["מודעה 1", "מודעה 2"]);
+    // The ad SET name is the customer's own words — that one they chose, and
+    // it is the only name in this flow a person typed on purpose.
+    expect(writer.adSetCalls[0].name).toBe("נשים 35-55");
+    expect(result.metaAdIds).toHaveLength(2);
+  });
+
   it("a mid-build failure on add-ad-set resumes cleanly: retry only creates what's missing", async () => {
     const { campaignId } = await makeExistingCampaign("adset-resume");
     const writer = new FakeAddContentWriter();
