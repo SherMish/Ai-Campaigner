@@ -168,7 +168,7 @@ const checklist: TemplateDefinition = {
     { layout: "check", eyebrow: checklistCopy.slides.check1Eyebrow, title: v.check1Title, body: v.check1Body, number: "01" },
     { layout: "check", eyebrow: checklistCopy.slides.check2Eyebrow, title: v.check2Title, body: v.check2Body, number: "02" },
     { layout: "check", eyebrow: checklistCopy.slides.check3Eyebrow, title: v.check3Title, body: v.check3Body, number: "03" },
-    { layout: "warning", eyebrow: checklistCopy.slides.warningEyebrow, title: checklistCopy.slides.warningTitle, body: v.warning, accent: checklistCopy.slides.warningAccent },
+    { layout: "warning", eyebrow: checklistCopy.slides.warningEyebrow, title: checklistCopy.slides.warningTitle, body: v.warning },
     { layout: "cta", eyebrow: copy.shared.ctaEyebrow, title: v.ctaTitle, body: v.ctaBody, accent: checklistCopy.slides.ctaAccent },
   ],
 };

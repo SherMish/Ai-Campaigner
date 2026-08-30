@@ -320,7 +320,6 @@ export const strings = {
             check3Eyebrow: "בדיקה שלישית",
             warningEyebrow: "רגע לפני שמגדילים",
             warningTitle: "עוד תקציב לא מתקן תשתית שבורה",
-            warningAccent: "עצרו ובדקו",
             ctaAccent: "התחילו בחינם",
           },
         },

@@ -57,6 +57,14 @@ describe("Ads Agent Content Studio (AIC-142)", () => {
     expect(getTemplate("checklist").fields.some((field) => field.id.startsWith("check4"))).toBe(false);
   });
 
+  it("keeps the checklist warning slide free of a button-like accent", () => {
+    const slides = buildSlides("checklist", createDraft("checklist"));
+    const warning = slides.find((slide) => slide.layout === "warning");
+
+    expect(warning?.accent).toBeUndefined();
+    expect(slides.at(-1)?.accent).toBe("התחילו בחינם");
+  });
+
   it.each(ids)("%s sample copy is complete and exportable immediately", (id) => {
     expect(validateDraft(id, createDraft(id))).toEqual([]);
   });
