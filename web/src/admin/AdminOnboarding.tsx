@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FIXED_DESTINATION, WEBSITE_DESTINATION, missingRequiredFields } from "@aic/shared";
 import { api, ApiError, updateCustomer, type CustomerWriteFields } from "../api";
-import { step4Branch } from "./onboarding-step4";
+import { adAccountOptions, step4Branch } from "./onboarding-step4";
 import { strings } from "../strings";
 import { BusinessFields } from "./BusinessFields";
 import { profileBadge, badgeLabel, fieldNames } from "./profile-badge";
@@ -198,6 +198,9 @@ export function AdminOnboarding() {
   // The Page-side sibling of the ad-account picker (user request): pick from
   // what the System User can actually manage, instead of transcribing a raw
   // Page id out of Meta's own screen.
+  // AIC-153: the operator wants to BUILD a campaign on an account that
+  // already has some. Adopting stays the default; this is the escape hatch.
+  const [forceNewCampaign, setForceNewCampaign] = useState(false);
   const [pages, setPages] = useState<PageOption[] | null>(null);
   // Who else already has the SELECTED page, per picker. Derived rather than
   // stored: the answer must follow the dropdown, and a second piece of state
@@ -381,6 +384,14 @@ export function AdminOnboarding() {
     // Changing the ad account invalidates any campaign already picked under
     // the PREVIOUS one — clearing it rather than leaving a stale, mismatched
     // campaign id silently attached to a different account.
+    // The override belongs to the account it was chosen for — carrying it to
+    // the next account would silently offer to build on one the operator has
+    // not looked at yet.
+    setForceNewCampaign(false);
+    // The override belongs to the account it was chosen for — carrying it to
+    // another account would silently offer to build on one the operator has
+    // not looked at yet.
+    setForceNewCampaign(false);
     setForm((f) => ({ ...f, metaAdAccountId, metaCampaignId: "" }));
     setCampaigns(null);
     setCampaignsError(null);
@@ -676,7 +687,12 @@ export function AdminOnboarding() {
     loading: loadingCampaigns,
     error: campaignsError,
     campaigns: campaigns?.map((c) => ({ supported: c.destination.supported })) ?? null,
+    forceNewCampaign,
   });
+  // AIC-153: step 4 offers only the ad account already verified for THIS
+  // customer. It used to list every account the System User can reach —
+  // another customer's included — guarded by nothing but a note.
+  const adAccountChoices = adAccountOptions(adAccounts, state?.checks.ad_account?.assetId);
   // Kept as a name only for the build-a-new-campaign block below; every other
   // site now names its branch directly. The old NEGATION of this flag was the
   // bug — it rendered the adopt-existing form in the three states where we
@@ -1048,12 +1064,19 @@ export function AdminOnboarding() {
               disabled={loadingAdAccounts}
             >
               <option value="">{w.pickAdAccountPlaceholder}</option>
-              {(adAccounts ?? []).map((a) => (
+              {adAccountChoices.options.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name} ({a.id}){a.usedByCustomer ? ` — ${w.pickAdAccountUsedBy.replace("{name}", a.usedByCustomer.name)}` : ""}
                 </option>
               ))}
             </select>
+            {/* Say WHY only one is here — an unexplained single-option select
+                reads as a broken list. Names where to change it, so the
+                narrowing is a rule the operator can work with rather than a
+                dead end. */}
+            {adAccountChoices.scoped && (
+              <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickAdAccountScoped}</p>
+            )}
             {loadingAdAccounts && <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickAdAccountLoading}</p>}
             {adAccountsError && (
               <p style={{ color: "#c0362c", fontSize: "0.78rem", marginTop: 4 }}>
@@ -1198,6 +1221,57 @@ export function AdminOnboarding() {
           )}
           {branch === "error" && (
             <p className="muted" style={{ fontSize: "0.8rem" }}>{w.pickCampaignFailedNoBranch}</p>
+          )}
+          {branch === "adopt_existing" && (
+            <p style={{ fontSize: "0.8rem", marginTop: 4 }}>
+              <button
+                type="button"
+                className="link"
+                style={{ background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer", textDecoration: "underline" }}
+                onClick={() => { setForceNewCampaign(true); setForm((f) => ({ ...f, metaCampaignId: "" })); }}
+              >
+                {w.buildNewInstead}
+              </button>
+            </p>
+          )}
+          {branch === "new_campaign" && (campaigns?.length ?? 0) > 0 && (
+            <p style={{ fontSize: "0.8rem", marginTop: 4 }}>
+              {w.buildingNewNote}{" "}
+              <button
+                type="button"
+                className="link"
+                style={{ background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer", textDecoration: "underline" }}
+                onClick={() => setForceNewCampaign(false)}
+              >
+                {w.adoptExistingInstead}
+              </button>
+            </p>
+          )}
+          {/* AIC-153: an account with campaigns used to make adopting one the
+              ONLY reachable path. The builder always supported creating
+              another; only the wizard forbade it. */}
+          {branch === "adopt_existing" && (
+            <p style={{ fontSize: "0.8rem", marginTop: 4 }}>
+              <button
+                type="button"
+                onClick={() => { setForceNewCampaign(true); setForm((f) => ({ ...f, metaCampaignId: "" })); }}
+                style={{ background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer", textDecoration: "underline", color: "inherit" }}
+              >
+                {w.buildNewInstead}
+              </button>
+            </p>
+          )}
+          {branch === "new_campaign" && (campaigns?.length ?? 0) > 0 && (
+            <p style={{ fontSize: "0.8rem", marginTop: 4 }}>
+              {w.buildingNewNote}{" "}
+              <button
+                type="button"
+                onClick={() => setForceNewCampaign(false)}
+                style={{ background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer", textDecoration: "underline", color: "inherit" }}
+              >
+                {w.adoptExistingInstead}
+              </button>
+            </p>
           )}
           {branch === "adopt_existing" && (
             <>

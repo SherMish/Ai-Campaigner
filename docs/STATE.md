@@ -6,6 +6,27 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-30 — wizard: step 4 scoped to the verified ad account, and a way to build a new campaign
+
+Two operator-reported gaps. (1) Step 4 listed EVERY ad account the System User
+can reach — another customer's included — guarded only by a "בשימוש גם עבור X"
+note, on the step that writes the connection everything else is built on. It now
+offers only the account verified for that customer, and says why; if that
+account is missing from the fetched list it falls back to the full list rather
+than leaving a required field that cannot be filled. (2) An account with
+campaigns made adopting one the only reachable path, though the builder always
+supported creating another and Meta never objected. Adopting stays the default,
+with an explicit escape hatch both ways.
+
+Also fixes a test that leaked rows into production: the mass-assignment guard in
+customer-profile renames the attacker's own row to "hacked" (correct — they
+renamed themselves), which no longer matched the `LIKE '__it_prof_%'` cleanup,
+so every run left an orphan behind, seeded `is_test = false` and therefore
+counted as a real customer. Two such rows were deleted from production. Cleanup
+is now by id, fixtures are `is_test = true`, and the sibling isTest test was
+inverted to send `false` — the dangerous direction, and the only one that can
+still fail once fixtures are seeded true.
+
 ### 2026-08-30 — Instagram was invisible in the wizard even when correctly connected
 
 The IG picker asked only `{ad_account}/instagram_accounts`. That link is real
