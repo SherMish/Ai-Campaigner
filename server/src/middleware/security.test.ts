@@ -105,3 +105,35 @@ describe("security headers (security audit 2026-08-25)", () => {
     expect(plain.headers["strict-transport-security"]).toBeUndefined();
   });
 });
+
+// AIC-28. Widening a CSP is a security decision, so it gets a test that says
+// exactly how far it was widened — and that the widening did not quietly turn
+// script-src into a wildcard.
+function cspOf(): string {
+  const r = res();
+  securityHeaders(req("1.2.3.4"), r as never, () => {});
+  return String(r.headers["content-security-policy"]);
+}
+
+describe("CSP — the Mixpanel allowances, and their limits", () => {
+  it("permits Mixpanel's library origin and ingestion host, by name", () => {
+    // Without these the library is blocked and every call queues forever,
+    // silently — which is how this was found.
+    const csp = cspOf();
+    expect(csp).toContain("script-src 'self' https://cdn.mxpnl.com");
+    expect(csp).toContain("https://api-js.mixpanel.com");
+  });
+
+  it("names exact hosts, never a wildcard", () => {
+    // `https://*.mxpnl.com` would hand the same trust to anything Mixpanel
+    // ever hosts on any subdomain, including something they do not intend to
+    // serve scripts from.
+    const csp = cspOf();
+    expect(csp).not.toMatch(/script-src[^;]*\*/);
+    expect(csp).not.toMatch(/connect-src[^;]*\*/);
+  });
+
+  it("still forbids inline script — the widening is about ORIGIN, not method", () => {
+    expect(cspOf()).not.toMatch(/script-src[^;]*unsafe-inline/);
+  });
+});

@@ -66,6 +66,10 @@ ${modifiedAt ? `<meta property="article:modified_time" content="${modifiedAt}" /
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/guides/guides.css" />
 <script type="application/ld+json">${escapeJsonLd(jsonLd)}</script>
+<!-- AIC-28. Here rather than hand-added to the generated files, for the same
+     reason the OG tags are here: anything edited in web/public/guides is
+     overwritten on the next build. Learned the hard way. -->
+<script src="/analytics.js" defer></script>
 </head>
 <body>
 <header class="g-top">

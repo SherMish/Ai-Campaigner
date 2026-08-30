@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { strings } from "../strings";
 import { AuthLayout, Field, WA } from "./components";
 import { api, ApiError, setAuthToken } from "../api";
-import { resetAnalytics } from "../analytics";
+import { resetAnalytics, trackEvent } from "../analytics";
 
 const a = strings.he.app;
 
@@ -29,9 +29,12 @@ export function Signup() {
         method: "POST",
         body: JSON.stringify({ name, email, password }),
       });
-      // A fresh session must not inherit the previous customer's identity —
-      // the server re-identifies from /overview once it knows who this is.
-      resetAnalytics();
+      // AIC-28: tracked BEFORE any identify, and deliberately WITHOUT a
+      // reset. This browser already has an anonymous id carrying the landing
+      // page and guide visits that led here; resetting would discard exactly
+      // the join that makes an acquisition funnel possible. Mixpanel merges
+      // that history into the identity when the app identifies the customer.
+      trackEvent("signed_up");
       setAuthToken(token);
       nav("/onboarding");
     } catch (e) {
@@ -89,9 +92,11 @@ export function Login() {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
-      // A fresh session must not inherit the previous customer's identity —
-      // the server re-identifies from /overview once it knows who this is.
+      // Reset here, unlike signup: whoever logs in may not be whoever used
+      // this browser last, and they must not inherit that person's id. The
+      // app re-identifies from /overview once it knows who this is.
       resetAnalytics();
+      trackEvent("logged_in");
       setAuthToken(token);
       nav("/app");
     } catch (e) {

@@ -45,7 +45,7 @@ function CreativeContextPanel({ ctx }: { ctx: CreativeCtx | null | undefined }) 
     <div className="card" style={{ marginBottom: 24 }}>
       <button
         className="row between"
-        onClick={() => setOpen((v) => !v)}
+        data-track="creative_context_toggle" onClick={() => setOpen((v) => !v)}
         style={{ width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", textAlign: "start" }}
         aria-expanded={open}
       >

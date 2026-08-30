@@ -31,6 +31,10 @@ playwright-report/
 # The markdown IS the source; these are build output and would otherwise show
 # up as spurious diffs on every build.
 web/public/guides/
+# AIC-28: copied out of node_modules by scripts/vendor-mixpanel.mjs on every
+# build, exactly like the generated guides above. Committing it would let a
+# stale copy drift from the mixpanel-browser version in package.json.
+web/public/vendor/
 web/public/guides.html
 web/public/sitemap.xml
 web/public/robots.txt

@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Menu } from "lucide-react";
 import { strings } from "../strings";
 import { getConfig } from "../api";
-import { identifyCustomer, initAnalytics, trackPage } from "../analytics";
+import { identifyCustomer, initAnalytics, initClickTracking, trackPage } from "../analytics";
 import { useSharedOverview } from "./overview-store";
 import { Sidebar } from "./Sidebar";
 
@@ -37,6 +37,13 @@ export function AppShell() {
   useEffect(() => {
     trackPage(routePattern(pathname));
   }, [pathname]);
+  // A ref, not the value: the listener is attached once, and a stale closure
+  // would label every click with the route the app booted on.
+  const routeRef = useRef(pathname);
+  routeRef.current = pathname;
+  useEffect(() => {
+    initClickTracking(() => routePattern(routeRef.current));
+  }, []);
 
   // Escape closes the mobile drawer (AIC-42 a11y pass).
   useEffect(() => {

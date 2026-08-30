@@ -10,9 +10,20 @@ import type { Request, Response, NextFunction } from "express";
 // object URLs the upload preview creates from a local file before it is sent.
 const IMG_SRC = "'self' data: blob: https://*.fbcdn.net https://*.cdninstagram.com";
 
+// AIC-28: Mixpanel. The library is loaded from Mixpanel's CDN on the static
+// landing/guides pages, and every surface POSTs events to their ingestion
+// host. Both origins are named explicitly — a wildcard would hand the same
+// trust to anything Mixpanel ever hosts.
+//
+// Found by testing, not by reading: with `script-src 'self'` alone the library
+// is blocked and every call queues forever, silently. That would have been
+// dead in production exactly as it was locally.
+const MIXPANEL_CDN = "https://cdn.mxpnl.com";
+const MIXPANEL_API = "https://api-js.mixpanel.com https://api.mixpanel.com";
+
 const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  `script-src 'self' ${MIXPANEL_CDN}`,
   // 'unsafe-inline' is required for STYLE only, and it is not a loophole for
   // scripts. The app styles heavily through React `style={{…}}` props, which
   // CSP3 treats as inline styles; without this the UI renders unstyled.
@@ -20,8 +31,9 @@ const CSP = [
   "font-src 'self' data: https://fonts.gstatic.com",
   `img-src ${IMG_SRC}`,
   // The browser never talks to Meta directly — every Graph call goes through
-  // this server — so same-origin is the whole legitimate surface.
-  "connect-src 'self'",
+  // this server — so same-origin plus Mixpanel's ingestion host is the whole
+  // legitimate surface.
+  `connect-src 'self' ${MIXPANEL_API}`,
   // Clickjacking: nothing may frame this app. Paired with X-Frame-Options
   // below for browsers that predate frame-ancestors.
   "frame-ancestors 'none'",

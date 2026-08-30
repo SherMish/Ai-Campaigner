@@ -201,9 +201,9 @@ export function RecommendationDetail() {
               {isAdvisory(rec.type) ? (
                 <Link className="btn btn-primary" to="/app/add-content">{rd.addCreativesCta}</Link>
               ) : (
-                <button className="btn btn-primary" onClick={approve}>{a.approve}</button>
+                <button className="btn btn-primary" data-track="rec_approve" onClick={approve}>{a.approve}</button>
               )}
-              <button className="btn btn-outline" onClick={dismiss}>{a.notNow}</button>
+              <button className="btn btn-outline" data-track="rec_dismiss" onClick={dismiss}>{a.notNow}</button>
               <a className="btn btn-ghost" href={WA} style={{ marginInlineStart: "auto" }}>{rd.wantToTalk} {a.talk}</a>
             </div>
           </>

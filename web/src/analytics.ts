@@ -94,3 +94,62 @@ export function trackPage(routePattern: string): void {
     /* ignore */
   }
 }
+
+/** A named product event from the browser. snake_case, past tense. */
+export function trackEvent(event: string, props: Record<string, string | number | boolean> = {}): void {
+  if (!ready) return;
+  try {
+    mixpanel.track(event, props);
+  } catch {
+    /* ignore */
+  }
+}
+
+/*
+ * Delegated click tracking for the signed-in app.
+ *
+ * THE LABEL IS NEVER THE ELEMENT'S TEXT. In here the text is customer content:
+ * ad headlines, business names, audience labels, recommendation copy. Sending
+ * it would put customer data into event properties, which is the one thing the
+ * server tracker's scrubber exists to prevent — and the browser has no
+ * scrubber. So a label is either an explicit `data-track` attribute, or a
+ * structural descriptor derived from the element's own classes and role.
+ *
+ * The cost is that un-annotated buttons report as `button.btn-primary` rather
+ * than something readable. That is the right trade: an unreadable label is a
+ * nuisance, a leaked ad headline is a privacy problem. Add `data-track` to the
+ * controls worth naming.
+ */
+function clickLabel(el: Element): string {
+  const explicit = el.getAttribute("data-track");
+  if (explicit) return explicit;
+  const href = el.getAttribute("href");
+  if (href && href.startsWith("/")) return `link:${href.replace(/\/[0-9a-f-]{20,}/gi, "/:id")}`;
+  if (href) return "external_link";
+  // Class names are ours (ui.css), not content — safe and reasonably telling.
+  const cls = (el.className || "").toString().trim().split(/\s+/).filter(Boolean).slice(0, 2).join(".");
+  return cls ? `${el.tagName.toLowerCase()}.${cls}` : el.tagName.toLowerCase();
+}
+
+let clicksWired = false;
+
+export function initClickTracking(currentRoute: () => string): void {
+  if (clicksWired) return;
+  clicksWired = true;
+  document.addEventListener(
+    "click",
+    (e) => {
+      if (!ready) return;
+      const el = (e.target as Element | null)?.closest?.("a,button");
+      if (!el) return;
+      try {
+        mixpanel.track("element_clicked", { label: clickLabel(el), route: currentRoute() });
+      } catch {
+        /* ignore */
+      }
+    },
+    // Capture: a handler that stops propagation, or a link that navigates
+    // away, must not cost us the event.
+    true,
+  );
+}

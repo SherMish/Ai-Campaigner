@@ -221,7 +221,7 @@ function RecTeaser({ ov }: { ov: CustomerOverview }) {
       <div className="k">{h.recWaitingTitle}</div>
       <h3>{(ov.pendingRecommendationType && a.recDetail.titles[ov.pendingRecommendationType]) || h.recWaitingTitle}</h3>
       <div className="actions">
-        <Link className="btn btn-primary btn-sm" to="/app/recommendations">{h.view}</Link>
+        <Link className="btn btn-primary btn-sm" data-track="rec_teaser_view" to="/app/recommendations">{h.view}</Link>
       </div>
     </div>
   );
@@ -448,8 +448,8 @@ export function Home() {
                     <p style={{ marginTop: 8, maxWidth: "42em", fontSize: "0.9rem" }}>{threshold}</p>
                   )}
                 </div>
-                {hd.cta && <Link className="btn btn-primary btn-sm" to={hd.cta.to}>{hd.cta.label}</Link>}
-                {hd.launch && <button className="btn btn-primary btn-sm" onClick={() => setLaunchOpen(true)}>{hd.launch.label}</button>}
+                {hd.cta && <Link className="btn btn-primary btn-sm" data-track="hero_cta" to={hd.cta.to}>{hd.cta.label}</Link>}
+                {hd.launch && <button className="btn btn-primary btn-sm" data-track="hero_launch" onClick={() => setLaunchOpen(true)}>{hd.launch.label}</button>}
               </div>
             </div>
           )}

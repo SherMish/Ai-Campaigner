@@ -135,7 +135,9 @@ transition, **after** the row is written:
 | `recommendation_approved` | `customer-recommendations.ts`, after `execute()` | carries `execution_outcome` — an approval whose Meta write failed is not the same outcome as one that landed |
 | `campaign_launched` | `activate.ts` `markLaunched`, after `launch_approved_at` is set | a customer who clicked approve and hit a Meta failure never reaches here |
 | `meta_connection_lost` / `_restored` | `ConnectionService`, on a real health change | `unknown` never reaches it (AIC-150), so a network blip cannot look like a lost connection |
-| `page_viewed` | browser | the one thing the server cannot see |
+| `page_viewed` | browser (SPA + static) | the one thing the server cannot see |
+| `element_clicked` | browser | engagement; label never derived from text |
+| `signed_up` / `logged_in` | browser | see "Why signup is a browser event" |
 
 **The value moment is `recommendation_approved`.** Everything upstream exists to
 reach it: it is the moment the engine's judgement becomes a real change to a
@@ -205,3 +207,57 @@ Also absent: `customer_paid` and `onboarding_completed`. Both are operator
 actions in P0 (manual billing, hand-provisioning), so there is no honest code
 path to fire them from yet — and inventing one would be exactly the
 fireable-phase mistake this design exists to avoid.
+
+## The static surfaces (landing, /guides)
+
+`web/public/analytics.js`, loaded by `landing/index.html` and by every guide.
+The guides are generated, so the tag lives in `scripts/build-guides.mjs`'s
+shared `head()` — anything hand-added to `web/public/guides` is overwritten on
+the next build.
+
+Three things there were found by testing rather than reading, and each would
+have shipped silently broken:
+
+**Our own CSP blocked it.** `script-src 'self'` meant Mixpanel's library never
+loaded and every call queued forever, with no error. That would have been dead
+in production exactly as it was locally. `cdn.mxpnl.com` and the ingestion
+hosts are now named explicitly in the CSP — never a wildcard, and pinned by a
+test in `security.test.ts`.
+
+**The loader stub picks its URL from the page protocol**, so on http it
+requests `http://cdn.mxpnl.com`, which Mixpanel does not serve. We inject the
+library over https ourselves so both protocols behave identically.
+
+**The stub and the library are different objects.** When the library loads it
+replaces `window.mixpanel` and flushes the stub's queue once. Code holding the
+stub afterwards pushes into a queue nobody reads again — the first version did
+exactly that, so the page view worked and every click vanished. `send()` now
+resolves `window.mixpanel` at call time and never holds a reference.
+
+Payload: Mixpanel's CDN build is 33 KB gzipped; bundling the npm package was
+measured at 126 KB (it includes the session recorder). On SEO pages that
+difference outweighs the third-party request.
+
+## Why signup is a browser event when the server knows better
+
+Everything else in the funnel fires server-side, so this looks like an
+exception. It is not.
+
+At signup there is no customer yet — `customer_id` is NULL until an operator
+provisions one — so the server has no funnel identity to attribute it to. The
+browser does: the anonymous `distinct_id` that already carries the landing page
+and guide visits that led here. Tracking `signed_up` there, **without** calling
+`reset()`, is what joins "read a guide" to "became a customer".
+
+`reset()` on **login** is correct for the opposite reason: whoever logs in may
+not be whoever used that browser last, and must not inherit their id.
+
+## Click labels never come from element text
+
+In the app, text is customer content — ad headlines, business names, audience
+labels. A label is either an explicit `data-track` attribute or a structural
+descriptor (`button.btn-primary`, `link:/app/settings`). The cost is that
+un-annotated controls report unreadably; the alternative is leaking an ad
+headline into an event property that cannot be selectively deleted. Add
+`data-track` to the controls worth naming — `hero_launch`, `rec_approve`,
+`rec_dismiss`, `creative_context_toggle` already have it.
