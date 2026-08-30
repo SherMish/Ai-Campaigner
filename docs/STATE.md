@@ -6,6 +6,20 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-30 — wizard: the new-campaign toggle rendered twice, in the wrong column
+
+The escape hatch shipped earlier today was pasted twice and both copies sat as
+direct children of step 4's `auto-fit` grid, so each took its own column: the
+same link appeared under the ad-account field and again under the Facebook-page
+field, belonging visually to neither. It now lives inside the campaign field,
+directly under its select, once. Also suppressed "לא נמצאו קמפיינים בחשבון
+הפרסום הזה" in the forced-new case, where it contradicted the populated select
+above it. The behaviour it describes was undocumented; the owning section in
+[features/ops-console.md](features/ops-console.md) now covers both the scoping
+and the toggle.
+
+---
+
 ### 2026-08-30 — wizard: step 4 scoped to the verified ad account, and a way to build a new campaign
 
 Two operator-reported gaps. (1) Step 4 listed EVERY ad account the System User

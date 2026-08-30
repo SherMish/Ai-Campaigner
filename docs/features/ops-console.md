@@ -665,6 +665,28 @@ form. A failed load is its own state for the same reason — silently treating
 it as "no campaigns" would offer to build a second campaign for an account
 that already has one.
 
+**Step 4's ad-account picker is scoped to the account verified in step 1.**
+`adAccountOptions(all, verifiedId)` (`web/src/admin/onboarding-step4.ts`)
+returns `{options, scoped}`: when the customer has a verified ad-account check,
+the select offers that account alone and prints why, naming "בדיקת חשבון
+פרסום" as where to change it. Two deliberate non-scopings: nothing verified
+yet — narrowing there would invent a constraint the operator has not set — and
+a verified account absent from the fetch, which falls back to the full list,
+because filtering to nothing leaves a required field that cannot be filled.
+The step writes the connection everything downstream is built on, so an
+unscoped list containing another customer's account was a real hazard guarded
+by nothing but a note.
+
+**Adopting is the default on an account with campaigns, not the only option.**
+The builder has always been able to create another campaign there and Meta
+does not object; only the wizard forbade it. A `forceNewCampaign` flag in
+`AdminOnboarding` is passed into `step4Branch`, which then returns
+`new_campaign` even when the list is non-empty; the link toggles both ways and
+is cleared whenever the ad account changes, so an override never silently
+carries to an account the operator has not looked at. The
+"לא נמצאו קמפיינים" line is suppressed in the forced case — it would
+contradict the populated select directly above it.
+
 **An ad account already provisioned to a different customer is annotated, not
 blocked.** AIC-87's migration 038 deliberately allows one Meta ad account to
 back more than one customer (Pisga's own two rows are the real example), so

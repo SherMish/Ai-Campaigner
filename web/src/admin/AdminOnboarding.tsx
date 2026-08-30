@@ -1185,9 +1185,48 @@ export function AdminOnboarding() {
                 <button type="button" className="btn btn-outline btn-sm" onClick={() => loadCampaigns(form.metaAdAccountId)}>{w.pickRetry}</button>
               </p>
             )}
+            {/* An account that already has campaigns used to make adopting
+                one the ONLY reachable path. The builder always
+                supported creating another; only the wizard forbade it.
+
+                Lives INSIDE the campaign field, directly under its select.
+                As a direct child of the surrounding auto-fit grid it was laid
+                out as its own column and rendered under an unrelated field —
+                a control that reads as belonging to whatever happens to sit
+                above it. */}
+            {branch === "adopt_existing" && (
+              <p style={{ fontSize: "0.78rem", marginTop: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => { setForceNewCampaign(true); setForm((f) => ({ ...f, metaCampaignId: "" })); }}
+                  style={{ background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer", textDecoration: "underline", color: "inherit" }}
+                >
+                  {w.buildNewInstead}
+                </button>
+              </p>
+            )}
+            {branch === "new_campaign" && (campaigns?.length ?? 0) > 0 && (
+              <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>
+                {w.buildingNewNote}{" "}
+                <button
+                  type="button"
+                  onClick={() => setForceNewCampaign(false)}
+                  style={{ background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer", textDecoration: "underline", color: "inherit" }}
+                >
+                  {w.adoptExistingInstead}
+                </button>
+              </p>
+            )}
             {noCampaignsForSelectedAccount && (
               <div style={{ marginTop: 6 }}>
-                <p className="muted" style={{ fontSize: "0.78rem" }}>{w.pickCampaignEmpty}</p>
+                {/* Only when it is TRUE. Forcing new-campaign mode on an
+                    account that has campaigns reaches this same block, and
+                    "no campaigns found" would be a flat contradiction of the
+                    select right above it — the line explaining that state is
+                    buildingNewNote, printed there. */}
+                {(campaigns?.length ?? 0) === 0 && (
+                  <p className="muted" style={{ fontSize: "0.78rem" }}>{w.pickCampaignEmpty}</p>
+                )}
                 {/* AIC-106 gap, found live: this field is what was missing —
                     an operator could complete the entire builder wizard and
                     only discover there was no agreed ceiling on the final
@@ -1221,57 +1260,6 @@ export function AdminOnboarding() {
           )}
           {branch === "error" && (
             <p className="muted" style={{ fontSize: "0.8rem" }}>{w.pickCampaignFailedNoBranch}</p>
-          )}
-          {branch === "adopt_existing" && (
-            <p style={{ fontSize: "0.8rem", marginTop: 4 }}>
-              <button
-                type="button"
-                className="link"
-                style={{ background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer", textDecoration: "underline" }}
-                onClick={() => { setForceNewCampaign(true); setForm((f) => ({ ...f, metaCampaignId: "" })); }}
-              >
-                {w.buildNewInstead}
-              </button>
-            </p>
-          )}
-          {branch === "new_campaign" && (campaigns?.length ?? 0) > 0 && (
-            <p style={{ fontSize: "0.8rem", marginTop: 4 }}>
-              {w.buildingNewNote}{" "}
-              <button
-                type="button"
-                className="link"
-                style={{ background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer", textDecoration: "underline" }}
-                onClick={() => setForceNewCampaign(false)}
-              >
-                {w.adoptExistingInstead}
-              </button>
-            </p>
-          )}
-          {/* AIC-153: an account with campaigns used to make adopting one the
-              ONLY reachable path. The builder always supported creating
-              another; only the wizard forbade it. */}
-          {branch === "adopt_existing" && (
-            <p style={{ fontSize: "0.8rem", marginTop: 4 }}>
-              <button
-                type="button"
-                onClick={() => { setForceNewCampaign(true); setForm((f) => ({ ...f, metaCampaignId: "" })); }}
-                style={{ background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer", textDecoration: "underline", color: "inherit" }}
-              >
-                {w.buildNewInstead}
-              </button>
-            </p>
-          )}
-          {branch === "new_campaign" && (campaigns?.length ?? 0) > 0 && (
-            <p style={{ fontSize: "0.8rem", marginTop: 4 }}>
-              {w.buildingNewNote}{" "}
-              <button
-                type="button"
-                onClick={() => setForceNewCampaign(false)}
-                style={{ background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer", textDecoration: "underline", color: "inherit" }}
-              >
-                {w.adoptExistingInstead}
-              </button>
-            </p>
           )}
           {branch === "adopt_existing" && (
             <>
