@@ -41,10 +41,27 @@ d("guides are served as real HTML (DB-free)", () => {
     expect(res.text).not.toContain('<div id="root"></div>');
   });
 
+  it("serves both AIC-153 troubleshooting guides as crawlable HTML", async () => {
+    const guides = [
+      ["קמפיין-פעיל-אין-פניות", "הקמפיין פעיל אבל אין פניות"],
+      ["פיקסל-פייסבוק-בדיקה", "מה זה פיקסל של פייסבוק"],
+    ];
+
+    for (const [slug, title] of guides) {
+      const res = await request(app).get(`/guides/${encodeURIComponent(slug)}`);
+      expect(res.status).toBe(200);
+      expect(res.text).toContain(title);
+      expect(res.text).toContain("FAQPage");
+      expect(res.text).not.toContain('<div id="root"></div>');
+    }
+  });
+
   it("serves sitemap.xml and robots.txt, and the sitemap lists the guides", async () => {
     const sitemap = await request(app).get("/sitemap.xml");
     expect(sitemap.status).toBe(200);
     expect(sitemap.text).toContain("/guides");
+    expect(sitemap.text).toContain("/guides/קמפיין-פעיל-אין-פניות");
+    expect(sitemap.text).toContain("/guides/פיקסל-פייסבוק-בדיקה");
 
     const robots = await request(app).get("/robots.txt");
     expect(robots.status).toBe(200);

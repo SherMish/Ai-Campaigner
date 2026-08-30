@@ -6,6 +6,18 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-30 — Campaign troubleshooting and Meta Pixel guides (AIC-153)
+
+The Hebrew guides section gained two practical search-focused articles for the
+questions that appear after a campaign launches: why an active campaign has no
+leads, and how to prove a Meta Pixel is measuring the real completion event.
+The diagnosis starts with delivery, routing and measurement before suggesting
+creative or audience changes, while the Pixel guide distinguishes a loaded
+PageView from one successful lead event and covers duplicate events without
+promising perfect attribution. Both guides include primary Meta sources,
+cross-links, FAQ schema, honest product CTAs and original 1200x630 artwork.
+Owning doc: [docs/features/guides-blog.md](features/guides-blog.md).
+
 ### 2026-08-30 — Checklist hook becomes a save-post tag (AIC-152)
 
 The checklist carousel's first slide now presents `שמרו את הפוסט` in a compact

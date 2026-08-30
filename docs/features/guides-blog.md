@@ -1,6 +1,6 @@
 # Guides (the blog) — `/guides`
 
-**Status:** live. Static HTML generated at build time from Markdown. Two guides
+**Status:** live. Static HTML generated at build time from Markdown. Four guides
 ship; adding more is a Markdown file and, when needed, a tracked public image.
 
 **Source of truth:**
@@ -15,8 +15,8 @@ ship; adding more is a Markdown file and, when needed, a tracked public image.
 **Lock-in tests:**
 `web/src/guides/guides-lib.test.ts` (escaping, slugs, TOC ids/dedupe, validation,
 SEO warnings),
-`server/src/guide-content.test.ts` (AIC-147 source quality, primary-source
-links, short-hyphen rule and exact title-image dimensions),
+`server/src/guide-content.test.ts` (AIC-147/AIC-153 source quality,
+primary-source links, short-hyphen rule and exact title-image dimensions),
 `server/src/routes/guides-static.integration.test.ts` (the URLs serve real HTML
 and **not** the SPA shell; sitemap/robots; SPA routes still work).
 
@@ -68,6 +68,20 @@ and would otherwise be spurious diffs on every build.
    handler for the landing at `/`.
 
 Run it alone with `npm run --workspace web build:guides`.
+
+## Current guide set
+
+| Guide | Search job |
+| --- | --- |
+| `מדריך-תקציב-פייסבוק.md` | Decide a test budget from unit economics rather than a universal formula |
+| `הקמת-קמפיין-לידים-במטא.md` | Set up a WhatsApp or website lead campaign without skipping destination and measurement |
+| `קמפיין-פעיל-אין-פניות.md` | Diagnose delivery, lead routing and measurement before changing audiences or creatives |
+| `פיקסל-פייסבוק-בדיקה.md` | Verify that the correct website conversion event fires once at the correct moment |
+
+The two troubleshooting guides form one journey and cross-link directly:
+campaign symptoms first, then the deeper Pixel/event check when the campaign
+uses a website destination. Both point back to the setup guide rather than
+repeating the full build tutorial.
 
 ## What a guide needs — the authoring spec
 

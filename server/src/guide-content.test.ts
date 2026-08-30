@@ -8,13 +8,35 @@ const guidePath = fileURLToPath(
 const budgetGuidePath = fileURLToPath(
   new URL("../../content/guides/מדריך-תקציב-פייסבוק.md", import.meta.url),
 );
+const noLeadsGuidePath = fileURLToPath(
+  new URL("../../content/guides/קמפיין-פעיל-אין-פניות.md", import.meta.url),
+);
+const pixelGuidePath = fileURLToPath(
+  new URL("../../content/guides/פיקסל-פייסבוק-בדיקה.md", import.meta.url),
+);
 const imagePath = fileURLToPath(
   new URL("../../web/public/meta-leads-setup-2026.png", import.meta.url),
+);
+const noLeadsImagePath = fileURLToPath(
+  new URL("../../web/public/facebook-campaign-no-leads.png", import.meta.url),
+);
+const pixelImagePath = fileURLToPath(
+  new URL("../../web/public/meta-pixel-check-guide.png", import.meta.url),
 );
 const guidesCssPath = fileURLToPath(new URL("../../scripts/guides.css", import.meta.url));
 const markdown = fs.readFileSync(guidePath, "utf8");
 const budgetMarkdown = fs.readFileSync(budgetGuidePath, "utf8");
+const noLeadsMarkdown = fs.readFileSync(noLeadsGuidePath, "utf8");
+const pixelMarkdown = fs.readFileSync(pixelGuidePath, "utf8");
 const guidesCss = fs.readFileSync(guidesCssPath, "utf8");
+
+function expectPngDimensions(path: string, width: number, height: number) {
+  expect(fs.existsSync(path)).toBe(true);
+  const png = fs.readFileSync(path);
+  expect(png.subarray(1, 4).toString("ascii")).toBe("PNG");
+  expect(png.readUInt32BE(16)).toBe(width);
+  expect(png.readUInt32BE(20)).toBe(height);
+}
 
 describe("Meta lead-campaign setup guide (AIC-147)", () => {
   it("ships complete SEO metadata and a truthful Ads Agent CTA", () => {
@@ -51,15 +73,56 @@ describe("Meta lead-campaign setup guide (AIC-147)", () => {
   });
 
   it("ships a 1200x630 PNG title image", () => {
-    expect(fs.existsSync(imagePath)).toBe(true);
-    const png = fs.readFileSync(imagePath);
-    expect(png.subarray(1, 4).toString("ascii")).toBe("PNG");
-    expect(png.readUInt32BE(16)).toBe(1200);
-    expect(png.readUInt32BE(20)).toBe(630);
+    expectPngDimensions(imagePath, 1200, 630);
   });
 
   it("allows long tracking parameters to wrap on mobile", () => {
     expect(markdown).toContain("utm_source=meta&utm_medium=paid_social&utm_campaign=campaign_name");
     expect(guidesCss).toMatch(/\.g-body code[\s\S]*overflow-wrap:\s*anywhere/);
+  });
+});
+
+describe("no-leads and Meta Pixel guides (AIC-153)", () => {
+  it("ships distinct search metadata, stable slugs and honest CTAs", () => {
+    expect(noLeadsMarkdown).toContain('seoTitle: "קמפיין פייסבוק פעיל ואין פניות - 10 בדיקות"');
+    expect(noLeadsMarkdown).toContain('slug: "קמפיין-פעיל-אין-פניות"');
+    expect(noLeadsMarkdown).toContain('image: "/facebook-campaign-no-leads.png"');
+    expect(noLeadsMarkdown).toContain("בלי הבטחת לידים ובלי להסתיר תקלה מאחורי גרפים");
+
+    expect(pixelMarkdown).toContain('seoTitle: "פיקסל של פייסבוק - מה זה ואיך בודקים שהוא עובד"');
+    expect(pixelMarkdown).toContain('slug: "פיקסל-פייסבוק-בדיקה"');
+    expect(pixelMarkdown).toContain('image: "/meta-pixel-check-guide.png"');
+    expect(pixelMarkdown).toContain("בלי להציג ביקור באתר כאילו הוא ליד");
+  });
+
+  it("uses normal short hyphens in both guides", () => {
+    expect(noLeadsMarkdown).not.toMatch(/[–—־]/);
+    expect(pixelMarkdown).not.toMatch(/[–—־]/);
+  });
+
+  it("keeps diagnosis ahead of optimization and distinguishes PageView from a lead", () => {
+    expect(noLeadsMarkdown).toContain("רק אחרי שכל המסלול תקין יש טעם להשוות בין מודעות");
+    expect(noLeadsMarkdown).toContain("אין חוק שאומר שכל קמפיין צריך לחכות מספר קבוע של ימים");
+    expect(noLeadsMarkdown).not.toMatch(/חייבים לחכות\s+\d+\s+ימים/);
+
+    expect(pixelMarkdown).toContain("`PageView` אומר שהעמוד נטען בדפדפן");
+    expect(pixelMarkdown).toContain("האירוע הנכון, ברגע הנכון, פעם אחת");
+    expect(pixelMarkdown).not.toContain("הפיקסל סופר כל משתמש");
+  });
+
+  it("cross-links the troubleshooting journey and cites primary Meta tools and docs", () => {
+    expect(noLeadsMarkdown).toContain("/guides/פיקסל-פייסבוק-בדיקה");
+    expect(noLeadsMarkdown).toContain("https://metastatus.com/ads-manager");
+    expect(noLeadsMarkdown).toContain("https://www.facebook.com/accountquality/");
+
+    expect(pixelMarkdown).toContain("/guides/קמפיין-פעיל-אין-פניות");
+    expect(pixelMarkdown).toContain("https://developers.facebook.com/docs/meta-pixel/get-started/");
+    expect(pixelMarkdown).toContain("https://www.facebookblueprint.com/");
+    expect(pixelMarkdown).toContain("https://chromewebstore.google.com/");
+  });
+
+  it("ships a 1200x630 PNG title image for each guide", () => {
+    expectPngDimensions(noLeadsImagePath, 1200, 630);
+    expectPngDimensions(pixelImagePath, 1200, 630);
   });
 });
