@@ -6,6 +6,18 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-30 — the app's WhatsApp link was a placeholder on every screen
+
+`components.tsx` exported `WA = "https://wa.me/972500000000"` behind a TODO — a
+fictional number — and 13 "talk to us" links across onboarding, connect,
+checkout, recommendations, settings, review, add-content and auth all read it.
+For a product whose onboarding and support are deliberately human, that is the
+support channel itself being broken, and silently: a wa.me link to an unused
+number opens WhatsApp and goes nowhere. Now the landing page's real number
+(972526964069), with a test that fails if it becomes a placeholder again or
+drifts from the landing page's copy — the landing is static HTML and cannot
+import the constant, so the duplication can only be held together by a check.
+
 ### 2026-08-30 — Campaign troubleshooting and Meta Pixel guides (AIC-153)
 
 The Hebrew guides section gained two practical search-focused articles for the

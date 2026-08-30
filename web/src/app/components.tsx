@@ -8,7 +8,24 @@ import { clearAuthToken, getMe } from "../api";
 let cachedName: string | null = null;
 
 const a = strings.he.app;
-export const WA = "https://wa.me/972500000000"; // TODO: real WhatsApp number
+/*
+ * The one WhatsApp contact for the whole signed-in app — 13 links across
+ * onboarding, connect, checkout, recommendations, settings, review,
+ * add-content and auth all read this.
+ *
+ * It was `972500000000` behind a TODO: a fictional number, shipped, on every
+ * "talk to us" link a customer could press. The support channel this product
+ * leans on (manual onboarding, human help when the engine defers) was dead the
+ * whole time, and silently — a wa.me link to an unused number opens WhatsApp
+ * and simply goes nowhere.
+ *
+ * Must stay identical to the landing page's number (landing/index.html, six
+ * occurrences). The landing page is static HTML and cannot import this, so the
+ * duplication is unavoidable; changing one without the other splits the
+ * company's contact number in half.
+ */
+export const WA_NUMBER = "972526964069";
+export const WA = `https://wa.me/${WA_NUMBER}`;
 
 export function Brand({ className = "brand" }: { className?: string }) {
   return (
