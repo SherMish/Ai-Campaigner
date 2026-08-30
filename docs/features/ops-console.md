@@ -687,6 +687,18 @@ carries to an account the operator has not looked at. The
 "לא נמצאו קמפיינים" line is suppressed in the forced case — it would
 contradict the populated select directly above it.
 
+**A disabled "צור קמפיין חדש" always says why.** `newCampaignBlocker()`
+(`web/src/admin/onboarding-step4.ts`) returns the FIRST unmet precondition —
+`page_missing | page_unverified | instagram_unverified | budget_missing`, in
+the order the operator has to act in — or null when the button is live. The
+button's disabled state, the line under it and `startNewCampaign`'s own guard
+all read that one function. They used to be three separate lists: the disabled
+expression named four conditions, the guard re-checked them in its own order,
+and the screen explained two. A picked-but-unchecked Instagram account
+therefore produced a dead primary button and no text at all — and a disabled
+button can never reach the guard that knows the reason, so the render is the
+only place left to say it.
+
 **An ad account already provisioned to a different customer is annotated, not
 blocked.** AIC-87's migration 038 deliberately allows one Meta ad account to
 back more than one customer (Pisga's own two rows are the real example), so

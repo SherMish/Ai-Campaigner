@@ -853,11 +853,11 @@ export const strings = {
       pickAdAccountUsedBy: "בשימוש גם עבור {name}",
       // Shown inside the dropdown row — a footnote among other options.
       pickAssetUsedBy: "כבר מחובר ל-{name}",
-      // AIC-153: step 4 lists only the ad account verified for this customer.
+      // Step 4 lists only the ad account verified for this customer.
       // A single-option select with no explanation reads as a broken list, so
       // say why — and where to change it.
       pickAdAccountScoped: "מוצג רק חשבון הפרסום שאומת ללקוח הזה בשלב 1. כדי לעבוד מול חשבון אחר — מריצים \"בדיקת חשבון פרסום\" עם המזהה החדש.",
-      // AIC-153: an ad account with campaigns used to force adopting one.
+      // An ad account with campaigns used to force adopting one.
       buildNewInstead: "או ליצור קמפיין חדש בחשבון הזה במקום לאמץ קיים",
       buildingNewNote: "בונים קמפיין חדש בחשבון שכבר יש בו קמפיינים.",
       adoptExistingInstead: "לחזור לאימוץ קמפיין קיים",

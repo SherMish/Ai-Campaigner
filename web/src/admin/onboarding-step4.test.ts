@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { adAccountOptions, step4Branch } from "./onboarding-step4.js";
+import { adAccountOptions, newCampaignBlocker, step4Branch } from "./onboarding-step4.js";
 
 describe("step 4: which provisioning branch to show (AIC-119)", () => {
   // The bug, found live on a customer with no connection at all: the operator
@@ -54,7 +54,7 @@ describe("step 4: which provisioning branch to show (AIC-119)", () => {
 // new one? allow it as it's allowed for users without a campaign." The build
 // path already existed and worked — it was simply unreachable for these
 // accounts, which is an arbitrary restriction Meta itself does not impose.
-describe("step4Branch — building a new campaign is always allowed (AIC-153)", () => {
+describe("step4Branch — building a new campaign is always allowed", () => {
   const withCampaigns = {
     adAccountId: "act_1",
     loading: false,
@@ -130,5 +130,36 @@ describe("adAccountOptions — step 4 is scoped to the verified account", () => 
 
   it("handles a list that has not loaded", () => {
     expect(adAccountOptions(null, "act_mine")).toEqual({ options: [], scoped: false });
+  });
+});
+
+describe("newCampaignBlocker", () => {
+  const ready = { pageMissing: false, pageUnverified: false, instagramUnverified: false, budgetMissing: false };
+
+  it("names the reason when only Instagram is unverified — the bug this fixes", () => {
+    // Found on the real wizard: Page selected, budget filled, Instagram picked
+    // but never checked. "צור קמפיין חדש" was disabled and the screen printed
+    // NOTHING, because the two rendered explanations covered only the Page.
+    expect(newCampaignBlocker({ ...ready, instagramUnverified: true })).toBe("instagram_unverified");
+  });
+
+  it("names the reason when only the budget is missing", () => {
+    expect(newCampaignBlocker({ ...ready, budgetMissing: true })).toBe("budget_missing");
+  });
+
+  it("returns null only when nothing blocks — so a disabled button always has a reason", () => {
+    expect(newCampaignBlocker(ready)).toBeNull();
+  });
+
+  it("reports the Page before its verification, and both before Instagram", () => {
+    // The order the operator has to act in, and the same order startNewCampaign
+    // guards in — one list, so the button, its message and the request can
+    // never disagree about why.
+    expect(newCampaignBlocker({ pageMissing: true, pageUnverified: true, instagramUnverified: true, budgetMissing: true }))
+      .toBe("page_missing");
+    expect(newCampaignBlocker({ ...ready, pageUnverified: true, instagramUnverified: true, budgetMissing: true }))
+      .toBe("page_unverified");
+    expect(newCampaignBlocker({ ...ready, instagramUnverified: true, budgetMissing: true }))
+      .toBe("instagram_unverified");
   });
 });

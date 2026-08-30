@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-30 — wizard: "צור קמפיין חדש" was disabled with no reason given
+
+Reported live: Page picked, budget filled, button dead and the screen silent.
+The blocker was an Instagram account selected but never checked. Its disabled
+expression listed four conditions, `startNewCampaign` re-checked the same four
+in its own order, and the render explained two of them — and a disabled button
+cannot reach the guard that knows, so nothing could say why. `newCampaignBlocker()`
+is now the single ordered list all three read, and the reason is always printed.
+
+---
+
 ### 2026-08-30 — wizard: the new-campaign toggle rendered twice, in the wrong column
 
 The escape hatch shipped earlier today was pasted twice and both copies sat as

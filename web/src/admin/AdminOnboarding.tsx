@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FIXED_DESTINATION, WEBSITE_DESTINATION, missingRequiredFields } from "@aic/shared";
 import { api, ApiError, updateCustomer, type CustomerWriteFields } from "../api";
-import { adAccountOptions, step4Branch } from "./onboarding-step4";
+import { adAccountOptions, newCampaignBlocker, step4Branch } from "./onboarding-step4";
 import { strings } from "../strings";
 import { BusinessFields } from "./BusinessFields";
 import { profileBadge, badgeLabel, fieldNames } from "./profile-badge";
@@ -198,7 +198,7 @@ export function AdminOnboarding() {
   // The Page-side sibling of the ad-account picker (user request): pick from
   // what the System User can actually manage, instead of transcribing a raw
   // Page id out of Meta's own screen.
-  // AIC-153: the operator wants to BUILD a campaign on an account that
+  // The operator wants to BUILD a campaign on an account that
   // already has some. Adopting stays the default; this is the escape hatch.
   const [forceNewCampaign, setForceNewCampaign] = useState(false);
   const [pages, setPages] = useState<PageOption[] | null>(null);
@@ -611,22 +611,31 @@ export function AdminOnboarding() {
     return !Number.isFinite(n) || n <= 0;
   }
 
+  // Why the build button is dead, in the operator's own terms. Derived once
+  // from the SAME ordered list the button's disabled state reads, because a
+  // disabled control can never reach the guards inside startNewCampaign — the
+  // screen is the only place left that can say why.
+  function newCampaignBlockedBy(): ReturnType<typeof newCampaignBlocker> {
+    return newCampaignBlocker({
+      pageMissing: newCampaignPageMissing(),
+      pageUnverified: pageIdUnverified(),
+      instagramUnverified: instagramIdUnverified(),
+      budgetMissing: newCampaignBudgetMissing(),
+    });
+  }
+
+  const NEW_CAMPAIGN_BLOCKER_COPY = {
+    page_missing: w.errorPageRequiredForNewCampaign,
+    page_unverified: w.errorPageNotVerified,
+    instagram_unverified: w.errorInstagramNotVerified,
+    budget_missing: w.errorNewCampaignBudgetRequired,
+  } as const;
+
   function startNewCampaign() {
     if (!id || !form.metaAdAccountId) return;
-    if (newCampaignPageMissing()) {
-      setStartNewCampaignError(w.errorPageRequiredForNewCampaign);
-      return;
-    }
-    if (pageIdUnverified()) {
-      setStartNewCampaignError(w.errorPageNotVerified);
-      return;
-    }
-    if (instagramIdUnverified()) {
-      setStartNewCampaignError(w.errorInstagramNotVerified);
-      return;
-    }
-    if (newCampaignBudgetMissing()) {
-      setStartNewCampaignError(w.errorNewCampaignBudgetRequired);
+    const blocked = newCampaignBlockedBy();
+    if (blocked) {
+      setStartNewCampaignError(NEW_CAMPAIGN_BLOCKER_COPY[blocked]);
       return;
     }
     setStartingNewCampaign(true);
@@ -689,7 +698,7 @@ export function AdminOnboarding() {
     campaigns: campaigns?.map((c) => ({ supported: c.destination.supported })) ?? null,
     forceNewCampaign,
   });
-  // AIC-153: step 4 offers only the ad account already verified for THIS
+  // Step 4 offers only the ad account already verified for THIS
   // customer. It used to list every account the System User can reach —
   // another customer's included — guarded by nothing but a note.
   const adAccountChoices = adAccountOptions(adAccounts, state?.checks.ad_account?.assetId);
@@ -1242,12 +1251,17 @@ export function AdminOnboarding() {
                 </div>
                 <button
                   type="button" className="btn btn-primary btn-sm" style={{ marginTop: 10 }}
-                  disabled={startingNewCampaign || newCampaignPageMissing() || pageIdUnverified() || instagramIdUnverified() || newCampaignBudgetMissing()} onClick={startNewCampaign}
+                  disabled={startingNewCampaign || newCampaignBlockedBy() !== null} onClick={startNewCampaign}
                 >
                   {startingNewCampaign ? w.startNewCampaignBusy : w.startNewCampaignCta}
                 </button>
-                {newCampaignPageMissing() && <p className="muted" style={{ fontSize: "0.72rem", marginTop: 6 }}>{w.errorPageRequiredForNewCampaign}</p>}
-                {!newCampaignPageMissing() && pageIdUnverified() && <p className="muted" style={{ fontSize: "0.72rem", marginTop: 6 }}>{w.errorPageNotVerified}</p>}
+                {/* Never disabled without saying why: one reason, from the
+                    same list that disabled it. */}
+                {newCampaignBlockedBy() && (
+                  <p className="muted" style={{ fontSize: "0.72rem", marginTop: 6 }}>
+                    {NEW_CAMPAIGN_BLOCKER_COPY[newCampaignBlockedBy()!]}
+                  </p>
+                )}
                 {startNewCampaignError && <p style={{ color: "#c0362c", fontSize: "0.78rem", marginTop: 6 }}>{startNewCampaignError}</p>}
               </div>
             )}

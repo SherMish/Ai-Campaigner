@@ -8,7 +8,7 @@
 //     an existing campaign's own config, so it needs its name, its budget and
 //     its WhatsApp destination.
 //
-// AIC-153: having campaigns used to make adopting the ONLY reachable path.
+// Having campaigns used to make adopting the ONLY reachable path.
 // Adopting stays the default — an account with campaigns is usually one we are
 // taking over — but the operator can override it and build a new campaign
 // instead, which the builder already supported and Meta never objected to.
@@ -37,7 +37,7 @@ export function step4Branch(input: {
   campaigns: Array<{ supported: boolean }> | null;
   /**
    * The operator chose to BUILD a campaign on an account that already has
-   * some (AIC-153). Having campaigns made adopting one the only reachable
+   * some. Having campaigns made adopting one the only reachable
    * path, which is a restriction we invented — Meta is perfectly happy with a
    * second campaign, and an operator onboarding a customer who wants a fresh
    * one had nowhere to go.
@@ -62,7 +62,7 @@ export function step4Branch(input: {
 }
 
 /**
- * Which ad accounts step 4 may offer (AIC-153).
+ * Which ad accounts step 4 may offer.
  *
  * The picker used to list every ad account the System User can reach, which on
  * a real token means other customers' accounts too. A note said "בשימוש גם
@@ -86,4 +86,38 @@ export function adAccountOptions<T extends { id: string }>(
   if (!all) return { options: [], scoped: false };
   const verified = verifiedId ? all.find((a) => a.id === verifiedId) : undefined;
   return verified ? { options: [verified], scoped: true } : { options: all, scoped: false };
+}
+
+/**
+ * Why "צור קמפיין חדש" cannot be pressed yet — or null when it can.
+ *
+ * THIS EXISTS BECAUSE THE BUTTON WENT SILENT. Its disabled expression listed
+ * four conditions, `startNewCampaign` re-checked the same four in its own
+ * order, and the screen rendered explanations for TWO of them. An operator
+ * with a picked-but-unchecked Instagram account got a dead primary button and
+ * not one word about why — and could not reach the guard that knows, because
+ * being disabled is exactly what stops the click.
+ *
+ * One ordered list, consumed by all three, so the button, its message and the
+ * request cannot disagree. The order is the order the operator has to act in:
+ * a Page before its check, both before Instagram's, the budget last because it
+ * is the only one fixed without leaving this step.
+ */
+export type NewCampaignBlocker =
+  | "page_missing"
+  | "page_unverified"
+  | "instagram_unverified"
+  | "budget_missing";
+
+export function newCampaignBlocker(input: {
+  pageMissing: boolean;
+  pageUnverified: boolean;
+  instagramUnverified: boolean;
+  budgetMissing: boolean;
+}): NewCampaignBlocker | null {
+  if (input.pageMissing) return "page_missing";
+  if (input.pageUnverified) return "page_unverified";
+  if (input.instagramUnverified) return "instagram_unverified";
+  if (input.budgetMissing) return "budget_missing";
+  return null;
 }
