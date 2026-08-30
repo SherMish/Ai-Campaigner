@@ -1,4 +1,5 @@
 import type pg from "pg";
+import { track } from "../analytics/mixpanel.js";
 import type { LaunchWriter } from "./types.js";
 
 // The launch gate (AIC-53): the ONLY path a builder-created campaign can go
@@ -82,6 +83,24 @@ async function markLaunched(
   approvedBy: string,
 ): Promise<void> {
   await pool.query(`UPDATE managed_campaigns SET launch_approved_at = now() WHERE id = $1`, [campaignId]);
+
+  // AIC-28: the campaign is now genuinely spending. Emitted from markLaunched
+  // rather than from the route, so it can only fire once the column is
+  // actually set — a customer who clicked approve and hit a Meta failure never
+  // reaches here, and must not count as a launch.
+  const { rows: owner } = await pool.query<{ customer_id: string; is_test: boolean | null }>(
+    `SELECT mc.customer_id, c.is_test FROM managed_campaigns mc
+       JOIN customers c ON c.id = mc.customer_id WHERE mc.id = $1`,
+    [campaignId],
+  );
+  if (owner[0]) {
+    track({
+      event: "campaign_launched",
+      customerId: owner[0].customer_id,
+      isTest: owner[0].is_test === true,
+      props: { campaign_id: campaignId, approved_by: approvedBy },
+    });
+  }
   await pool.query(
     `INSERT INTO action_history
        (campaign_id, recommendation_id, what, action_type, target_meta_id,

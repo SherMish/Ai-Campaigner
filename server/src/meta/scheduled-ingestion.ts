@@ -3,6 +3,7 @@ import type { InsightsPeriod } from "./types.js";
 import { GraphMetaClient } from "./client.js";
 import { PgSnapshotStore } from "./snapshot-store.js";
 import { PgConnectionStore } from "./connection-store.js";
+import { track } from "../analytics/mixpanel.js";
 import { ConnectionService } from "./connection-service.js";
 import {
   IngestionService,
@@ -98,6 +99,24 @@ export function buildIngestionTick(
   const connectionService = new ConnectionService(
     new PgConnectionStore(pool),
     client,
+    undefined,
+    // AIC-28: only the SCHEDULED check reports connection transitions. The
+    // on-demand recheck (customer-actions, admin) runs the same verify and
+    // would double-count the same real-world event from a button press.
+    ({ customerId, from, to }) => {
+      void (async () => {
+        const { rows } = await pool.query<{ is_test: boolean | null }>(
+          `SELECT is_test FROM customers WHERE id = $1`,
+          [customerId],
+        );
+        track({
+          event: to === "ok" ? "meta_connection_restored" : "meta_connection_lost",
+          customerId,
+          isTest: rows[0]?.is_test === true,
+          props: { from_health: from, to_health: to },
+        });
+      })().catch(() => {});
+    },
   );
   return async () => {
     const campaigns = await listManagedCampaigns(pool);

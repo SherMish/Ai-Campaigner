@@ -6,6 +6,28 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-29 — AIC-28 (part): Mixpanel wired, funnel measured server-side
+
+The customer funnel is instrumented, and the design decision is where it fires:
+every event is emitted from the code path that performs the real state
+transition, after the row is written — never from a click. That is PIS-27's
+lesson, which AIC-28 carries as an explicit requirement. The value moment is
+`recommendation_approved`, and it carries `execution_outcome`, so an approval
+whose Meta write failed is not counted as one that worked. PII is dropped by a
+pattern-based scrubber rather than by call-site discipline, `is_test` keeps our
+own accounts out of the funnel, and `ip: false` removes the only personal data
+Mixpanel collects by default. HALF THE TICKET REMAINS: the four operational
+metrics (human minutes per customer, intervention rate, accounts per operator)
+need an operator-entered capture mechanism and are not built. Owning doc:
+[docs/METRICS.md](METRICS.md).
+
+### 2026-08-30 — Checklist warning slide loses its false button (AIC-151)
+
+The checklist carousel's fifth slide no longer renders the fixed orange
+`עצרו ובדקו` pill. It looked interactive and competed with the warning without
+adding information. The warning copy and final free-start CTA remain unchanged.
+Owning doc: [docs/features/content-studio.md](features/content-studio.md).
+
 ### 2026-08-27 — AIC-150: a network blip told a customer we lost their Meta account
 
 Live on אבשלום's account: `access 'ok' → 'needs_reconnect' (network error

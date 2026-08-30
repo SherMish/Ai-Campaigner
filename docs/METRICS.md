@@ -101,3 +101,107 @@ access result). The normalization, math, idempotency, and error handling are
 covered by unit + DB tests with fixtures; swapping `GraphMetaClient` in with a real
 token is the remaining step. Reconciliation vs Ads Manager is tracked in
 [features/dogfood-readout.md](features/dogfood-readout.md) (AIC-7).
+
+---
+
+# Analytics — the Mixpanel layer (AIC-28)
+
+Everything above defines what a lead IS. This section is about measuring
+whether the PRODUCT works — a separate concern that happens to live in the same
+file because both answer "what do we count".
+
+**Status:** funnel wired. The four *operational* metrics AIC-28 also asks for
+(human minutes per customer, intervention rate, accounts per operator) are
+**not** built — see "Not built yet".
+
+**Source of truth:** `server/src/analytics/mixpanel.ts` (server, the funnel),
+`web/src/analytics.ts` (identity + page views). Token: `MIXPANEL_TOKEN` on
+Railway, served to the browser through `/api/config`.
+**Lock-in tests:** `server/src/analytics/mixpanel.test.ts`.
+## The funnel is measured on the SERVER
+
+This is the whole design decision, and it comes from a scar. Pisga's PIS-27:
+activation milestones were fired from the UI when a customer *reached a phase*,
+so they counted intentions rather than outcomes and over-reported activation
+for a month. AIC-28 carries that lesson forward as an explicit requirement —
+milestones must reflect real state transitions, reconstructable from source.
+
+So every funnel event is emitted from the code path that performs the
+transition, **after** the row is written:
+
+| event | fires where | why there |
+| --- | --- | --- |
+| `recommendation_generated` | `generation.ts`, after the row exists | not where a rule decides one is warranted |
+| `recommendation_approved` | `customer-recommendations.ts`, after `execute()` | carries `execution_outcome` — an approval whose Meta write failed is not the same outcome as one that landed |
+| `campaign_launched` | `activate.ts` `markLaunched`, after `launch_approved_at` is set | a customer who clicked approve and hit a Meta failure never reaches here |
+| `meta_connection_lost` / `_restored` | `ConnectionService`, on a real health change | `unknown` never reaches it (AIC-150), so a network blip cannot look like a lost connection |
+| `page_viewed` | browser | the one thing the server cannot see |
+
+**The value moment is `recommendation_approved`.** Everything upstream exists to
+reach it: it is the moment the engine's judgement becomes a real change to a
+real campaign, with the customer's consent.
+
+## Three rules the module enforces so call sites cannot get them wrong
+
+**1. Never throws, never blocks.** Analytics failing must never fail a
+customer's request. Every call is fire-and-forget inside a catch.
+
+**2. No PII in event properties.** This domain is full of it — customer emails,
+contact phones, the WhatsApp number every ad routes to, business names. Event
+properties in Mixpanel cannot be selectively deleted; profiles can. So a
+pattern-based scrubber drops anything matching
+`email|phone|whatsapp|name|address|token|password|secret` and records what it
+dropped under `scrubbed_properties`, so the omission is visible rather than
+silent. `business_category` and `campaign_objective` are allow-listed
+explicitly — they match `/name/` by accident and are legitimate dimensions.
+
+A pattern rather than an allow-list is deliberate: a field added next year that
+carries an email is caught without anyone remembering this file exists.
+
+**3. Our own accounts are never counted.** `is_test` already excludes Pisga and
+the beta rows from growth stats; analytics honours the same boundary, or our
+dogfooding *is* the activation funnel. Threaded explicitly through
+`GenCampaign.isTest` and `resolveCampaignOwner` rather than looked up ad hoc.
+
+## Identity
+
+`distinct_id` is the **customer id** — a stable uuid, never an email (emails
+change, ids do not). One profile per *business*, which is the subject this
+product is actually about: a customer is an account with a campaign, and its
+several logins are the same subject. The browser uses the same id, so browser
+and server events land on one profile instead of two halves of a funnel that
+never join.
+
+`mixpanel.reset()` on logout is not optional. Without it the next person to
+sign in on that device inherits the previous customer's `distinct_id` and their
+events merge into someone else's profile — a privacy incident, not just bad
+data.
+
+## Privacy posture
+
+`ip: false` in the browser init. Customers are Israeli businesses, but the
+dashboard is a public URL and we cannot prove no EU resident ever opens it. IP
+is the one piece of personal data Mixpanel collects by default and we have no
+analytic use for it — dropping it removes the question rather than answering it
+with a consent banner nobody wants. If EU customers ever become a real segment,
+the answer is `opt_out_tracking_by_default: true` plus a consent gate, not a
+retrofit.
+
+The **project token is public by design** — it is embedded in the client bundle
+of every site that uses Mixpanel and can only write events, never read them.
+Served from `/api/config` rather than baked in at build time so it is set once
+as a Railway variable and absent environments simply emit nothing.
+
+## Not built yet (AIC-28 is only half done)
+
+The ticket's four *operational* metrics — human onboarding minutes per
+customer, support minutes per customer per month, human intervention rate,
+accounts per operator — are **not** instrumented. They are the ones the ticket
+calls make-or-break for the unit economics, and none of them can be derived
+from product events: they need an operator-entered capture mechanism. The
+funnel half shipped first because it needed no new UI.
+
+Also absent: `customer_paid` and `onboarding_completed`. Both are operator
+actions in P0 (manual billing, hand-provisioning), so there is no honest code
+path to fire them from yet — and inventing one would be exactly the
+fireable-phase mistake this design exists to avoid.

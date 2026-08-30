@@ -1,4 +1,5 @@
 import type pg from "pg";
+import { track } from "../analytics/mixpanel.js";
 import type { RecommendationType } from "@aic/shared";
 import { PgRecommendationStore } from "../recommendations/recommendation-store.js";
 import { RecommendationService } from "../recommendations/recommendation-service.js";
@@ -65,15 +66,29 @@ export async function resolveCampaignId(
   pool: pg.Pool,
   userId: string,
 ): Promise<string | null> {
-  const { rows } = await pool.query<{ id: string }>(
-    `SELECT mc.id
+  return (await resolveCampaignOwner(pool, userId))?.campaignId ?? null;
+}
+
+/**
+ * The caller's campaign together with WHOSE it is — AIC-28 needs the customer
+ * id (the analytics subject: one profile per business, not per login) and the
+ * `is_test` flag, so our own rows never enter the activation funnel.
+ */
+export async function resolveCampaignOwner(
+  pool: pg.Pool,
+  userId: string,
+): Promise<{ campaignId: string; customerId: string; isTest: boolean } | null> {
+  const { rows } = await pool.query<{ id: string; customer_id: string; is_test: boolean | null }>(
+    `SELECT mc.id, mc.customer_id, c.is_test
      FROM app_users u
      JOIN managed_campaigns mc ON mc.customer_id = u.customer_id
+     JOIN customers c ON c.id = mc.customer_id
      WHERE u.id = $1
      LIMIT 1`,
     [userId],
   );
-  return rows[0]?.id ?? null;
+  const r = rows[0];
+  return r ? { campaignId: r.id, customerId: r.customer_id, isTest: r.is_test === true } : null;
 }
 
 export async function listCustomerRecommendations(
@@ -203,12 +218,12 @@ export async function approveCustomerRecommendation(
   userId: string,
   recId: string,
 ): Promise<ApproveResult> {
-  const campaignId = await resolveCampaignId(pool, userId);
-  if (!campaignId) return { status: "not_found" };
+  const owner = await resolveCampaignOwner(pool, userId);
+  if (!owner) return { status: "not_found" };
 
   const store = new PgRecommendationStore(pool);
   const rec = await store.getById(recId);
-  if (!rec || rec.campaignId !== campaignId) return { status: "not_found" };
+  if (!rec || rec.campaignId !== owner.campaignId) return { status: "not_found" };
   if (rec.state !== "proposed") return { status: "not_pending" };
 
   const executor = buildCustomerExecutor(pool);
@@ -217,6 +232,24 @@ export async function approveCustomerRecommendation(
   // proposed → approved, then run the pipeline (approved → executing → …).
   await new RecommendationService(store).approve(recId, "customer");
   const result = await executor.execute(recId, "customer");
+
+  // AIC-28's VALUE MOMENT: the engine's judgement became a real change to a
+  // real campaign, with the customer's consent. Everything upstream in the
+  // funnel exists to reach this event.
+  //
+  // Fired after execute() so the property records what actually happened —
+  // an approval whose Meta write failed is not the same outcome as one that
+  // landed, and collapsing them would overstate the product working.
+  track({
+    event: "recommendation_approved",
+    customerId: owner.customerId,
+    isTest: owner.isTest,
+    props: {
+      recommendation_type: rec.type,
+      execution_outcome: result.outcome,
+      campaign_id: owner.campaignId,
+    },
+  });
   return { status: "done", result };
 }
 

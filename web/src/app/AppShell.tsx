@@ -2,7 +2,16 @@ import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Menu } from "lucide-react";
 import { strings } from "../strings";
+import { getConfig } from "../api";
+import { identifyCustomer, initAnalytics, trackPage } from "../analytics";
+import { useSharedOverview } from "./overview-store";
 import { Sidebar } from "./Sidebar";
+
+// AIC-28: the route PATTERN, never the resolved path — `/app/recommendations/
+// 9f3c…` would put a customer-owned object id into an event property.
+function routePattern(pathname: string): string {
+  return pathname.replace(/\/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, "/:id");
+}
 
 // The signed-in app shell (AIC-40): a right-side sidebar + the routed screen in
 // the main column. On mobile the sidebar becomes an off-canvas drawer opened by
@@ -12,6 +21,22 @@ export function AppShell() {
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [pathname]); // close the drawer on navigation
+
+  // AIC-28. Boot analytics once from the server-served token (null in any
+  // environment where MIXPANEL_TOKEN is unset, which makes every call a
+  // no-op), then tie the session to the CUSTOMER — the same distinct_id the
+  // server uses, so browser and server events land on one profile instead of
+  // two halves of a funnel that never join.
+  const { data: overview } = useSharedOverview();
+  useEffect(() => {
+    getConfig().then((c) => initAnalytics(c.mixpanelToken)).catch(() => {});
+  }, []);
+  useEffect(() => {
+    identifyCustomer(overview?.customer?.id ?? null);
+  }, [overview?.customer?.id]);
+  useEffect(() => {
+    trackPage(routePattern(pathname));
+  }, [pathname]);
 
   // Escape closes the mobile drawer (AIC-42 a11y pass).
   useEffect(() => {

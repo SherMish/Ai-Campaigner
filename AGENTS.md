@@ -146,3 +146,43 @@ approval.** Two principles trace through every feature:
 Does this make the customer's campaign **safer** or the recommendation
 **clearer / more honest** — without exposing advertising complexity? If neither,
 reconsider before building it.
+
+---
+
+## Analytics (AIC-28)
+
+Mixpanel is wired. Read `docs/METRICS.md` before adding tracking; the rules
+below are the ones easy to break by accident.
+
+## Where to put a new event
+
+**Server, at the state transition** — `server/src/analytics/mixpanel.ts`
+`track()`. Funnel events are emitted from the code path that performs the
+transition, *after* the row is written. Never from a click handler, and never
+from the browser: an event fired at the intent counts things that did not
+happen (PIS-27; the reason AIC-28 says milestones must be reconstructable from
+source).
+
+Ask first: does the server already know this happened? It almost always does,
+and it knows it truthfully.
+
+**Browser** — `web/src/analytics.ts`, for identity and page views only.
+
+## Rules
+
+- **snake_case, past tense.** `recommendation_approved`, not `Approve Rec`.
+- **Never put PII in event properties** — email, phone, WhatsApp number,
+  business name, contact name. The scrubber drops them, but relying on it is
+  not the same as not sending them. Profile properties (`identifyCustomer`) are
+  the only place PII belongs, because profiles can be deleted on request.
+- **Never put a customer-owned object id in a page-view route.** Use the route
+  pattern; `trackPage` already normalises uuids to `:id`.
+- **Pass `isTest`.** Our own rows (Pisga, betas) must not enter the funnel.
+  `GenCampaign.isTest` and `resolveCampaignOwner()` carry it.
+- **`distinct_id` is the customer id**, never a user id or email.
+- Analytics never throws and never blocks a request. Keep it that way.
+
+## Local and CI
+
+No `MIXPANEL_TOKEN` → the client is never constructed and every call is a
+silent no-op. Tests never emit.

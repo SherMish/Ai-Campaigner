@@ -14,11 +14,13 @@
   "dependencies": {
     "@aic/shared": "*",
     "lucide-react": "^1.31.0",
+    "mixpanel-browser": "^2.82.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0"
   },
   "devDependencies": {
+    "@types/mixpanel-browser": "^2.60.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",

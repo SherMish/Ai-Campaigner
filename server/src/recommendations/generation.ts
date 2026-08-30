@@ -33,6 +33,7 @@ import { recordLeadsToDate } from "../services/leads-to-date.js";
 import { getLatestEngineActionByType } from "../services/action-history.js";
 import { OpsQueue } from "../services/ops-queue.js";
 import { loadLeadQuality } from "../services/lead-quality-source.js";
+import { track } from "../analytics/mixpanel.js";
 import { consoleLogger, type Logger } from "../services/logger.js";
 
 export interface AudienceMetaReader {
@@ -72,6 +73,8 @@ export interface GenCampaign {
   id: string;
   metaCampaignId: string;
   customerId: string | null;
+  // AIC-28: our own rows (Pisga, betas) never enter the activation funnel.
+  isTest?: boolean;
   // Per-account rule threshold overrides (AIC-77a, managed_campaigns.threshold_overrides).
   thresholdOverrides?: Record<string, number> | null;
   // AIC-87: this campaign's own lead definition (managed_campaigns.lead_event_types).
@@ -115,6 +118,7 @@ export async function listEligibleForGeneration(pool: pg.Pool): Promise<GenCampa
     meta_ad_account_id: string | null;
     tracking_pixel_id: string | null;
     profile_state: string | null;
+    is_test: boolean | null;
   }>(
     // AIC-72 needs the ad account (to ask Meta if it can spend) and the
     // connection id (where that verdict is cached — one account backs N
@@ -124,7 +128,7 @@ export async function listEligibleForGeneration(pool: pg.Pool): Promise<GenCampa
     // profile tick that writes it runs in the same loop.
     `SELECT mc.id, mc.meta_campaign_id, mc.customer_id, mc.threshold_overrides, mc.lead_event_types,
             conn.id AS connection_id, aa.meta_ad_account_id, mc.tracking_pixel_id,
-            cust.profile_state
+            cust.profile_state, cust.is_test
      FROM managed_campaigns mc
      JOIN meta_connections conn ON conn.customer_id = mc.customer_id
      LEFT JOIN customers cust ON cust.id = mc.customer_id
@@ -138,6 +142,7 @@ export async function listEligibleForGeneration(pool: pg.Pool): Promise<GenCampa
     id: r.id,
     metaCampaignId: r.meta_campaign_id,
     customerId: r.customer_id,
+    isTest: r.is_test === true,
     thresholdOverrides: r.threshold_overrides,
     leadEventTypes: r.lead_event_types,
     connectionId: r.connection_id,
@@ -538,6 +543,17 @@ export async function runGenerationTick(deps: {
     if (result.createdId) {
       summary.created++;
       log?.info(`[generation] ${campaign.id}: proposed ${result.freshDraft.type}`);
+      // AIC-28: emitted HERE, after the row exists — not where a rule decides
+      // one is warranted. The PIS-27 lesson: a milestone fired at the intent
+      // rather than the outcome counts things that never happened.
+      if (campaign.customerId) {
+        track({
+          event: "recommendation_generated",
+          customerId: campaign.customerId,
+          isTest: campaign.isTest,
+          props: { recommendation_type: result.freshDraft.type, campaign_id: campaign.id },
+        });
+      }
     }
     try {
       await deps.recordNoRecReason?.(campaign, result.freshDraft);

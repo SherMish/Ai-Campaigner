@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { strings } from "../strings";
 import { AuthLayout, Field, WA } from "./components";
 import { api, ApiError, setAuthToken } from "../api";
+import { resetAnalytics } from "../analytics";
 
 const a = strings.he.app;
 
@@ -28,6 +29,9 @@ export function Signup() {
         method: "POST",
         body: JSON.stringify({ name, email, password }),
       });
+      // A fresh session must not inherit the previous customer's identity —
+      // the server re-identifies from /overview once it knows who this is.
+      resetAnalytics();
       setAuthToken(token);
       nav("/onboarding");
     } catch (e) {
@@ -85,6 +89,9 @@ export function Login() {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
+      // A fresh session must not inherit the previous customer's identity —
+      // the server re-identifies from /overview once it knows who this is.
+      resetAnalytics();
       setAuthToken(token);
       nav("/app");
     } catch (e) {

@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { LayoutGrid, Sparkles, LifeBuoy, Settings, LogOut, PlusCircle } from "lucide-react";
 import { strings } from "../strings";
 import { clearAuthToken } from "../api";
+import { resetAnalytics } from "../analytics";
 import { useSharedOverview } from "./overview-store";
 
 const a = strings.he.app;
@@ -44,7 +45,10 @@ export function Sidebar() {
     return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
   }, [menu]);
 
-  const logout = () => { clearAuthToken(); window.location.assign("/login"); };
+  // resetAnalytics BEFORE the redirect: without it the next person to sign in
+  // on this device inherits this customer's distinct_id and their events merge
+  // into someone else's profile — a privacy incident, not just bad data.
+  const logout = () => { resetAnalytics(); clearAuthToken(); window.location.assign("/login"); };
   const initials = name.trim() ? name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join("") : "";
   const cls = ({ isActive }: { isActive: boolean }) => "ap-nav-item" + (isActive ? " active" : "");
 

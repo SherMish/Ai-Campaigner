@@ -19,7 +19,7 @@ See also: [STATE.md](STATE.md) (dated changelog) · [POSTMORTEM-2026-08-19.md](P
 | Ad-account health — can the account spend at all? (AIC-72) | [features/account-health.md](features/account-health.md) |
 | Lead-event volume — pixel alive but the lead event stopped (AIC-91) | [features/event-volume.md](features/event-volume.md) |
 | Over-count detection — are the leads inflated? (AIC-92) | [features/overcount.md](features/overcount.md) |
-| Lead / CPL / metric definitions | [METRICS.md](METRICS.md) |
+| Lead / CPL / metric definitions · Mixpanel analytics (AIC-28) | [METRICS.md](METRICS.md) |
 | Admin dogfood readout (screen + API) | [features/dogfood-readout.md](features/dogfood-readout.md) |
 | Recommendation engine — state machine, rules, staleness, explainer | [features/recommendation-engine.md](features/recommendation-engine.md) |
 | Feature layer — named windowed metrics the rules reason over | [FEATURES.md](FEATURES.md) |

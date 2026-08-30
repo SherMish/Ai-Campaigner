@@ -73,7 +73,17 @@ export function createApp() {
   // customers, not a secret, and Connect.tsx/AddContent.tsx need it before
   // the customer signs in on some flows.
   api.get("/config", (_req, res) => {
-    res.json({ businessPortfolioId: OUR_BUSINESS_PORTFOLIO_ID });
+    res.json({
+      businessPortfolioId: OUR_BUSINESS_PORTFOLIO_ID,
+      // AIC-28. A Mixpanel PROJECT token is designed to be public — it is
+      // embedded in the client bundle of every site that uses Mixpanel and can
+      // only write events, never read them. Served from here rather than
+      // baked in at build time so it is set once as a Railway variable, and so
+      // an environment without it (local, CI) simply gets null and never
+      // emits. It is NOT an API secret; the read-only API secret is separate
+      // and never leaves the server.
+      mixpanelToken: process.env.MIXPANEL_TOKEN ?? null,
+    });
   });
 
   api.use("/auth", authRouter);

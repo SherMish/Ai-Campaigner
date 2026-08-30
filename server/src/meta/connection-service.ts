@@ -36,6 +36,13 @@ export class ConnectionService {
     private readonly store: ConnectionStore,
     private readonly client: MetaClient,
     private readonly now: () => Date = () => new Date(),
+    // Injected rather than imported so this class stays pure for its unit
+    // tests, which already run without any analytics side effect.
+    private readonly onHealthChange?: (change: {
+      customerId: string;
+      from: AccessHealth;
+      to: AccessHealth;
+    }) => void,
   ) {}
 
   // Check every granted asset, fold into one health, persist, and on any loss
@@ -103,6 +110,11 @@ export class ConnectionService {
     }
 
     await this.store.updateHealth(connectionId, health, at);
+
+    // AIC-28: a real transition, either direction, recorded where the column
+    // changes. `unknown` never reaches here (see the fold above), so a network
+    // blip can never look like a customer losing their connection.
+    this.onHealthChange?.({ customerId: conn.customerId, from: previous, to: health });
 
     if (health !== "ok") {
       const reasons = checks
