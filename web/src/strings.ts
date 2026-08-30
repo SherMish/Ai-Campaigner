@@ -927,7 +927,20 @@ export const strings = {
       // left enabled to fail at the end.
       pickInstagramPlaceholder: "בחרו חשבון…",
       pickInstagramLoading: "טוען חשבונות אינסטגרם…",
-      pickInstagramEmpty: "אין חשבון אינסטגרם המקושר לחשבון המודעות הזה. מקשרים אותו בהגדרות העסק ב-Meta, ואז רועננו.",
+      // Rewritten 2026-08-30 after a live case where everything looked correct
+      // in Meta and the list was still empty. The old text said "link it to the
+      // ad account", which is the OLD link and not the one that matters: today
+      // Meta connects Instagram to the PAGE, and that is the link we read.
+      //
+      // Ordered by what actually goes wrong, most common first. The second line
+      // is the trap that cost an hour: an Instagram account can be assigned to
+      // our System User (it shows under Assigned assets, "Full access") and
+      // still be invisible, because assignment is not connection.
+      pickInstagramEmpty: "לא נמצא חשבון אינסטגרם. בדקו לפי הסדר: (1) האם האינסטגרם מחובר לעמוד הפייסבוק שנבחר — ב-Meta: הגדרות → עמודים → העמוד → נכסים מקושרים (Connected assets)? זה הקישור שאנחנו קוראים. (2) האם החשבון הוקצה למשתמש המערכת שלנו? הקצאה לבדה לא מספיקה — צריך גם חיבור לעמוד. (3) האם זה חשבון מקצועי (Business/Creator)? חשבון פרטי לא ניתן לפרסום.",
+      // Shown when the list has options but not the one expected — the same
+      // failure as an empty list, and it used to look like "this account only
+      // has one Instagram".
+      pickInstagramMissingHint: "לא רואים את החשבון שציפיתם לו? חשבון מופיע כאן רק אם הוא מחובר לאחד מעמודי הפייסבוק של חשבון הפרסום (הגדרות → עמודים → העמוד → נכסים מקושרים).",
       pickInstagramError: "טעינת חשבונות האינסטגרם נכשלה",
       instagramGateNote: "אפשר להשאיר ריק. אם ממלאים — חייבים לאמת: מזהה שלא נקרא בהצלחה יהפוך את כל החיבור ל־revoked ויעצור את מנוע ההמלצות בשקט, בדיוק כמו מזהה עמוד.",
       errorInstagramNotVerified: "מזהה האינסטגרם שהוקלד לא אומת. מריצים \"בדיקת אינסטגרם\" עם המזהה הזה בדיוק, או משאירים ריק.",

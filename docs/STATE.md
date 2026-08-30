@@ -6,6 +6,22 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-30 — Instagram was invisible in the wizard even when correctly connected
+
+The IG picker asked only `{ad_account}/instagram_accounts`. That link is real
+but empty for accounts connected the way Meta connects them today, so an
+operator who had done everything right saw an empty dropdown and no reason why.
+It now also reads `{page}?fields=instagram_business_account` for the account's
+Pages and unions the two — verified live: the ad-account edge stayed `[]` while
+the Page edge returned `@liam_handstylist`, so the old code would still have
+shown nothing. Needs no Page token and no `instagram_*` scope. The empty-state
+copy now names the real checks in order, including that Business Settings →
+Connected assets is NOT sufficient — the exact trap this took an hour to find.
+Also fixes the integration tests broken by the `usedByCustomer` change, whose
+fixtures turned out to be REAL production ids and so collided with live data.
+Owning docs: [docs/META_SETUP.md](META_SETUP.md),
+[docs/features/ops-console.md](features/ops-console.md).
+
 ### 2026-08-30 — onboarding wizard: say when a Page is already taken, and why one is missing
 
 Two gaps found while onboarding a second customer onto an ad account another

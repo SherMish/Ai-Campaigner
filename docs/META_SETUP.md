@@ -170,7 +170,7 @@ Repeat per asset that needs sharing:
 | --- | --- | --- |
 | **Ad account** (required) | Manage campaigns / Advertise | read Insights, apply approved budget + status changes |
 | **Page** (required for WhatsApp-lead ads + add-content) | **Advertise**, plus enough to *read* the Page — grant **Manage** if the health check can't read it with Advertise alone | ad creation references the Page (`promoted_object.page_id`); the connection health check reads the Page directly |
-| **Instagram** (if IG creatives are used) | as applicable | IG creative operations |
+| **Instagram** (if IG creatives are used) | as applicable | IG creative operations — **but see the Instagram section below: assignment alone does not make it visible** |
 
 ⚠️ **Sharing the ad account alone is not enough.** That was GelNails' state for
 months: ads ran fine, but every Page-dependent feature (add-content, AIC-63) was
@@ -285,3 +285,64 @@ what it gates (external partner-owned accounts only, vs our own), and the estima
 lead time — and raise the priority of
 [AIC-25](https://linear.app/pisga-app/issue/AIC-25) accordingly. Pisga's own account
 is unaffected (same business, Standard Access).
+
+---
+
+## Instagram: assignment is not connection (2026-08-30)
+
+Instagram cost an hour that the other asset types did not, because Business
+Settings can show an Instagram account fully connected while the API sees
+nothing. The three layers above still apply, and Instagram adds one more
+condition on top.
+
+**What we read.** `{page}?fields=instagram_business_account`. Confirmed live:
+this needs **no Page token and no `instagram_*` scope** — our System User token
+carries none and reads it fine. The picker also asks
+`{ad_account}/instagram_accounts`, an older link that is real but empty for
+accounts connected the modern way; querying only that edge is what made the
+wizard show an empty dropdown for a correctly-configured account.
+
+**The trap.** An Instagram account can be:
+
+- assigned to our System User (Business Settings → System Users → Assigned
+  assets → "Full access"), **and**
+- connected to the Page in Business Settings → Pages → Connected assets,
+
+and still be invisible to us — because neither of those is the link the Graph
+API exposes on the Page. Observed exactly this with `liam_handstylist`: both
+boxes ticked in Meta, every Page-side edge empty, and the only edge that would
+have listed it refused with:
+
+```
+(#10) requires that you can VIEW_INSTAGRAM_ACCOUNTS for this business account
+```
+
+**The fix that works.** Connect it from **Instagram's own side**: Instagram app
+→ Settings → Business tools → *Connect to Facebook* → pick the Page. That
+populates `instagram_business_account`, and it appeared in our picker
+immediately with no token change. The alternative — granting
+`VIEW_INSTAGRAM_ACCOUNTS` and regenerating the token with `instagram_basic` —
+is more moving parts and hits the layer-3 trap.
+
+**Not an Instagram account:** `page_backed_instagram_accounts`. Meta
+auto-creates this shadow profile so a Page can run Instagram placements without
+a real account. It has no username and nobody logs into it; the picker
+deliberately ignores it rather than offering an id an operator cannot identify.
+
+### Three kinds of "ad account" in Instagram's connect flow
+
+Instagram's *Connect to Facebook* screen offers a choice that matters:
+
+| shown as | what it is | usable by us |
+| --- | --- | --- |
+| **Meta ad account** | a real ad account in a Business portfolio | **yes** — the only one |
+| Instagram ad account | auto-created by boosting from the Instagram app | no |
+| Facebook ad account | auto-created by boosting from a Page | no |
+
+The last two are a separate lightweight surface, not a lesser tier: they cannot
+be shared by partner access or driven through the Marketing API. Both refuse us
+with `(#200) Ad account owner has NOT grant ads_management or ads_read`, which
+is not a permission anyone can grant — it is the wrong kind of account. **Always
+pick the Meta ad account.** Spend on a boost account is invisible to the product
+entirely: no insights, no recommendations, and it will never show up in any
+number we report.

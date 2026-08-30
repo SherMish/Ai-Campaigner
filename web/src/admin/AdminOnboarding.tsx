@@ -927,6 +927,11 @@ export function AdminOnboarding() {
             {!loadingIg && !igError && pageScopeAccount && igAccounts?.length === 0 && (
               <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickInstagramEmpty}</p>
             )}
+            {/* The list being non-empty is not the same as it containing the
+                account the operator wants — same reasoning as the Page hint. */}
+            {!loadingIg && !igError && pageScopeAccount && (igAccounts?.length ?? 0) > 0 && (
+              <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickInstagramMissingHint}</p>
+            )}
           </div>
           <button className="btn btn-outline btn-sm" disabled={checkingAsset !== null || !instagramId.trim()} onClick={() => runCheck("instagram", instagramId)}>
             {checkingAsset === "instagram" ? w.checking : w.checkInstagram}
@@ -1121,6 +1126,11 @@ export function AdminOnboarding() {
                 Business Settings rather than by anything here. */}
             {!loadingIg && !igError && pageScopeAccount && igAccounts?.length === 0 && (
               <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickInstagramEmpty}</p>
+            )}
+            {/* The list being non-empty is not the same as it containing the
+                account the operator wants — same reasoning as the Page hint. */}
+            {!loadingIg && !igError && pageScopeAccount && (igAccounts?.length ?? 0) > 0 && (
+              <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickInstagramMissingHint}</p>
             )}
             <p className="muted" style={{ fontSize: "0.75rem", marginTop: 4 }}>
               {w.instagramGateNote}

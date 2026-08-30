@@ -14,7 +14,15 @@ const d = HAS_DB ? describe : describe.skip;
 const ADMIN = "Bearer test-admin";
 const app = createApp();
 
-const PAGE = "1216278568228263";
+// Fixture ids are SYNTHETIC, not the real production ones they used to be.
+//
+// These tests run against the shared database (AIC-84), and the real ids —
+// 1216278568228263, 1214357698438710, 17841447360487819 — belong to live
+// customers. The moment the pickers started reporting `usedByCustomer`, every
+// assertion expecting `null` began failing against real rows: the fixture and
+// production data were the same rows. Synthetic ids cannot collide with
+// anything a customer owns.
+const PAGE = "__it_page_main";
 const ACCT = "act_2181076988590009";
 const ALL_SCOPES = ["ads_read", "ads_management", "pages_show_list", "pages_read_engagement"];
 const ADS_ONLY = ["ads_read", "ads_management"];
@@ -499,8 +507,8 @@ d("onboarding wizard routes (AIC-101)", () => {
     // The Page-side sibling: same "pick, don't type" move, but SCOPED to the
     // picked ad account via `{ad_account}/promote_pages` — Meta's own answer
     // to "which Pages can this account advertise for".
-    const OTHER_ACCT = "act_1573023157816786";
-    const OTHER_PAGE = "1214357698438710";
+    const OTHER_ACCT = "act___it_other";
+    const OTHER_PAGE = "__it_page_other";
     const BIZ_A = "467328257419676";
     const BIZ_B = "1518507149596335";
 
@@ -509,32 +517,91 @@ d("onboarding wizard routes (AIC-101)", () => {
     // it even though its Page is assigned to the System User — the exact
     // state a brand-new account is in when Branch A goes to build its first
     // campaign.
-    function fakePagesGraph() {
+    function fakePagesGraph(pageId: string = PAGE) {
       return vi.fn(async (url: string) => {
         const u = String(url);
         if (u.includes(`${ACCT}?fields=business`)) return json({ id: ACCT, business: { id: BIZ_A } });
         if (u.includes(`${OTHER_ACCT}?fields=business`)) return json({ id: OTHER_ACCT, business: { id: BIZ_B } });
         if (u.includes("me/accounts")) {
           return json({ data: [
-            { id: PAGE, name: "פסגה", business: { id: BIZ_A } },
+            { id: pageId, name: "פסגה", business: { id: BIZ_A } },
             { id: OTHER_PAGE, name: "Ads Agent", business: { id: BIZ_B } },
           ] });
         }
-        if (u.includes(`${ACCT}/promote_pages`)) return json({ data: [{ id: PAGE, name: "פסגה" }] });
+        if (u.includes(`${ACCT}/promote_pages`)) return json({ data: [{ id: pageId, name: "פסגה" }] });
         if (u.includes(`${OTHER_ACCT}/promote_pages`)) return json({ data: [] });
         throw new Error(`unexpected fetch ${u}`);
       }) as unknown as typeof fetch;
     }
 
     it("lists only the Pages the PICKED ad account can promote", async () => {
+      // Its own page id: the PROVISIONING block earlier in this file connects
+      // a customer to PAGE, and those rows live until afterAll. Asserting
+      // `usedByCustomer: null` against the shared constant fails on a row an
+      // unrelated test wrote — the same trap the ad-account block documents.
+      const pickPage = "__it_page_pick";
       const id = await seedCustomer("disc-pages");
-      vi.stubGlobal("fetch", fakePagesGraph());
+      vi.stubGlobal("fetch", fakePagesGraph(pickPage));
       const res = await request(app)
         .get(`/api/admin/customers/${id}/onboarding/pages`)
         .query({ metaAdAccountId: ACCT })
         .set("Authorization", ADMIN);
       expect(res.status).toBe(200);
-      expect(res.body.pages).toEqual([{ id: PAGE, name: "פסגה" }]);
+      expect(res.body.pages).toEqual([{ id: pickPage, name: "פסגה", usedByCustomer: null }]);
+    });
+
+    // The real case that prompted this: a second customer onto an ad account
+    // another customer already uses, where the only Page offered was the one
+    // already connected — with nothing saying so.
+    //
+    // Reusing a Page is LEGAL (page_id has no uniqueness constraint) so this
+    // must never filter or block. It must only make the reuse impossible to
+    // choose by accident.
+    it("flags a Page already connected to a DIFFERENT customer — and still offers it", async () => {
+      // A page id nothing else in this file writes a row against. The
+      // meta_connections rows below outlive the test (only afterAll cleans
+      // up), so reusing the shared PAGE constant would make every later
+      // usedByCustomer assertion in this block fail — which is exactly what
+      // happened on the first attempt, and what the ad-account block's own
+      // comment warns about.
+      const sharedPage = "page_shared_other";
+      const mine = await seedCustomer("pages-owner");
+      const other = await seedCustomer("pages-other");
+      await pool.query(
+        `INSERT INTO meta_connections (customer_id, page_id) VALUES ($1, $2)`,
+        [other, sharedPage],
+      );
+
+      vi.stubGlobal("fetch", fakePagesGraph(sharedPage));
+      const res = await request(app)
+        .get(`/api/admin/customers/${mine}/onboarding/pages`)
+        .query({ metaAdAccountId: ACCT })
+        .set("Authorization", ADMIN);
+
+      expect(res.status).toBe(200);
+      // Still offered — the option is present, not filtered away.
+      expect(res.body.pages).toHaveLength(1);
+      expect(res.body.pages[0].id).toBe(sharedPage);
+      expect(res.body.pages[0].usedByCustomer).toMatchObject({ id: other, name: "__it_wiz_pages-other" });
+    });
+
+    it("does NOT flag a Page the SAME customer already has", async () => {
+      // Re-selecting your own Page is not a conflict with yourself, and
+      // reporting it as one would train the operator to ignore the warning.
+      const selfPage = "page_shared_self";
+      const id = await seedCustomer("pages-self");
+      await pool.query(
+        `INSERT INTO meta_connections (customer_id, page_id) VALUES ($1, $2)`,
+        [id, selfPage],
+      );
+
+      vi.stubGlobal("fetch", fakePagesGraph(selfPage));
+      const res = await request(app)
+        .get(`/api/admin/customers/${id}/onboarding/pages`)
+        .query({ metaAdAccountId: ACCT })
+        .set("Authorization", ADMIN);
+
+      expect(res.body.pages[0].usedByCustomer).toBeNull();
     });
 
     // Both bugs this list has already had, locked in as one case:
@@ -552,7 +619,7 @@ d("onboarding wizard routes (AIC-101)", () => {
         .query({ metaAdAccountId: OTHER_ACCT })
         .set("Authorization", ADMIN);
       expect(res.status).toBe(200);
-      expect(res.body.pages).toEqual([{ id: OTHER_PAGE, name: "Ads Agent" }]);
+      expect(res.body.pages).toEqual([{ id: OTHER_PAGE, name: "Ads Agent", usedByCustomer: null }]);
     });
 
     it("400s when metaAdAccountId is missing — a Page list is meaningless unscoped", async () => {
@@ -577,7 +644,7 @@ d("onboarding wizard routes (AIC-101)", () => {
     // for the same reason — an operator transcribing a 17-digit id onto a
     // live call — but the edge is per-account by construction, so the scoping
     // case is a straight assertion rather than a union.
-    const IG = "17841447360487819";
+    const IG = "__it_ig_main";
     function fakeIgGraph() {
       return vi.fn(async (url: string) => {
         const u = String(url);
@@ -597,7 +664,7 @@ d("onboarding wizard routes (AIC-101)", () => {
         .query({ metaAdAccountId: ACCT })
         .set("Authorization", ADMIN);
       expect(res.status).toBe(200);
-      expect(res.body.instagramAccounts).toEqual([{ id: IG, username: "ads_agent_il" }]);
+      expect(res.body.instagramAccounts).toEqual([{ id: IG, username: "ads_agent_il", usedByCustomer: null }]);
     });
 
     // The bug the Page picker shipped three times: offering one customer's
@@ -625,7 +692,7 @@ d("onboarding wizard routes (AIC-101)", () => {
         .query({ metaAdAccountId: ACCT })
         .set("Authorization", ADMIN);
       expect(res.status).toBe(200);
-      expect(res.body.instagramAccounts).toEqual([{ id: IG, username: IG }]);
+      expect(res.body.instagramAccounts).toEqual([{ id: IG, username: IG, usedByCustomer: null }]);
     });
 
     it("400s when metaAdAccountId is missing — an Instagram list is meaningless unscoped", async () => {

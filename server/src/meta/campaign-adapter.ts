@@ -583,19 +583,57 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     return [...byId.values()];
   }
 
-  // Unlike listPages, this needs no union and no business filter: the edge is
-  // already per-account and already scoped. Verified live 2026-08-19 on the
-  // production token — act_1573023157816786 → [@ads_agent_il],
-  // act_2181076988590009 → []. The two accounts genuinely differ, so a
-  // non-empty result is real rather than a permissions artifact.
-  //
-  // An empty list here is INFORMATIVE, not an error: it means no Instagram
-  // account is attached to this ad account (fixed in Meta Business Settings,
-  // not by us). The caller renders that reason rather than a blank (AIC-98).
+  /*
+   * Instagram accounts usable with this ad account.
+   *
+   * TWO SOURCES, because Meta has two different links and only one of them is
+   * the modern one:
+   *
+   *   1. `{ad_account}/instagram_accounts` — the older, account-level link.
+   *      Real (act_1573023157816786 returns @ads_agent_il through it) but
+   *      empty for accounts whose Instagram is attached the current way.
+   *   2. `{page}?fields=instagram_business_account` — a professional Instagram
+   *      connected to a Page. This is how Meta links Instagram today, and it
+   *      was invisible to us: the picker asked only source 1, so an operator
+   *      who had correctly connected Instagram in Meta saw an empty dropdown
+   *      and no reason why. Found live 2026-08-30.
+   *
+   * Source 2 needs NO page token and NO instagram_* scope — verified against
+   * a token carrying neither, which still read the link. So this costs one
+   * extra call per Page and buys the case that was silently broken.
+   *
+   * NOT a source: `page_backed_instagram_accounts`. That is the shadow profile
+   * Meta auto-creates so a Page can run Instagram placements without a real
+   * account. It has no username, nobody logs into it, and offering it would
+   * put an un-selectable-looking id in front of an operator as if it were the
+   * business's Instagram.
+   */
   async listInstagramAccounts(adAccountId: string): Promise<InstagramOption[]> {
     type RawIg = { id: string; username?: string };
-    const body = await this.get(`${adAccountId}/instagram_accounts?fields=id,username&limit=200`);
-    return ((body.data as RawIg[]) ?? []).map((a) => ({
+
+    const [direct, viaPages] = await Promise.all([
+      this.get(`${adAccountId}/instagram_accounts?fields=id,username&limit=200`)
+        .then((b) => ((b.data as RawIg[]) ?? []))
+        .catch(() => [] as RawIg[]),
+      // Source 2. Isolated per Page: one Page we cannot read must not empty
+      // the whole list, which is the failure this method already had.
+      this.listPages(adAccountId)
+        .then((pages) =>
+          Promise.all(
+            pages.map((pg) =>
+              this.get(`${pg.id}?fields=instagram_business_account{id,username}`)
+                .then((b) => (b.instagram_business_account as RawIg | undefined) ?? null)
+                .catch(() => null),
+            ),
+          ),
+        )
+        .then((rows) => rows.filter((r): r is RawIg => !!r?.id))
+        .catch(() => [] as RawIg[]),
+    ]);
+
+    const byId = new Map<string, RawIg>();
+    for (const a of [...direct, ...viaPages]) byId.set(String(a.id), a);
+    return [...byId.values()].map((a) => ({
       id: String(a.id),
       // Fall back to the id rather than rendering an empty @ — a nameless
       // option an operator cannot identify is worse than a raw id.
