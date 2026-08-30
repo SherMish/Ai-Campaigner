@@ -1,4 +1,5 @@
 import mixpanel from "mixpanel-browser";
+import { strings } from "./strings";
 
 // AIC-28 — the browser half of the measurement layer.
 //
@@ -108,29 +109,77 @@ export function trackEvent(event: string, props: Record<string, string | number 
 }
 
 /*
- * Delegated click tracking for the signed-in app.
+ * Every fixed UI string in the app, flattened once.
  *
- * THE LABEL IS NEVER THE ELEMENT'S TEXT. In here the text is customer content:
- * ad headlines, business names, audience labels, recommendation copy. Sending
- * it would put customer data into event properties, which is the one thing the
- * server tracker's scrubber exists to prevent — and the browser has no
- * scrubber. So a label is either an explicit `data-track` attribute, or a
- * structural descriptor derived from the element's own classes and role.
+ * THIS IS WHAT MAKES A READABLE CLICK LABEL SAFE. The rule was never "text is
+ * forbidden" — it is "CUSTOMER CONTENT is forbidden": ad headlines, business
+ * names, audience labels. Our own copy is not customer content, and it is all
+ * in strings.ts.
  *
- * The cost is that un-annotated buttons report as `button.btn-primary` rather
- * than something readable. That is the right trade: an unreadable label is a
- * nuisance, a leaked ad headline is a privacy problem. Add `data-track` to the
- * controls worth naming.
+ * So a button's text may be used as its label if and only if that exact text
+ * is one of our strings. A dynamic label — an ad headline rendered into a row,
+ * a business name — cannot be in this set, so it falls through and is never
+ * sent. The check is the safety property, not a heuristic about it.
+ *
+ * The first version refused all text and produced labels like
+ * `button.btn.btn-primary`, which is safe and useless.
  */
-function clickLabel(el: Element): string {
+const UI_TEXTS: Set<string> = (() => {
+  const out = new Set<string>();
+  const walk = (v: unknown): void => {
+    if (typeof v === "string") {
+      const t = v.trim();
+      // Long strings are body copy, not control labels — no value as a label
+      // and more chance of colliding with something dynamic.
+      if (t && t.length <= 40) out.add(t);
+    } else if (v && typeof v === "object") {
+      for (const inner of Object.values(v as Record<string, unknown>)) walk(inner);
+    }
+  };
+  walk(strings.he);
+  return out;
+})();
+
+/** Collapse whitespace so "שמירה\n " matches the string "שמירה". */
+function normalizeText(el: Element): string {
+  return (el.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
+/*
+ * A readable label that still cannot carry customer content.
+ *
+ * In priority order:
+ *   1. `data-track` — an explicit, stable name. Best, and survives copy edits.
+ *   2. the element's own text, ONLY if it is a known UI string (see UI_TEXTS).
+ *   3. `aria-label`, same restriction.
+ *   4. the destination, for links.
+ *   5. a structural descriptor — the last resort, not the default.
+ */
+type LabelSource = "explicit" | "ui_text" | "aria" | "href" | "structural";
+
+function clickLabel(el: Element): { label: string; source: LabelSource } {
   const explicit = el.getAttribute("data-track");
-  if (explicit) return explicit;
+  if (explicit) return { label: explicit, source: "explicit" };
+
+  const text = normalizeText(el);
+  if (text && UI_TEXTS.has(text)) return { label: text, source: "ui_text" };
+
+  // Icon-only controls (the mobile menu, the info affordances) have no text at
+  // all; their aria-label IS their name, and it comes from the strings file
+  // like everything else.
+  const aria = el.getAttribute("aria-label")?.trim();
+  if (aria && UI_TEXTS.has(aria)) return { label: aria, source: "aria" };
+
   const href = el.getAttribute("href");
-  if (href && href.startsWith("/")) return `link:${href.replace(/\/[0-9a-f-]{20,}/gi, "/:id")}`;
-  if (href) return "external_link";
-  // Class names are ours (ui.css), not content — safe and reasonably telling.
+  if (href && href.startsWith("/")) {
+    return { label: `link:${href.replace(/\/[0-9a-f-]{20,}/gi, "/:id")}`, source: "href" };
+  }
+  if (href) return { label: "external_link", source: "href" };
+
+  // Class names are ours (ui.css), not content. Reached only when a control
+  // has no stable name and no recognisable copy — worth adding `data-track` to.
   const cls = (el.className || "").toString().trim().split(/\s+/).filter(Boolean).slice(0, 2).join(".");
-  return cls ? `${el.tagName.toLowerCase()}.${cls}` : el.tagName.toLowerCase();
+  return { label: cls ? `${el.tagName.toLowerCase()}.${cls}` : el.tagName.toLowerCase(), source: "structural" };
 }
 
 let clicksWired = false;
@@ -145,7 +194,20 @@ export function initClickTracking(currentRoute: () => string): void {
       const el = (e.target as Element | null)?.closest?.("a,button");
       if (!el) return;
       try {
-        mixpanel.track("element_clicked", { label: clickLabel(el), route: currentRoute() });
+        // Computed together, never separately: an earlier version derived the
+        // label in one place and its source in another, and they disagreed —
+        // an aria-labelled control reported `[structural] תפריט`, which is
+        // exactly the confusion label_source exists to remove.
+        const { label, source } = clickLabel(el);
+        mixpanel.track("element_clicked", {
+          label,
+          // How the name was obtained. Lets a report separate "this control is
+          // used" from "something round here was clicked", and shows which
+          // controls are still worth a data-track.
+          label_source: source,
+          route: currentRoute(),
+          element: el.tagName.toLowerCase(),
+        });
       } catch {
         /* ignore */
       }

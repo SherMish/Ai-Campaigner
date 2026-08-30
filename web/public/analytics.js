@@ -40,16 +40,24 @@
   }
 
   /*
-   * A click label that can never leak content.
+   * The label. On THESE pages the text is safe to use directly.
    *
-   * `data-track` when present, else the element's role and destination —
-   * NEVER its text. Here the text is marketing copy and harmless; in the app
-   * the same habit would send ad headlines and business names. One rule for
-   * both surfaces beats a special case that gets copied to the wrong place.
+   * Landing and /guides are static HTML we wrote — every word is our own
+   * marketing copy, and no customer data is rendered on them at all. That is
+   * not true inside the app, where the same habit would send ad headlines and
+   * business names, so web/src/analytics.ts uses a stricter rule: text only
+   * when it matches a known UI string. Two surfaces, two honest rules, each
+   * justified by what can actually appear on it.
+   *
+   * Capped and whitespace-collapsed: a label is a name, not a paragraph.
    */
   function labelFor(el) {
     var explicit = el.getAttribute("data-track");
     if (explicit) return explicit;
+    var text = (el.textContent || "").replace(/\s+/g, " ").trim();
+    if (text && text.length <= 40) return text;
+    var aria = (el.getAttribute("aria-label") || "").trim();
+    if (aria) return aria;
     var href = el.getAttribute("href") || "";
     if (href.indexOf("wa.me") > -1) return "whatsapp";
     if (href.indexOf("mailto:") === 0) return "email_link";
@@ -92,6 +100,11 @@
           page_type: base.page_type,
           page_slug: base.page_slug,
           label: labelFor(el),
+          element: el.tagName.toLowerCase(),
+          // The destination matters as much as the label on a marketing page:
+          // two "לקבלת הצעה" buttons that go to different places are two
+          // different results.
+          href: el.getAttribute("href") || undefined,
         });
       },
       // Capture: a handler that stops propagation, or a link that navigates

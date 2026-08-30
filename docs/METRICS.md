@@ -252,15 +252,37 @@ and guide visits that led here. Tracking `signed_up` there, **without** calling
 `reset()` on **login** is correct for the opposite reason: whoever logs in may
 not be whoever used that browser last, and must not inherit their id.
 
-## Click labels never come from element text
+## Click labels: readable, without ever carrying customer content
 
-In the app, text is customer content — ad headlines, business names, audience
-labels. A label is either an explicit `data-track` attribute or a structural
-descriptor (`button.btn-primary`, `link:/app/settings`). The cost is that
-un-annotated controls report unreadably; the alternative is leaking an ad
-headline into an event property that cannot be selectively deleted. Add
-`data-track` to the controls worth naming — `hero_launch`, `rec_approve`,
-`rec_dismiss`, `creative_context_toggle` already have it.
+The rule was never "text is forbidden" — it is "CUSTOMER content is forbidden":
+ad headlines, business names, audience labels. A first version refused all text
+and produced labels like `button.btn.btn-primary`, which is safe and useless.
+
+**In the app**, a control's own text is used as its label *if and only if that
+exact string is one of ours*. `UI_TEXTS` is every fixed string in `strings.ts`,
+flattened once at boot; a dynamic label cannot be in that set, so it falls
+through and is never sent. The check IS the safety property, not a heuristic
+about it. Real labels from the live dashboard:
+
+```
+[ui_text] היום · שבוע · חודש · הכל     the range switcher
+[aria]    מידע על סטטוס הקמפיין        an icon-only control
+[explicit] rec_approve                 a data-track name
+```
+
+`label_source` (`explicit` / `ui_text` / `aria` / `href` / `structural`) says
+how the name was obtained, so a report can separate "this control is used" from
+"something round here was clicked" — and shows which controls are still worth a
+`data-track`. **Label and source are computed together**, in one function: an
+earlier version derived them separately and they disagreed, reporting
+`[structural] תפריט` for an aria-labelled button.
+
+**On the landing page and /guides** the text is used directly. Those are static
+HTML we wrote; no customer data is rendered on them at all. Two surfaces, two
+rules, each justified by what can actually appear on it.
+
+Explicit names so far: `hero_launch`, `hero_cta`, `rec_teaser_view`,
+`rec_approve`, `rec_dismiss`, `creative_context_toggle`.
 
 ## Data residency — and why `status: 1` proves nothing
 
