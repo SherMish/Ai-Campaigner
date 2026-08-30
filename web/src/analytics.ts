@@ -23,10 +23,12 @@ let ready = false;
  * any environment where it is unset) → every function here is a no-op, which
  * is how every other integration in this codebase behaves.
  */
-export function initAnalytics(token: string | null): void {
+export function initAnalytics(token: string | null, apiHost?: string | null): void {
   if (!token || ready) return;
   try {
     mixpanel.init(token, {
+      // Must match the server's region — see MIXPANEL_API_HOST. Unset → US.
+      ...(apiHost ? { api_host: apiHost } : {}),
       // Derived from the host rather than a build-time env flag: this repo's
       // web tsconfig has no vite/client types, and a hostname check needs no
       // build plumbing to be right.

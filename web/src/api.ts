@@ -868,7 +868,7 @@ export const approveAddition = (id: string) =>
 // customers, not a secret) and never a literal baked into this bundle. See
 // server/src/config/meta-identity.ts for why: a customer adds us as a
 // partner BY ID, and that ID has to survive the "Ads Agent" rename unchanged.
-export const getConfig = () => api<{ businessPortfolioId: string; mixpanelToken: string | null }>("/config");
+export const getConfig = () => api<{ businessPortfolioId: string; mixpanelToken: string | null; mixpanelApiHost: string | null }>("/config");
 
 export const getOverview = () => api<CustomerOverview>("/app/overview");
 // AIC-67: `relevant` answers about the PENDING delta only — the server reads

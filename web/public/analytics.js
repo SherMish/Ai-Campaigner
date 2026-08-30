@@ -132,13 +132,18 @@
         lib.async = true;
         document.head.appendChild(lib);
 
-        window.mixpanel.init(cfg.mixpanelToken, {
+        var opts = {
           track_pageview: false, // sent explicitly above, with page_type
           persistence: "localStorage",
           // IP is the only personal datum Mixpanel takes by default and we
           // have no analytic use for it. Same posture as the SPA.
           ip: false,
-        });
+        };
+        // Must match the server's region. A project in Mixpanel's EU/India
+        // region does not ingest on the US host, and the US host still
+        // answers `status: 1` — so the mismatch is invisible.
+        if (cfg.mixpanelApiHost) opts.api_host = cfg.mixpanelApiHost;
+        window.mixpanel.init(cfg.mixpanelToken, opts);
         start();
       };
 

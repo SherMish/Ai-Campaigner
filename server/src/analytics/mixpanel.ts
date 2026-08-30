@@ -41,6 +41,17 @@ function mp(): Mixpanel.Mixpanel | null {
     // Server-side events carry no browser context, so let Mixpanel geolocate
     // from nothing rather than attributing every customer to Railway's region.
     geolocate: false,
+    // DATA RESIDENCY. A project created in Mixpanel's EU or India region only
+    // ingests on its own host; events sent to the US host are acknowledged
+    // with `status: 1` and then land nowhere. That acknowledgement is
+    // worthless as a check — a deliberately bogus token gets the same reply —
+    // so a residency mismatch looks exactly like a working integration until
+    // you notice the project is empty.
+    //
+    // Unset → US, which is Mixpanel's default region.
+    //   EU:    api-eu.mixpanel.com
+    //   India: api-in.mixpanel.com
+    ...(process.env.MIXPANEL_API_HOST ? { host: process.env.MIXPANEL_API_HOST } : {}),
   });
   return client;
 }

@@ -29,7 +29,7 @@ export function AppShell() {
   // two halves of a funnel that never join.
   const { data: overview } = useSharedOverview();
   useEffect(() => {
-    getConfig().then((c) => initAnalytics(c.mixpanelToken)).catch(() => {});
+    getConfig().then((c) => initAnalytics(c.mixpanelToken, c.mixpanelApiHost)).catch(() => {});
   }, []);
   useEffect(() => {
     identifyCustomer(overview?.customer?.id ?? null);

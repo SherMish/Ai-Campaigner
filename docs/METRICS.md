@@ -261,3 +261,27 @@ un-annotated controls report unreadably; the alternative is leaking an ad
 headline into an event property that cannot be selectively deleted. Add
 `data-track` to the controls worth naming — `hero_launch`, `rec_approve`,
 `rec_dismiss`, `creative_context_toggle` already have it.
+
+## Data residency — and why `status: 1` proves nothing
+
+`MIXPANEL_API_HOST` (unset → US). Set it to `https://api-eu.mixpanel.com` or
+`https://api-in.mixpanel.com` if the Mixpanel project was created in that
+region. The server tracker, the SPA and the static pages all read it, so the
+three can never disagree.
+
+**This matters more than it looks, because the failure is invisible.** A
+project in the EU region does not ingest on the US host — but the US host still
+answers `{"error":null,"status":1}`. Measured while setting this up: **a
+deliberately bogus 32-zero token gets exactly the same reply.** `/track` is
+fire-and-forget by design; it acknowledges anything well-formed and validates
+the token asynchronously.
+
+So a `status: 1` is not evidence that anything landed. The only real
+confirmation is seeing the event in Mixpanel's own UI (Events / Live View). If
+the project shows "Still listening" while requests are being accepted, the two
+candidates in order are:
+
+1. **Region mismatch** — project is EU/India, events are going to US. Fix with
+   `MIXPANEL_API_HOST`, no code change.
+2. **Wrong project** — the token belongs to a different project than the one
+   being watched. Check Project Settings → Access Keys.

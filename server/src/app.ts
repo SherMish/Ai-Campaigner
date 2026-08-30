@@ -83,6 +83,10 @@ export function createApp() {
       // emits. It is NOT an API secret; the read-only API secret is separate
       // and never leaves the server.
       mixpanelToken: process.env.MIXPANEL_TOKEN ?? null,
+      // Null → Mixpanel's US default. Set to https://api-eu.mixpanel.com (or
+      // api-in) for a project created in that region; sending to the wrong
+      // one is silently dropped, and /track still answers `status: 1`.
+      mixpanelApiHost: process.env.MIXPANEL_API_HOST ?? null,
     });
   });
 
