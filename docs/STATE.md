@@ -6,6 +6,14 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-30 — Checklist hook becomes a save-post tag (AIC-152)
+
+The checklist carousel's first slide now presents `שמרו את הפוסט` in a compact
+sharp-corner tag with a bookmark icon. It reads as the familiar Instagram save
+action instead of another rounded CTA, while the other hook formats remain
+unchanged. Owning doc:
+[docs/features/content-studio.md](features/content-studio.md).
+
 ### 2026-08-29 — AIC-28 (part): Mixpanel wired, funnel measured server-side
 
 The customer funnel is instrumented, and the design decision is where it fires:

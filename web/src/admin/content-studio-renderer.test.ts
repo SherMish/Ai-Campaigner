@@ -26,6 +26,7 @@ function fakeCanvas() {
     fillRect: vi.fn(),
     beginPath: vi.fn(),
     moveTo: vi.fn(),
+    lineTo: vi.fn(),
     arcTo: vi.fn(),
     closePath: vi.fn(),
     fill: vi.fn(),
@@ -148,8 +149,8 @@ describe("Content Studio renderer geometry", () => {
     expect(pillRight - pillX).toBe("הידעתם?".length * 20 + 64);
   });
 
-  it("centers checklist hook accent copy vertically inside its pill", () => {
-    const { canvas, textCalls } = fakeCanvas();
+  it("renders the checklist hook accent as a sharp save-post tag", () => {
+    const { canvas, context, textCalls } = fakeCanvas();
     const slide: CarouselSlide = {
       layout: "hook",
       hookStyle: "checklist",
@@ -160,6 +161,13 @@ describe("Content Studio renderer geometry", () => {
 
     drawCarouselSlide(canvas, slide, { index: 0, total: 6 });
 
+    expect(context.fillRect.mock.calls).toContainEqual([
+      expect.any(Number),
+      1010,
+      expect.any(Number),
+      78,
+    ]);
+    expect(context.lineTo).toHaveBeenCalledTimes(4);
     expect(textCalls.find((call) => call.text === "שמרו את הפוסט")).toMatchObject({
       y: 1010 + 78 / 2,
       align: "right",
