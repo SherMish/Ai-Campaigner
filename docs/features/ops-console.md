@@ -1276,3 +1276,41 @@ a two-word reply, which is exactly the useless version of these fields.
 - `onChange` rebuilt from the `form` **prop**, so two edits in the same tick lost
   one. Reachable through browser autofill, which sets name/phone/email together.
   Composed through a ref, the same fix `BuilderCreatives` needed the same day.
+
+## Reusing a Page or IG account across customers (2026-08-30)
+
+`meta_connections.page_id` and `.instagram_id` have no uniqueness constraint,
+and one Page can legitimately back several customers. The wizard used to draw
+the conclusion that there was therefore "no conflict to warn about" and said
+nothing.
+
+That was right about the database and wrong about the operator. Reusing a Page
+is legal but almost never intended, and with the picker silent there was no way
+to tell a deliberate reuse from having clicked the wrong row. So both pickers
+now annotate each option with the other customer already connected to it
+(`usedByCustomer`, the same shape the ad-account picker has always used), and
+the SELECTED row raises a bold red line naming that customer.
+
+**Permitted, not silent.** The choice is never blocked, because the constraint
+genuinely does not exist — a real conflict would be a failed write, not a
+warning. The current customer is excluded from the lookup (`c.id != $2`), so
+re-selecting what they already have is not reported as a conflict with
+themselves.
+
+## Why a Page you expect might not be in the list
+
+A Page appears only if BOTH hold:
+
+1. our System User has a role on it (it comes back from `me/accounts`), and
+2. it belongs to the same Business that owns the selected ad account — or it
+   has already been advertised through that account (`promote_pages`).
+
+Neither is visible from our side, so a missing Page looked exactly like "this
+account only has one Page". The picker now says both conditions and where to
+fix them (Meta Business Settings) whenever the list is non-empty — the AIC-98
+rule applied to a SHORT list, not only an empty one.
+
+Confirmed live on `act_2181076988590009`: its business is `467328257419676`,
+and `me/accounts` returns only two Pages the System User can manage — one in
+that business (shown) and one in another (correctly hidden). A third Page the
+operator expected was in neither, i.e. never granted to the System User at all.

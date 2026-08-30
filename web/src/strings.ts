@@ -851,6 +851,16 @@ export const strings = {
       // (AIC-87's migration 038 deliberately allows one Meta ad account to
       // back more than one customer), never a reason not to pick it.
       pickAdAccountUsedBy: "בשימוש גם עבור {name}",
+      // Shown inside the dropdown row — a footnote among other options.
+      pickAssetUsedBy: "כבר מחובר ל-{name}",
+      // Shown once that row is SELECTED, in bold red. Reusing a Page or an IG
+      // account across customers is allowed (neither column is unique), so
+      // this warns and never blocks — it only makes the reuse impossible to
+      // do by accident.
+      pickAssetUsedByWarning: "שימו לב: העמוד הזה כבר מחובר ללקוח {name}. אפשר להמשיך — אותו עמוד יכול לשרת כמה לקוחות — אבל ודאו שזו הכוונה.",
+      // Why an expected Page might not be in the list. A missing page looked
+      // exactly like "there is only one page", with nothing to act on.
+      pickPageMissingHint: "לא רואים עמוד שציפיתם לו? עמוד מופיע כאן רק אם (1) למשתמש המערכת שלנו יש הרשאה עליו, ו-(2) הוא שייך לאותו עסק (Business) שמחזיק בחשבון הפרסום. אם חסר — מוסיפים אותו ב-Meta Business Settings ומרעננים.",
       pickCampaignLabel: "קמפיין",
       pickCampaignPlaceholder: "בחרו קמפיין…",
       pickCampaignLoading: "טוענים קמפיינים…",

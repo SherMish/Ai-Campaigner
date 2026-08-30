@@ -88,14 +88,20 @@ type DetectedDestination =
   | { supported: true; destinationType: "engagement"; leadEventTypes: [string] }
   | { supported: false; reason: "no_ad_sets" | "unrecognized_objective" | "mixed_ad_sets" };
 type UnsupportedReason = Extract<DetectedDestination, { supported: false }>["reason"];
+// `usedByCustomer` is the OTHER customer already connected to this asset, or
+// null. Reusing a Page or an IG account across customers is legal — neither
+// column is unique — so this never blocks the choice; it only makes a reuse
+// impossible to make by accident.
 interface InstagramOption {
   id: string;
   username: string;
+  usedByCustomer: { id: string; name: string } | null;
 }
 
 interface PageOption {
   id: string;
   name: string;
+  usedByCustomer: { id: string; name: string } | null;
 }
 interface DiscoveredCampaign {
   id: string;
@@ -193,6 +199,12 @@ export function AdminOnboarding() {
   // what the System User can actually manage, instead of transcribing a raw
   // Page id out of Meta's own screen.
   const [pages, setPages] = useState<PageOption[] | null>(null);
+  // Who else already has the SELECTED page, per picker. Derived rather than
+  // stored: the answer must follow the dropdown, and a second piece of state
+  // would be one more thing to forget to update.
+  const usedByOf = (id: string) => (pages ?? []).find((p) => p.id === id)?.usedByCustomer ?? null;
+  const selectedPageUsedBy = usedByOf(pageId);
+  const formPageUsedBy = usedByOf(form.pageIdForm);
   const [loadingPages, setLoadingPages] = useState(false);
   const [pagesError, setPagesError] = useState<string | null>(null);
   // Same move for Instagram. Worth a picker for a sharper reason than the
@@ -845,8 +857,21 @@ export function AdminOnboarding() {
                 that step 1 or 2 hasn't been done for it. */}
             <select value={pageId} onChange={(e) => setPageId(e.target.value)} disabled={loadingPages}>
               <option value="">{w.pickPagePlaceholder}</option>
-              {(pages ?? []).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.id})</option>)}
+              {(pages ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.id}){p.usedByCustomer ? ` — ${w.pickAssetUsedBy.replace("{name}", p.usedByCustomer.name)}` : ""}
+                </option>
+              ))}
             </select>
+            {/* Loud, and only once SELECTED. In the option list this is a
+                footnote among others; on the chosen row it is the one thing
+                the operator needs to have decided on purpose. Still not a
+                block — the same Page legitimately backs several customers. */}
+            {selectedPageUsedBy && (
+              <p style={{ color: "#c0362c", fontWeight: 700, fontSize: "0.85rem", marginTop: 6 }}>
+                {w.pickAssetUsedByWarning.replace("{name}", selectedPageUsedBy.name)}
+              </p>
+            )}
             {loadingPages && <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickPageLoading}</p>}
             {pagesError && (
               <p style={{ color: "#c0362c", fontSize: "0.78rem", marginTop: 4 }}>
@@ -859,6 +884,14 @@ export function AdminOnboarding() {
             )}
             {!loadingPages && !pagesError && pageScopeAccount && pages?.length === 0 && (
               <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickPageEmpty}</p>
+            )}
+            {/* AIC-98 applied to a SHORT list, not just an empty one. A page
+                the operator expects and cannot find is the same failure as an
+                empty list, and it looked identical to "there is only one
+                page". Says which two conditions a Page must meet to appear,
+                so the operator can go fix the right one in Meta. */}
+            {!loadingPages && !pagesError && pageScopeAccount && (pages?.length ?? 0) > 0 && (
+              <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickPageMissingHint}</p>
             )}
           </div>
           <button className="btn btn-outline btn-sm" disabled={checkingAsset !== null || !pageId.trim()} onClick={() => runCheck("page", pageId)}>
@@ -1035,8 +1068,21 @@ export function AdminOnboarding() {
               disabled={loadingPages || !form.metaAdAccountId}
             >
               <option value="">{w.pickPagePlaceholder}</option>
-              {(pages ?? []).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.id})</option>)}
+              {(pages ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.id}){p.usedByCustomer ? ` — ${w.pickAssetUsedBy.replace("{name}", p.usedByCustomer.name)}` : ""}
+                </option>
+              ))}
             </select>
+            {/* Loud, and only once SELECTED. In the option list this is a
+                footnote among others; on the chosen row it is the one thing
+                the operator needs to have decided on purpose. Still not a
+                block — the same Page legitimately backs several customers. */}
+            {formPageUsedBy && (
+              <p style={{ color: "#c0362c", fontWeight: 700, fontSize: "0.85rem", marginTop: 6 }}>
+                {w.pickAssetUsedByWarning.replace("{name}", formPageUsedBy.name)}
+              </p>
+            )}
             {!loadingPages && !pagesError && form.metaAdAccountId && pages?.length === 0 && (
               <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{w.pickPageEmpty}</p>
             )}

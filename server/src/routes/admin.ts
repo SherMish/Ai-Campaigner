@@ -795,10 +795,16 @@ adminRouter.get("/customers/:id/onboarding/ad-accounts", async (req, res) => {
 // The Page-side sibling of the ad-accounts picker, SCOPED to one ad account
 // (`metaAdAccountId` required, same shape as the campaigns route below).
 // The scoping is the point: an unscoped list offered one customer's Page
-// while another customer's account was selected — found live. Deliberately
-// NOT annotated with "already used by customer X" the way ad accounts are:
-// `meta_connections.page_id` has no uniqueness constraint and one Page
-// legitimately backs several customers, so there is no conflict to warn about.
+// while another customer's account was selected — found live.
+//
+// ANNOTATED with `usedByCustomer`, reversing an earlier decision. The old
+// reasoning was that `page_id` has no uniqueness constraint and one Page can
+// legitimately back several customers, so there was "no conflict to warn
+// about". True about the DATABASE, wrong about the OPERATOR: reusing a Page is
+// legal but almost never intended, and the wizard gave no way to tell a
+// deliberate reuse from picking the wrong row. So the Page stays SELECTABLE —
+// the constraint really does not exist — and the UI says loudly who already
+// has it. Permitted, not silent.
 adminRouter.get("/customers/:id/onboarding/pages", async (req, res) => {
   const metaAdAccountId = String(req.query.metaAdAccountId ?? "").trim();
   if (!metaAdAccountId) {
@@ -811,12 +817,37 @@ adminRouter.get("/customers/:id/onboarding/pages", async (req, res) => {
     return;
   }
   try {
-    res.json({ pages: await reader.listPages(metaAdAccountId) });
+    const pages = await reader.listPages(metaAdAccountId);
+    res.json({ pages: await annotateUsage(pages, "page_id", req.params.id) });
   } catch (e) {
     console.error("[admin] list pages failed", e);
     res.status(502).json({ error: "failed to load pages" });
   }
 });
+
+/**
+ * Tag each option with the OTHER customer already connected to it, if any.
+ *
+ * `c.id != $2` is the whole subtlety: the customer being onboarded is excluded,
+ * so re-selecting what they already have is not reported as a conflict with
+ * themselves. Same rule the ad-account picker uses.
+ */
+async function annotateUsage<T extends { id: string }>(
+  options: T[],
+  column: "page_id" | "instagram_id",
+  currentCustomerId: string,
+): Promise<Array<T & { usedByCustomer: { id: string; name: string } | null }>> {
+  if (options.length === 0) return [];
+  const { rows } = await pool.query<{ ref: string; customer_id: string; business_name: string }>(
+    `SELECT mc.${column} AS ref, c.id AS customer_id, c.business_name
+       FROM meta_connections mc
+       JOIN customers c ON c.id = mc.customer_id
+      WHERE mc.${column} = ANY($1::text[]) AND c.id != $2`,
+    [options.map((o) => o.id), currentCustomerId],
+  );
+  const used = new Map(rows.map((r) => [r.ref, { id: r.customer_id, name: r.business_name }]));
+  return options.map((o) => ({ ...o, usedByCustomer: used.get(o.id) ?? null }));
+}
 
 // Every Instagram account attached to one ad account, so the operator picks
 // instead of transcribing an 17-digit id. Same shape and same scoping rule as
@@ -824,9 +855,9 @@ adminRouter.get("/customers/:id/onboarding/pages", async (req, res) => {
 // construction, so it needs no union — verified live 2026-08-19 that the two
 // real ad accounts return different results on one token.
 //
-// Deliberately NOT filtered to "unused": instagram_id has no uniqueness
-// constraint and one IG account can legitimately back several customers, so
-// there is no conflict to warn about (same reasoning as Pages).
+// Annotated with `usedByCustomer` for the same reason as Pages: legal to
+// reuse, rarely intended, so it is permitted and said out loud rather than
+// silently allowed. Still not FILTERED — the constraint does not exist.
 adminRouter.get("/customers/:id/onboarding/instagram-accounts", async (req, res) => {
   const metaAdAccountId = String(req.query.metaAdAccountId ?? "").trim();
   if (!metaAdAccountId) {
@@ -839,7 +870,8 @@ adminRouter.get("/customers/:id/onboarding/instagram-accounts", async (req, res)
     return;
   }
   try {
-    res.json({ instagramAccounts: await reader.listInstagramAccounts(metaAdAccountId) });
+    const accounts = await reader.listInstagramAccounts(metaAdAccountId);
+    res.json({ instagramAccounts: await annotateUsage(accounts, "instagram_id", req.params.id) });
   } catch (e) {
     console.error("[admin] list instagram accounts failed", e);
     res.status(502).json({ error: "failed to load instagram accounts" });

@@ -6,6 +6,20 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-30 — onboarding wizard: say when a Page is already taken, and why one is missing
+
+Two gaps found while onboarding a second customer onto an ad account another
+customer already uses. (1) The Page/IG pickers said nothing when an option was
+already connected elsewhere — the old reasoning was that the columns are not
+unique so there is "no conflict", which is true of the database and useless to
+the operator. Both pickers now annotate the option and raise a bold red warning
+on the selected one, naming the other customer; never blocked, because the
+constraint really does not exist. (2) A Page the operator expected was missing
+with no explanation, looking identical to "this account has one Page". A Page
+appears only if the System User has a role on it AND it belongs to the ad
+account's Business; the picker now states both and points at Business Settings.
+Owning doc: [docs/features/ops-console.md](features/ops-console.md).
+
 ### 2026-08-30 — the app's WhatsApp link was a placeholder on every screen
 
 `components.tsx` exported `WA = "https://wa.me/972500000000"` behind a TODO — a
