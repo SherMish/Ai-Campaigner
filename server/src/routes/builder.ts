@@ -13,6 +13,7 @@ import type { CreativeMedia } from "../builder/creative-types.js";
 import { adSetName, campaignName } from "../meta/naming.js";
 import { pageIdentityOrNulls } from "../builder/page-identity.js";
 import { searchGeoOrEmpty } from "../builder/geo-search.js";
+import { listPromotableContent } from "../builder/promotable-content.js";
 
 // The guided builder's HTTP surface (AIC-52) — a thin layer over AIC-50's
 // create-writes and AIC-51's creative handling. Every route resolves the
@@ -96,7 +97,7 @@ builderRouter.get("/posts", requireAuth, async (req, res) => {
     if (!ctx) return notReady(res);
     const writer = buildBuilderWriter();
     if (!writer) return unavailable(res);
-    const posts = await writer.listPromotablePosts(ctx.pageId);
+    const posts = await listPromotableContent(writer, ctx.pageId, ctx.instagramId);
     res.json({ posts });
   } catch (e) {
     console.error("[builder] list posts failed", e);
@@ -193,6 +194,7 @@ interface CreativeBody {
   destinationUrl?: string; // website only
   media?: CreativeMedia;
   postId?: string;
+  postSource?: "facebook" | "instagram"; // AIC-156
 }
 
 // POST /creative — create one ad's Meta creative, either from an upload
@@ -218,6 +220,11 @@ builderRouter.post("/creative", requireAuth, async (req, res) => {
       spec = {
         kind: "existing_post", adAccountId: ctx.metaAdAccountId, pageId: ctx.pageId,
         name: body.name, postId: body.postId,
+        // AIC-156 — which network this post came from selects the Meta
+        // payload (object_story_id vs object_id + source_instagram_media_id),
+        // and the IG identity is what makes the ad run as the customer.
+        postSource: body.postSource ?? "facebook",
+        instagramUserId: ctx.instagramId,
         // AIC-115 (2026-08-23): the CTA must ride along here too, or Meta
         // refuses the AD as "incompatible with the objective". Same
         // destination resolution as the upload branch below — an engagement
@@ -237,6 +244,7 @@ builderRouter.post("/creative", requireAuth, async (req, res) => {
         kind: "upload",
         adAccountId: ctx.metaAdAccountId,
         pageId: ctx.pageId,
+        instagramUserId: ctx.instagramId, // AIC-156
         name: body.name,
         headline: body.headline!,
         primaryText: body.primaryText!,

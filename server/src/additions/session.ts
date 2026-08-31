@@ -27,6 +27,10 @@ export interface AdditionContext {
   metaCampaignId: string;
   metaAdAccountId: string; // "act_..." — what every real Meta API call needs
   pageId: string;
+  // AIC-156 — the customer's own Instagram. Their ads run as this account
+  // instead of the nameless Page-backed shadow profile, and their own
+  // Instagram posts become promotable. Null is normal, not an error.
+  instagramId: string | null;
   // NULL when this campaign's leads do NOT arrive over WhatsApp — the type is
   // deliberately nullable so every consumer has to decide what to do about it
   // rather than silently passing '' into a real Meta write.
@@ -116,13 +120,14 @@ type AdditionContextRow = {
   access_health: string | null;
   meta_ad_account_id: string | null;
   page_id: string | null;
+  instagram_id: string | null;
 };
 
 async function fetchAdditionContextRow(pool: pg.Pool, userId: string): Promise<AdditionContextRow | undefined> {
   const { rows } = await pool.query<AdditionContextRow>(
     `SELECT u.customer_id, c.category, mc.id AS campaign_id, mc.name AS campaign_name,
             mc.meta_campaign_id, mc.whatsapp_destination, mc.website_url, mc.tracking_pixel_id, mc.lead_event_types,
-            conn.access_health, aa.meta_ad_account_id, conn.page_id
+            conn.access_health, aa.meta_ad_account_id, conn.page_id, conn.instagram_id
      FROM app_users u
      LEFT JOIN customers c ON c.id = u.customer_id
      LEFT JOIN managed_campaigns mc ON mc.customer_id = u.customer_id
@@ -161,6 +166,7 @@ function toContext(r: AdditionContextRow): AdditionContext {
     metaCampaignId: r.meta_campaign_id!,
     metaAdAccountId: r.meta_ad_account_id!,
     pageId: r.page_id!,
+    instagramId: r.instagram_id ?? null,
     whatsappNumber: isMessaging && number ? number : null,
     websiteUrl: !isMessaging && url ? url : null,
     isMessaging,

@@ -22,6 +22,9 @@ export interface AdDraft {
   // (Meta hosts it), so there is nothing else to render it from.
   localPreviewUrl: string | null;
   postId: string | null;
+  // AIC-156: which network the chosen post came from — it selects the Meta
+  // creative shape server-side, so it has to travel with the id.
+  postSource: "facebook" | "instagram";
   postPreview: string | null;
   // AIC-136: the post's own copy, so the preview can show what the ad will
   // actually say. Client-only, never sent — the creative is built from postId.
@@ -45,6 +48,7 @@ export function newAdDraft(index: number): AdDraft {
     media: null,
     localPreviewUrl: null,
     postId: null,
+    postSource: "facebook",
     postPreview: null,
     postMessage: null,
     creativeId: null,
@@ -63,7 +67,7 @@ export type AdCreativeBody =
       whatsappNumber?: string; destination?: string; destinationUrl?: string;
       media: UploadedMedia;
     }
-  | { clientKey: string; name: string; postId: string };
+  | { clientKey: string; name: string; postId: string; postSource: "facebook" | "instagram" };
 
 interface Props {
   ads: AdDraft[];
@@ -182,7 +186,7 @@ export function BuilderCreatives({
     try {
       const body: AdCreativeBody =
         ad.source === "post"
-          ? { clientKey: ad.clientKey, name: ad.name, postId: ad.postId! }
+          ? { clientKey: ad.clientKey, name: ad.name, postId: ad.postId!, postSource: ad.postSource }
           : {
               clientKey: ad.clientKey, name: ad.name,
               headline: ad.headline, primaryText: ad.primaryText,
@@ -315,13 +319,43 @@ function AdCard({
                 <p className="muted">{c.noPosts}</p>
               ) : (
                 <div className="stack gap12">
-                  {posts.map((p) => (
-                    <label key={p.id} className="row gap12" style={{ alignItems: "center", cursor: "pointer" }}>
-                      <input type="radio" name={`post-${ad.clientKey}`} checked={ad.postId === p.id} onChange={() => onUpdate({ postId: p.id, postPreview: p.pictureUrl, postMessage: p.message ?? null })} />
-                      {p.pictureUrl && <img src={p.pictureUrl} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover" }} />}
-                      <span className="muted" style={{ fontSize: "0.9rem" }}>{p.message?.slice(0, 60) || p.id}</span>
-                    </label>
-                  ))}
+                  {posts.map((p) => {
+                    // AIC-156: Meta itself says which media cannot be boosted
+                    // (licensed music, interactive filters). Shown disabled
+                    // with the reason rather than dropped — a silently short
+                    // list reads as "I have no posts", which is false and
+                    // sends the customer looking in the wrong place.
+                    const blocked = p.boostable === false;
+                    return (
+                      <label
+                        key={`${p.source}-${p.id}`}
+                        className="row gap12"
+                        style={{ alignItems: "center", cursor: blocked ? "not-allowed" : "pointer", opacity: blocked ? 0.55 : 1 }}
+                      >
+                        <input
+                          type="radio" name={`post-${ad.clientKey}`} disabled={blocked}
+                          checked={ad.postId === p.id && ad.postSource === p.source}
+                          onChange={() => onUpdate({ postId: p.id, postSource: p.source, postPreview: p.pictureUrl, postMessage: p.message ?? null })}
+                        />
+                        {p.pictureUrl && <img src={p.pictureUrl} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover" }} />}
+                        <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                          <span className="muted" style={{ fontSize: "0.9rem" }}>
+                            {/* Both networks in one list, newest first — the
+                                customer is looking for "the post from last
+                                week", not for a network. The badge is how they
+                                tell two similar posts apart. */}
+                            <span className="post-source">{p.source === "instagram" ? c.sourceInstagram : c.sourceFacebook}</span>
+                            {" "}{p.message?.slice(0, 60) || p.id}
+                          </span>
+                          {blocked && (
+                            <span className="muted" style={{ fontSize: "0.75rem" }}>
+                              {p.boostReason || c.postNotBoostable}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               )}
             </div>

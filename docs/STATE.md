@@ -6,6 +6,24 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-31 — AIC-156: Instagram was connected and completely unused
+
+`instagram_id` was stored, verified at onboarding and health-checked hourly,
+then read by nothing. Two consequences: the existing-post picker offered only
+Facebook Page posts, and — the half nobody could see — no creative sent
+`instagram_user_id`, so Meta served Instagram placements under the nameless
+Page-backed shadow profile instead of the customer's own account. Both fixed.
+The picker now merges Facebook posts and Instagram media newest-first from one
+`listPromotableContent`, used by all three surfaces; `PromotablePost.source`
+selects which of the two Meta creative payloads gets built (`object_story_id`
+vs `object_id` + `source_instagram_media_id`), so it has no default. A failing
+Instagram read degrades to Facebook-only rather than emptying the picker.
+Required a System User token regeneration with `instagram_basic` — which is
+only offered once the app carries an Instagram use case; verified live
+afterwards that all previous scopes survived and IG media reads.
+
+---
+
 ### 2026-08-31 — AIC-158: the dashboard called an unbuilt campaign "live"
 
 Found on a real customer. The wizard's connect-only branch writes a shell

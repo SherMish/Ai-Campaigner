@@ -19,6 +19,7 @@ import { gendersOf } from "./builder.js";
 import { buildCreativeContext, describeCreativeContext } from "../services/creative-context.js";
 import type { AdDetailReader } from "../meta/ad-detail.js";
 import { sendTelegram } from "../notify/telegram.js";
+import { listPromotableContent } from "../builder/promotable-content.js";
 
 // Adding content to a campaign we ALREADY manage (AIC-63) — the everyday
 // management action, distinct from the first-time builder (routes/builder.ts):
@@ -267,7 +268,7 @@ additionsRouter.get("/posts", requireAuth, async (req, res) => {
     if (!ctx) return notReady(res);
     const writer = buildAdditionWriter();
     if (!writer) return unavailable(res);
-    const posts = await writer.listPromotablePosts(ctx.pageId);
+    const posts = await listPromotableContent(writer, ctx.pageId, ctx.instagramId);
     res.json({ posts });
   } catch (e) {
     console.error("[additions] list posts failed", e);
@@ -282,6 +283,7 @@ interface CreativeBody {
   primaryText?: string;
   media?: CreativeMedia;
   postId?: string;
+  postSource?: "facebook" | "instagram"; // AIC-156
 }
 
 // POST /creative — identical validation/idempotency contract as
@@ -317,6 +319,11 @@ additionsRouter.post("/creative", requireAuth, async (req, res) => {
       spec = {
         kind: "existing_post", adAccountId: ctx.metaAdAccountId, pageId: ctx.pageId,
         name: body.name, postId: body.postId,
+        // AIC-156 — which network this post came from selects the Meta
+        // payload (object_story_id vs object_id + source_instagram_media_id),
+        // and the IG identity is what makes the ad run as the customer.
+        postSource: body.postSource ?? "facebook",
+        instagramUserId: ctx.instagramId,
         ...(postDestination.kind === "whatsapp"
           ? { destination: FIXED_DESTINATION, whatsappNumber: postDestination.number }
           : postDestination.kind === "website"
@@ -340,6 +347,7 @@ additionsRouter.post("/creative", requireAuth, async (req, res) => {
         kind: "upload",
         adAccountId: ctx.metaAdAccountId,
         pageId: ctx.pageId,
+        instagramUserId: ctx.instagramId, // AIC-156
         name: body.name,
         headline: body.headline!,
         primaryText: body.primaryText!,

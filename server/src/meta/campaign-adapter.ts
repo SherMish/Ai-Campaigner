@@ -1047,6 +1047,62 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
         message: p.message ? String(p.message) : null,
         pictureUrl: p.full_picture ? String(p.full_picture) : null,
         createdAt: String(p.created_time ?? ""),
+        source: "facebook" as const,
+      };
+    });
+  }
+
+  /**
+   * AIC-156 — the customer's own Instagram posts, for the existing-content
+   * picker. Needs `instagram_basic`, which our System User token did not
+   * carry until 2026-08-31; before that the picker could only ever offer
+   * Facebook Page posts, so a customer who connected Instagram in the wizard
+   * saw none of their own content.
+   *
+   * `boost_eligibility_info` comes back from Meta itself: media with licensed
+   * music or interactive filters cannot be boosted, and Meta says so up front.
+   * Carried through rather than filtered out, so the picker can show the post
+   * disabled WITH the reason — an item the customer can see and understand is
+   * better than a short list that reads as "you have no posts".
+   *
+   * A video's own `media_url` is the video file, not a picture, so the
+   * thumbnail is preferred for the preview; falling back to media_url would
+   * put a video URL into an <img>.
+   */
+  async listInstagramMedia(igUserId: string): Promise<PromotablePost[]> {
+    const body = await this.get(
+      // `boost_eligibility_info` is requested BARE, without a subfield
+      // selection. Found live 2026-08-31: asking for
+      // `boost_eligibility_info{eligible_to_boost,eligibility_errors}` fails
+      // the WHOLE call with "(#100) Tried accessing nonexisting field
+      // (eligibility_errors)" on v21.0 — the field is not exposed there — and
+      // one bad subfield takes every post down with it, emptying the Instagram
+      // half for every customer. Bare, Meta returns whatever subfields it
+      // actually has, and a version that later adds a reason starts working
+      // without a change here.
+      `${igUserId}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,` +
+        `boost_eligibility_info&limit=25`,
+    );
+    type RawMedia = {
+      id: string; caption?: string; media_type?: string;
+      media_url?: string; thumbnail_url?: string; timestamp?: string;
+      boost_eligibility_info?: { eligible_to_boost?: boolean; eligibility_errors?: Array<{ error_message?: string }> };
+    };
+    return ((body.data as RawMedia[]) ?? []).map((m) => {
+      const boost = m.boost_eligibility_info;
+      return {
+        id: String(m.id),
+        message: m.caption ?? null,
+        pictureUrl: m.thumbnail_url ?? m.media_url ?? null,
+        createdAt: String(m.timestamp ?? ""),
+        source: "instagram" as const,
+        // `undefined` (the field absent) is NOT "not boostable" — it is "Meta
+        // did not say". Only an explicit false blocks.
+        boostable: boost?.eligible_to_boost !== false,
+        // v21.0 returns only `eligible_to_boost` — no reason. Parsed
+        // defensively so a later version that adds one is picked up; until
+        // then the UI falls back to its own copy rather than an empty line.
+        boostReason: boost?.eligibility_errors?.[0]?.error_message ?? null,
       };
     });
   }
@@ -1079,6 +1135,9 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
         : { type: shape.ctaType, value: { whatsapp_number: params.whatsappNumber } };
     return this.postCreate(params.adAccountId, "adcreatives", {
       name: params.name,
+      // AIC-156: without this the ad still runs on Instagram — as the
+      // Page-backed shadow profile, not the customer's account.
+      ...(params.instagramUserId ? { instagram_user_id: params.instagramUserId } : {}),
       object_story_spec: {
         page_id: params.pageId,
         link_data: {
@@ -1174,10 +1233,42 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     }
   }
 
+  /**
+   * Promote something already published — a Facebook Page post, or (AIC-156)
+   * an Instagram post.
+   *
+   * THE TWO ARE DIFFERENT PAYLOADS, not a flag on one. Per Meta's "Use Posts
+   * as Instagram Ads" guide:
+   *
+   *   Facebook   object_story_id = "{page}_{post}"   [+ instagram_user_id]
+   *   Instagram  object_id       = "{page}"          + source_instagram_media_id
+   *                                                  + instagram_user_id
+   *
+   * Note `object_id` for the Instagram path — the PAGE id, bare, not a story
+   * id. Sending `object_story_id` with an IG media id would build a creative
+   * pointing at a Facebook post that does not exist.
+   *
+   * An Instagram post NEEDS instagram_user_id; there is no shadow-profile
+   * fallback for content that lives on a real account. Refused loudly here
+   * rather than sent half-formed, so the failure names the missing thing
+   * instead of arriving as a Meta 400 the customer sees as a 502.
+   */
   async createCreativeFromExistingPost(params: CreatePostCreativeParams): Promise<string> {
+    const fromInstagram = params.postSource === "instagram";
+    if (fromInstagram && !params.instagramUserId) {
+      throw new Error(
+        "createCreativeFromExistingPost: an Instagram post needs instagramUserId — " +
+          "the connection has no instagram_id, so this post cannot be promoted as the customer",
+      );
+    }
     const fields: Record<string, unknown> = {
       name: params.name,
-      object_story_id: `${params.pageId}_${params.postId}`,
+      ...(fromInstagram
+        ? { object_id: params.pageId, source_instagram_media_id: params.postId }
+        : { object_story_id: `${params.pageId}_${params.postId}` }),
+      // A Facebook post carries it only when we have one; an Instagram post
+      // cannot get here without one (guarded above).
+      ...(params.instagramUserId ? { instagram_user_id: params.instagramUserId } : {}),
     };
 
     // No destination given → post as is, byte-identical to the old behaviour.

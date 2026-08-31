@@ -1081,6 +1081,63 @@ confident lie on the last screen before spend the moment a picker existed.
 a Meta write on a customer's account: it goes through the recommendation engine
 with their approval, or not at all.
 
+## Instagram: the customer's own account, and their own posts (AIC-156)
+
+Before this, connecting Instagram in the wizard bought a health check and
+nothing else. `meta_connections.instagram_id` was stored, verified at
+onboarding (AIC-108) and re-checked hourly — and then **read by nothing**.
+
+**Two consequences, and the quieter one was worse.**
+
+The visible half: the existing-post picker read `{page}/posts` and only that,
+so a customer who connected Instagram saw none of their own Instagram content.
+
+The half nobody could see: no creative or ad set sent `instagram_actor_id`
+(now `instagram_user_id`). Meta does not stop serving Instagram placements when
+you stay silent — it serves them under the **Page-backed Instagram account**,
+the shadow profile it auto-creates, which has no username and which nobody logs
+into. That is the same object `listInstagramAccounts` deliberately refuses to
+*offer* as a choice, because an unidentifiable id in front of an operator is
+worse than nothing. Meta will happily *use* it. So a customer connected
+@their_handle and their Instagram ads ran as somebody else.
+
+**Two networks, two payloads — not a flag on one.** Per Meta's *Use Posts as
+Instagram Ads* guide:
+
+| Source | Creative fields |
+| --- | --- |
+| Facebook Page post | `object_story_id = "{page}_{post}"`, plus `instagram_user_id` when we have one |
+| Instagram media | `object_id = "{page}"` (bare Page id) + `source_instagram_media_id` + `instagram_user_id` |
+
+`PromotablePost.source` therefore is not a label: it selects the payload, which
+is why it has no default and travels with the chosen post from the picker back
+to the creative call. An Instagram post with no `instagramUserId` is **refused
+before any Meta call** — there is no shadow-profile fallback for content that
+lives on a real account, and a refusal that names the missing thing beats a
+Meta 400 the customer sees as a 502.
+
+**One merge, three surfaces.** `listPromotableContent`
+(`server/src/builder/promotable-content.ts`) returns both networks newest-first
+and backs the customer builder, the admin builder and add-content. The customer
+is looking for "the post from last week" and does not think of it as a Facebook
+or Instagram post first, so they interleave; a small chip names the network as
+the tiebreaker.
+
+**A failing Instagram read never costs the Facebook posts.** The IG half is the
+fragile one — it needs `instagram_basic` (added to the System User token
+2026-08-31; before that the scope did not exist on it at all) and an account
+still linked to the Page. If a future regeneration drops the scope, the picker
+must not go empty and strand a customer who wanted to promote a Facebook post
+they have had for months. The IG failure is swallowed and logged; a Facebook
+failure still propagates, because a Page is required for this flow to mean
+anything at all.
+
+**Un-boostable media is shown disabled, with Meta's own reason.** Media with
+licensed music or interactive filters cannot be promoted, and
+`boost_eligibility_info` says so up front. AIC-98's rule applies: a silently
+short list reads as "I have no posts", which is false. An ABSENT verdict counts
+as boostable — Meta not saying is not Meta saying no.
+
 ## The ad preview names the Page, not our customer record (AIC-155)
 
 `GET {builderBasePath}/page` returns the connected Page's `{name, pictureUrl}`

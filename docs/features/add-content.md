@@ -187,6 +187,15 @@ so it targets exactly what the builder can. Before this every ad set added here
 ran on all of Israel. Full rationale, including why cities must never be sent
 alongside `countries`: [campaign-builder.md](campaign-builder.md).
 
+## Instagram (AIC-156)
+
+The existing-post picker here reads both the Facebook Page and the customer's
+Instagram, from the same `listPromotableContent` the builder uses, and every
+creative it produces carries `instagram_user_id` so the ad runs as the
+customer's own account rather than the nameless Page-backed shadow profile.
+Full rationale and the two Meta payloads:
+[campaign-builder.md](campaign-builder.md).
+
 ## Naming (AIC-154)
 
 The ad SET keeps the name the customer types — the one name in this flow a

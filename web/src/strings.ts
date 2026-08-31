@@ -2066,8 +2066,15 @@ export const strings = {
         previewPostNoText: "הפוסט שנבחר יופיע כאן",
         previewPostHeadline: "הכותרת והכפתור מגיעים מהפוסט",
         uploading: "מעלה…",
-        noPosts: "לא נמצאו פוסטים בעמוד המחובר.",
+        // AIC-156: the picker now reads BOTH networks, so "בעמוד המחובר"
+        // would have named only half of what was searched.
+        noPosts: "לא נמצאו פוסטים בעמוד הפייסבוק או בחשבון האינסטגרם המחוברים.",
         loadingPosts: "טוען פוסטים…",
+        sourceFacebook: "פייסבוק",
+        sourceInstagram: "אינסטגרם",
+        // Meta's own reason is preferred when it gives one; this is the
+        // fallback so the disabled row is never unexplained.
+        postNotBoostable: "אי אפשר לקדם את הפוסט הזה כמודעה (למשל בגלל מוזיקה או אפקטים).",
         createAdCta: "יצירת המודעה",
         creatingAd: "יוצר…",
         // AIC-130: was "המודעה נוצרה" — which claimed the AD existed when only

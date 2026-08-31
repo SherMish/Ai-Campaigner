@@ -602,7 +602,20 @@ export const startBuilder = (customerId?: string) =>
 export const getBuilderPage = (customerId?: string) =>
   api<{ name: string | null; pictureUrl: string | null }>(`${builderBasePath(customerId)}/page`);
 
-export interface PromotablePost { id: string; message: string | null; pictureUrl: string | null; createdAt: string; }
+export interface PromotablePost {
+  id: string;
+  message: string | null;
+  pictureUrl: string | null;
+  createdAt: string;
+  /** AIC-156 — which network. Not a label: it selects the Meta creative shape
+   *  server-side, so it must ride back with the chosen post. */
+  source: "facebook" | "instagram";
+  /** Instagram only. Meta refuses to boost media with licensed music or
+   *  interactive filters; false means show it disabled WITH the reason rather
+   *  than hiding it (AIC-98). */
+  boostable?: boolean;
+  boostReason?: string | null;
+}
 export const getPromotablePosts = (customerId?: string) => api<{ posts: PromotablePost[] }>(`${builderBasePath(customerId)}/posts`);
 
 export type UploadedMedia =
@@ -648,7 +661,7 @@ export type CreateCreativeBody =
       destinationUrl?: string;
       media: UploadedMedia;
     }
-  | { localCampaignId: string; clientKey: string; name: string; postId: string };
+  | { localCampaignId: string; clientKey: string; name: string; postId: string; postSource?: "facebook" | "instagram" };
 
 // Bypasses api() too: a 400 here carries {errors: code[]}, not {error: string} —
 // needs its own parsing so CreativeValidationError keeps the codes, not a flattened message.
@@ -835,7 +848,7 @@ export const getAdditionPosts = () => api<{ posts: PromotablePost[] }>("/app/add
 // AddContent.tsx call site for a field the server already ignores.
 export type AddContentCreativeBody =
   | { clientKey: string; name: string; headline: string; primaryText: string; whatsappNumber?: string; media: UploadedMedia }
-  | { clientKey: string; name: string; postId: string };
+  | { clientKey: string; name: string; postId: string; postSource?: "facebook" | "instagram" };
 
 // Bypasses api() too — a 400 here carries {errors: code[]}, matching createCreative.
 export async function createAdditionCreative(body: AddContentCreativeBody): Promise<{ creativeId: string }> {

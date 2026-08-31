@@ -418,7 +418,9 @@ describe("GraphCampaignAdapter creative handling (AIC-51)", () => {
 
     const posts = await adapter.listPromotablePosts("page_1");
 
-    expect(posts).toEqual([{ id: "post_1", message: "hello", pictureUrl: "https://x/p.jpg", createdAt: "2026-08-01T00:00:00Z" }]);
+    // AIC-156: `source` tags where each item came from — the picker now shows
+    // both networks, and the tag selects the Meta creative shape later.
+    expect(posts).toEqual([{ id: "post_1", message: "hello", pictureUrl: "https://x/p.jpg", createdAt: "2026-08-01T00:00:00Z", source: "facebook" }]);
 
     const [tokenUrl, tokenInit] = mock.mock.calls[0] as [string, RequestInit];
     expect(tokenUrl).toContain("me/accounts");
@@ -544,6 +546,124 @@ describe("GraphCampaignAdapter creative handling (AIC-51)", () => {
     const body = new URLSearchParams(String(init.body));
     expect(body.get("object_story_id")).toBe("page_1_post_9");
     expect(body.has("object_story_spec")).toBe(false);
+  });
+
+  // ── AIC-156: the Instagram identity, and Instagram posts ────────────────
+
+  it("an Instagram post uses object_id + source_instagram_media_id, NOT object_story_id", async () => {
+    // Meta's "Use Posts as Instagram Ads" guide: the Instagram path takes the
+    // bare PAGE id as object_id plus the media id, where the Facebook path
+    // takes a compound "{page}_{post}" story id. Sending object_story_id with
+    // an IG media id would build a creative pointing at a Facebook post that
+    // does not exist.
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ id: "crea_ig" }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await adapter.createCreativeFromExistingPost({
+      adAccountId: "act_123", pageId: "page_1", name: "IG ad",
+      postId: "17917607970159179", postSource: "instagram", instagramUserId: "17841446168726181",
+    });
+
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    const body = new URLSearchParams(String(init.body));
+    expect(body.get("object_id")).toBe("page_1");
+    expect(body.get("source_instagram_media_id")).toBe("17917607970159179");
+    expect(body.get("instagram_user_id")).toBe("17841446168726181");
+    expect(body.has("object_story_id")).toBe(false);
+  });
+
+  it("REFUSES an Instagram post with no Instagram identity, before any Meta call", async () => {
+    // There is no shadow-profile fallback for content that lives on a real
+    // account. Refused here so the failure names the missing thing, instead of
+    // arriving as a Meta 400 the customer sees as a raw 502.
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await expect(
+      adapter.createCreativeFromExistingPost({
+        adAccountId: "act_123", pageId: "page_1", name: "IG ad",
+        postId: "media_1", postSource: "instagram",
+      }),
+    ).rejects.toThrow(/instagramUserId/);
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("a Facebook post carries the Instagram identity when we have one", async () => {
+    // THE HALF THAT CHANGES WHAT CUSTOMERS GET. Without instagram_user_id Meta
+    // still serves Instagram placements — under the Page-backed shadow
+    // profile, which has no username. So a customer connected their Instagram
+    // and their ads ran as somebody else.
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ id: "crea_fb" }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await adapter.createCreativeFromExistingPost({
+      adAccountId: "act_123", pageId: "page_1", name: "FB ad",
+      postId: "post_9", postSource: "facebook", instagramUserId: "17841446168726181",
+    });
+
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    const body = new URLSearchParams(String(init.body));
+    expect(body.get("object_story_id")).toBe("page_1_post_9");
+    expect(body.get("instagram_user_id")).toBe("17841446168726181");
+  });
+
+  it("omits instagram_user_id entirely when the connection has none", async () => {
+    // Never an empty string: Meta reads a blank as a value, and a customer
+    // with no Instagram must produce the byte-identical payload we sent before.
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ id: "crea_fb2" }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await adapter.createCreativeFromExistingPost({ adAccountId: "act_123", pageId: "page_1", name: "Ad", postId: "post_9" });
+
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    expect(new URLSearchParams(String(init.body)).has("instagram_user_id")).toBe(false);
+  });
+
+  it("asks for boost_eligibility_info BARE — a bad subfield fails the whole call", async () => {
+    // Found live: `boost_eligibility_info{eligible_to_boost,eligibility_errors}`
+    // is rejected with "(#100) Tried accessing nonexisting field" on v21.0,
+    // and that takes EVERY post down with it, emptying the Instagram half for
+    // every customer.
+    const mock = vi.fn(async (_url: string) => ({ ok: true, status: 200, json: async () => ({ data: [] }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    await new GraphCampaignAdapter("tok").listInstagramMedia("ig_1");
+    const [url] = mock.mock.calls[0] as [string];
+    expect(url).toContain("boost_eligibility_info&");
+    expect(url).not.toContain("eligibility_errors");
+  });
+
+  it("listInstagramMedia carries Meta's own boost-eligibility verdict", async () => {
+    const mock = vi.fn(async (_url: string) => ({ ok: true, status: 200, json: async () => ({ data: [
+      { id: "m1", caption: "Just like candy", media_type: "IMAGE", media_url: "https://x/1.jpg", timestamp: "2026-08-20T00:00:00Z" },
+      { id: "m2", media_type: "VIDEO", media_url: "https://x/2.mp4", thumbnail_url: "https://x/2.jpg", timestamp: "2026-08-21T00:00:00Z",
+        boost_eligibility_info: { eligible_to_boost: false, eligibility_errors: [{ error_message: "licensed music" }] } },
+    ] }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    const media = await adapter.listInstagramMedia("ig_1");
+
+    expect(media[0]).toMatchObject({ id: "m1", source: "instagram", boostable: true, pictureUrl: "https://x/1.jpg" });
+    // A video's media_url is the video FILE — the thumbnail is what belongs in
+    // an <img>.
+    expect(media[1].pictureUrl).toBe("https://x/2.jpg");
+    expect(media[1]).toMatchObject({ boostable: false, boostReason: "licensed music" });
+  });
+
+  it("treats an ABSENT eligibility verdict as boostable, not as blocked", async () => {
+    // Meta not saying is not Meta saying no. Blocking on silence would hide
+    // perfectly promotable posts.
+    const mock = vi.fn(async (_url: string) => ({ ok: true, status: 200, json: async () => ({
+      data: [{ id: "m3", media_type: "IMAGE", media_url: "https://x/3.jpg", timestamp: "2026-08-22T00:00:00Z" }],
+    }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    expect((await adapter.listInstagramMedia("ig_1"))[0].boostable).toBe(true);
   });
 
   // Found live 2026-08-23: a real build failed at create_ad with "The ad's

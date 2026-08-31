@@ -666,3 +666,12 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
   border: 0; background: none; color: var(--muted);
 }
 .geo-chip button:hover, .geo-chip button:focus-visible { color: var(--ink); background: var(--line); outline: none; }
+
+/* AIC-156 — which network a promotable post came from. A quiet chip, not a
+   brand badge: the customer is scanning for their own photo, and the network
+   is the tiebreaker between two similar posts, not the headline. */
+.post-source {
+  display: inline-block; padding: 1px 7px; border-radius: 999px;
+  background: var(--cream-2); color: var(--muted);
+  font-size: 0.72rem; vertical-align: middle;
+}

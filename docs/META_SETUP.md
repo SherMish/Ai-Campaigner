@@ -137,7 +137,7 @@ Set in Railway (and mirrored in `server/.env.example` as placeholders):
 | --- | --- |
 | `META_APP_ID` | Our Meta app id (public) |
 | `META_APP_SECRET` | App secret (secret) |
-| `META_SYSTEM_USER_TOKEN` | System User token — `ads_read`+`ads_management`+`business_management`, **plus `pages_show_list`+`pages_read_engagement`** for Page-dependent features (secret). Scopes are frozen at generation; adding an asset type later requires a new token. |
+| `META_SYSTEM_USER_TOKEN` | System User token — `ads_read`+`ads_management`+`business_management`, **plus `pages_show_list`+`pages_read_engagement`** for Page-dependent features, **plus `instagram_basic`** (AIC-156, added 2026-08-31) to read a customer's Instagram media (secret). Scopes are frozen at generation; adding an asset type later requires a new token. `instagram_basic` is only OFFERED in the token generator once the app carries an Instagram use case — the permission list is driven by the app's use cases, not by what you type. |
 | `META_GRAPH_VERSION` | Graph API version, e.g. `v21.0` |
 
 ---

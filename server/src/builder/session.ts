@@ -20,6 +20,7 @@ export interface BuilderContext {
   adAccountUuid: string; // ad_accounts.id — the FK managed_campaigns.ad_account_id needs
   metaAdAccountId: string; // "act_..." — what every real Meta API call needs
   pageId: string;
+  instagramId: string | null;
 }
 
 interface ReadinessRow {
@@ -35,6 +36,7 @@ interface ReadinessRow {
   ad_account_uuid: string | null;
   meta_ad_account_id: string | null;
   page_id: string | null;
+  instagram_id: string | null;
 }
 
 // Shared by both resolvers below: a connection with no campaign yet, healthy
@@ -57,6 +59,10 @@ function contextFromRow(customerId: string, r: ReadinessRow | undefined): Builde
     adAccountUuid: r.ad_account_uuid,
     metaAdAccountId: r.meta_ad_account_id,
     pageId: r.page_id,
+    // AIC-156: the customer's own Instagram, so their ads run AS them and
+    // their Instagram posts can be promoted. Nullable — plenty of customers
+    // have no IG, and that is not an error.
+    instagramId: r.instagram_id ?? null,
   };
 }
 
@@ -71,7 +77,7 @@ export async function resolveBuilderContext(pool: pg.Pool, userId: string): Prom
               WHERE mc.customer_id = u.customer_id AND mc.meta_campaign_id IS NULL
               ORDER BY mc.created_at LIMIT 1) AS agreed_budget_agorot,
             EXISTS(SELECT 1 FROM managed_campaigns mc WHERE mc.customer_id = u.customer_id AND mc.meta_campaign_id IS NOT NULL) AS already_has_campaign,
-            conn.access_health, aa.id AS ad_account_uuid, aa.meta_ad_account_id, conn.page_id
+            conn.access_health, aa.id AS ad_account_uuid, aa.meta_ad_account_id, conn.page_id, conn.instagram_id
      FROM app_users u
      LEFT JOIN customers c ON c.id = u.customer_id
      LEFT JOIN meta_connections conn ON conn.customer_id = u.customer_id
@@ -99,7 +105,7 @@ export async function resolveBuilderContextForCustomer(pool: pg.Pool, customerId
               WHERE mc.customer_id = c.id AND mc.meta_campaign_id IS NULL
               ORDER BY mc.created_at LIMIT 1) AS agreed_budget_agorot,
             EXISTS(SELECT 1 FROM managed_campaigns mc WHERE mc.customer_id = c.id AND mc.meta_campaign_id IS NOT NULL) AS already_has_campaign,
-            conn.access_health, aa.id AS ad_account_uuid, aa.meta_ad_account_id, conn.page_id
+            conn.access_health, aa.id AS ad_account_uuid, aa.meta_ad_account_id, conn.page_id, conn.instagram_id
      FROM customers c
      LEFT JOIN meta_connections conn ON conn.customer_id = c.id
      LEFT JOIN ad_accounts aa ON aa.connection_id = conn.id

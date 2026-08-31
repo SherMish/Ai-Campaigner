@@ -31,13 +31,19 @@ export async function uploadCreativeMedia(
   return { kind: "image", imageHash: img.hash };
 }
 
+// AIC-156: `instagramUserId` on BOTH shapes — every creative we build should
+// run on Instagram as the customer, not as the nameless Page-backed shadow
+// profile Meta falls back to when we say nothing. `postSource` selects which
+// Meta payload the existing-post path builds; see
+// createCreativeFromExistingPost.
 export type CreativeSpec =
-  | { kind: "upload"; adAccountId: string; pageId: string; name: string; headline: string; primaryText: string; whatsappNumber: string; destinationUrl?: string; media: CreativeMedia; destination: string }
+  | { kind: "upload"; adAccountId: string; pageId: string; name: string; headline: string; primaryText: string; whatsappNumber: string; destinationUrl?: string; media: CreativeMedia; destination: string; instagramUserId?: string | null }
   // AIC-115 fix (2026-08-23): an existing-post creative needs the campaign's
   // CTA too, or Meta refuses the AD as "incompatible with the objective".
   // Optional so an engagement campaign (no ctaType) simply omits them.
   | { kind: "existing_post"; adAccountId: string; pageId: string; name: string; postId: string;
-      destination?: string; whatsappNumber?: string; destinationUrl?: string };
+      postSource?: "facebook" | "instagram";
+      destination?: string; whatsappNumber?: string; destinationUrl?: string; instagramUserId?: string | null };
 
 function asCreatingWriter(writer: CreativeWriter, spec: CreativeSpec): CreatingWriter {
   return {
@@ -63,9 +69,10 @@ export async function createCreativeIdempotent(
   const outbox = new WriteOutbox(pool);
   const payload: Record<string, unknown> =
     spec.kind === "upload"
-      ? { adAccountId: spec.adAccountId, pageId: spec.pageId, name: spec.name, headline: spec.headline, primaryText: spec.primaryText, whatsappNumber: spec.whatsappNumber, destinationUrl: spec.destinationUrl, media: spec.media, destination: spec.destination }
+      ? { adAccountId: spec.adAccountId, pageId: spec.pageId, name: spec.name, headline: spec.headline, primaryText: spec.primaryText, whatsappNumber: spec.whatsappNumber, destinationUrl: spec.destinationUrl, media: spec.media, destination: spec.destination, instagramUserId: spec.instagramUserId }
       : { adAccountId: spec.adAccountId, pageId: spec.pageId, name: spec.name, postId: spec.postId,
-          destination: spec.destination, whatsappNumber: spec.whatsappNumber, destinationUrl: spec.destinationUrl };
+          postSource: spec.postSource,
+          destination: spec.destination, whatsappNumber: spec.whatsappNumber, destinationUrl: spec.destinationUrl, instagramUserId: spec.instagramUserId };
 
   const creativeId = await outbox.applyIdempotent(
     {
