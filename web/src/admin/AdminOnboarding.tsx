@@ -380,7 +380,16 @@ export function AdminOnboarding() {
       `/admin/customers/${id}/onboarding/campaigns?metaAdAccountId=${encodeURIComponent(metaAdAccountId)}`,
     )
       .then((r) => setCampaigns(r.campaigns))
-      .catch((e) => setCampaignsError(e instanceof Error ? e.message : w.pickCampaignError))
+      // AIC-160: a 429 is Meta throttling this ad account — temporary, and the
+      // only correct instruction is "wait and retry". The generic branch would
+      // surface Meta's raw English inside a Hebrew console and read like a
+      // broken connection, sending the operator to check permissions that are
+      // fine. The retry button beside this is already the right next action.
+      .catch((e) => setCampaignsError(
+        e instanceof ApiError && e.status === 429
+          ? w.pickCampaignRateLimited
+          : e instanceof Error ? e.message : w.pickCampaignError,
+      ))
       .finally(() => setLoadingCampaigns(false));
   }
 

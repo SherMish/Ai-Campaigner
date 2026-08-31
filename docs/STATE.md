@@ -6,6 +6,20 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-31 — AIC-160: step 4 was N+1 against Meta, and hid the throttle
+
+Reported live as "failed to load campaigns". Railway logs gave the real cause:
+Meta code 17, "Ad Account Has Too Many API Calls". `listCampaigns` read the
+campaign list and then `/adsets` separately per campaign — six requests to open
+step 4 on a five-campaign account, on top of the ingestion engine. Field
+expansion nests the ad sets in the campaigns call: six requests become one,
+verified live against the real account with identical fields. And the throttle
+now answers 429 with `meta_rate_limited` and Hebrew copy saying it is temporary
+— it was a 502 carrying English text that discarded Meta's own actionable
+sentence and read like a broken connection.
+
+---
+
 ### 2026-08-31 — AIC-159: a fix's own residue kept claiming "האשף הושלם"
 
 AIC-158 stopped `finalize` from writing `completed_at` on connection health

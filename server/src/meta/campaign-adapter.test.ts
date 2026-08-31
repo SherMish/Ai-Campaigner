@@ -548,6 +548,45 @@ describe("GraphCampaignAdapter creative handling (AIC-51)", () => {
     expect(body.has("object_story_spec")).toBe(false);
   });
 
+  // ── AIC-160: one call, not 1+N ──────────────────────────────────────────
+
+  it("listCampaigns costs ONE Meta call, with the ad sets nested", async () => {
+    // This used to read the campaign list and then hit /adsets separately for
+    // every campaign — six requests to open step 4 on a five-campaign account.
+    // On top of the hourly ingestion engine that tripped Meta's per-ad-account
+    // limit (code 17), and the picker then told the operator "failed to load
+    // campaigns", which reads like a broken connection when the truth was
+    // "wait a minute".
+    const mock = vi.fn(async (_url: string) => ({ ok: true, status: 200, json: async () => ({ data: [
+      { id: "c1", name: "WhatsApp one", status: "ACTIVE", effective_status: "ACTIVE", objective: "OUTCOME_LEADS", daily_budget: "3000",
+        adsets: { data: [{ id: "as1", name: "A", optimization_goal: "CONVERSATIONS", destination_type: "WHATSAPP" }] } },
+      { id: "c2", name: "Pixel one", status: "PAUSED", effective_status: "PAUSED", objective: "OUTCOME_LEADS",
+        adsets: { data: [{ id: "as2", optimization_goal: "OFFSITE_CONVERSIONS", promoted_object: { pixel_id: "px1", custom_event_type: "LEAD" } }] } },
+    ] }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+
+    const out = await new GraphCampaignAdapter("tok").listCampaigns("act_1");
+
+    expect(mock).toHaveBeenCalledTimes(1);
+    const [url] = mock.mock.calls[0] as [string];
+    expect(url).toContain("adsets.limit(100){id,name,optimization_goal,destination_type,promoted_object}");
+    // Detection is unchanged — same detectDestination, same inputs, just
+    // fetched differently.
+    expect(out[0].destination).toMatchObject({ supported: true, destinationType: "whatsapp" });
+    expect(out[1].destination).toMatchObject({ supported: true, destinationType: "website" });
+    expect(out[0].dailyBudgetAgorot).toBe(3000);
+  });
+
+  it("a campaign with no ad sets still classifies as no_ad_sets, not as a new silent case", async () => {
+    const mock = vi.fn(async (_url: string) => ({ ok: true, status: 200, json: async () => ({
+      data: [{ id: "c3", name: "Empty", status: "ACTIVE", objective: "OUTCOME_LEADS" }],
+    }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+
+    const out = await new GraphCampaignAdapter("tok").listCampaigns("act_1");
+    expect(out[0].destination).toMatchObject({ supported: false, reason: "no_ad_sets" });
+  });
+
   // ── AIC-156: the Instagram identity, and Instagram posts ────────────────
 
   it("an Instagram post uses object_id + source_instagram_media_id, NOT object_story_id", async () => {

@@ -39,6 +39,7 @@ import { ConnectionService } from "../meta/connection-service.js";
 import { PgConnectionStore } from "../meta/connection-store.js";
 import { GraphMetaClient } from "../meta/client.js";
 import { buildCampaignDiscoveryReader } from "../meta/campaign-discovery.js";
+import { GraphWriteError, META_RATE_LIMIT_CODE } from "../meta/campaign-adapter.js";
 
 // Internal admin surfaces. Reads only from our DB (insight_snapshots) — never a
 // live Meta call at render time (AIC-7).
@@ -904,6 +905,18 @@ adminRouter.get("/customers/:id/onboarding/campaigns", async (req, res) => {
     const campaigns = await reader.listCampaigns(metaAdAccountId);
     res.json({ campaigns });
   } catch (e) {
+    // AIC-160 — a rate limit is not a broken connection, and it is not a 502.
+    // Meta hands us code 17 with its own operator-facing sentence ("too many
+    // calls from this ad-account, please wait a bit"), and this route used to
+    // discard all of it into a flat English "failed to load campaigns". An
+    // operator mid-call reads that and goes hunting for a permissions problem
+    // that does not exist — the fix is sixty seconds of waiting. 429 so the
+    // status code says "temporary" too, and its own code so the screen can
+    // say it in Hebrew.
+    if (e instanceof GraphWriteError && e.code === META_RATE_LIMIT_CODE) {
+      res.status(429).json({ error: e.userMessage ?? e.message, code: "meta_rate_limited" });
+      return;
+    }
     console.error("[admin] list campaigns failed", e);
     res.status(502).json({ error: "failed to load campaigns" });
   }

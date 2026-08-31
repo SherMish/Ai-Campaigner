@@ -889,6 +889,9 @@ export const strings = {
       // (its old label) was misleading for the build-a-new-campaign path.
       pageRequirementNote: "לחיבור קמפיין קיים — לא חובה. לבניית קמפיין חדש — חובה, כי כל מודעה רצה דרך עמוד.",
       pickCampaignEmpty: "לא נמצאו קמפיינים בחשבון הפרסום הזה.",
+      // AIC-160: זמני ומדיד — לא תקלת חיבור. Meta חוסמת לרגע חשבון פרסום
+      // שקיבל יותר מדי קריאות; ההנחיה היחידה הנכונה היא לחכות ולנסות שוב.
+      pickCampaignRateLimited: "Meta חסמה לרגע בקשות לחשבון הפרסום הזה (יותר מדי קריאות). מחכים כדקה ומנסים שוב — זה לא תקלה בחיבור.",
       // AIC-119: shown in place of BOTH provisioning forms until we know which
       // one applies. Before this, the adopt-an-existing-campaign form rendered
       // by default — for a customer with no Meta connection at all.

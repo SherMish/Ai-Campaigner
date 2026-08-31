@@ -26,6 +26,13 @@ import { intentStatus, type ControlWriter, type ManualObjectStatus, type ObjectI
 // plain, operator-readable form. Does NOT attempt AIC-105's full four-
 // category translation table (Meta-code → Hebrew symptom-table lookup) —
 // that is real, larger, separate work, still not done.
+/**
+ * Meta's per-ad-account throttle (AIC-160). Its own constant because the
+ * number is the ONLY thing separating "wait a minute" from "something is
+ * broken", and the two need opposite responses from an operator.
+ */
+export const META_RATE_LIMIT_CODE = 17;
+
 export class GraphWriteError extends Error {
   constructor(
     message: string,
@@ -104,6 +111,31 @@ export class InstagramPostNotSupportedError extends Error {
     super("an Instagram post cannot serve a click-to-WhatsApp campaign — Meta supports no such creative");
     this.name = "InstagramPostNotSupportedError";
   }
+}
+
+/**
+ * The ad-set fields destination detection reads. Shared (AIC-160) between
+ * `getAdSetTracking`, which fetches them per campaign, and `listCampaigns`,
+ * which now gets them nested inside ONE campaigns call — so the two cannot
+ * drift into detecting different destinations from the same ad set.
+ */
+interface RawAdSetTracking {
+  id: string;
+  name?: string;
+  optimization_goal?: string;
+  destination_type?: string;
+  promoted_object?: { pixel_id?: string; custom_event_type?: string };
+}
+
+function normalizeAdSetTracking(r: RawAdSetTracking): AdSetTrackingConfig {
+  return {
+    adSetId: String(r.id),
+    name: r.name ?? null,
+    optimizationGoal: r.optimization_goal ?? null,
+    destinationType: r.destination_type ?? null,
+    pixelId: r.promoted_object?.pixel_id ?? null,
+    customEventType: r.promoted_object?.custom_event_type ?? null,
+  };
 }
 
 export interface GeoLocationOption {
@@ -426,21 +458,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     const body = await this.get(
       `${metaCampaignId}/adsets?fields=id,name,optimization_goal,destination_type,promoted_object&limit=100`,
     );
-    type Raw = {
-      id: string;
-      name?: string;
-      optimization_goal?: string;
-      destination_type?: string;
-      promoted_object?: { pixel_id?: string; custom_event_type?: string };
-    };
-    return ((body.data as Raw[]) ?? []).map((r) => ({
-      adSetId: String(r.id),
-      name: r.name ?? null,
-      optimizationGoal: r.optimization_goal ?? null,
-      destinationType: r.destination_type ?? null,
-      pixelId: r.promoted_object?.pixel_id ?? null,
-      customEventType: r.promoted_object?.custom_event_type ?? null,
-    }));
+    return ((body.data as RawAdSetTracking[]) ?? []).map(normalizeAdSetTracking);
   }
 
   // AIC-128: each ad's creative destination, joined to its ad set's promise.
@@ -683,14 +701,24 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   }
 
   // Every campaign under one ad account, destination DETECTED per campaign
-  // (detectDestination, over the same getAdSetTracking read AIC-88 already
-  // trusts) rather than asked — so adopting a campaign can never disagree
-  // with what the ongoing tracking-health check will judge once it's
-  // connected. One extra read per campaign (its ad sets); fine for an
-  // operator-triggered, low-frequency admin action, not a hot path.
+  // (detectDestination, over the same ad-set fields AIC-88's tracking check
+  // trusts) rather than asked — so adopting a campaign can never disagree with
+  // what the ongoing tracking-health check will judge once it's connected.
+  //
+  // AIC-160 — ONE call, not 1+N. This used to fetch the campaign list and then
+  // read `/adsets` separately for every campaign, so opening step 4 on a
+  // five-campaign account cost six Meta requests. On top of the hourly
+  // ingestion engine that was enough to trip Meta's per-ad-account limit
+  // (code 17), and the picker then showed the operator "failed to load
+  // campaigns" — an error that reads like a broken connection when the truth
+  // was "wait a minute".
+  //
+  // Field expansion nests the ad sets in the campaigns response. Verified live
+  // against the real account: identical fields, five campaigns, one request.
   async listCampaigns(adAccountId: string): Promise<DiscoveredCampaign[]> {
     const body = await this.get(
-      `${adAccountId}/campaigns?fields=id,name,status,effective_status,objective,daily_budget&limit=200`,
+      `${adAccountId}/campaigns?fields=id,name,status,effective_status,objective,daily_budget,` +
+        `adsets.limit(100){id,name,optimization_goal,destination_type,promoted_object}&limit=200`,
     );
     type Raw = {
       id: string;
@@ -699,12 +727,16 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       effective_status?: string;
       objective?: string;
       daily_budget?: string;
+      adsets?: { data?: RawAdSetTracking[] };
     };
     const rows = (body.data as Raw[]) ?? [];
     const out: DiscoveredCampaign[] = [];
     for (const r of rows) {
       const metaCampaignId = String(r.id);
-      const tracking = await this.getAdSetTracking(metaCampaignId);
+      // A campaign with no ad sets yields an empty list, which detectDestination
+      // already classifies as `no_ad_sets` — the same answer the separate read
+      // produced, not a new silent case.
+      const tracking = (r.adsets?.data ?? []).map(normalizeAdSetTracking);
       out.push({
         id: metaCampaignId,
         name: r.name ? String(r.name) : metaCampaignId,

@@ -371,31 +371,26 @@ d("onboarding wizard routes (AIC-101)", () => {
         if (u.includes("me/adaccounts")) {
           return json({ data: [{ id: listedAccountId, name: "GelNails", currency: "ILS", account_status: 1 }] });
         }
+        // AIC-160: the ad sets arrive NESTED in the campaigns response now —
+        // one request instead of 1+N. The per-campaign /adsets branches this
+        // replaces would still have matched nothing and quietly passed, which
+        // is why the shape lives here rather than beside them.
         if (u.includes(`${ACCT}/campaigns`)) {
           return json({
             data: [
-              { id: WHATSAPP_CAMP, name: "WhatsApp campaign", status: "ACTIVE", effective_status: "ACTIVE", objective: "OUTCOME_LEADS", daily_budget: "2000" },
-              { id: PIXEL_CAMP, name: "Website campaign", status: "ACTIVE", effective_status: "ACTIVE", objective: "OUTCOME_LEADS", daily_budget: "3000" },
-              { id: TRAFFIC_CAMP, name: "Old traffic campaign", status: "PAUSED", effective_status: "PAUSED", objective: "OUTCOME_TRAFFIC", daily_budget: null },
-              { id: ENGAGEMENT_CAMP, name: "Engagement test", status: "ACTIVE", effective_status: "ACTIVE", objective: "OUTCOME_ENGAGEMENT", daily_budget: "1500" },
+              { id: WHATSAPP_CAMP, name: "WhatsApp campaign", status: "ACTIVE", effective_status: "ACTIVE", objective: "OUTCOME_LEADS", daily_budget: "2000",
+                adsets: { data: [{ id: "as_wa", optimization_goal: "CONVERSATIONS", destination_type: "WHATSAPP" }] } },
+              { id: PIXEL_CAMP, name: "Website campaign", status: "ACTIVE", effective_status: "ACTIVE", objective: "OUTCOME_LEADS", daily_budget: "3000",
+                adsets: { data: [{ id: "as_px", optimization_goal: "OFFSITE_CONVERSIONS", promoted_object: { pixel_id: "984664453249037", custom_event_type: "COMPLETE_REGISTRATION" } }] } },
+              { id: TRAFFIC_CAMP, name: "Old traffic campaign", status: "PAUSED", effective_status: "PAUSED", objective: "OUTCOME_TRAFFIC", daily_budget: null,
+                adsets: { data: [{ id: "as_tr", optimization_goal: "LINK_CLICKS" }] } },
+              { id: ENGAGEMENT_CAMP, name: "Engagement test", status: "ACTIVE", effective_status: "ACTIVE", objective: "OUTCOME_ENGAGEMENT", daily_budget: "1500",
+                adsets: { data: [{ id: "as_eng", optimization_goal: "POST_ENGAGEMENT", destination_type: null, promoted_object: null }] } },
+              // No `adsets` key at all — the "brand new campaign" shape, which
+              // must still classify as no_ad_sets.
               { id: EMPTY_CAMP, name: "Brand new, no ad sets yet", status: "ACTIVE", effective_status: "ACTIVE", objective: "OUTCOME_LEADS", daily_budget: null },
             ],
           });
-        }
-        if (u.includes(`${WHATSAPP_CAMP}/adsets`)) {
-          return json({ data: [{ id: "as_wa", optimization_goal: "CONVERSATIONS", destination_type: "WHATSAPP" }] });
-        }
-        if (u.includes(`${PIXEL_CAMP}/adsets`)) {
-          return json({ data: [{ id: "as_px", optimization_goal: "OFFSITE_CONVERSIONS", promoted_object: { pixel_id: "984664453249037", custom_event_type: "COMPLETE_REGISTRATION" } }] });
-        }
-        if (u.includes(`${ENGAGEMENT_CAMP}/adsets`)) {
-          return json({ data: [{ id: "as_eng", optimization_goal: "POST_ENGAGEMENT", destination_type: null, promoted_object: null }] });
-        }
-        if (u.includes(`${TRAFFIC_CAMP}/adsets`)) {
-          return json({ data: [{ id: "as_tr", optimization_goal: "LINK_CLICKS" }] });
-        }
-        if (u.includes(`${EMPTY_CAMP}/adsets`)) {
-          return json({ data: [] });
         }
         return json({ error: { message: `unexpected discovery call: ${u}` } }, false);
       }) as unknown as typeof fetch;

@@ -725,6 +725,22 @@ the ad-accounts route looks up every `ad_accounts` row on the listed ids
 rendered in the option text as "בשימוש גם עבור X". Informational only; the
 operator can still pick it.
 
+**One Meta call, and a rate limit that says so (AIC-160).** `listCampaigns`
+nests the ad sets into the campaigns request
+(`adsets.limit(100){id,name,optimization_goal,destination_type,promoted_object}`)
+rather than reading `/adsets` per campaign. Opening step 4 on a five-campaign
+account cost six requests; it costs one. On top of the hourly ingestion engine
+that was enough to trip Meta's per-ad-account throttle — found live, code 17,
+"Ad Account Has Too Many API Calls".
+
+The throttle now has its own answer: **429**, code `meta_rate_limited`, Hebrew
+copy saying it is temporary and to retry. It used to be a flat 502 "failed to
+load campaigns" — English, in a Hebrew console, discarding Meta's own
+actionable sentence and implying a broken connection when the fix was sixty
+seconds of waiting. `META_RATE_LIMIT_CODE` is a named constant because that
+number is the only thing separating "wait" from "something is wrong", and the
+two need opposite responses from an operator.
+
 **The campaign picker detects the destination — it never asks.** `GET
 .../onboarding/campaigns?metaAdAccountId=…` (`listCampaigns`) reads every
 campaign under the picked ad account and, for each, calls the SAME
