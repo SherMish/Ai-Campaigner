@@ -15,6 +15,7 @@ import {
 import { Stepper, StatusPill, SupportCard, Recommended } from "./components";
 import { BuilderCreatives, newAdDraft, type AdDraft } from "./BuilderCreatives";
 import { AudienceFields, type Gender } from "./AudienceFields";
+import { createCampaignBlocker, nextBlocker } from "./builder-gates";
 
 const b = strings.he.builder;
 const g = b.goal, ds = b.destination, bg = b.budget, sc = b.specialCategory, au = b.audience, pl = b.placements, rv = b.review;
@@ -72,6 +73,25 @@ const draftKey = (customerId?: string) => `aic_builder_draft:${customerId ?? "se
  * Names beyond the first two are counted rather than listed — a review line
  * that wraps to three rows stops being a review.
  */
+/**
+ * AIC-163 — the gate's reason, in Hebrew. `budget_over_ceiling` deliberately
+ * maps to null: the budget field already states it WITH the agreed number, and
+ * repeating it under the button would be two messages about one fact.
+ */
+function nextGateText(gate: NonNullable<ReturnType<typeof nextBlocker>>): string | null {
+  const g = strings.he.builder.creatives;
+  switch (gate) {
+    case "whatsapp_number_invalid": return g.gateWhatsappNumber;
+    case "website_url_invalid": return g.gateWebsiteUrl;
+    case "pixel_missing": return g.gatePixel;
+    case "conversion_event_missing": return g.gateConversionEvent;
+    case "budget_missing": return g.gateBudget;
+    case "budget_over_ceiling": return null;
+    case "age_invalid": return g.gateAge;
+    case "no_ads": return g.gateNoAds;
+  }
+}
+
 function geoSummary(cities: GeoPlace[]): string {
   if (cities.length === 0) return strings.he.builder.audience.geoAllIsrael;
   if (cities.length <= 2) return cities.map((c) => c.name).join(", ");
@@ -263,16 +283,24 @@ export function Builder({ customerId, onExit }: Props = {}) {
     Number.isFinite(wizard.dailyBudgetShekels) &&
     Math.round(wizard.dailyBudgetShekels * 100) > agreedBudgetAgorot;
 
-  const canNext = [
-    true, // goal
-    destinationValid,
-    Number.isFinite(wizard.dailyBudgetShekels) && wizard.dailyBudgetShekels > 0 && !budgetOverCeiling,
-    true, // special category
-    wizard.ageMin >= 13 && wizard.ageMax > wizard.ageMin && wizard.ageMax <= 65,
-    true, // placements
-    createdAds.length >= 1,
-    false, // review — handled by the create button, not "next"
-  ][step];
+  // AIC-163 — one description of why "הבא" is dead, read by the button AND
+  // the line under it. It used to be this array alone: four of its eight
+  // entries can be false and the button said nothing about any of them.
+  const nextGate = nextBlocker(step, {
+    destination: wizard.destination,
+    whatsappNumber: wizard.whatsappNumber,
+    destinationUrl: wizard.destinationUrl,
+    pixelId: wizard.pixelId,
+    conversionEvent: wizard.conversionEvent,
+    dailyBudgetShekels: wizard.dailyBudgetShekels,
+    budgetOverCeiling,
+    ageMin: wizard.ageMin,
+    ageMax: wizard.ageMax,
+    createdAdCount: createdAds.length,
+  }, ENGAGEMENT_DESTINATION, WEBSITE_DESTINATION);
+  // The review step has no "next" at all — its own create button ends the
+  // wizard — so it stays closed regardless of what the gate says.
+  const canNext = step !== 7 && nextGate === null;
 
   async function submit() {
     if (!wizard || !localCampaignId) return;
@@ -574,9 +602,14 @@ export function Builder({ customerId, onExit }: Props = {}) {
                 <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>{rv.confirmStartsNow}</p>
               </div>
               {buildError && <p className="muted" style={{ marginTop: 16, color: "var(--orange)" }}>{buildError}</p>}
-              <button className="btn btn-primary btn-wide" style={{ marginTop: 20 }} disabled={building || createdAds.length === 0} onClick={submit}>
+              <button className="btn btn-primary btn-wide" style={{ marginTop: 20 }} disabled={building || createCampaignBlocker(createdAds.length) !== null} onClick={submit}>
                 {building ? rv.creating : rv.createCta}
               </button>
+              {/* Eight steps in, a dead final button with no explanation is the
+                  worst place in the wizard to be silent. */}
+              {createCampaignBlocker(createdAds.length) && (
+                <p className="muted" style={{ fontSize: "0.85rem", marginTop: 10 }}>{b.creatives.gateNoAds}</p>
+              )}
             </div>
           )}
 
@@ -585,6 +618,13 @@ export function Builder({ customerId, onExit }: Props = {}) {
               {step > 0 && <button className="btn btn-outline btn-sm" onClick={() => setStep((s) => s - 1)}>{b.back}</button>}
               <button className="btn btn-primary btn-sm" disabled={!canNext} onClick={() => setStep((s) => s + 1)}>{b.next}</button>
             </div>
+          )}
+          {/* AIC-163: never a dead button with nothing to say. budget_over_ceiling
+              is the one gate with no line here — the budget field already says
+              it, with the agreed number, and one fact should not produce two
+              messages on one screen. */}
+          {step < 7 && nextGate && nextGateText(nextGate) && (
+            <p className="muted" style={{ fontSize: "0.85rem", marginTop: 10 }}>{nextGateText(nextGate)}</p>
           )}
           {step === 7 && step > 0 && (
             <div className="row gap12" style={{ marginTop: 16 }}>

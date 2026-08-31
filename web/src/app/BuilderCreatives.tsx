@@ -5,9 +5,19 @@ import {
   type PromotablePost, type UploadedMedia, type CreateCreativeBody,
 } from "../api";
 import { StatusPill } from "./components";
+import { adCreateBlocker } from "./builder-gates";
 
 const b = strings.he.builder;
 const c = b.creatives;
+
+// AIC-163 — exhaustive by construction: a new AdCreateBlocker variant without
+// copy is a tsc failure rather than a blank line under a dead button.
+const AD_GATE_TEXT: Record<NonNullable<ReturnType<typeof adCreateBlocker>>, string> = {
+  post_not_chosen: c.gateAdPost,
+  media_missing: c.gateAdMedia,
+  headline_missing: c.gateAdHeadline,
+  text_missing: c.gateAdText,
+};
 
 export interface AdDraft {
   clientKey: string;
@@ -271,9 +281,18 @@ function AdCard({
   onCreate: () => void;
   onRemove?: () => void;
 }) {
-  const canCreate =
-    ad.status !== "creating" && ad.status !== "created" &&
-    (ad.source === "post" ? !!ad.postId : !!ad.media && !!ad.headline.trim() && !!ad.primaryText.trim());
+  // AIC-163: one description of why the create button is dead, read by the
+  // button and the line under it. It was a single boolean covering four
+  // different missing things, and said none of them.
+  const adGate = adCreateBlocker({
+    source: ad.source,
+    postId: ad.postId,
+    hasMedia: !!ad.media,
+    headline: ad.headline,
+    primaryText: ad.primaryText,
+  });
+  const busy = ad.status === "creating" || ad.status === "created";
+  const canCreate = !busy && adGate === null;
 
   return (
     <div className="card">
@@ -395,6 +414,11 @@ function AdCard({
           <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={!canCreate} onClick={onCreate}>
             {ad.status === "creating" ? c.creatingAd : c.createAdCta}
           </button>
+          {/* Not while it is mid-create or already created — those are states,
+              not missing input, and the button's own label already says so. */}
+          {!busy && adGate && (
+            <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>{AD_GATE_TEXT[adGate]}</p>
+          )}
         </>
       )}
     </div>

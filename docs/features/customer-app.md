@@ -259,6 +259,32 @@ first month). P0's billing decision (AIC-19) was **manual billing, no gateway**.
 This divergence needs a call — tracked in its own ticket. The screen is built; no
 payment integration is wired.
 
+## "Did we build this?" means the campaign we are linked to (AIC-165)
+
+`was_built_here` requires the `create_campaign` action's `target_meta_id` to
+equal the campaign's current `meta_campaign_id`.
+
+Without that it answered a different question — "did a successful
+`create_campaign` ever happen against this ROW" — and was false in both
+directions on a real customer:
+
+```
+create_campaign  success  target 120249408291450352   13:45:23
+rollback_build   success                              13:45:26
+meta_campaign_id        120249004871310352            (adopted later)
+```
+
+A build that was rolled back — its Meta object deleted — still counted, and it
+counted for a different campaign than the one now linked. On that evidence the
+dashboard told the customer *"בנינו את הקמפיין והוא עבר בדיקה"*, and AIC-164's
+fix (which keys off `was_built_here`) did not take on the very customer it was
+written for.
+
+Matching the id resolves both faults with one condition and needs no knowledge
+of rollbacks: a rolled-back build created an id we are not linked to, and a
+genuine build matches by construction, because the id we linked is the id we
+created.
+
 ## The launch gate applies only to campaigns we built (AIC-164)
 
 `readyToLaunch` requires `was_built_here`. The gate exists (AIC-53) so a

@@ -264,7 +264,29 @@ export async function buildCustomerOverview(
       `SELECT mc.id, mc.name, mc.status, mc.objective, mc.agreed_budget_agorot, mc.budget_period, mc.automation_enabled, mc.delivery_ok, mc.tracking_ok, mc.cta_ok, mc.launch_approved_at, mc.meta_campaign_id, mc.no_rec_reason, mc.no_rec_detail, mc.live_budget_agorot, mc.delivering, mc.delivering_ad_count, mc.leads_to_date,
               EXISTS (
                 SELECT 1 FROM action_history ah
-                WHERE ah.campaign_id = mc.id AND ah.action_type = 'create_campaign' AND ah.result = 'success'
+                WHERE ah.campaign_id = mc.id
+                  AND ah.action_type = 'create_campaign'
+                  AND ah.result = 'success'
+                  -- AIC-165: the campaign we built must BE the campaign we are
+                  -- linked to. Without this the predicate answered "did a
+                  -- successful create_campaign ever happen against this ROW",
+                  -- which is a different question and was false in both
+                  -- directions on a real customer:
+                  --
+                  --   create_campaign  success  target 120249408291450352
+                  --   rollback_build   success                            (3s later)
+                  --   meta_campaign_id          120249004871310352        (adopted)
+                  --
+                  -- A build that was rolled back — the Meta object deleted —
+                  -- still counted, and it counted for a DIFFERENT campaign
+                  -- than the one now linked. On that evidence the dashboard
+                  -- told the customer "בנינו את הקמפיין והוא עבר בדיקה".
+                  --
+                  -- Matching the id fixes both without needing to know about
+                  -- rollbacks: a rolled-back build created an id we are not
+                  -- linked to, and a genuine build matches by construction
+                  -- because the id we linked is the id we created.
+                  AND ah.target_meta_id = mc.meta_campaign_id
               ) AS was_built_here
        FROM managed_campaigns mc WHERE mc.customer_id = $1`,
       [customerId],

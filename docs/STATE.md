@@ -6,6 +6,23 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-31 — AIC-165 + AIC-163: a rolled-back build counted, and four silent controls
+
+AIC-164's fix did not take on the customer it was written for: `was_built_here`
+was true because a build at 13:45 created a campaign and rolled itself back
+three seconds later, leaving the `create_campaign` row behind — for a Meta id
+that is not even the one now linked. It now requires
+`target_meta_id = meta_campaign_id`, which fixes both faults with one condition.
+The existing "built here" test had no `target_meta_id` at all, so it passed only
+because the predicate never checked; it now uses the shape a real build writes.
+
+And the sweep promised after the third silent-control bug: `builder-gates.ts`
+gives the customer builder's Next button, its review create button, each ad
+card's create button and add-content's add-ad-set button a stated reason. Next
+alone could be blocked by four different conditions without a word.
+
+---
+
 ### 2026-08-31 — AIC-164: an adopted, running campaign said it was awaiting launch
 
 Found minutes after AIC-162 let the first real adoption through. `readyToLaunch`

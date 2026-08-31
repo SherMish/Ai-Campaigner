@@ -259,15 +259,44 @@ d("customer overview (DB + HTTP)", () => {
     expect(ov!.homeState).not.toBe("ready_to_launch");
   });
 
+  // AIC-165, found on the customer AIC-164 was written for — where the fix
+  // did not take because was_built_here was true for a build that never
+  // survived.
+  it("a build that was ROLLED BACK does not count as built here", async () => {
+    const { userId, campaignId } = await seedChain("rolledback");
+    await pool.query(
+      `UPDATE managed_campaigns SET meta_campaign_id = 'meta_camp_adopted_later', launch_approved_at = NULL WHERE id = $1`,
+      [campaignId],
+    );
+    // The real shape: a build created a campaign, the build failed, everything
+    // was rolled back — and the customer later adopted a DIFFERENT campaign.
+    await pool.query(
+      `INSERT INTO action_history (campaign_id, what, action_type, target_meta_id, human_involved, result)
+       VALUES ($1,'created campaign','create_campaign','meta_camp_that_was_deleted',true,'success'),
+              ($1,'rolled the build back','rollback_build',NULL,false,'success')`,
+      [campaignId],
+    );
+
+    const ov = await buildCustomerOverview(pool, userId);
+    expect(ov!.campaign?.wasBuiltHere).toBe(false);
+    // …so it cannot claim "we built it and it passed review" either.
+    expect(ov!.campaign?.readyToLaunch).toBe(false);
+    expect(ov!.homeState).not.toBe("ready_to_launch");
+  });
+
   it("wasBuiltHere is true once a real, successful create_campaign action_history row exists", async () => {
     const { userId, campaignId } = await seedChain("builtHere");
     await pool.query(
       `UPDATE managed_campaigns SET meta_campaign_id = 'meta_camp_built', launch_approved_at = NULL WHERE id = $1`,
       [campaignId],
     );
+    // AIC-165: target_meta_id was absent here, so this passed only because the
+    // predicate never checked WHICH campaign was built. A real build always
+    // records it (campaign-create.ts's logCreate), and the assertion is only
+    // meaningful against that shape.
     await pool.query(
-      `INSERT INTO action_history (campaign_id, what, action_type, previous_state, new_state, human_involved, result)
-       VALUES ($1, 'created campaign', 'create_campaign', '{}'::jsonb, '{}'::jsonb, true, 'success')`,
+      `INSERT INTO action_history (campaign_id, what, action_type, target_meta_id, previous_state, new_state, human_involved, result)
+       VALUES ($1, 'created campaign', 'create_campaign', 'meta_camp_built', '{}'::jsonb, '{}'::jsonb, true, 'success')`,
       [campaignId],
     );
 

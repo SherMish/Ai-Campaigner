@@ -12,6 +12,8 @@ import {
 import { StatusPill, SupportCard, WA } from "./components";
 import { AudienceFields, type AudienceValue, type Gender } from "./AudienceFields";
 import { BuilderCreatives, newAdDraft, type AdDraft } from "./BuilderCreatives";
+import { adSetSubmitBlocker } from "./builder-gates";
+const cc = strings.he.builder.creatives;
 
 const s = strings.he.additions;
 const c = strings.he.app.connect;
@@ -406,7 +408,13 @@ export function AddContent() {
   if (phase === "error") return <div className="wrap page"><div className="card"><p className="muted">{s.unavailable}</p></div></div>;
 
   const adReady = !!selectedAdSetId && adDrafts.some((d) => d.creativeId);
-  const adSetReady = !!setName.trim() && groupAdDrafts.some((d) => d.creativeId);
+  // AIC-163 — its sibling (the add-ONE-ad button) got its reason in AIC-136;
+  // this one was missed, and the two sit on the same screen.
+  const adSetGate = adSetSubmitBlocker({
+    setName,
+    createdAdCount: groupAdDrafts.filter((d) => d.creativeId).length,
+  });
+  const adSetReady = adSetGate === null;
 
   return (
     <div className="wrap page">
@@ -583,6 +591,11 @@ export function AddContent() {
               <button className="btn btn-primary btn-wide" disabled={!adSetReady || submitting} onClick={submitAdSet}>
                 {submitting ? s.submitting : s.submitAdSetCta}
               </button>
+              {!submitting && adSetGate && (
+                <p className="muted" style={{ fontSize: "0.85rem", marginTop: 8 }}>
+                  {adSetGate === "set_name_missing" ? cc.gateAdSetName : cc.gateNoAds}
+                </p>
+              )}
             </div>
           )}
 

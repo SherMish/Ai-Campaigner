@@ -1192,6 +1192,42 @@ confirmation.
 `{page}/posts` only, and no Meta write sends `instagram_actor_id` — a connected
 `instagram_id` is stored and health-checked, then never used. AIC-156.
 
+## No control in the builder is dead without saying why (AIC-163)
+
+`web/src/app/builder-gates.ts` — pure functions, one per control, each
+returning the FIRST unmet precondition in the order the customer must act, or
+null when the control is live. The disabled state and the message both read it,
+so they cannot disagree. Same shape and same reason as
+`admin/onboarding-step4.ts`: no component-test tooling here, so extracting the
+decision is the only way it gets locked in.
+
+Written after the shape appeared three times in one day in the admin console —
+AIC-155 (disabled button, no stated reason), AIC-158 (a verdict without the
+evidence for it), AIC-161 (a refusal rendered a screen above the button). The
+sweep that followed found four more, all customer-facing:
+
+| Control | Was |
+| --- | --- |
+| **הבא** (`nextBlocker`) | four of eight steps could block it, silently |
+| review's create button (`createCampaignBlocker`) | silent |
+| an ad card's create (`adCreateBlocker`) | silent, four different causes |
+| add-content's add-ad-set (`adSetSubmitBlocker`) | silent — its sibling got a reason in AIC-136 |
+
+**Next is the worst of them** and the most-pressed control in the product. A
+WhatsApp number one digit short, or an age range Meta will not accept, and the
+only control on screen went grey with nothing to read. Its destination step now
+names WHICH field is wrong: the website branch has three separate requirements
+that were collapsed into one boolean, so even a generic message left the
+customer testing them one at a time.
+
+**`budget_over_ceiling` deliberately maps to no button-level text.** The budget
+field already states it, with the agreed number. One list describing why Next
+is dead, but not two messages about one fact.
+
+**`AD_GATE_TEXT` is an exhaustive `Record`**, so a new blocker variant without
+copy is a tsc failure rather than a blank line under a dead button — the same
+enforcement the customer-visible state enums already carry.
+
 ## What we name the things we create (AIC-154)
 
 `server/src/meta/naming.ts` is the only place a campaign, ad-set or ad name is
