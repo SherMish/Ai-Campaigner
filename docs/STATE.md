@@ -6,6 +6,19 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-31 — AIC-155: the builder's ad preview showed our CRM name, not the Page
+
+Reported from the existing-post step: the preview header read "Liam Aboros"
+with a grey initial, while the connected Page was `am nails`. `AddContent` had
+always fed the shared `AdPreview` from the real Page; `Builder` fed it
+`customers.business_name` and no picture at all. New `GET {builder}/page` on
+both builder routers, degrading to nulls so a decorative read can never break
+the step. Filed AIC-156 for the related, larger gap found while diagnosing it:
+a connected `instagram_id` is stored and health-checked and then never used —
+no IG posts in the picker, and no `instagram_actor_id` on any Meta write.
+
+---
+
 ### 2026-08-30 — AIC-154: one naming convention for what we create on Meta
 
 There was none — six call sites built names inline. Every self-serve campaign

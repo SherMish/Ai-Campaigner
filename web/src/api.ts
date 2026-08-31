@@ -595,6 +595,13 @@ export const getBuilderContext = (customerId?: string) =>
 export const startBuilder = (customerId?: string) =>
   api<{ localCampaignId: string }>(`${builderBasePath(customerId)}/start`, { method: "POST" });
 
+/** AIC-155 — the connected Page's name + photo for the builder's ad preview.
+ *  The preview used to be fed the CRM's `businessName`, so it showed the ad as
+ *  published by our customer record rather than by the Page Meta publishes it
+ *  from. Always resolves; nulls fall back to the neutral placeholder. */
+export const getBuilderPage = (customerId?: string) =>
+  api<{ name: string | null; pictureUrl: string | null }>(`${builderBasePath(customerId)}/page`);
+
 export interface PromotablePost { id: string; message: string | null; pictureUrl: string | null; createdAt: string; }
 export const getPromotablePosts = (customerId?: string) => api<{ posts: PromotablePost[] }>(`${builderBasePath(customerId)}/posts`);
 

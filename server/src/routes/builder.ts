@@ -11,6 +11,7 @@ import { startBuilderCampaign, buildCampaignOnMeta, type BuildCampaignInput } fr
 import { createCreativeIdempotent, uploadCreativeMedia, type CreativeSpec } from "../builder/creative-create.js";
 import type { CreativeMedia } from "../builder/creative-types.js";
 import { adSetName, campaignName } from "../meta/naming.js";
+import { pageIdentityOrNulls } from "../builder/page-identity.js";
 
 // The guided builder's HTTP surface (AIC-52) — a thin layer over AIC-50's
 // create-writes and AIC-51's creative handling. Every route resolves the
@@ -99,6 +100,27 @@ builderRouter.get("/posts", requireAuth, async (req, res) => {
   } catch (e) {
     console.error("[builder] list posts failed", e);
     res.status(502).json({ error: "failed to load posts" });
+  }
+});
+
+// GET /page — the connected Page's name and photo, for the ad preview header
+// (AIC-155). Its own route rather than a wider /context, for two reasons: the
+// identity costs two live Meta reads (me/accounts for a Page token, then the
+// Page), which the builder's load should not wait on, and a failure here must
+// degrade the preview header alone.
+//
+// The bug it fixes: this preview was fed `businessName` — the name in OUR
+// customers row — so it showed the ad as published by our CRM record instead
+// of by the Page Meta will actually publish it from. The same component in
+// AddContent has always read the real Page; only this screen didn't.
+builderRouter.get("/page", requireAuth, async (req, res) => {
+  try {
+    const ctx = await resolveBuilderContext(pool, (req as AuthedRequest).userId!);
+    const writer = ctx ? buildBuilderWriter() : null;
+    res.json(await pageIdentityOrNulls(writer, ctx?.pageId));
+  } catch (e) {
+    console.error("[builder] page identity failed", e);
+    res.json({ name: null, pictureUrl: null });
   }
 });
 

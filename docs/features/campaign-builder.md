@@ -1025,6 +1025,35 @@ prefill bug fix, and the mobile overflow fix — all confirmed zero
 `scrollWidth` overflow after the CSS fix. The actual create + activate
 against a real Meta campaign rides the same pending live dogfood as AIC-50.
 
+## The ad preview names the Page, not our customer record (AIC-155)
+
+`GET {builderBasePath}/page` returns the connected Page's `{name, pictureUrl}`
+via `getPageIdentity`, and the preview header renders it. Reported live: the
+header read "Liam Aboros" with a grey initial while the connected Page was
+`am nails`.
+
+The cause was two sources for one component. `AddContent.tsx` had always fed
+`AdPreview` from the real Page; `Builder.tsx` fed it `businessName` from
+`GET /context` — i.e. `customers.business_name`, whatever we typed into the
+customer row at onboarding. So the builder previewed the ad as published by our
+CRM record rather than by the Page Meta actually publishes from, and passed no
+picture at all, which is why the avatar was always the placeholder the code
+itself calls "a fallback, not the design". `pagePictureUrl` was already a prop
+— only this screen never passed it.
+
+Its own route rather than a wider `/context`: the identity costs two live Meta
+reads (me/accounts for a Page token, then the Page), which the builder's load
+should not wait on, and a failure must cost the preview header alone.
+`pageIdentityOrNulls` (`server/src/builder/page-identity.ts`) turns every
+failure into `{null, null}` so a decorative read can never 502 a step.
+
+`businessName` keeps its real job: naming the customer in the creation
+confirmation.
+
+**Instagram is not part of this.** The existing-post picker reads
+`{page}/posts` only, and no Meta write sends `instagram_actor_id` — a connected
+`instagram_id` is stored and health-checked, then never used. AIC-156.
+
 ## What we name the things we create (AIC-154)
 
 `server/src/meta/naming.ts` is the only place a campaign, ad-set or ad name is

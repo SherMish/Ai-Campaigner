@@ -15,6 +15,7 @@ import { gendersOf } from "./builder.js";
 import { logAdminAction, type Actor } from "../services/admin-audit.js";
 import { PgUserStore } from "../auth/user-store.js";
 import { adSetName, campaignName } from "../meta/naming.js";
+import { pageIdentityOrNulls } from "../builder/page-identity.js";
 
 // AIC-105 Branch A — the guided builder's HTTP surface (routes/builder.ts),
 // mirrored for an operator building a customer's FIRST campaign on their
@@ -105,6 +106,19 @@ adminBuilderRouter.get("/customers/:id/builder/posts", async (req, res) => {
   } catch (e) {
     console.error("[admin-builder] list posts failed", e);
     res.status(502).json({ error: "failed to load posts" });
+  }
+});
+
+// AIC-155 — the admin drives the SAME Builder.tsx, so the preview was wrong
+// here too.
+adminBuilderRouter.get("/customers/:id/builder/page", async (req, res) => {
+  try {
+    const ctx = await resolveBuilderContextForCustomer(pool, req.params.id);
+    const writer = ctx ? buildBuilderWriter() : null;
+    res.json(await pageIdentityOrNulls(writer, ctx?.pageId));
+  } catch (e) {
+    console.error("[admin-builder] page identity failed", e);
+    res.json({ name: null, pictureUrl: null });
   }
 });
 

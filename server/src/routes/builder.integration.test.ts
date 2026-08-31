@@ -32,6 +32,9 @@ function mockMetaFetch() {
     if (u.includes("me/accounts")) {
       return jsonRes({ data: [{ id: "page_it_1", access_token: "PAGE_TOKEN" }] });
     }
+    if (u.includes("fields=name,picture")) {
+      return jsonRes({ name: "am nails IT", picture: { data: { url: "https://x/page.jpg" } } });
+    }
     if (u.includes("/posts?")) {
       return jsonRes({ data: [{ id: "post_1", message: "hi", full_picture: "https://x/p.jpg", created_time: "2026-01-01T00:00:00Z" }] });
     }
@@ -229,6 +232,14 @@ d("guided builder routes (DB + HTTP)", () => {
     const posts = await request(app).get("/api/app/builder/posts").set("Authorization", `Bearer ${token}`);
     expect(posts.status).toBe(200);
     expect(posts.body.posts[0].id).toBe("post_1");
+
+    // AIC-155: the ad preview names the PAGE that will publish the ad. It used
+    // to be fed `businessName` — the name in our own customers row — so the
+    // mock-up showed a publisher Meta was never going to use. This route did
+    // not exist before the fix.
+    const page = await request(app).get("/api/app/builder/page").set("Authorization", `Bearer ${token}`);
+    expect(page.status).toBe(200);
+    expect(page.body).toEqual({ name: "am nails IT", pictureUrl: "https://x/page.jpg" });
 
     const creative = await request(app)
       .post("/api/app/builder/creative")

@@ -8,7 +8,7 @@ import {
 } from "@aic/shared";
 import { strings } from "../strings";
 import {
-  getBuilderContext, startBuilder, buildCampaign, getBuilderPixels, checkBuilderPixel, ApiError,
+  getBuilderContext, getBuilderPage, startBuilder, buildCampaign, getBuilderPixels, checkBuilderPixel, ApiError,
   type BuildCampaignResult, type PixelOption,
 } from "../api";
 import { Stepper, StatusPill, SupportCard, Recommended } from "./components";
@@ -93,6 +93,11 @@ export function Builder({ customerId, onExit }: Props = {}) {
   const [category, setCategory] = useState<BusinessCategory>("other");
   // AIC-106 — from the customer record via /builder/context, never typed here.
   const [businessName, setBusinessName] = useState("");
+  // AIC-155: the PAGE, which is who Meta publishes the ad as — not
+  // businessName, which is what we typed into the customers row. Loaded
+  // separately from the context so its two live Meta reads never delay the
+  // builder's load, and a failure costs the preview header alone.
+  const [page, setPage] = useState<{ name: string | null; pictureUrl: string | null }>({ name: null, pictureUrl: null });
   // AIC-106 follow-up, found live: the wizard accepted ₪40/day against an
   // agreed ceiling of ₪20 and only refused on the FINAL click, after every
   // step was filled. The ceiling is known from provisioning, so the budget
@@ -121,6 +126,9 @@ export function Builder({ customerId, onExit }: Props = {}) {
         const cat = normalizeBusinessCategory(ctx.category);
         setCategory(cat);
         setBusinessName(ctx.businessName ?? "");
+        getBuilderPage(customerId).then(setPage).catch(() => {
+          /* the preview falls back to the placeholder — never break the step */
+        });
         setAgreedBudgetAgorot(ctx.agreedBudgetAgorot ?? null);
         const aud = resolveAudienceDefault(cat);
         // A saved draft wins over the defaults — that is the whole point of
@@ -501,7 +509,8 @@ export function Builder({ customerId, onExit }: Props = {}) {
             <div>
               <b style={{ fontSize: "1.2rem", display: "block", marginBottom: 12 }}>{b.creatives.title}</b>
               <BuilderCreatives
-                businessName={businessName}
+                businessName={page.name ?? undefined}
+                pagePictureUrl={page.pictureUrl}
                 ads={ads} onChange={setAds} localCampaignId={localCampaignId} customerId={customerId} postsOnly={isEngagement}
                 whatsappNumber={isWebsite ? undefined : wizard.whatsappNumber}
                 destination={isWebsite ? wizard.destination : undefined}
