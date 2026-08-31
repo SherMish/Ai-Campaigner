@@ -2075,6 +2075,9 @@ export const strings = {
         // Meta's own reason is preferred when it gives one; this is the
         // fallback so the disabled row is never unexplained.
         postNotBoostable: "אי אפשר לקדם את הפוסט הזה כמודעה (למשל בגלל מוזיקה או אפקטים).",
+        // AIC-156, מאומת מול Meta: אין צורת מודעה כזו בכלל — לא חוסר הרשאה
+        // ולא תקלה זמנית. אומרים את זה כאן, לפני הבחירה.
+        instagramNotForWhatsapp: "פוסט מאינסטגרם לא יכול להוביל לוואטסאפ. אפשר לבחור פוסט מפייסבוק, או להעלות תמונה או סרטון.",
         createAdCta: "יצירת המודעה",
         creatingAd: "יוצר…",
         // AIC-130: was "המודעה נוצרה" — which claimed the AD existed when only

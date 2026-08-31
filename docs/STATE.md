@@ -6,6 +6,22 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-31 — AIC-156 follow-up: Instagram posts cannot lead to WhatsApp
+
+Found by the live write check on our own ad account, which the first commit
+had explicitly left undone. Meta contradicts itself on an IG-media creative
+with a WhatsApp CTA: without `link` it demands one, with `link` it forbids one.
+No payload exists. The same media promotes fine with LEARN_MORE + link, and a
+Facebook post carrying `instagram_user_id` with a WhatsApp CTA is accepted —
+so the docs' "Creative is missing DOF spec" warning did not apply to us.
+As shipped an hour earlier, the picker would have offered Instagram posts on a
+WhatsApp campaign and failed at create with a 502. Now refused by name before
+any Meta call, answered as 409, and disabled in the picker with copy that names
+what to do instead. All three probe creatives were deleted afterwards; none
+remain.
+
+---
+
 ### 2026-08-31 — AIC-156: Instagram was connected and completely unused
 
 `instagram_id` was stored, verified at onboarding and health-checked hourly,

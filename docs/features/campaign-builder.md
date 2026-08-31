@@ -1132,6 +1132,31 @@ they have had for months. The IG failure is swallowed and logged; a Facebook
 failure still propagates, because a Page is required for this flow to mean
 anything at all.
 
+**An Instagram post cannot serve a click-to-WhatsApp campaign.** Proven by a
+live write on our OWN ad account (2026-08-31), which is the only way this was
+ever going to be known — Meta contradicts itself on the combination:
+
+| Payload | Meta's answer |
+| --- | --- |
+| IG media, `WHATSAPP_MESSAGE` CTA, no `link` | "The link field is required." |
+| IG media, `WHATSAPP_MESSAGE` CTA, with `link` | "Please remove parameter link from the value of WHATSAPP_MESSAGE call to action type." |
+| IG media, `LEARN_MORE` + `link` | accepted |
+| IG media, no CTA at all | accepted |
+| Facebook post + `instagram_user_id` + WhatsApp CTA | accepted — no "DOF spec" error, contrary to the docs' warning |
+
+So no payload satisfies both conditions: the combination is impossible, not
+un-permissioned and not transient. `createCreativeFromExistingPost` refuses it
+by name (`InstagramPostNotSupportedError`) before any Meta call, the routes
+answer **409, never 502** — our precondition, not Meta breaking, the same
+distinction the budget refusals draw — and the picker disables Instagram posts
+on a WhatsApp campaign with copy naming both alternatives. Left to Meta, the
+customer's click would have surfaced as "The link field is required" inside a
+502: an error about a field no screen in this product has, on a campaign type
+where no link exists.
+
+This matters more than it sounds, because click-to-WhatsApp is most of what we
+run. Instagram posts are usable on website and engagement campaigns today.
+
 **Un-boostable media is shown disabled, with Meta's own reason.** Media with
 licensed music or interactive filters cannot be promoted, and
 `boost_eligibility_info` says so up front. AIC-98's rule applies: a silently

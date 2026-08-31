@@ -71,7 +71,7 @@ function graphError(context: string, status: number, body: Record<string, unknow
   }
   return new Error(message);
 }
-import { shekelToAgorot, resolveDestinationShape, ADVANTAGE_AUDIENCE_ENABLED } from "@aic/shared";
+import { shekelToAgorot, resolveDestinationShape, ADVANTAGE_AUDIENCE_ENABLED, FIXED_CTA } from "@aic/shared";
 import { extractLeads } from "./insights.js";
 import type { RawAdMetaRow } from "./ad-meta-types.js";
 import { normalizeAdMedia, type AdMedia, type AdMediaReader, type RawAdMedia } from "./ad-media.js";
@@ -89,6 +89,22 @@ import type { AdAccountOption, PageOption, InstagramOption, DiscoveredCampaign, 
 // adapter resolves the budget-bearing object on read and writes back to the same
 // one, so setDailyBudget targets the right object.
 const BASE = "https://graph.facebook.com";
+
+/**
+ * AIC-156 — an Instagram post asked to serve a click-to-WhatsApp campaign.
+ *
+ * Not a Meta failure and not our bug: Meta genuinely has no creative shape for
+ * this combination (see createCreativeFromExistingPost). Its own name so the
+ * route can answer 409 with copy the customer can act on — "pick a Facebook
+ * post, or upload" — rather than 502 "Meta is broken", the same distinction
+ * BudgetLimitError already draws.
+ */
+export class InstagramPostNotSupportedError extends Error {
+  constructor() {
+    super("an Instagram post cannot serve a click-to-WhatsApp campaign — Meta supports no such creative");
+    this.name = "InstagramPostNotSupportedError";
+  }
+}
 
 export interface GeoLocationOption {
   key: string;
@@ -1255,6 +1271,23 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
    */
   async createCreativeFromExistingPost(params: CreatePostCreativeParams): Promise<string> {
     const fromInstagram = params.postSource === "instagram";
+    // AIC-156, PROVEN LIVE on our own account (2026-08-31): an Instagram post
+    // cannot carry a click-to-WhatsApp CTA. Meta refuses it both ways —
+    //
+    //   no `link`   → "The link field is required."
+    //   with `link` → "Please remove parameter link from the value of
+    //                  WHATSAPP_MESSAGE call to action type."
+    //
+    // — a flat contradiction, so there is no payload that satisfies it. The
+    // same media promotes fine with LEARN_MORE + link (website) or with no
+    // CTA at all (engagement), both verified in the same session.
+    //
+    // Refused HERE, by name. Left to Meta, the customer's click would surface
+    // as "The link field is required" inside a 502 — an error about a field
+    // no screen in this product has, on a campaign type where no link exists.
+    if (fromInstagram && params.destination && resolveDestinationShape(params.destination).ctaType === FIXED_CTA) {
+      throw new InstagramPostNotSupportedError();
+    }
     if (fromInstagram && !params.instagramUserId) {
       throw new Error(
         "createCreativeFromExistingPost: an Instagram post needs instagramUserId — " +

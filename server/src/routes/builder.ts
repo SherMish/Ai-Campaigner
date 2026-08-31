@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { BudgetCeilingMissingError, BudgetLimitError } from "../execution/budget.js";
 import { CampaignConfigIncompleteError } from "../builder/campaign-create.js";
-import { GraphWriteError } from "../meta/campaign-adapter.js";
+import { GraphWriteError, InstagramPostNotSupportedError } from "../meta/campaign-adapter.js";
 import multer from "multer";
 import { validateCreativeCopy, MAX_VIDEO_BYTES, SPECIAL_AD_CATEGORY, FIXED_BID_STRATEGY, FIXED_DESTINATION, type SpecialAdCategory } from "@aic/shared";
 import { pool } from "../db/pool.js";
@@ -259,6 +259,14 @@ builderRouter.post("/creative", requireAuth, async (req, res) => {
     const creativeId = await createCreativeIdempotent(pool, writer, body.localCampaignId!, body.clientKey, spec);
     res.json({ creativeId });
   } catch (e) {
+    // AIC-156: Meta supports no creative shape for an Instagram post on a
+    // click-to-WhatsApp campaign (proven live). Our precondition, not Meta
+    // breaking — so 409 with actionable copy, never 502 "Meta is broken",
+    // the same distinction the budget refusals already draw.
+    if (e instanceof InstagramPostNotSupportedError) {
+      res.status(409).json({ error: e.message, code: "instagram_post_unsupported" });
+      return;
+    }
     console.error("[builder] create creative failed", e);
     res.status(502).json({ error: "failed to create creative" });
   }

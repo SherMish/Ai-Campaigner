@@ -6,7 +6,7 @@
 // paused-invariant is safety-critical and cheap to pin down here directly).
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { FIXED_DESTINATION, FIXED_CTA, WEBSITE_DESTINATION, WEBSITE_CTA, ENGAGEMENT_DESTINATION } from "@aic/shared";
-import { GraphCampaignAdapter, GraphWriteError } from "./campaign-adapter.js";
+import { GraphCampaignAdapter, GraphWriteError, InstagramPostNotSupportedError } from "./campaign-adapter.js";
 
 function fakeFetch(respond: { id: string }) {
   return vi.fn(async (_url: string, init?: RequestInit) => {
@@ -571,6 +571,46 @@ describe("GraphCampaignAdapter creative handling (AIC-51)", () => {
     expect(body.get("source_instagram_media_id")).toBe("17917607970159179");
     expect(body.get("instagram_user_id")).toBe("17841446168726181");
     expect(body.has("object_story_id")).toBe(false);
+  });
+
+  it("REFUSES an Instagram post on a click-to-WhatsApp campaign, before any Meta call", async () => {
+    // PROVEN LIVE against our own ad account (2026-08-31). Meta contradicts
+    // itself on this exact combination:
+    //   no `link`   → "The link field is required."
+    //   with `link` → "Please remove parameter link from WHATSAPP_MESSAGE."
+    // No payload satisfies both, so the combination is impossible — not
+    // missing permission, not a transient failure. The same media promotes
+    // fine with LEARN_MORE + link, and with no CTA at all.
+    //
+    // Left to Meta, the customer's click would surface as "The link field is
+    // required" inside a 502 — an error about a field no screen in this
+    // product has, on a campaign type where no link exists.
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await expect(
+      adapter.createCreativeFromExistingPost({
+        adAccountId: "act_123", pageId: "page_1", name: "IG ad",
+        postId: "media_1", postSource: "instagram", instagramUserId: "ig_1",
+        destination: FIXED_DESTINATION, whatsappNumber: "972500000000",
+      }),
+    ).rejects.toBeInstanceOf(InstagramPostNotSupportedError);
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("ALLOWS an Instagram post on a website campaign — LEARN_MORE + link is a real shape", async () => {
+    // Verified live in the same session: this one Meta accepts.
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ id: "crea_ig_web" }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+    const adapter = new GraphCampaignAdapter("tok");
+
+    await adapter.createCreativeFromExistingPost({
+      adAccountId: "act_123", pageId: "page_1", name: "IG ad",
+      postId: "media_1", postSource: "instagram", instagramUserId: "ig_1",
+      destination: WEBSITE_DESTINATION, destinationUrl: "https://example.com",
+    });
+    expect(mock).toHaveBeenCalled();
   });
 
   it("REFUSES an Instagram post with no Instagram identity, before any Meta call", async () => {

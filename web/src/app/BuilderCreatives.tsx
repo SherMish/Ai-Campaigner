@@ -97,6 +97,16 @@ interface Props {
   customerId?: string;
   // AIC-107: engagement campaigns can only promote an existing Page post.
   postsOnly?: boolean;
+  /**
+   * AIC-156 — true when this campaign's leads arrive over WhatsApp.
+   *
+   * Instagram posts CANNOT serve one. Proven live against Meta: with no
+   * `link` it answers "The link field is required", with a `link` it answers
+   * "Please remove parameter link from WHATSAPP_MESSAGE" — a contradiction,
+   * so no payload exists. The server refuses it too; this is so the customer
+   * learns it in the picker instead of after choosing.
+   */
+  whatsappCampaign?: boolean;
   // AIC-63: injectable so AddContent.tsx can point creative creation at
   // /app/additions/* instead of /app/builder/* — same component and UI,
   // different backend routes. Defaults to the builder's own endpoints.
@@ -107,7 +117,7 @@ interface Props {
 
 export function BuilderCreatives({
   ads, onChange, localCampaignId, whatsappNumber, destination, destinationUrl, customerId,
-  businessName, pagePictureUrl,
+  businessName, pagePictureUrl, whatsappCampaign = false,
   postsOnly = false,
   getPosts = () => getPromotablePosts(customerId),
   uploadFile = (file) => uploadCreativeFile(file, customerId),
@@ -227,6 +237,7 @@ export function BuilderCreatives({
             onUpload={(file) => doUpload(ad, file)}
             previewBusinessName={businessName}
             previewPictureUrl={pagePictureUrl}
+            whatsappCampaign={whatsappCampaign}
             onCreate={() => doCreate(ad)}
             onRemove={ads.length > 1 ? () => removeAd(ad.clientKey) : undefined}
           />
@@ -243,10 +254,12 @@ export function BuilderCreatives({
 
 function AdCard({
   index, ad, posts, postsLoading, onLoadPosts, postsOnly, onUpdate, onUpload, onCreate, onRemove,
-  previewBusinessName, previewPictureUrl,
+  previewBusinessName, previewPictureUrl, whatsappCampaign,
 }: {
   index: number;
   ad: AdDraft;
+  // AIC-156 — Instagram posts cannot serve a click-to-WhatsApp campaign.
+  whatsappCampaign: boolean;
   posts: PromotablePost[] | null;
   postsLoading: boolean;
   onLoadPosts: () => void;
@@ -325,7 +338,12 @@ function AdCard({
                     // with the reason rather than dropped — a silently short
                     // list reads as "I have no posts", which is false and
                     // sends the customer looking in the wrong place.
-                    const blocked = p.boostable === false;
+                    // Two different reasons a post cannot be used, kept apart
+                    // because they have different fixes: Meta says this
+                    // particular media is not boostable, versus Instagram
+                    // cannot serve THIS CAMPAIGN at all.
+                    const wrongNetwork = whatsappCampaign && p.source === "instagram";
+                    const blocked = p.boostable === false || wrongNetwork;
                     return (
                       <label
                         key={`${p.source}-${p.id}`}
@@ -349,7 +367,7 @@ function AdCard({
                           </span>
                           {blocked && (
                             <span className="muted" style={{ fontSize: "0.75rem" }}>
-                              {p.boostReason || c.postNotBoostable}
+                              {wrongNetwork ? c.instagramNotForWhatsapp : (p.boostReason || c.postNotBoostable)}
                             </span>
                           )}
                         </span>
