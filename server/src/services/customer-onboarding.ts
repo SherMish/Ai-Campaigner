@@ -170,6 +170,26 @@ export async function markIncomplete(pool: pg.Pool, customerId: string): Promise
   return toState(rows[0]);
 }
 
+/**
+ * AIC-164 — the wizard finishing must move the CUSTOMER's own status too.
+ *
+ * `customers.onboarding_status` is not bookkeeping: `Onboarding.tsx` routes on
+ * it, and only `"ready"` lets the customer reach their dashboard. Found live —
+ * a customer whose wizard was complete and whose campaign was running at
+ * ₪30/day still carried `meta_connection_required`, so the product would have
+ * held them on a screen asking them to connect Meta.
+ *
+ * Two markers for one fact is the AIC-159 shape again; this makes the wizard's
+ * completion advance both, in the same transaction-less step, from the one
+ * place that already decides the wizard is done.
+ */
+export async function markCustomerReady(pool: pg.Pool, customerId: string): Promise<void> {
+  await pool.query(
+    `UPDATE customers SET onboarding_status = 'ready', updated_at = now() WHERE id = $1`,
+    [customerId],
+  );
+}
+
 export async function markComplete(pool: pg.Pool, customerId: string): Promise<OnboardingState> {
   const { rows } = await pool.query<Row>(
     `UPDATE customer_onboarding SET completed_at = now(), updated_at = now()
@@ -466,6 +486,21 @@ export async function provisionConnection(
 
     let campaignId: string | null = null;
     if (hasCampaign) {
+      // AIC-164 — `launch_approved_at = now()`: ADOPTION IS NOT A LAUNCH.
+      //
+      // The launch gate (AIC-53) exists for campaigns WE built and
+      // deliberately left paused, so the customer approves before money first
+      // moves. A campaign that already exists has already started: nobody is
+      // waiting on an approval and there is no first spend to authorise.
+      //
+      // Left NULL, readyToLaunch computes true and the customer's Home opens
+      // with "מצאנו את הקמפיין שלכם ב-Meta, אבל הוא עדיין מושהה ולא מוציא
+      // כסף" — about a campaign running at 30 shekels a day. Found live the
+      // first time an adoption ever succeeded through the wizard. The
+      // campaign's real state is described by delivering/stopped, which exist
+      // for exactly that and stay honest whether or not it happens to be
+      // paused on Meta right now.
+      //
       // AIC-162 — ADOPT INTO an unlinked shell rather than insert beside it.
       //
       // managed_campaigns is UNIQUE (customer_id). The connect-only branch
@@ -483,11 +518,13 @@ export async function provisionConnection(
       const camp = await client.query<{ id: string }>(
         `INSERT INTO managed_campaigns
            (customer_id, ad_account_id, meta_campaign_id, name, status, objective,
-            agreed_budget_agorot, budget_period, lead_event_types, tracking_pixel_id, website_url, whatsapp_destination)
+            agreed_budget_agorot, budget_period, lead_event_types, tracking_pixel_id, website_url, whatsapp_destination,
+            launch_approved_at)
          VALUES ($1,$2,$3,$4,'active',$5,$6,$7,
                  COALESCE($8::text[], ARRAY['onsite_conversion.messaging_conversation_started_7d',
                                             'onsite_conversion.messaging_conversation_started']),
-                 $9,$10,COALESCE($11,''))
+                 $9,$10,COALESCE($11,''),
+                 now())
          ON CONFLICT (customer_id) DO UPDATE SET
            ad_account_id = EXCLUDED.ad_account_id,
            meta_campaign_id = EXCLUDED.meta_campaign_id,
@@ -499,7 +536,8 @@ export async function provisionConnection(
            lead_event_types = EXCLUDED.lead_event_types,
            tracking_pixel_id = EXCLUDED.tracking_pixel_id,
            website_url = EXCLUDED.website_url,
-           whatsapp_destination = EXCLUDED.whatsapp_destination
+           whatsapp_destination = EXCLUDED.whatsapp_destination,
+           launch_approved_at = EXCLUDED.launch_approved_at
          WHERE managed_campaigns.meta_campaign_id IS NULL
          RETURNING id`,
         [

@@ -212,19 +212,51 @@ d("customer overview (DB + HTTP)", () => {
   // which is false on both counts (nobody built it, nothing went through
   // campaign_reviews). `wasBuiltHere` is derived from a REAL create_campaign
   // action_history row rather than a separately-set flag, so it can't drift.
-  it("wasBuiltHere is false for a campaign with no create_campaign action_history row — even though it's ready_to_launch (AIC-89 hero-copy bug)", async () => {
+  // AIC-164, found the first time an adoption ever succeeded through the
+  // wizard. The customer's Home opened with "מצאנו את הקמפיין שלכם ב-Meta, אבל
+  // הוא עדיין מושהה ולא מוציא כסף" about a campaign Meta reported as ACTIVE at
+  // ₪30/day — and its button would have called activateCampaign on it.
+  it("an ADOPTED campaign is never ready_to_launch, however its columns look", async () => {
+    const { userId, campaignId } = await seedChain("adopted");
+    // The exact shape provisioning used to leave: linked, active, never
+    // launch-approved, and nothing in action_history that built it.
+    await pool.query(
+      `UPDATE managed_campaigns SET meta_campaign_id = 'meta_camp_adopted', launch_approved_at = NULL WHERE id = $1`,
+      [campaignId],
+    );
+    const ov = await buildCustomerOverview(pool, userId);
+
+    expect(ov!.campaign?.wasBuiltHere).toBe(false);
+    expect(ov!.campaign?.readyToLaunch).toBe(false);
+    // Its real state comes from the machinery built for it, not the launch gate.
+    expect(ov!.homeState).toBe("collecting");
+  });
+
+  // REWRITTEN by AIC-164. This asserted `readyToLaunch: true` and
+  // `homeState: "ready_to_launch"` for a campaign nothing built here — which
+  // was the behaviour AIC-89 found and fixed the COPY for, without questioning
+  // the state itself. AIC-164 removed the state: the launch gate exists so a
+  // customer approves before OUR build first spends, and a campaign that was
+  // already running when we adopted it has no such moment. Leaving the old
+  // assertion would have been a passing test defending the very claim
+  // ("עדיין מושהה ולא מוציא כסף") that turned out to be false on a live
+  // campaign spending ₪30 a day.
+  //
+  // What the test is actually FOR survives untouched: was_built_here is
+  // derived from real action_history, so a campaign we did not build reports
+  // false.
+  it("wasBuiltHere is false for a campaign with no create_campaign action_history row (AIC-89)", async () => {
     const { userId, campaignId } = await seedChain("connected");
-    // Same shape the real connected campaign has: reviewed + linked to a real
-    // Meta campaign, not yet launch-approved — but nothing built it here.
     await pool.query(
       `UPDATE managed_campaigns SET meta_campaign_id = 'meta_camp_connected', launch_approved_at = NULL WHERE id = $1`,
       [campaignId],
     );
 
     const ov = await buildCustomerOverview(pool, userId);
-    expect(ov!.campaign?.readyToLaunch).toBe(true);
     expect(ov!.campaign?.wasBuiltHere).toBe(false);
-    expect(ov!.homeState).toBe("ready_to_launch");
+    // …and therefore NOT awaiting a launch we never held it back from.
+    expect(ov!.campaign?.readyToLaunch).toBe(false);
+    expect(ov!.homeState).not.toBe("ready_to_launch");
   });
 
   it("wasBuiltHere is true once a real, successful create_campaign action_history row exists", async () => {

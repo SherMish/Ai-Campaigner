@@ -2081,6 +2081,18 @@ export const strings = {
         uploading: "מעלה…",
         // AIC-156: the picker now reads BOTH networks, so "בעמוד המחובר"
         // would have named only half of what was searched.
+        // AIC-163 — למה הכפתור עוד לא פעיל. עד עכשיו הוא פשוט היה אפור.
+        gateWhatsappNumber: "ממלאים מספר וואטסאפ תקין (6–15 ספרות, כולל קידומת מדינה).",
+        gateWebsiteUrl: "ממלאים כתובת אתר מלאה, שמתחילה ב-https://",
+        gatePixel: "בוחרים פיקסל.",
+        gateConversionEvent: "בוחרים איזו פעולה נחשבת פנייה.",
+        gateBudget: "ממלאים תקציב יומי גדול מאפס.",
+        gateAge: "טווח הגילאים צריך להיות בין 13 ל-65, וגיל המקסימום גדול מהמינימום.",
+        gateNoAds: "יוצרים לפחות מודעה אחת כדי להמשיך.",
+        gateAdPost: "בוחרים פוסט קיים.",
+        gateAdMedia: "מעלים תמונה או סרטון.",
+        gateAdHeadline: "ממלאים כותרת.",
+        gateAdText: "ממלאים טקסט למודעה.",
         noPosts: "לא נמצאו פוסטים בעמוד הפייסבוק או בחשבון האינסטגרם המחוברים.",
         loadingPosts: "טוען פוסטים…",
         sourceFacebook: "פייסבוק",

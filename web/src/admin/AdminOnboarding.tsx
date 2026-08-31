@@ -1375,7 +1375,11 @@ export function AdminOnboarding() {
 
         {branch === "adopt_existing" && (
           <>
-            <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={provisioning || provisionBlockedBy() !== null} onClick={submitProvision}>
+            {/* Disabled once it has succeeded (operator request, 2026-08-31).
+                A live button after "נוצר בהצלחה" invites a second click, which
+                reads as "maybe it didn't take" — and provisioning is not a
+                thing to press twice on a customer's real records. */}
+            <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={provisioning || !!provisionResult || provisionBlockedBy() !== null} onClick={submitProvision}>
               {w.provisionSubmit}
             </button>
             {/* Beside the button, never in the page header: a refusal the

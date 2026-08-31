@@ -259,6 +259,41 @@ first month). P0's billing decision (AIC-19) was **manual billing, no gateway**.
 This divergence needs a call — tracked in its own ticket. The screen is built; no
 payment integration is wired.
 
+## The launch gate applies only to campaigns we built (AIC-164)
+
+`readyToLaunch` requires `was_built_here`. The gate exists (AIC-53) so a
+customer approves before OUR build first spends money; a campaign adopted
+through the admin wizard has been running on its own since before we saw it, so
+there is no first spend to authorise and nobody is waiting on an approval.
+
+**Found the first time an adoption ever succeeded** (AIC-162 had made it
+impossible until that day). The customer's Home opened with
+
+> מצאנו את הקמפיין שלכם ב-Meta, אבל הוא עדיין מושהה ולא מוציא כסף.
+
+about a campaign Meta reported `ACTIVE` at ₪30/day — and the button beside it
+would have called `activateCampaign` on something already active.
+
+Two changes, deliberately both: provisioning stamps `launch_approved_at` when
+adopting, so the stored row is right going forward; and `readyToLaunch` derives
+from `was_built_here`, which fixes every campaign **already** adopted with no
+write to anyone's row. Storing alone would have left the existing ones lying —
+the AIC-159 lesson.
+
+An adopted campaign's real state is then told by `delivering` / `stopped`,
+which exist for exactly that and stay honest whether or not it happens to be
+paused on Meta right now.
+
+`readyToLaunchConnected` copy and its branch in `hero()` are kept although now
+unreachable: if a future change ever lets a not-built-here campaign reach this
+state again, the fallback must not be the built-here claim AIC-89 removed.
+
+**Completing the wizard also sets `customers.onboarding_status = 'ready'.**
+That column is not bookkeeping — `Onboarding.tsx` routes on it, and only
+`ready` lets a customer reach their dashboard. A customer whose wizard was
+complete and whose campaign was live still carried `meta_connection_required`,
+so the product would have held them on a screen asking them to connect Meta.
+
 ## `unbuilt`: a campaign row is not a campaign (AIC-158)
 
 `HomeState` has a variant for "we hold a row, Meta holds nothing". It is set by

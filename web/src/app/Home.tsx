@@ -187,6 +187,12 @@ function hero(state: HomeState, attentionKind: AttentionKind | null, readyToBuil
       // Bug fix, 2026-08-14: "we built it, it passed review" is false for a
       // campaign connected from outside the app — confirmed live. Same
       // badge/CTA either way; only the claim about who built it changes.
+      // AIC-164: `ready_to_launch` now requires wasBuiltHere on the server, so
+      // the connected-campaign variant below is unreachable. Kept rather than
+      // deleted because the branch costs nothing and the alternative — a
+      // `!wasBuiltHere` campaign reaching this state again after some future
+      // change and rendering the BUILT copy ("we built it, it passed review")
+      // — is the exact false claim AIC-89 fixed here.
       return wasBuiltHere
         ? { badge: HOME_STATE_BADGE.ready_to_launch, title: h.states.readyToLaunch.title, body: h.states.readyToLaunch.body, launch: { label: h.states.readyToLaunch.cta } }
         : { badge: HOME_STATE_BADGE.ready_to_launch, title: h.states.readyToLaunchConnected.title, body: h.states.readyToLaunchConnected.body, launch: { label: h.states.readyToLaunch.cta } };

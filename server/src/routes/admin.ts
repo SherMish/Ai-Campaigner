@@ -31,7 +31,7 @@ import { AccessProbe } from "../meta/access-probe.js";
 import { REQUIRED_SCOPES, type CheckedAsset } from "../meta/access-layers.js";
 import { OUR_BUSINESS_PORTFOLIO_ID, OUR_SYSTEM_USER_ID } from "../config/meta-identity.js";
 import {
-  getOrCreateOnboarding, setStep, recordCheck, markComplete, markIncomplete, hasLinkedCampaign,
+  getOrCreateOnboarding, setStep, recordCheck, markComplete, markIncomplete, hasLinkedCampaign, markCustomerReady,
   CampaignAlreadyLinkedError,
   provisionConnection, PageNotReadableError, InstagramNotReadableError,
   IncompleteProvisioningError, CHECK_FOR_ASSET,
@@ -975,6 +975,9 @@ adminRouter.post("/customers/:id/onboarding/finalize", async (req, res) => {
   let finalState = state;
   if (health === "ok" && campaignLinked) {
     await markComplete(pool, req.params.id);
+    // AIC-164: and the customer's OWN status, which is what actually lets them
+    // reach their dashboard.
+    await markCustomerReady(pool, req.params.id);
     finalState = await getOrCreateOnboarding(pool, req.params.id);
   } else if (!campaignLinked) {
     // AIC-159: CLEAR a stale flag, don't merely decline to write a new one.

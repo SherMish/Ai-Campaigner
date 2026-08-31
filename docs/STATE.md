@@ -6,6 +6,23 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-31 — AIC-164: an adopted, running campaign said it was awaiting launch
+
+Found minutes after AIC-162 let the first real adoption through. `readyToLaunch`
+was true for it (active, linked, never launch-approved), so the customer's Home
+opened with "עדיין מושהה ולא מוציא כסף" about a campaign Meta reported ACTIVE at
+₪30/day, and its CTA would have activated something already active. The launch
+gate belongs to campaigns WE build and pause; adoption is not a launch.
+Provisioning now stamps `launch_approved_at`, and — the half that fixes rows
+already written — `readyToLaunch` derives from `was_built_here`. The AIC-89
+test that asserted the old behaviour was rewritten rather than weakened, and
+AIC-89's ticket amended. Completing the wizard also advances
+`customers.onboarding_status` to `ready`, which is what actually lets a customer
+reach their dashboard — it was still `meta_connection_required` on a customer
+whose campaign was live.
+
+---
+
 ### 2026-08-31 — AIC-162: adopting a campaign was impossible after "צור קמפיין חדש"
 
 Reported as "clicked, button greyed for a few seconds, then nothing". Railway

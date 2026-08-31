@@ -320,7 +320,26 @@ export async function buildCustomerOverview(
         deliveryOk: campRes.rows[0].delivery_ok,
         trackingOk: campRes.rows[0].tracking_ok,
         ctaOk: campRes.rows[0].cta_ok,
+        // AIC-164 — the launch gate applies ONLY to a campaign we built.
+        //
+        // It exists (AIC-53) so a customer approves before OUR build first
+        // spends money. A campaign adopted through the wizard has been running
+        // on its own since before we saw it: nobody is waiting on an approval,
+        // and there is no first spend to authorise. Found live the first time
+        // an adoption succeeded — the customer's Home opened with "עדיין מושהה
+        // ולא מוציא כסף" about a campaign spending ₪30 a day, and its button
+        // would have called activateCampaign on something already ACTIVE.
+        //
+        // `was_built_here` rather than a stored flag, deliberately: provisioning
+        // now stamps launch_approved_at on adoption, but that only helps rows
+        // written from here on. Deriving fixes every campaign already adopted,
+        // with no write to anyone's row — the AIC-159 lesson.
+        //
+        // An adopted campaign's real state is then told by delivering/stopped,
+        // which exist for exactly that and stay honest whether or not it is
+        // paused on Meta right now.
         readyToLaunch:
+          campRes.rows[0].was_built_here === true &&
           campRes.rows[0].status === "active" &&
           campRes.rows[0].launch_approved_at === null &&
           campRes.rows[0].meta_campaign_id !== null,
