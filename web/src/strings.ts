@@ -977,6 +977,12 @@ export const strings = {
       finalizeCta: "אימות והשלמה",
       finalizing: "מאמתים…",
       finalizeOk: "החיבור אומת ותקין. האשף הושלם.",
+      // AIC-158: the connection can be perfectly healthy while no campaign
+      // exists on Meta — the connect-only branch writes a shell row and the
+      // builder finishes it. Saying "האשף הושלם" there was a completion claim
+      // with no campaign behind it, and the customer's dashboard was telling
+      // them the campaign was live at the same time.
+      finalizeOkNoCampaign: "החיבור אומת ותקין — אבל עדיין אין קמפיין ב-Meta. צריך לבנות אותו (אשף הבנייה) או לאמץ קמפיין קיים בשלב 4, ואז להריץ את האימות שוב.",
       finalizeNotOk: "עדיין לא תקין — חוזרים לשלב שנכשל.",
       finalizeNeedsProvision: "יוצרים קודם את הרשומות בשלב 4.",
 
@@ -1265,6 +1271,17 @@ export const strings = {
           createCampaign: { badge: "מוכן להתחיל", title: "בואו ניצור את הקמפיין הראשון שלכם", body: "כמה שאלות קצרות וממליצים לכם על ברירת מחדל בכל שלב — אפשר תמיד לשנות.", cta: "בניית הקמפיין" },
           // AIC-53: built + review-approved, PAUSED on Meta, waiting for the
           // customer's explicit go-live approval — nothing spends until they click.
+          // AIC-158 — we hold a campaign row, Meta holds nothing. Distinct
+          // from `setup` (nothing started at all): here the customer HAS
+          // started, so the honest next step is finishing the build, not
+          // beginning one. Wording matches add-content's notLaunchedBody,
+          // which has told this truth correctly the whole time.
+          unbuilt: {
+            badge: "לא הושלמה הקמה",
+            title: "הקמפיין עוד לא נוצר ב-Meta",
+            body: "התחלנו להקים את הקמפיין אבל התהליך לא הושלם, ולכן אין עדיין קמפיין פעיל ואין הוצאה. אפשר להמשיך מהמקום שבו עצרנו.",
+            cta: "להשלמת ההקמה",
+          },
           readyToLaunch: { badge: "מוכן להפעלה", title: "הקמפיין מוכן — נותר רק לאשר הפעלה", body: "בנינו את הקמפיין והוא עבר בדיקה, אבל הוא עדיין מושהה ולא מוציא כסף. ההפעלה מתבצעת רק באישור שלכם.", cta: "אישור והפעלה" },
           // Bug fix, 2026-08-14: the copy above claims "we built it, it passed
           // review" — both false for a campaign connected from outside the app
@@ -1308,6 +1325,7 @@ export const strings = {
           paused: { meaning: "השהינו את הקמפיין. הסיבה מופיעה ב״מה קרה לאחרונה״.", spend: "לא מוציא תקציב", whoActs: "אנחנו" },
           stopped: { meaning: "כל קבוצות המודעות מושהות, ולכן אף מודעה לא מוצגת.", spend: "לא מוציא תקציב", whoActs: "אתם" },
           readyToLaunch: { meaning: "הקמפיין מוכן אבל עדיין לא הופעל.", spend: "לא מוציא תקציב", whoActs: "אתם — צריך אישור" },
+          unbuilt: { meaning: "ההקמה לא הושלמה — אין קמפיין ב-Meta.", spend: "לא מוציא תקציב", whoActs: "אתם — צריך להשלים את ההקמה" },
           noCampaignSetup: { meaning: "אנחנו עדיין מחברים את החשבון.", spend: "לא מוציא תקציב", whoActs: "אנחנו" },
           noCampaignReadyToBuild: { meaning: "החשבון מחובר, אפשר לבנות קמפיין.", spend: "לא מוציא תקציב", whoActs: "אנחנו" },
           attentionConnection: { meaning: "איבדנו גישה לחשבון המודעות ולא נוכל לנהל את הקמפיין.", spend: "ייתכן שכן", whoActs: "אתם — צריך לחדש הרשאה" },

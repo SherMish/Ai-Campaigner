@@ -40,7 +40,7 @@ export class ApiError extends Error {
 // ── Customer overview (AIC-22/24) ─────────────────────────────────────────
 // Mirrors server/src/services/customer-overview.ts. Money is integer agorot.
 export type AccessHealth = "ok" | "revoked" | "invalid" | "needs_reconnect";
-export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campaign" | "ready_to_launch" | "stopped";
+export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campaign" | "unbuilt" | "ready_to_launch" | "stopped";
 // AIC-98: which cause put the campaign in `attention`. Named (was inline on
 // CustomerOverview) so the copy map can be `Record<AttentionKind, …>` and a
 // fourth cause can't ship without its own message — the three existing ones

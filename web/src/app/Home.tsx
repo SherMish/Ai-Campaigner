@@ -156,7 +156,7 @@ function StatusInfo({ tooltipKey }: { tooltipKey: ReturnType<typeof statusToolti
 }
 
 const PILL: Record<HomeState, "ok" | "info" | "neutral" | "attn"> = {
-  ok: "ok", collecting: "neutral", paused: "neutral", attention: "attn", no_campaign: "neutral", ready_to_launch: "info", stopped: "neutral",
+  ok: "ok", collecting: "neutral", paused: "neutral", attention: "attn", no_campaign: "neutral", unbuilt: "info", ready_to_launch: "info", stopped: "neutral",
 };
 
 // Which status-hero copy + optional CTA each real state shows. A `launch: true`
@@ -199,6 +199,10 @@ function hero(state: HomeState, attentionKind: AttentionKind | null, readyToBuil
       // connecting → the existing setup-status copy, unchanged.
       if (readyToBuild) return { ...h.states.createCampaign, cta: { to: "/app/builder", label: h.states.createCampaign.cta } };
       return { ...h.states.setup, cta: { to: "/onboarding", label: h.states.setup.cta } };
+    // AIC-158: an unfinished build. The CTA is the builder, matching
+    // add-content's already-correct copy for the same fact.
+    case "unbuilt":
+      return { ...h.states.unbuilt, cta: { to: "/app/builder", label: h.states.unbuilt.cta } };
     case "collecting":
     case "ok": {
       const nr = noRecCard(noRecReason, noRecDetail, visibleLeads);
@@ -397,6 +401,11 @@ export function Home() {
   const quietHero =
     (state === "ok" || state === "collecting") &&
     HERO_TONE[ov.campaign?.noRecReason ?? "stable"] === "quiet";
+  // AIC-158: is there anything on Meta for these numbers to be ABOUT? A
+  // campaign row of ours is not a campaign; the connect-only wizard branch
+  // writes a shell and the builder finishes it, so an abandoned build leaves
+  // rows with real-looking figures attached to nothing.
+  const hasLiveCampaign = state !== "unbuilt" && state !== "no_campaign";
   const threshold = thresholdLine(ov.campaign?.noRecReason ?? null, ov.campaign?.noRecDetail, shekels);
   const period = ov.campaign?.budgetPeriod === "monthly" ? L.perMonth : L.perDay;
 
@@ -547,9 +556,17 @@ export function Home() {
                 <span className="k" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{h.sMode}<StatusInfo tooltipKey={tooltipKey} /></span>
                 <StatusPill variant={PILL[state]}>{hd.badge}</StatusPill>
               </div>
-              <div className="summary-row"><span className="k">{h.sBudget}</span><b>{ov.campaign ? `${shekels(ov.campaign.liveBudgetAgorot ?? ov.campaign.agreedBudgetAgorot)} ${period}` : L.none}</b></div>
+              {/* AIC-158 — nothing here may describe a campaign that does not
+                  exist on Meta. The budget row would print the AGREED ceiling
+                  (₪15 ביום) as if it were being spent, and the leads row would
+                  print 0 — a measured zero, when nothing has been measured at
+                  all. Beside a badge saying the campaign is live, that zero
+                  reads as "your ads run and nobody calls". Both become "—",
+                  the same mark the rest of this dashboard uses for "we do not
+                  have this". */}
+              <div className="summary-row"><span className="k">{h.sBudget}</span><b>{hasLiveCampaign && ov.campaign ? `${shekels(ov.campaign.liveBudgetAgorot ?? ov.campaign.agreedBudgetAgorot)} ${period}` : L.none}</b></div>
               <div className="summary-row"><span className="k">{h.sAds}</span><b>{activeAds > 0 ? `${activeAds} ${L.adsActive}` : L.none}</b></div>
-              <div className="summary-row"><span className="k">{h.sLeads}</span><b>{leads}</b></div>
+              <div className="summary-row"><span className="k">{h.sLeads}</span><b>{hasLiveCampaign ? leads : L.none}</b></div>
             </div>
           </div>
           {r && <LeadsGraph isEngagement={isEngagementCampaign} daily={r.daily} />}

@@ -236,6 +236,8 @@ export function AdminOnboarding() {
 
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeHealth, setFinalizeHealth] = useState<string | null>(null);
+  // AIC-158: health and completion are two facts, not one.
+  const [campaignLinked, setCampaignLinked] = useState(true);
 
   useEffect(() => {
     if (!id) return;
@@ -675,10 +677,10 @@ export function AdminOnboarding() {
     if (!id) return;
     setFinalizing(true);
     setError(null);
-    api<{ health: string; state: OnboardingState }>(`/admin/customers/${id}/onboarding/finalize`, {
+    api<{ health: string; campaignLinked: boolean; state: OnboardingState }>(`/admin/customers/${id}/onboarding/finalize`, {
       method: "POST", body: "{}",
     })
-      .then((r) => { setFinalizeHealth(r.health); setState(r.state); })
+      .then((r) => { setFinalizeHealth(r.health); setCampaignLinked(r.campaignLinked); setState(r.state); })
       .catch((e) => setError(e instanceof Error ? e.message : w.errorGeneric))
       .finally(() => setFinalizing(false));
   }
@@ -1342,7 +1344,7 @@ export function AdminOnboarding() {
         </button>
         {finalizeHealth && (
           <p style={{ marginTop: 10, fontSize: "0.9rem" }}>
-            {finalizeHealth === "ok" ? w.finalizeOk : w.finalizeNotOk}
+            {finalizeHealth === "ok" ? (campaignLinked ? w.finalizeOk : w.finalizeOkNoCampaign) : w.finalizeNotOk}
             {" "}<span className="mono muted" style={{ fontSize: "0.75rem" }}>({finalizeHealth})</span>
           </p>
         )}

@@ -42,6 +42,7 @@ export const HOME_STATE_BADGE: Record<HomeState, string> = {
   paused: h.states.paused.badge,
   attention: h.states.attention.badge,
   no_campaign: h.states.setup.badge,
+  unbuilt: h.states.unbuilt.badge,
   ready_to_launch: h.states.readyToLaunch.badge,
   stopped: h.states.stopped.badge,
 };
@@ -219,7 +220,7 @@ export function noRecCopy(
 // popover can never describe two different situations.
 export type StatusTooltipKey =
   | "ok" | "collecting" | "paused" | "stopped" | "ready_to_launch"
-  | "no_campaign_setup" | "no_campaign_ready_to_build"
+  | "no_campaign_setup" | "no_campaign_ready_to_build" | "unbuilt"
   | "attention_connection" | "attention_tracking" | "attention_delivery" | "attention_cta";
 
 export function statusTooltipKey(
@@ -234,6 +235,7 @@ export function statusTooltipKey(
     case "stopped": return "stopped";
     case "ready_to_launch": return "ready_to_launch";
     case "no_campaign": return readyToBuild ? "no_campaign_ready_to_build" : "no_campaign_setup";
+    case "unbuilt": return "unbuilt";
     case "attention": {
       const kind = attentionKind ?? "connection";
       switch (kind) {
@@ -268,6 +270,7 @@ export const STATUS_TOOLTIP_COPY: Record<StatusTooltipKey, StatusTooltipCopy> = 
   paused: st.paused,
   stopped: st.stopped,
   ready_to_launch: st.readyToLaunch,
+  unbuilt: st.unbuilt,
   no_campaign_setup: st.noCampaignSetup,
   no_campaign_ready_to_build: st.noCampaignReadyToBuild,
   attention_connection: st.attentionConnection,

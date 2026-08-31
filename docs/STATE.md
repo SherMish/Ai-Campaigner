@@ -6,6 +6,25 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-31 — AIC-158: the dashboard called an unbuilt campaign "live"
+
+Found on a real customer. The wizard's connect-only branch writes a shell
+campaign and hands off to the builder; that build was abandoned, so
+`meta_campaign_id` was NULL and nothing existed on Meta. `deriveHomeState`
+never asked, so the row fell through every branch to `collecting` and the
+customer read "הקמפיין פעיל ואנחנו ממשיכים לעקוב" with ₪15 ביום and פניות 0 —
+which beside a live badge reads as "my ads run and nobody calls". New
+`unbuilt` HomeState (badge, hero, tooltip, CTA to the builder), the rail card's
+budget and leads render "—" when there is no campaign to describe, and the
+admin wizard's step 5 stops saying "האשף הושלם" for a healthy connection with
+no campaign behind it. add-content had this right all along via
+`classifyConnectionReadiness`. The overview fixtures were setting no
+`meta_campaign_id` at all, so every homeState assertion in that file had been
+made against a shell row — the tests were defending the bug; they now seed a
+linked campaign and the two that care about absence clear it explicitly.
+
+---
+
 ### 2026-08-31 — AIC-157: campaigns can finally target a place
 
 Every ad set we had ever created targeted all of Israel — not by choice, but

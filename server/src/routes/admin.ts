@@ -934,9 +934,28 @@ adminRouter.post("/customers/:id/onboarding/finalize", async (req, res) => {
     null,
     null, // no single asset id — this checks the whole connection
   );
-  // Only a genuinely verified connection completes the wizard — "onboarded"
-  // is never inferred from rows someone created.
-  if (health === "ok") await markComplete(pool, req.params.id);
+  // AIC-158 — a verified CONNECTION is not a finished wizard. The
+  // connect-only branch writes a shell campaign (budget, nothing else) and
+  // hands off to the builder, so an abandoned build leaves a healthy
+  // connection beside a campaign that does not exist on Meta. This step
+  // reported "החיבור אומת ותקין. האשף הושלם" for exactly that state — true
+  // about the connection, false about the wizard — while the customer's own
+  // dashboard told them the campaign was live.
+  const linked = await pool.query<{ n: string }>(
+    `SELECT count(*)::text AS n FROM managed_campaigns
+      WHERE customer_id = $1 AND meta_campaign_id IS NOT NULL`,
+    [req.params.id],
+  );
+  const campaignLinked = Number(linked.rows[0].n) > 0;
 
-  res.json({ health, state: health === "ok" ? await getOrCreateOnboarding(pool, req.params.id) : state });
+  // Only a genuinely verified connection completes the wizard — "onboarded"
+  // is never inferred from rows someone created. AIC-158 adds the second
+  // half: nor from a connection alone.
+  if (health === "ok" && campaignLinked) await markComplete(pool, req.params.id);
+
+  res.json({
+    health,
+    campaignLinked,
+    state: health === "ok" && campaignLinked ? await getOrCreateOnboarding(pool, req.params.id) : state,
+  });
 });

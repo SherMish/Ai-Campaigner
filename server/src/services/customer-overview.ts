@@ -13,7 +13,12 @@ import type { NoActionReason } from "../recommendations/rules.js";
 // from the customer's own rows (never another customer's) + the snapshot-based
 // readout. Everything is read-only; no live Meta call at render time.
 export type AccessHealth = "ok" | "revoked" | "invalid" | "needs_reconnect";
-export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campaign" | "ready_to_launch" | "stopped";
+// AIC-158: `unbuilt` = we hold a campaign row but nothing exists on Meta —
+// the connect-only wizard branch wrote a shell and the builder was never
+// finished. Distinct from `no_campaign` (no row at all, nothing started) on
+// purpose: the customer HAS started, and the honest next step is to finish the
+// build, not to begin one.
+export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campaign" | "unbuilt" | "ready_to_launch" | "stopped";
 // AIC-98: which cause put the campaign in `attention`. Named so the web copy
 // map can be Record<AttentionKind, …> — all three wear the same "צריך טיפול"
 // badge, so a fourth silently reusing another's message is the exact failure
@@ -38,6 +43,12 @@ export interface CustomerOverview {
   campaign: {
     id: string;
     name: string;
+    // AIC-158: NULL means this campaign exists ONLY as a row of ours — the
+    // wizard's connect-only branch writes a shell (budget, nothing else) and
+    // hands off to the builder, so a build abandoned halfway leaves exactly
+    // this. Nothing about delivery, spend or leads means anything until it is
+    // set, which is why deriveHomeState checks it before all of them.
+    metaCampaignId: string | null;
     status: CampaignStatus;
     objective: string;
     agreedBudgetAgorot: Agorot;
@@ -113,6 +124,23 @@ function deriveHomeState(
 ): HomeState {
   if (!campaign) return "no_campaign";
   if (connection && connection.accessHealth !== "ok") return "attention";
+  // AIC-158, found live. A shell campaign — our row, no Meta object — used to
+  // fall through EVERY branch below and land on `collecting`, so the customer
+  // read "הקמפיין פעיל ואנחנו ממשיכים לעקוב" with a budget, an ad count and
+  // "פניות 0" about a campaign that does not exist. Beside "active", a zero
+  // does not read as "nothing has been built"; it reads as "your ads are
+  // running and nobody is calling".
+  //
+  // Deliberately BELOW the connection check and above everything else: a lost
+  // connection still outranks this (a build cannot be finished without one),
+  // and every check after this point — delivery, tracking, CTA, delivering,
+  // snapshots — is reasoning about an object that isn't there.
+  //
+  // add-content has always been right about this
+  // (classifyConnectionReadiness → "not_launched"). Home simply never asked
+  // the question, which is how one product told a customer two different
+  // things on two screens.
+  if (!campaign.metaCampaignId) return "unbuilt";
   // AIC-53: review-approved but not yet customer-activated outranks delivery/
   // collecting — a still-PAUSED campaign has no delivery data to judge yet,
   // and the one actionable thing is the launch approval itself.
@@ -287,6 +315,7 @@ export async function buildCustomerOverview(
         objective: campRes.rows[0].objective,
         agreedBudgetAgorot: Number(campRes.rows[0].agreed_budget_agorot),
         budgetPeriod: campRes.rows[0].budget_period,
+        metaCampaignId: campRes.rows[0].meta_campaign_id,
         automationEnabled: campRes.rows[0].automation_enabled,
         deliveryOk: campRes.rows[0].delivery_ok,
         trackingOk: campRes.rows[0].tracking_ok,

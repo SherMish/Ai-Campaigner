@@ -259,6 +259,49 @@ first month). P0's billing decision (AIC-19) was **manual billing, no gateway**.
 This divergence needs a call — tracked in its own ticket. The screen is built; no
 payment integration is wired.
 
+## `unbuilt`: a campaign row is not a campaign (AIC-158)
+
+`HomeState` has a variant for "we hold a row, Meta holds nothing". It is set by
+`deriveHomeState` (`server/src/services/customer-overview.ts`) from
+`campaign.metaCampaignId === null`, and it sits directly below the connection
+check and above everything else.
+
+**The bug it fixes, found on a real customer.** The admin wizard's connect-only
+branch writes a SHELL campaign — budget and nothing else — then hands off to
+the builder. That customer's build was never finished, so `meta_campaign_id`
+was NULL. `deriveHomeState` opened with `if (!campaign) return "no_campaign"`
+and never asked whether the campaign existed on Meta, so the row fell past
+every branch — delivery, tracking, CTA, delivering, snapshots, each of them
+reasoning about an object that was not there — and landed on `collecting`. The
+customer read *"הקמפיין פעיל ואנחנו ממשיכים לעקוב"*, a badge saying
+אוספים נתונים, ₪15 ביום, and פניות 0.
+
+That last pair is the damage. Beside a badge that says the campaign is live, a
+zero does not read as "nothing has been built"; it reads as *"my ads are
+running and nobody is calling"* — a false negative about their business, from
+us.
+
+**add-content was right the whole time.** It routes through
+`classifyConnectionReadiness`, whose second check is
+`if (!input.metaCampaignId) return "not_launched"`. One product, one fact, two
+screens, and only one of them asked. The `unbuilt` copy deliberately echoes
+add-content's `notLaunchedBody` and sends the customer to the same place.
+
+**`unbuilt` is not `no_campaign`.** No row at all means nothing was ever
+started, and the honest next step is to begin. A shell row means the customer
+DID start, and the next step is to finish — different sentence, different CTA.
+
+**The rail card stops asserting.** Budget and leads render `—` under `unbuilt`
+and `no_campaign`: the budget row would otherwise print the agreed ceiling as
+though it were being spent, and the leads row a measured zero where nothing has
+been measured.
+
+**The admin wizard's step 5 stops claiming completion.** `finalize` verifies
+the CONNECTION; it now also reports `campaignLinked`, and `markComplete` needs
+both. It used to print "החיבור אומת ותקין. האשף הושלם" over a healthy
+connection with no campaign behind it — the same false completion, from the
+operator's side.
+
 ## Two honesty fixes on Home (AIC-130)
 
 **A window with no rows shows `—`, not `₪0`.** Seen live: with no data yet for

@@ -57,9 +57,18 @@ async function seedChain(tag: string, status = "active") {
     [conn.rows[0].id, `act_ov_${conn.rows[0].id.slice(0, 8)}`],
   );
   const camp = await pool.query<{ id: string }>(
-    `INSERT INTO managed_campaigns (customer_id, ad_account_id, name, status, agreed_budget_agorot, budget_period)
-     VALUES ($1, $2, 'IT Campaign', $3, 800, 'daily') RETURNING id`,
-    [customerId, acct.rows[0].id, status],
+    // AIC-158: meta_campaign_id was ABSENT here, so every homeState assertion
+    // in this file was made against a campaign that does not exist on Meta —
+    // the fixture was defending the bug. A real managed campaign always has
+    // one; the tests that care about its absence set it back to NULL
+    // explicitly.
+    // …and launch_approved_at, for the same reason: a linked, active campaign
+    // with no approval is `ready_to_launch`, which would now outrank every
+    // state these tests are actually about. The launch flow has its own tests
+    // further down, which set both columns explicitly.
+    `INSERT INTO managed_campaigns (customer_id, ad_account_id, name, status, agreed_budget_agorot, budget_period, meta_campaign_id, launch_approved_at)
+     VALUES ($1, $2, 'IT Campaign', $3, 800, 'daily', $4, now()) RETURNING id`,
+    [customerId, acct.rows[0].id, status, `meta_camp_ov_${tag}`],
   );
   return { customerId, userId, campaignId: camp.rows[0].id };
 }
@@ -109,6 +118,35 @@ d("customer overview (DB + HTTP)", () => {
     const ov = await buildCustomerOverview(pool, userId);
     expect(ov!.homeState).toBe("collecting");
     expect(ov!.readout?.current.leads).toBe(0);
+  });
+
+  // AIC-158, found live on a real customer. The wizard's connect-only branch
+  // writes a SHELL campaign — budget and nothing else — and hands off to the
+  // builder. That customer never finished it, so `meta_campaign_id` was NULL:
+  // no campaign exists on Meta at all. The dashboard said "הקמפיין פעיל
+  // ואנחנו ממשיכים לעקוב" with the badge "אוספים נתונים", ₪15/day and
+  // "פניות 0" — which reads as "your ads are running and nobody is calling".
+  //
+  // Every branch below the top of deriveHomeState was reasoning about an
+  // object that did not exist. add-content had it right the whole time
+  // (classifyConnectionReadiness → not_launched); Home just never asked.
+  it("says the campaign was never built when there is no meta_campaign_id — AIC-158", async () => {
+    const { userId } = await seedChain("unbuilt");
+    await pool.query(
+      `UPDATE managed_campaigns SET meta_campaign_id = NULL WHERE customer_id = (SELECT customer_id FROM app_users WHERE id = $1)`,
+      [userId],
+    );
+    const ov = await buildCustomerOverview(pool, userId);
+    expect(ov!.homeState).toBe("unbuilt");
+    expect(ov!.campaign?.metaCampaignId).toBeNull();
+  });
+
+  it("a lost connection still outranks the unbuilt state — you cannot finish a build without one", async () => {
+    const { userId, customerId } = await seedChain("unbuiltconn");
+    await pool.query(`UPDATE managed_campaigns SET meta_campaign_id = NULL WHERE customer_id = $1`, [customerId]);
+    await pool.query(`UPDATE meta_connections SET access_health = 'revoked' WHERE customer_id = $1`, [customerId]);
+    const ov = await buildCustomerOverview(pool, userId);
+    expect(ov!.homeState).toBe("attention");
   });
 
   it("surfaces a delivery problem as attention (kind = delivery) — AIC-39", async () => {
@@ -179,7 +217,7 @@ d("customer overview (DB + HTTP)", () => {
     // Same shape the real connected campaign has: reviewed + linked to a real
     // Meta campaign, not yet launch-approved — but nothing built it here.
     await pool.query(
-      `UPDATE managed_campaigns SET meta_campaign_id = 'meta_camp_connected' WHERE id = $1`,
+      `UPDATE managed_campaigns SET meta_campaign_id = 'meta_camp_connected', launch_approved_at = NULL WHERE id = $1`,
       [campaignId],
     );
 
@@ -192,7 +230,7 @@ d("customer overview (DB + HTTP)", () => {
   it("wasBuiltHere is true once a real, successful create_campaign action_history row exists", async () => {
     const { userId, campaignId } = await seedChain("builtHere");
     await pool.query(
-      `UPDATE managed_campaigns SET meta_campaign_id = 'meta_camp_built' WHERE id = $1`,
+      `UPDATE managed_campaigns SET meta_campaign_id = 'meta_camp_built', launch_approved_at = NULL WHERE id = $1`,
       [campaignId],
     );
     await pool.query(
@@ -208,7 +246,7 @@ d("customer overview (DB + HTTP)", () => {
   it("a FAILED create_campaign attempt does not count as wasBuiltHere", async () => {
     const { userId, campaignId } = await seedChain("failedbuild");
     await pool.query(
-      `UPDATE managed_campaigns SET meta_campaign_id = 'meta_camp_failed' WHERE id = $1`,
+      `UPDATE managed_campaigns SET meta_campaign_id = 'meta_camp_failed', launch_approved_at = NULL WHERE id = $1`,
       [campaignId],
     );
     await pool.query(
