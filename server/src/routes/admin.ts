@@ -32,6 +32,7 @@ import { REQUIRED_SCOPES, type CheckedAsset } from "../meta/access-layers.js";
 import { OUR_BUSINESS_PORTFOLIO_ID, OUR_SYSTEM_USER_ID } from "../config/meta-identity.js";
 import {
   getOrCreateOnboarding, setStep, recordCheck, markComplete, markIncomplete, hasLinkedCampaign,
+  CampaignAlreadyLinkedError,
   provisionConnection, PageNotReadableError, InstagramNotReadableError,
   IncompleteProvisioningError, CHECK_FOR_ASSET,
 } from "../services/customer-onboarding.js";
@@ -758,6 +759,13 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
       // metaAdAccountId/budget checks — this is AIC-103's provisioning-time
       // enforcement point, not a server error.
       res.status(400).json({ error: e.message, missingFields: e.missingFields });
+      return;
+    }
+    // AIC-162 — the customer already has a campaign on Meta. A refusal, not a
+    // failure: 409 with a reason, never the Postgres constraint string this
+    // used to fall through to.
+    if (e instanceof CampaignAlreadyLinkedError) {
+      res.status(409).json({ error: e.message, code: "campaign_already_linked" });
       return;
     }
     console.error("[admin] provisioning failed", e);

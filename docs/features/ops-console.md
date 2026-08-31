@@ -705,6 +705,33 @@ campaign is ever unlinked later. `finalize` additionally CLEARS a stale flag
 is only half the job while the false claim is still on the row, and the next
 feature to read `completed_at` would inherit it.
 
+**Adopting a campaign works on a customer who already has a shell (AIC-162).**
+`managed_campaigns` is `UNIQUE (customer_id)`. The connect-only branch writes a
+shell row — budget only, `meta_campaign_id IS NULL` — and hands off to the
+builder, so an operator who then changed their mind and adopted an existing
+campaign hit the constraint and the customer became **permanently
+un-provisionable through the wizard**. Found live.
+
+The adopt branch now upserts, guarded exactly as the connect-only branch two
+blocks above already was: `ON CONFLICT (customer_id) DO UPDATE … WHERE
+managed_campaigns.meta_campaign_id IS NULL`. That WHERE is the safety
+property, not a detail — without it the upsert would silently REPOINT a live
+customer's campaign at a different Meta id, changing whose numbers we report
+with nobody deciding to, invisible until the figures moved. A conflict against
+a linked row returns no row, which becomes `CampaignAlreadyLinkedError` → 409
+with copy telling the operator to disconnect the existing one first.
+
+**A failed provision says so beside the button.** Success and the 409 access
+gate already rendered there; the generic error path did not, so a failure
+showed as a second of greyed button and then nothing, while a raw Postgres
+`duplicate key value violates unique constraint` sat in the page header a
+screen above. The header stays right for page-level failures; the outcome of a
+click belongs next to the click.
+
+**The budget field carries `*`.** It is required — `provisionBlocker` refuses
+without it — and sat unmarked next to a WhatsApp field that had one, so the
+label read as optional.
+
 **"יצירת הרשומות" always says why too (AIC-161)** — `provisionBlocker()`,
 the sibling of `newCampaignBlocker` and the same rule: the button's disabled
 state, the line beneath it and `submitProvision`'s guard all read one ordered

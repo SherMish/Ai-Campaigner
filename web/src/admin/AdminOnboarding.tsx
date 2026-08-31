@@ -220,6 +220,11 @@ export function AdminOnboarding() {
 
   const [provisioning, setProvisioning] = useState(false);
   const [provisionResult, setProvisionResult] = useState<string | null>(null);
+  // AIC-162: a FAILED provision needs to say so where the button is, exactly
+  // as success already does. Separate from `error` (the page header), which is
+  // the right home for page-level failures and the wrong one for the outcome
+  // of a click.
+  const [provisionFailure, setProvisionFailure] = useState<string | null>(null);
   const [provisionBlocked, setProvisionBlocked] = useState<AccessDiagnosis | null>(null);
 
   // AIC-105 Branch A — the ad account has zero campaigns. Connects the
@@ -582,6 +587,7 @@ export function AdminOnboarding() {
     setProvisioning(true);
     setError(null);
     setProvisionBlocked(null);
+    setProvisionFailure(null);
     api<{ result: { connectionId: string; campaignId: string; pageIdSaved: boolean } }>(
       `/admin/customers/${id}/onboarding/provision`,
       {
@@ -629,6 +635,20 @@ export function AdminOnboarding() {
           const body = e.body as { missingFields?: string[] } | undefined;
           if (body?.missingFields?.length) { setError(`${w.errorIncompleteConfig} (${body.missingFields.join(", ")})`); return; }
         }
+        // AIC-162 — a refusal the server named, beside the button. This used
+        // to fall through to setError, which renders in the PAGE HEADER: the
+        // operator saw the button grey for a second and then nothing at all,
+        // while a raw Postgres "duplicate key value violates unique
+        // constraint" sat a screen above them.
+        if (e instanceof ApiError && (e.body as { code?: string } | undefined)?.code === "campaign_already_linked") {
+          setProvisionFailure(w.errorCampaignAlreadyLinked);
+          return;
+        }
+        // Anything else is genuinely unexpected. It still goes to the header
+        // (where a page-level failure belongs), but a short line beside the
+        // button says SOMETHING happened — the absence of that line is what
+        // made a failed click read as a click that did nothing.
+        setProvisionFailure(w.errorGeneric);
         setError(e instanceof Error ? e.message : w.errorGeneric);
       })
       .finally(() => setProvisioning(false));
@@ -1321,7 +1341,7 @@ export function AdminOnboarding() {
               <div className="field"><label>{w.fieldCampaignName}</label>
                 <input value={form.campaignName} onChange={(e) => setForm({ ...form, campaignName: e.target.value })} /></div>
               <div className="field">
-                <label>{w.fieldBudget}</label>
+                <label>{w.fieldBudget} *</label>
                 <input type="number" min="0" value={form.budgetShekels} onChange={(e) => setForm({ ...form, budgetShekels: e.target.value })} />
                 {/* AIC-106: shown, never sourced-from — the live Meta figure
                     and the agreed ceiling are deliberately two separate
@@ -1376,6 +1396,7 @@ export function AdminOnboarding() {
           </div>
         )}
         {provisionResult && <p className="muted" style={{ marginTop: 10, fontSize: "0.85rem" }}>{provisionResult}</p>}
+        {provisionFailure && <p style={{ marginTop: 10, fontSize: "0.85rem", color: "#c0362c" }}>{provisionFailure}</p>}
         </>
         )}
       </div>

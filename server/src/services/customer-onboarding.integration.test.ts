@@ -9,6 +9,7 @@ import {
   recordCheck,
   markComplete,
   provisionConnection,
+  CampaignAlreadyLinkedError,
   PageNotReadableError,
   IncompleteProvisioningError,
   InstagramNotReadableError,
@@ -149,6 +150,60 @@ d("customer onboarding (DB)", () => {
 
       const camp = await pool.query(`SELECT status, meta_campaign_id, agreed_budget_agorot FROM managed_campaigns WHERE id = $1`, [r.campaignId]);
       expect(camp.rows[0]).toMatchObject({ status: "active", agreed_budget_agorot: 2000 });
+    });
+
+    // AIC-162, found live on a real customer. managed_campaigns is
+    // UNIQUE (customer_id). The connect-only branch writes a SHELL row (budget
+    // only, meta_campaign_id NULL) and hands off to the builder; an operator
+    // who then changed their mind and adopted an existing campaign hit the
+    // constraint, and that customer became permanently un-provisionable
+    // through the wizard. The failure surfaced as a raw Postgres string, in
+    // the page header, a screen above the button they pressed.
+    it("adopts INTO an existing unlinked shell instead of failing on the unique constraint", async () => {
+      const customerId = await seedCustomer("adoptshell");
+      // Exactly what "צור קמפיין חדש" leaves behind.
+      await provisionConnection(pool, {
+        customerId,
+        systemUserId: "122103498795426897",
+        metaAdAccountId: `act_it_${customerId.slice(0, 8)}`,
+        agreedBudgetAgorot: 1500,
+      }, null);
+      const shell = await pool.query<{ id: string; meta_campaign_id: string | null }>(
+        `SELECT id, meta_campaign_id FROM managed_campaigns WHERE customer_id = $1`, [customerId]);
+      expect(shell.rows).toHaveLength(1);
+      expect(shell.rows[0].meta_campaign_id).toBeNull();
+
+      const r = await provisionConnection(pool, base(customerId), null);
+
+      // The SAME row, now linked — not a second one, and not a failure.
+      expect(r.campaignId).toBe(shell.rows[0].id);
+      const after = await pool.query(
+        `SELECT meta_campaign_id, name, status, agreed_budget_agorot FROM managed_campaigns WHERE customer_id = $1`,
+        [customerId]);
+      expect(after.rows).toHaveLength(1);
+      expect(after.rows[0]).toMatchObject({
+        meta_campaign_id: `camp_${customerId.slice(0, 8)}`,
+        name: "IT Campaign",
+        status: "active",
+        agreed_budget_agorot: 2000,
+      });
+    });
+
+    it("REFUSES to adopt over a campaign already linked to Meta, rather than repointing it", async () => {
+      // The safety property. Without the WHERE guard the upsert would silently
+      // point a live customer's campaign at a different Meta id — changing
+      // whose numbers we report, with nobody deciding to, and invisible until
+      // the figures moved.
+      const customerId = await seedCustomer("adoptlinked");
+      await provisionConnection(pool, base(customerId), null);
+
+      await expect(
+        provisionConnection(pool, { ...base(customerId), metaCampaignId: "camp_someone_else" }, null),
+      ).rejects.toBeInstanceOf(CampaignAlreadyLinkedError);
+
+      const after = await pool.query<{ meta_campaign_id: string }>(
+        `SELECT meta_campaign_id FROM managed_campaigns WHERE customer_id = $1`, [customerId]);
+      expect(after.rows[0].meta_campaign_id).toBe(`camp_${customerId.slice(0, 8)}`);
     });
 
     it("defaults lead_event_types to the WhatsApp pair when none is given", async () => {

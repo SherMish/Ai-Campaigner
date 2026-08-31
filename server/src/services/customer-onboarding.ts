@@ -300,6 +300,22 @@ export interface ProvisionResult {
 // was needed for. The runbook documents this ordering; the point of doing it
 // here is that the wizard cannot get it wrong, rather than relying on an
 // operator remembering a warning in a markdown file at 6pm on a call.
+/**
+ * AIC-162 — the customer already has a campaign linked to Meta, so there is
+ * nothing to adopt into.
+ *
+ * Its own type because the alternative is silently repointing a live
+ * customer's campaign at a different Meta id, which would change whose numbers
+ * we report without anyone deciding to. Refusing is correct; refusing with a
+ * name is what lets the operator be told why.
+ */
+export class CampaignAlreadyLinkedError extends Error {
+  constructor() {
+    super("this customer already has a campaign linked to Meta — nothing to adopt into");
+    this.name = "CampaignAlreadyLinkedError";
+  }
+}
+
 export async function provisionConnection(
   pool: pg.Pool,
   input: ProvisionInput,
@@ -450,6 +466,20 @@ export async function provisionConnection(
 
     let campaignId: string | null = null;
     if (hasCampaign) {
+      // AIC-162 — ADOPT INTO an unlinked shell rather than insert beside it.
+      //
+      // managed_campaigns is UNIQUE (customer_id). The connect-only branch
+      // above writes a shell (budget only, meta_campaign_id NULL) and hands
+      // off to the builder; an operator who then changes their mind and adopts
+      // an existing campaign hit that constraint, and the customer became
+      // permanently un-provisionable through the wizard. Found live.
+      //
+      // The WHERE clause is the safety property, not a detail: it adopts only
+      // into a row with NO Meta campaign behind it. Without it this would
+      // silently REPOINT a live customer's campaign at a different Meta id —
+      // far worse than refusing, and invisible until their numbers changed.
+      // A conflict against a linked row returns no row at all, which the
+      // caller turns into an explicit refusal.
       const camp = await client.query<{ id: string }>(
         `INSERT INTO managed_campaigns
            (customer_id, ad_account_id, meta_campaign_id, name, status, objective,
@@ -458,6 +488,19 @@ export async function provisionConnection(
                  COALESCE($8::text[], ARRAY['onsite_conversion.messaging_conversation_started_7d',
                                             'onsite_conversion.messaging_conversation_started']),
                  $9,$10,COALESCE($11,''))
+         ON CONFLICT (customer_id) DO UPDATE SET
+           ad_account_id = EXCLUDED.ad_account_id,
+           meta_campaign_id = EXCLUDED.meta_campaign_id,
+           name = EXCLUDED.name,
+           status = 'active',
+           objective = EXCLUDED.objective,
+           agreed_budget_agorot = EXCLUDED.agreed_budget_agorot,
+           budget_period = EXCLUDED.budget_period,
+           lead_event_types = EXCLUDED.lead_event_types,
+           tracking_pixel_id = EXCLUDED.tracking_pixel_id,
+           website_url = EXCLUDED.website_url,
+           whatsapp_destination = EXCLUDED.whatsapp_destination
+         WHERE managed_campaigns.meta_campaign_id IS NULL
          RETURNING id`,
         [
           input.customerId,
@@ -473,6 +516,11 @@ export async function provisionConnection(
           input.whatsappDestination ?? null,
         ],
       );
+      // No row back means the ON CONFLICT guard refused: this customer already
+      // has a campaign linked to Meta. A real refusal with its own name, so
+      // the route can answer 409 with copy an operator can act on instead of
+      // a Postgres constraint string.
+      if (camp.rows.length === 0) throw new CampaignAlreadyLinkedError();
       campaignId = camp.rows[0].id;
     }
 

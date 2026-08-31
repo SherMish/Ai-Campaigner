@@ -6,6 +6,21 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-31 — AIC-162: adopting a campaign was impossible after "צור קמפיין חדש"
+
+Reported as "clicked, button greyed for a few seconds, then nothing". Railway
+had it: `duplicate key value violates unique constraint
+managed_campaigns_customer_id_key`. The connect-only branch leaves a shell row
+and `managed_campaigns` is UNIQUE per customer, so adopting afterwards could
+never succeed — that customer was permanently un-provisionable. The adopt
+branch now upserts into an unlinked shell, guarded by `WHERE meta_campaign_id
+IS NULL` so it can never repoint a campaign that is already live; a conflict
+against a linked row is refused by name and answered 409. Failed provisions
+also render beside the button now rather than only in the page header, and the
+mandatory budget field finally carries its `*`.
+
+---
+
 ### 2026-08-31 — AIC-161: "יצירת הרשומות" refused silently
 
 Reported as "does nothing, no feedback". It was refusing on an empty budget and
