@@ -705,6 +705,23 @@ campaign is ever unlinked later. `finalize` additionally CLEARS a stale flag
 is only half the job while the false claim is still on the row, and the next
 feature to read `completed_at` would inherit it.
 
+**"יצירת הרשומות" always says why too (AIC-161)** — `provisionBlocker()`,
+the sibling of `newCampaignBlocker` and the same rule: the button's disabled
+state, the line beneath it and `submitProvision`'s guard all read one ordered
+list (ad account → campaign → name → budget → page verified → Instagram
+verified → destination config).
+
+The bug was worse than the sibling's. That button was disabled and silent;
+this one was ENABLED, refused inside the click handler, and sent the reason to
+a `setError` rendered in the PAGE HEADER — roughly a screen above the button.
+The operator clicked and nothing appeared to happen. The four field checks also
+shared `errorGeneric`, which names none of them, so even scrolled to it could
+not say which box to fill.
+
+The header `error` is still right for genuine request failures — a 409 from the
+server, a network error. Those are outcomes of a submitted request, not reasons
+a click was refused, and only the latter belongs beside the button.
+
 **A disabled "צור קמפיין חדש" always says why.** `newCampaignBlocker()`
 (`web/src/admin/onboarding-step4.ts`) returns the FIRST unmet precondition —
 `page_missing | page_unverified | instagram_unverified | budget_missing`, in

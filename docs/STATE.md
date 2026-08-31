@@ -6,6 +6,18 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-31 — AIC-161: "יצירת הרשומות" refused silently
+
+Reported as "does nothing, no feedback". It was refusing on an empty budget and
+calling `setError`, which renders in the page header — about a screen above the
+button that was clicked. The four field checks also shared one `errorGeneric`
+that named none of them. `provisionBlocker()` joins `newCampaignBlocker` in
+`onboarding-step4.ts`: one ordered list read by the disabled state, the message
+directly beneath the button, and the handler's guard. Third instance of this
+shape in one day — a control that refuses without saying why.
+
+---
+
 ### 2026-08-31 — AIC-160: step 4 was N+1 against Meta, and hid the throttle
 
 Reported live as "failed to load campaigns". Railway logs gave the real cause:

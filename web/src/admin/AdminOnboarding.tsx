@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FIXED_DESTINATION, WEBSITE_DESTINATION, missingRequiredFields } from "@aic/shared";
 import { api, ApiError, updateCustomer, type CustomerWriteFields } from "../api";
-import { adAccountOptions, newCampaignBlocker, step4Branch } from "./onboarding-step4";
+import { adAccountOptions, newCampaignBlocker, provisionBlocker, step4Branch } from "./onboarding-step4";
 import { strings } from "../strings";
 import { BusinessFields } from "./BusinessFields";
 import { profileBadge, badgeLabel, fieldNames } from "./profile-badge";
@@ -531,34 +531,54 @@ export function AdminOnboarding() {
     return !check || !check.ok || check.assetId !== typed;
   }
 
+  // AIC-161 — why "יצירת הרשומות" is not pressable yet, derived once from the
+  // SAME ordered list its disabled state and its message read.
+  //
+  // This used to be four `setError` calls inside the click handler, which put
+  // the reason ~570 lines up the page in the header — most of a screen above
+  // the button. The operator clicked and saw nothing happen. And all four
+  // field checks shared `errorGeneric`, which names none of them.
+  function provisionBlockedBy(): ReturnType<typeof provisionBlocker> {
+    return provisionBlocker({
+      adAccountMissing: !form.metaAdAccountId,
+      campaignMissing: !form.metaCampaignId,
+      nameMissing: !form.campaignName.trim(),
+      budgetMissing: !(Math.round(Number(form.budgetShekels) * 100) > 0),
+      pageUnverified: pageIdUnverified(),
+      instagramUnverified: instagramIdUnverified(),
+      // AIC-103: the SAME table resolveAdditionAvailability checks at read
+      // time — client-side so the operator sees it before submitting, not
+      // after the server's own 400.
+      missingConfigFields: missingRequiredFields(
+        form.destinationType === "whatsapp" ? FIXED_DESTINATION : WEBSITE_DESTINATION,
+        {
+          whatsappDestination: form.whatsappDestination.trim() || null,
+          websiteUrl: form.websiteUrl.trim() || null,
+          trackingPixelId: form.trackingPixelId.trim() || null,
+          leadEventTypes: form.leadEventTypes.trim() ? form.leadEventTypes.split(",").map((s) => s.trim()) : null,
+        },
+      ),
+    });
+  }
+
+  function provisionBlockerText(b: NonNullable<ReturnType<typeof provisionBlocker>>): string {
+    switch (b.reason) {
+      case "ad_account_missing": return w.provisionNeedsAdAccount;
+      case "campaign_missing": return w.provisionNeedsCampaign;
+      case "name_missing": return w.provisionNeedsName;
+      case "budget_missing": return w.provisionNeedsBudget;
+      case "page_unverified": return w.errorPageNotVerified;
+      case "instagram_unverified": return w.errorInstagramNotVerified;
+      case "incomplete_config": return `${w.errorIncompleteConfig} (${b.fields.join(", ")})`;
+    }
+  }
+
   function submitProvision() {
     if (!id) return;
     const budgetAgorot = Math.round(Number(form.budgetShekels) * 100);
-    if (!form.metaAdAccountId || !form.metaCampaignId || !form.campaignName || !(budgetAgorot > 0)) {
-      setError(w.errorGeneric);
-      return;
-    }
-    if (pageIdUnverified()) {
-      setError(w.errorPageNotVerified);
-      return;
-    }
-    if (instagramIdUnverified()) {
-      setError(w.errorInstagramNotVerified);
-      return;
-    }
-    // AIC-103: the SAME table/function resolveAdditionAvailability checks at
-    // read time — client-side so the operator sees this before submitting,
-    // not just after the server's own 400.
-    const missing = missingRequiredFields(form.destinationType === "whatsapp" ? FIXED_DESTINATION : WEBSITE_DESTINATION, {
-      whatsappDestination: form.whatsappDestination.trim() || null,
-      websiteUrl: form.websiteUrl.trim() || null,
-      trackingPixelId: form.trackingPixelId.trim() || null,
-      leadEventTypes: form.leadEventTypes.trim() ? form.leadEventTypes.split(",").map((s) => s.trim()) : null,
-    });
-    if (missing.length > 0) {
-      setError(`${w.errorIncompleteConfig} (${missing.join(", ")})`);
-      return;
-    }
+    // Unreachable while the button is disabled on the same condition — kept so
+    // the guard cannot be defeated by a future change to the disabled state.
+    if (provisionBlockedBy()) return;
     setProvisioning(true);
     setError(null);
     setProvisionBlocked(null);
@@ -1335,11 +1355,17 @@ export function AdminOnboarding() {
 
         {branch === "adopt_existing" && (
           <>
-            <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={provisioning || pageIdUnverified() || instagramIdUnverified()} onClick={submitProvision}>
+            <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} disabled={provisioning || provisionBlockedBy() !== null} onClick={submitProvision}>
               {w.provisionSubmit}
             </button>
-            {pageIdUnverified() && <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>{w.errorPageNotVerified}</p>}
-            {instagramIdUnverified() && <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>{w.errorInstagramNotVerified}</p>}
+            {/* Beside the button, never in the page header: a refusal the
+                operator has to scroll to find is a refusal they will read as
+                "nothing happened". */}
+            {provisionBlockedBy() && (
+              <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>
+                {provisionBlockerText(provisionBlockedBy()!)}
+              </p>
+            )}
           </>
         )}
 

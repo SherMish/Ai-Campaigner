@@ -991,6 +991,13 @@ export const strings = {
 
       errorTokenNotConfigured: "META_SYSTEM_USER_TOKEN לא מוגדר בשרת — זו בעיה אצלנו, לא אצל הלקוח.",
       errorGeneric: "הפעולה נכשלה. אפשר לנסות שוב.",
+      // AIC-161 — למה "יצירת הרשומות" עוד לא אפשרית. ארבעת הראשונים חלקו
+      // קודם את errorGeneric, שלא נקב באף אחד מהם, והוצג בראש העמוד — מסך
+      // שלם מעל הכפתור שנלחץ.
+      provisionNeedsAdAccount: "בוחרים חשבון פרסום.",
+      provisionNeedsCampaign: "בוחרים קמפיין לאימוץ, או יוצרים חדש.",
+      provisionNeedsName: "ממלאים שם קמפיין.",
+      provisionNeedsBudget: "ממלאים תקציב יומי שסוכם עם הלקוח.",
       // AIC-103: distinct from errorGeneric — names exactly which fields are
       // missing (appended by the caller) rather than a generic failure.
       errorIncompleteConfig: "חסרים שדות חובה לסוג היעד שנבחר",

@@ -121,3 +121,50 @@ export function newCampaignBlocker(input: {
   if (input.budgetMissing) return "budget_missing";
   return null;
 }
+
+/**
+ * Why "יצירת הרשומות" cannot be pressed yet — or null when it can (AIC-161).
+ *
+ * THE SIBLING OF newCampaignBlocker, AND THE SAME BUG A SECOND TIME. That one
+ * was a disabled button with no stated reason. This one was worse: the button
+ * was ENABLED, `submitProvision` refused, and the refusal went to a `setError`
+ * rendered ~570 lines up the page in the header — most of a screen away from
+ * the button that was clicked. So it read as "nothing happens".
+ *
+ * The four field checks also shared one `errorGeneric` naming none of them, so
+ * even scrolled to, it could not say which box to fill.
+ *
+ * Order is the order the operator acts in: pick the thing, verify the thing,
+ * then fill what the chosen destination needs. `incomplete_config` carries the
+ * field list because the server names them and dropping it puts the operator
+ * back to guessing.
+ */
+export type ProvisionBlocker =
+  | { reason: "ad_account_missing" }
+  | { reason: "campaign_missing" }
+  | { reason: "name_missing" }
+  | { reason: "budget_missing" }
+  | { reason: "page_unverified" }
+  | { reason: "instagram_unverified" }
+  | { reason: "incomplete_config"; fields: string[] };
+
+export function provisionBlocker(input: {
+  adAccountMissing: boolean;
+  campaignMissing: boolean;
+  nameMissing: boolean;
+  budgetMissing: boolean;
+  pageUnverified: boolean;
+  instagramUnverified: boolean;
+  missingConfigFields: string[];
+}): ProvisionBlocker | null {
+  if (input.adAccountMissing) return { reason: "ad_account_missing" };
+  if (input.campaignMissing) return { reason: "campaign_missing" };
+  if (input.nameMissing) return { reason: "name_missing" };
+  if (input.budgetMissing) return { reason: "budget_missing" };
+  if (input.pageUnverified) return { reason: "page_unverified" };
+  if (input.instagramUnverified) return { reason: "instagram_unverified" };
+  if (input.missingConfigFields.length > 0) {
+    return { reason: "incomplete_config", fields: input.missingConfigFields };
+  }
+  return null;
+}

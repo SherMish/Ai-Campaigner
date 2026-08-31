@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { adAccountOptions, newCampaignBlocker, step4Branch } from "./onboarding-step4.js";
+import { adAccountOptions, newCampaignBlocker, provisionBlocker, step4Branch } from "./onboarding-step4.js";
 
 describe("step 4: which provisioning branch to show (AIC-119)", () => {
   // The bug, found live on a customer with no connection at all: the operator
@@ -161,5 +161,54 @@ describe("newCampaignBlocker", () => {
       .toBe("page_unverified");
     expect(newCampaignBlocker({ ...ready, instagramUnverified: true, budgetMissing: true }))
       .toBe("instagram_unverified");
+  });
+});
+
+describe("provisionBlocker (AIC-161)", () => {
+  const ready = {
+    adAccountMissing: false, campaignMissing: false, nameMissing: false,
+    budgetMissing: false, pageUnverified: false, instagramUnverified: false,
+    missingConfigFields: [] as string[],
+  };
+
+  it("names the missing budget — the bug this fixes", () => {
+    // Reported live: the operator clicked יצירת הרשומות and NOTHING happened.
+    // It was refusing on an empty budget and calling setError, which renders
+    // ~570 lines up the page, in the header. Off-screen from the button.
+    expect(provisionBlocker({ ...ready, budgetMissing: true })).toEqual({ reason: "budget_missing" });
+  });
+
+  it("returns null only when nothing blocks — so a dead button always has a reason", () => {
+    expect(provisionBlocker(ready)).toBeNull();
+  });
+
+  it("distinguishes the four fields that used to share one generic message", () => {
+    // `errorGeneric` covered ad account, campaign, name AND budget, naming
+    // none of them — useless even if you scrolled to it.
+    expect(provisionBlocker({ ...ready, adAccountMissing: true })).toEqual({ reason: "ad_account_missing" });
+    expect(provisionBlocker({ ...ready, campaignMissing: true })).toEqual({ reason: "campaign_missing" });
+    expect(provisionBlocker({ ...ready, nameMissing: true })).toEqual({ reason: "name_missing" });
+    expect(provisionBlocker({ ...ready, budgetMissing: true })).toEqual({ reason: "budget_missing" });
+  });
+
+  it("asks for the fields before their verification, and config last", () => {
+    // The order an operator has to act in: choose the thing, then verify it,
+    // then fill what the destination needs.
+    expect(provisionBlocker({
+      adAccountMissing: true, campaignMissing: true, nameMissing: true, budgetMissing: true,
+      pageUnverified: true, instagramUnverified: true, missingConfigFields: ["whatsapp_destination"],
+    })).toEqual({ reason: "ad_account_missing" });
+
+    expect(provisionBlocker({ ...ready, pageUnverified: true, instagramUnverified: true, missingConfigFields: ["whatsapp_destination"] }))
+      .toEqual({ reason: "page_unverified" });
+    expect(provisionBlocker({ ...ready, instagramUnverified: true, missingConfigFields: ["whatsapp_destination"] }))
+      .toEqual({ reason: "instagram_unverified" });
+  });
+
+  it("carries WHICH config fields are missing, not just that some are", () => {
+    // The server names them; dropping the list would put the operator back to
+    // guessing which box.
+    expect(provisionBlocker({ ...ready, missingConfigFields: ["whatsapp_destination", "website_url"] }))
+      .toEqual({ reason: "incomplete_config", fields: ["whatsapp_destination", "website_url"] });
   });
 });
