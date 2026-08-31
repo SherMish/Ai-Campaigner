@@ -236,7 +236,9 @@ export function AdminOnboarding() {
 
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeHealth, setFinalizeHealth] = useState<string | null>(null);
-  // AIC-158: health and completion are two facts, not one.
+  // AIC-158: health and completion are two facts, not one. AIC-159: loaded
+  // with the wizard state, not only after a finalize click, so the header
+  // stops claiming completion the moment the page opens.
   const [campaignLinked, setCampaignLinked] = useState(true);
 
   useEffect(() => {
@@ -260,8 +262,8 @@ export function AdminOnboarding() {
         });
       })
       .catch(() => {});
-    api<{ state: OnboardingState; businessPortfolioId: string }>(`/admin/customers/${id}/onboarding`)
-      .then((r) => { setState(r.state); setPortfolioId(r.businessPortfolioId); })
+    api<{ state: OnboardingState; campaignLinked: boolean; businessPortfolioId: string }>(`/admin/customers/${id}/onboarding`)
+      .then((r) => { setState(r.state); setCampaignLinked(r.campaignLinked); setPortfolioId(r.businessPortfolioId); })
       .catch(() => setError(w.errorGeneric));
     loadAdAccounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -725,8 +727,16 @@ export function AdminOnboarding() {
       {state && state.updatedAt !== state.startedAt && !state.completedAt && (
         <p className="muted" style={{ fontSize: "0.85rem" }}>{w.resumedNote}</p>
       )}
-      {state?.completedAt && (
+      {/* AIC-159: `completedAt` alone is not evidence. It was written on
+          connection health alone until AIC-158, so every customer onboarded
+          before that carries one — and this pill rendered it green, at the top
+          of the page, above a step 5 that now says the opposite. Requiring
+          BOTH self-corrects on load, without writing to anyone's row. */}
+      {state?.completedAt && campaignLinked && (
         <div className="pill ok" style={{ marginTop: 10, padding: "4px 12px" }}><span className="dot" />{w.finalizeOk}</div>
+      )}
+      {state?.completedAt && !campaignLinked && (
+        <div className="pill" style={{ marginTop: 10, padding: "4px 12px" }}><span className="dot" />{w.finalizeOkNoCampaign}</div>
       )}
       {error && <p style={{ color: "#c0362c", fontSize: "0.85rem", marginTop: 8 }}>{error}</p>}
 

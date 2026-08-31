@@ -31,7 +31,7 @@ import { AccessProbe } from "../meta/access-probe.js";
 import { REQUIRED_SCOPES, type CheckedAsset } from "../meta/access-layers.js";
 import { OUR_BUSINESS_PORTFOLIO_ID, OUR_SYSTEM_USER_ID } from "../config/meta-identity.js";
 import {
-  getOrCreateOnboarding, setStep, recordCheck, markComplete,
+  getOrCreateOnboarding, setStep, recordCheck, markComplete, markIncomplete, hasLinkedCampaign,
   provisionConnection, PageNotReadableError, InstagramNotReadableError,
   IncompleteProvisioningError, CHECK_FOR_ASSET,
 } from "../services/customer-onboarding.js";
@@ -543,7 +543,12 @@ function probeOrNull(): AccessProbe | null {
 // operator's place would make this worse than the markdown file it replaces.
 adminRouter.get("/customers/:id/onboarding", async (req, res) => {
   const state = await getOrCreateOnboarding(pool, req.params.id);
-  res.json({ state, businessPortfolioId: OUR_BUSINESS_PORTFOLIO_ID });
+  // AIC-159: `completed_at` alone is not evidence the wizard finished — every
+  // customer onboarded before AIC-158 carries one written on connection health
+  // alone. Sent alongside so the screen can require BOTH, which self-corrects
+  // on page load without writing to anyone's row.
+  const campaignLinked = await hasLinkedCampaign(pool, req.params.id);
+  res.json({ state, campaignLinked, businessPortfolioId: OUR_BUSINESS_PORTFOLIO_ID });
 });
 
 adminRouter.post("/customers/:id/onboarding/step", async (req, res) => {
@@ -941,21 +946,21 @@ adminRouter.post("/customers/:id/onboarding/finalize", async (req, res) => {
   // reported "החיבור אומת ותקין. האשף הושלם" for exactly that state — true
   // about the connection, false about the wizard — while the customer's own
   // dashboard told them the campaign was live.
-  const linked = await pool.query<{ n: string }>(
-    `SELECT count(*)::text AS n FROM managed_campaigns
-      WHERE customer_id = $1 AND meta_campaign_id IS NOT NULL`,
-    [req.params.id],
-  );
-  const campaignLinked = Number(linked.rows[0].n) > 0;
+  const campaignLinked = await hasLinkedCampaign(pool, req.params.id);
 
   // Only a genuinely verified connection completes the wizard — "onboarded"
   // is never inferred from rows someone created. AIC-158 adds the second
   // half: nor from a connection alone.
-  if (health === "ok" && campaignLinked) await markComplete(pool, req.params.id);
+  let finalState = state;
+  if (health === "ok" && campaignLinked) {
+    await markComplete(pool, req.params.id);
+    finalState = await getOrCreateOnboarding(pool, req.params.id);
+  } else if (!campaignLinked) {
+    // AIC-159: CLEAR a stale flag, don't merely decline to write a new one.
+    // Re-running the check on an unfinished customer is exactly when we know
+    // the stored claim is wrong, so that is when to retract it.
+    finalState = await markIncomplete(pool, req.params.id);
+  }
 
-  res.json({
-    health,
-    campaignLinked,
-    state: health === "ok" && campaignLinked ? await getOrCreateOnboarding(pool, req.params.id) : state,
-  });
+  res.json({ health, campaignLinked, state: finalState });
 });

@@ -133,6 +133,43 @@ export async function recordCheck(
   return toState(rows[0]);
 }
 
+/**
+ * Does this customer have a campaign that actually exists on Meta? (AIC-159)
+ *
+ * The wizard is "complete" only if it produced one. A verified connection is
+ * not a finished wizard — AIC-158 fixed the WRITE that conflated them, but
+ * left every flag already written, so customers onboarded before that carried
+ * a stored "האשף הושלם" that was false.
+ *
+ * Derived on read rather than migrated: no write to anyone's row, and it stays
+ * right if a campaign is ever unlinked later.
+ */
+export async function hasLinkedCampaign(pool: pg.Pool, customerId: string): Promise<boolean> {
+  const { rows } = await pool.query<{ n: string }>(
+    `SELECT count(*)::text AS n FROM managed_campaigns
+      WHERE customer_id = $1 AND meta_campaign_id IS NOT NULL`,
+    [customerId],
+  );
+  return Number(rows[0].n) > 0;
+}
+
+/**
+ * AIC-159 — un-complete a wizard whose campaign does not exist.
+ *
+ * The counterpart to markComplete, and the reason it exists: not writing a
+ * false flag is only half the fix while the false flag is still on the row.
+ * Anything that later reads `completed_at` — a report, a filter, a dashboard
+ * we have not built yet — would inherit the same claim.
+ */
+export async function markIncomplete(pool: pg.Pool, customerId: string): Promise<OnboardingState> {
+  const { rows } = await pool.query<Row>(
+    `UPDATE customer_onboarding SET completed_at = NULL, updated_at = now()
+     WHERE customer_id = $1 RETURNING *`,
+    [customerId],
+  );
+  return toState(rows[0]);
+}
+
 export async function markComplete(pool: pg.Pool, customerId: string): Promise<OnboardingState> {
   const { rows } = await pool.query<Row>(
     `UPDATE customer_onboarding SET completed_at = now(), updated_at = now()

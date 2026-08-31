@@ -687,6 +687,24 @@ carries to an account the operator has not looked at. The
 "לא נמצאו קמפיינים" line is suppressed in the forced case — it would
 contradict the populated select directly above it.
 
+**"האשף הושלם" requires a campaign that exists, not a stored flag (AIC-159).**
+`GET /customers/:id/onboarding` returns `campaignLinked` beside the state, and
+the header pill requires both it and `completedAt`.
+
+The bug it fixes is a fix's own residue. AIC-158 stopped `finalize` writing
+`completed_at` on connection health alone — and left every flag already
+written. The pill renders that flag directly, on page load, so a customer
+onboarded earlier kept a green "האשף הושלם" at the top of the page above a
+step 5 that now said the opposite: one screen contradicting itself, in the
+customer's favour.
+
+Derived on read rather than migrated: no write to anyone's row, it self-corrects
+for every affected customer the moment the page opens, and it stays right if a
+campaign is ever unlinked later. `finalize` additionally CLEARS a stale flag
+(`markIncomplete`) when the campaign is not linked — not writing a false claim
+is only half the job while the false claim is still on the row, and the next
+feature to read `completed_at` would inherit it.
+
 **A disabled "צור קמפיין חדש" always says why.** `newCampaignBlocker()`
 (`web/src/admin/onboarding-step4.ts`) returns the FIRST unmet precondition —
 `page_missing | page_unverified | instagram_unverified | budget_missing`, in

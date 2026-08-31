@@ -716,6 +716,48 @@ d("onboarding wizard routes (AIC-101)", () => {
     });
   });
 
+  // AIC-159, reported live. AIC-158 stopped finalize from WRITING a completion
+  // flag on connection health alone; it left every flag already written. The
+  // wizard header renders that flag directly, so a customer onboarded before
+  // the fix kept a green "האשף הושלם" above a step 5 that now says the
+  // opposite — one screen contradicting itself.
+  it("GET onboarding reports campaignLinked, so a stale completed_at cannot claim completion", async () => {
+    const id = await seedCustomer("stalecomplete");
+    // Exactly the shape found in production: a healthy connection, a shell
+    // campaign with no meta_campaign_id, and a completed_at stamped by the
+    // old code.
+    const conn = await pool.query<{ id: string }>(
+      `INSERT INTO meta_connections (customer_id, access_health) VALUES ($1,'ok') RETURNING id`, [id]);
+    const acct = await pool.query<{ id: string }>(
+      `INSERT INTO ad_accounts (connection_id, meta_ad_account_id) VALUES ($1,$2) RETURNING id`,
+      [conn.rows[0].id, `act_wiz_${conn.rows[0].id.slice(0, 8)}`]);
+    await pool.query(
+      `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, agreed_budget_agorot)
+       VALUES ($1,$2,'under_review',1500)`, [id, acct.rows[0].id]);
+    await request(app).get(`/api/admin/customers/${id}/onboarding`).set("Authorization", ADMIN);
+    await pool.query(`UPDATE customer_onboarding SET completed_at = now() WHERE customer_id = $1`, [id]);
+
+    const res = await request(app).get(`/api/admin/customers/${id}/onboarding`).set("Authorization", ADMIN);
+    expect(res.status).toBe(200);
+    expect(res.body.state.completedAt).toBeTruthy(); // the stale flag is still there…
+    expect(res.body.campaignLinked).toBe(false);     // …and this is what stops it being believed
+  });
+
+  it("campaignLinked is true once a campaign really exists on Meta", async () => {
+    const id = await seedCustomer("reallycomplete");
+    const conn = await pool.query<{ id: string }>(
+      `INSERT INTO meta_connections (customer_id, access_health) VALUES ($1,'ok') RETURNING id`, [id]);
+    const acct = await pool.query<{ id: string }>(
+      `INSERT INTO ad_accounts (connection_id, meta_ad_account_id) VALUES ($1,$2) RETURNING id`,
+      [conn.rows[0].id, `act_wiz_${conn.rows[0].id.slice(0, 8)}`]);
+    await pool.query(
+      `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, meta_campaign_id, agreed_budget_agorot)
+       VALUES ($1,$2,'active','meta_camp_real',1500)`, [id, acct.rows[0].id]);
+
+    const res = await request(app).get(`/api/admin/customers/${id}/onboarding`).set("Authorization", ADMIN);
+    expect(res.body.campaignLinked).toBe(true);
+  });
+
   it("finalize refuses before anything is provisioned", async () => {
     const id = await seedCustomer("finalempty");
     const res = await request(app).post(`/api/admin/customers/${id}/onboarding/finalize`)

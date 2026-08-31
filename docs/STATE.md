@@ -6,6 +6,19 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-31 — AIC-159: a fix's own residue kept claiming "האשף הושלם"
+
+AIC-158 stopped `finalize` from writing `completed_at` on connection health
+alone, and left every flag already written — including one stamped at 13:47 for
+a customer with no campaign on Meta. The wizard header renders that flag
+directly, so the page showed a green "האשף הושלם" above a step 5 that now says
+the opposite. `GET onboarding` now returns `campaignLinked` and the pill
+requires both, which self-corrects on load for every customer onboarded before
+today without writing to anyone's row; `finalize` also clears a stale flag
+rather than merely declining to write a new one.
+
+---
+
 ### 2026-08-31 — AIC-156 follow-up: Instagram posts cannot lead to WhatsApp
 
 Found by the live write check on our own ad account, which the first commit
