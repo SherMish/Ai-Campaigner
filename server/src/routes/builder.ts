@@ -12,6 +12,7 @@ import { createCreativeIdempotent, uploadCreativeMedia, type CreativeSpec } from
 import type { CreativeMedia } from "../builder/creative-types.js";
 import { adSetName, campaignName } from "../meta/naming.js";
 import { pageIdentityOrNulls } from "../builder/page-identity.js";
+import { searchGeoOrEmpty } from "../builder/geo-search.js";
 
 // The guided builder's HTTP surface (AIC-52) — a thin layer over AIC-50's
 // create-writes and AIC-51's creative handling. Every route resolves the
@@ -121,6 +122,18 @@ builderRouter.get("/page", requireAuth, async (req, res) => {
   } catch (e) {
     console.error("[builder] page identity failed", e);
     res.json({ name: null, pictureUrl: null });
+  }
+});
+
+// GET /geo?q= — Meta's own city/region lookup for the audience step's
+// location picker (AIC-157). Account-agnostic: /search is a global reference
+// endpoint, so this reads nothing belonging to any customer.
+builderRouter.get("/geo", requireAuth, async (req, res) => {
+  try {
+    res.json({ places: await searchGeoOrEmpty(buildBuilderWriter(), String(req.query.q ?? "")) });
+  } catch (e) {
+    console.error("[builder] geo search failed", e);
+    res.status(502).json({ error: "geo search failed" });
   }
 });
 
@@ -253,7 +266,7 @@ interface BuildBody {
   destinationUrl?: string; // website only
   pixelId?: string; // website only
   conversionEvent?: string; // website only
-  targeting?: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[] };
+  targeting?: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[]; cities?: Array<{ key: string; name: string; type: "city" | "region" }> };
   ads?: Array<{ clientKey: string; name: string; creativeId: string }>;
 }
 
@@ -307,12 +320,16 @@ builderRouter.post("/build", requireAuth, async (req, res) => {
           clientKey: "adset-1",
           // AIC-154: the audience, in the same words the dashboard shows for
           // it — not the campaign name plus a hardcoded "1".
-          name: adSetName({ ...body.targeting, genders: body.targeting.genders }),
+          name: adSetName({ ...body.targeting, genders: body.targeting.genders, cities: body.targeting.cities }),
           targeting: {
             ageMin: body.targeting.ageMin,
             ageMax: body.targeting.ageMax,
             genders: gendersOf(body.targeting.genders),
             countries: body.targeting.countries?.length ? body.targeting.countries : ["IL"],
+            // AIC-157 — chosen cities/regions REPLACE the country inside
+            // geo_locations (see geoLocations()); an empty list keeps the
+            // nationwide behaviour that was the only option until now.
+            cities: body.targeting.cities ?? [],
           },
           ads: body.ads,
         },

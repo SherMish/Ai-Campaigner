@@ -1963,15 +1963,22 @@ export const strings = {
         ageMaxLabel: "גיל מקסימום",
         genderLabel: "מגדר",
         genderOptions: { all: "הכל", male: "גברים", female: "נשים" },
-        // In P0 the campaign targets all of Israel by age + gender. Real
-        // location/radius targeting is a separate future step (AIC-54) — so we
-        // say that plainly rather than showing a radius control that does nothing.
-        geoNote: "בשלב הזה הקמפיין מטרגט את כל ישראל, לפי גיל ומגדר. טירגוט לפי אזור או רדיוס מהעסק יתווסף בהמשך.",
+        // AIC-157 — the location picker. geoNote used to say "בשלב הזה
+        // הקמפיין מטרגט את כל ישראל… יתווסף בהמשך", which was honest and
+        // expensive: a local business on ₪15/day paid for nationwide reach.
+        geoLabel: "איפה להציג את המודעות",
+        geoPlaceholder: "הקלידו עיר או אזור — למשל רמת גן",
+        geoHint: "רק מי שנמצא באזורים שתבחרו יראה את המודעה. בלי בחירה — הקמפיין רץ על כל ישראל, וזה כמעט תמיד רחב מדי לעסק מקומי.",
+        geoSearching: "מחפשים…",
+        geoNoResults: "לא נמצא אזור בשם הזה. אפשר לנסות את שם העיר בלבד.",
+        geoRemove: "הסרה",
+        geoAllIsrael: "כל ישראל",
+        geoSelectedCount: "{n} אזורים נבחרו",
         // Keyed by BusinessCategory (shared/recommended-defaults.ts) — every
         // key there must have a match here, kept in sync manually since
         // strings.ts stays free of a runtime dependency on @aic/shared. These
-        // justify the age/gender recommendation only — NOT a local radius,
-        // which P0 doesn't apply (see geoNote).
+        // justify the age/gender recommendation only — never the location,
+        // which the customer picks for themselves (AIC-157).
         categoryRationale: {
           beautician: "בעסקי יופי וטיפוח, נשים בגילי 18–45 הן בדרך כלל הקהל הרלוונטי ביותר.",
           fitness: "לכושר ואימונים מתאים קהל רחב משני המגדרים, בעיקר בגילי 20–45.",

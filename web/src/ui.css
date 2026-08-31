@@ -634,3 +634,35 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
   flex: none; font-size: .74rem; font-weight: 600; color: #111;
   background: #e4e6eb; border-radius: 6px; padding: 6px 10px;
 }
+
+/* AIC-157 — the audience step's location picker: a type-ahead result list and
+   the chips for what has been chosen. Both are scrollable rather than
+   uncapped, because the result list sits mid-form and a ten-row dropdown
+   pushing the rest of the step off-screen is how a picker stops being usable
+   on a phone. */
+.geo-results {
+  display: flex; flex-direction: column;
+  max-height: 200px; overflow-y: auto;
+  border: 1.5px solid var(--line); border-radius: 14px;
+  background: #fff;
+}
+.geo-result {
+  font: inherit; text-align: start; cursor: pointer;
+  padding: 10px 14px; background: none; border: 0;
+  border-bottom: 1px solid var(--line);
+}
+.geo-result:last-child { border-bottom: 0; }
+.geo-result:hover, .geo-result:focus-visible { background: var(--cream-2); outline: none; }
+
+.geo-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-height: 24px; }
+.geo-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 6px 4px 12px; border-radius: 999px;
+  background: var(--cream-2); font-size: 0.86rem;
+}
+.geo-chip button {
+  font: inherit; line-height: 1; cursor: pointer;
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 0; background: none; color: var(--muted);
+}
+.geo-chip button:hover, .geo-chip button:focus-visible { color: var(--ink); background: var(--line); outline: none; }

@@ -180,6 +180,13 @@ AIC-106).
 component and defaults the builder uses (`resolveAudienceDefault`) — one
 audience-input surface, not two.
 
+## Location targeting (AIC-157)
+
+The new-ad-set step gets the location picker from the shared `AudienceFields`,
+so it targets exactly what the builder can. Before this every ad set added here
+ran on all of Israel. Full rationale, including why cities must never be sent
+alongside `countries`: [campaign-builder.md](campaign-builder.md).
+
 ## Naming (AIC-154)
 
 The ad SET keeps the name the customer types — the one name in this flow a

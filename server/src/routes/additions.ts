@@ -415,7 +415,7 @@ additionsRouter.post("/ad", requireAuth, async (req, res) => {
 
 interface AddAdSetBody {
   name?: string;
-  targeting?: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[] };
+  targeting?: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[]; cities?: Array<{ key: string; name: string; type: "city" | "region" }> };
   ads?: Array<{ clientKey: string; name: string; creativeId: string }>;
   additionKey?: string;
 }
@@ -483,6 +483,10 @@ additionsRouter.post("/ad-set", requireAuth, async (req, res) => {
         ageMax: body.targeting.ageMax,
         genders: gendersOf(body.targeting.genders),
         countries: body.targeting.countries?.length ? body.targeting.countries : ["IL"],
+        // AIC-157 — the same control the builder has. Two screens creating ad
+        // sets with different targeting powers is exactly the divergence
+        // AIC-155 was.
+        cities: body.targeting.cities ?? [],
       },
       ads: body.ads,
       additionKey: body.additionKey,

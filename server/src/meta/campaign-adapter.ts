@@ -90,6 +90,31 @@ import type { AdAccountOption, PageOption, InstagramOption, DiscoveredCampaign, 
 // one, so setDailyBudget targets the right object.
 const BASE = "https://graph.facebook.com";
 
+export interface GeoLocationOption {
+  key: string;
+  name: string;
+  type: "city" | "region";
+  region: string | null;
+}
+
+/**
+ * AIC-157 — cities/regions if any were chosen, otherwise the country.
+ *
+ * Never both: Meta unions the fields inside geo_locations, so a payload
+ * carrying cities AND countries targets the cities plus the whole country —
+ * the nationwide spend the picker exists to prevent, wearing the appearance
+ * of a narrowed audience.
+ */
+export function geoLocations(t: { countries: string[]; cities?: Array<{ key: string; type: "city" | "region" }> }): Record<string, unknown> {
+  const cities = (t.cities ?? []).filter((c) => c.type === "city").map((c) => ({ key: c.key }));
+  const regions = (t.cities ?? []).filter((c) => c.type === "region").map((c) => ({ key: c.key }));
+  if (cities.length === 0 && regions.length === 0) return { countries: t.countries };
+  return {
+    ...(cities.length ? { cities } : {}),
+    ...(regions.length ? { regions } : {}),
+  };
+}
+
 export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryReader, BuilderWriter, CreativeWriter, LaunchWriter, AdditionWriter, ControlWriter, AdMediaReader, TrackingReader, CtaReader, AccountHealthReader, EventVolumeReader, CampaignDiscoveryReader {
   private budgetObj = new Map<string, string>(); // campaignId → budget object id
 
@@ -835,7 +860,16 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
         age_min: params.targeting.ageMin,
         age_max: params.targeting.ageMax,
         genders: params.targeting.genders,
-        geo_locations: { countries: params.targeting.countries },
+        // AIC-157. Cities and countries are a UNION in Meta's geo_locations,
+        // not a narrowing — sending both would target the chosen cities AND
+        // the entire country, i.e. exactly the nationwide spend the picker
+        // exists to stop, while looking like it worked. So it is one or the
+        // other.
+        //
+        // Meta's own key, never a name: `search?type=adgeolocation` returns
+        // English names ("Ramat Gan") for Hebrew queries, and a transcribed
+        // name is not a targetable value at all.
+        geo_locations: geoLocations(params.targeting),
         // Meta REFUSES the create outright if this is absent — it must be an
         // explicit 0 or 1 (found live 2026-08-19: "you need to enable or
         // disable the Advantage audience feature"). The value is a stated
@@ -952,6 +986,38 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     };
     if (!r.ok) throw graphError(`GET ${pageId} identity`, r.status, body as Record<string, unknown>);
     return { name: body.name ?? null, pictureUrl: body.picture?.data?.url ?? null };
+  }
+
+  /**
+   * AIC-157 — Meta's own geo lookup, for the builder's city picker.
+   *
+   * NOT account-scoped: `/search` is a global reference lookup, so it touches
+   * no customer's ad account and needs nothing beyond an ads token. Verified
+   * live 2026-08-31 with our System User token.
+   *
+   * Hebrew queries WORK and English names come back ("רמת גן" → "Ramat Gan"),
+   * which is why the caller localizes through `localizePlace` — the same map
+   * the dashboard's audience labels already use, so a city reads the same way
+   * everywhere.
+   */
+  async searchGeoLocations(query: string): Promise<GeoLocationOption[]> {
+    const q = query.trim();
+    if (!q) return [];
+    const body = await this.get(
+      `search?type=adgeolocation&location_types=${encodeURIComponent('["city","region"]')}` +
+        `&country_code=IL&limit=10&q=${encodeURIComponent(q)}`,
+    );
+    return ((body.data as Array<Record<string, unknown>>) ?? [])
+      .filter((r) => r.type === "city" || r.type === "region")
+      .map((r) => ({
+        key: String(r.key),
+        name: String(r.name ?? r.key),
+        type: r.type as "city" | "region",
+        // The district a city sits in — two Israeli towns can share a name,
+        // and "Ramla, Central District" is the difference between picking the
+        // right one and finding out from the spend.
+        region: r.region ? String(r.region) : null,
+      }));
   }
 
   async listPromotablePosts(pageId: string): Promise<PromotablePost[]> {

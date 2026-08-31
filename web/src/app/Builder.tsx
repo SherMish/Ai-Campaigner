@@ -9,6 +9,7 @@ import {
 import { strings } from "../strings";
 import {
   getBuilderContext, getBuilderPage, startBuilder, buildCampaign, getBuilderPixels, checkBuilderPixel, ApiError,
+  type GeoPlace,
   type BuildCampaignResult, type PixelOption,
 } from "../api";
 import { Stepper, StatusPill, SupportCard, Recommended } from "./components";
@@ -31,6 +32,9 @@ interface WizardState {
   ageMin: number;
   ageMax: number;
   gender: Gender;
+  // AIC-157 — where the ads run. Empty = all of Israel, which used to be the
+  // only possibility.
+  cities: GeoPlace[];
 }
 
 interface Props {
@@ -57,6 +61,23 @@ interface Props {
 const DRAFT_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 const draftKey = (customerId?: string) => `aic_builder_draft:${customerId ?? "self"}`;
 
+/*
+ * AIC-157 — the review's location line, DERIVED.
+ *
+ * It used to be `rv.geoValue`, a constant reading "כל ישראל" printed whatever
+ * the campaign targeted. It happened to be true when nothing else was
+ * possible; the moment a picker existed it would have become a confident lie
+ * on the last screen before spend starts.
+ *
+ * Names beyond the first two are counted rather than listed — a review line
+ * that wraps to three rows stops being a review.
+ */
+function geoSummary(cities: GeoPlace[]): string {
+  if (cities.length === 0) return strings.he.builder.audience.geoAllIsrael;
+  if (cities.length <= 2) return cities.map((c) => c.name).join(", ");
+  return strings.he.builder.audience.geoSelectedCount.replace("{n}", String(cities.length));
+}
+
 function loadDraft(customerId?: string): WizardState | null {
   try {
     const raw = localStorage.getItem(draftKey(customerId));
@@ -69,7 +90,10 @@ function loadDraft(customerId?: string): WizardState | null {
       localStorage.removeItem(draftKey(customerId));
       return null;
     }
-    return wizard ?? null;
+    // A draft written before AIC-157 has no `cities` key at all. Filling it
+    // here rather than at every read keeps the rest of the wizard able to
+    // assume the field exists.
+    return wizard ? { ...wizard, cities: wizard.cities ?? [] } : null;
   } catch {
     // Corrupt/unparseable draft is not worth a broken wizard — start clean.
     return null;
@@ -143,6 +167,7 @@ export function Builder({ customerId, onExit }: Props = {}) {
           dailyBudgetShekels: RECOMMENDED_BUDGET_AGOROT_PER_DAY.recommended / 100,
           specialCategory: RECOMMENDED_SPECIAL_AD_CATEGORY,
           ageMin: aud.ageMin, ageMax: aud.ageMax, gender: aud.genders,
+          cities: [],
         });
         return startBuilder(customerId);
       })
@@ -265,7 +290,7 @@ export function Builder({ customerId, onExit }: Props = {}) {
         destinationUrl: isWebsite ? wizard.destinationUrl : undefined,
         pixelId: isWebsite ? wizard.pixelId : undefined,
         conversionEvent: isWebsite ? wizard.conversionEvent : undefined,
-        targeting: { ageMin: wizard.ageMin, ageMax: wizard.ageMax, genders: wizard.gender },
+        targeting: { ageMin: wizard.ageMin, ageMax: wizard.ageMax, genders: wizard.gender, cities: wizard.cities },
         ads: createdAds.map((a) => ({ clientKey: a.clientKey, name: a.name, creativeId: a.creativeId! })),
       }, customerId);
       setBuildResult(result);
@@ -491,9 +516,10 @@ export function Builder({ customerId, onExit }: Props = {}) {
           {step === 4 && (
             <AudienceFields
               category={category}
-              value={{ ageMin: wizard.ageMin, ageMax: wizard.ageMax, gender: wizard.gender }}
+              value={{ ageMin: wizard.ageMin, ageMax: wizard.ageMax, gender: wizard.gender, cities: wizard.cities }}
               onCategoryChange={setCategory}
               onChange={patch}
+              customerId={customerId}
             />
           )}
 
@@ -529,7 +555,7 @@ export function Builder({ customerId, onExit }: Props = {}) {
               </div>
               <div className="summary-row"><span className="k">{rv.budgetLine}</span><b>₪{wizard.dailyBudgetShekels}</b></div>
               <div className="summary-row"><span className="k">{rv.businessLine}</span><b>{au.businessTypes[category]}</b></div>
-              <div className="summary-row"><span className="k">{rv.audienceLine}</span><b>{wizard.ageMin}–{wizard.ageMax}, {au.genderOptions[wizard.gender]} · {rv.geoValue}</b></div>
+              <div className="summary-row"><span className="k">{rv.audienceLine}</span><b>{wizard.ageMin}–{wizard.ageMax}, {au.genderOptions[wizard.gender]} · <bdi>{geoSummary(wizard.cities)}</bdi></b></div>
               <div className="summary-row"><span className="k">{rv.placementsLine}</span><b>{rv.placementsValue}</b></div>
               <div className="summary-row"><span className="k">{rv.adsLine}</span><b>{createdAds.length}</b></div>
               {/* AIC-106 — the launch gate is gone, so this is the last thing

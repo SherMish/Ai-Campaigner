@@ -1025,6 +1025,62 @@ prefill bug fix, and the mobile overflow fix — all confirmed zero
 `scrollWidth` overflow after the CSS fix. The actual create + activate
 against a real Meta campaign rides the same pending live dogfood as AIC-50.
 
+## Where the ads run: the location picker (AIC-157)
+
+Until this, every ad set we had ever created targeted **all of Israel**. Not as
+a choice — no screen offered one. All three write paths fell through to
+`countries: ["IL"]` and no client ever sent anything else. The step labelled
+מיקומים is *placements* (Advantage+), not geography, which is part of why it
+went unlooked-at; the audience step did say so honestly ("בשלב הזה הקמפיין
+מטרגט את כל ישראל… יתווסף בהמשך"), so this was a known limitation rather than a
+hidden bug. It was also, on ₪15/day for a local business, the most expensive
+thing the builder could get right or wrong — while `customers.geo_area` had
+been collecting the right answer the whole time under a help text that says
+location "משפיע ישירות על מי רואה את המודעה".
+
+**The picker is a type-ahead against Meta's own `search?type=adgeolocation`**,
+not a list we maintain. The only value Meta will target on is its `key`, so a
+name we transcribe is not a targetable thing at all. The endpoint is
+account-agnostic — a global reference lookup — so it reads nothing belonging to
+any customer, and it works with the System User token as-is (verified live,
+2026-08-31).
+
+**Hebrew in, English out.** `search?type=adgeolocation` answers in English
+whatever language you query in — "רמת גן" comes back "Ramat Gan". Results are
+localized once, server-side in `builder/geo-search.ts`, through the same
+`localizePlace` map the dashboard's audience labels already use. A customer who
+picks רמת גן and later reads "Ramat Gan" on their own dashboard has no way to
+know it is the same place.
+
+**Cities REPLACE the country; they never accompany it.** `geoLocations()`
+(`meta/campaign-adapter.ts`) is the one place that decides, and it is the
+single most important line in this change: Meta *unions* the fields inside
+`geo_locations`, so a payload carrying both cities and `countries` targets the
+chosen cities **plus the entire country**. That is the exact nationwide spend
+the picker exists to prevent, wearing the appearance of a narrowed audience —
+correct-looking on every screen, visible only in the bill. Locked in by
+`geo-locations.test.ts` and end-to-end through the real adapter in
+`builder.integration.test.ts`, which asserts on the form body Meta actually
+received.
+
+**One control, three surfaces.** It lives on the shared `AudienceValue`
+(`AudienceFields.tsx`), so the customer builder, the admin builder and
+add-content's new-ad-set step get it from the same component. Two screens
+creating ad sets with different targeting powers is precisely the divergence
+AIC-155 turned out to be.
+
+**Choosing nothing is still allowed** and still means nationwide — it just
+stops being silent. The empty state says כל ישראל and says why that is usually
+wrong for a local business.
+
+**The review line is derived now.** It was `rv.geoValue`, a constant reading
+"כל ישראל" printed regardless. True while nothing else was possible; a
+confident lie on the last screen before spend the moment a picker existed.
+
+**Nothing existing is retargeted.** Changing a live ad set's `geo_locations` is
+a Meta write on a customer's account: it goes through the recommendation engine
+with their approval, or not at all.
+
 ## The ad preview names the Page, not our customer record (AIC-155)
 
 `GET {builderBasePath}/page` returns the connected Page's `{name, pictureUrl}`

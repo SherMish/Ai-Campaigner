@@ -16,6 +16,7 @@ import { logAdminAction, type Actor } from "../services/admin-audit.js";
 import { PgUserStore } from "../auth/user-store.js";
 import { adSetName, campaignName } from "../meta/naming.js";
 import { pageIdentityOrNulls } from "../builder/page-identity.js";
+import { searchGeoOrEmpty } from "../builder/geo-search.js";
 
 // AIC-105 Branch A — the guided builder's HTTP surface (routes/builder.ts),
 // mirrored for an operator building a customer's FIRST campaign on their
@@ -119,6 +120,15 @@ adminBuilderRouter.get("/customers/:id/builder/page", async (req, res) => {
   } catch (e) {
     console.error("[admin-builder] page identity failed", e);
     res.json({ name: null, pictureUrl: null });
+  }
+});
+
+adminBuilderRouter.get("/customers/:id/builder/geo", async (req, res) => {
+  try {
+    res.json({ places: await searchGeoOrEmpty(buildBuilderWriter(), String(req.query.q ?? "")) });
+  } catch (e) {
+    console.error("[admin-builder] geo search failed", e);
+    res.status(502).json({ error: "geo search failed" });
   }
 });
 
@@ -238,7 +248,7 @@ interface BuildBody {
   destinationUrl?: string;
   pixelId?: string;
   conversionEvent?: string;
-  targeting?: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[] };
+  targeting?: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[]; cities?: Array<{ key: string; name: string; type: "city" | "region" }> };
   ads?: Array<{ clientKey: string; name: string; creativeId: string }>;
 }
 
@@ -290,12 +300,16 @@ adminBuilderRouter.post("/customers/:id/builder/build", async (req, res) => {
       adSets: [
         {
           clientKey: "adset-1",
-          name: adSetName({ ...body.targeting, genders: body.targeting.genders }),
+          name: adSetName({ ...body.targeting, genders: body.targeting.genders, cities: body.targeting.cities }),
           targeting: {
             ageMin: body.targeting.ageMin,
             ageMax: body.targeting.ageMax,
             genders: gendersOf(body.targeting.genders),
             countries: body.targeting.countries?.length ? body.targeting.countries : ["IL"],
+            // AIC-157 — chosen cities/regions REPLACE the country inside
+            // geo_locations (see geoLocations()); an empty list keeps the
+            // nationwide behaviour that was the only option until now.
+            cities: body.targeting.cities ?? [],
           },
           ads: body.ads,
         },

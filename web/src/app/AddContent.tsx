@@ -10,7 +10,7 @@ import {
   type CreativeContext as CreativeCtx,
 } from "../api";
 import { StatusPill, SupportCard, WA } from "./components";
-import { AudienceFields, type Gender } from "./AudienceFields";
+import { AudienceFields, type AudienceValue, type Gender } from "./AudienceFields";
 import { BuilderCreatives, newAdDraft, type AdDraft } from "./BuilderCreatives";
 
 const s = strings.he.additions;
@@ -172,7 +172,11 @@ export function AddContent() {
 
   // add-ad-set mode
   const [category, setCategory] = useState<BusinessCategory>("other");
-  const [audience, setAudience] = useState<{ ageMin: number; ageMax: number; gender: Gender }>({ ageMin: 18, ageMax: 65, gender: "all" });
+  // AIC-157: `cities` rides on the shared AudienceValue, so this screen gets
+  // the location picker from the same component the builder uses — two screens
+  // creating ad sets with different targeting powers is the AIC-155 divergence
+  // all over again.
+  const [audience, setAudience] = useState<AudienceValue>({ ageMin: 18, ageMax: 65, gender: "all", cities: [] });
   const [setName, setSetName] = useState("");
   const [groupAdDrafts, setGroupAdDrafts] = useState<AdDraft[]>([newAdDraft(1), newAdDraft(2), newAdDraft(3)]);
 
@@ -204,7 +208,7 @@ export function AddContent() {
         const cat = normalizeBusinessCategory(ctx.category);
         setCategory(cat);
         const d = resolveAudienceDefault(cat);
-        setAudience({ ageMin: d.ageMin, ageMax: d.ageMax, gender: d.genders });
+        setAudience({ ageMin: d.ageMin, ageMax: d.ageMax, gender: d.genders, cities: [] });
         setMissingConfigFields(ctx.missingConfigFields);
         setPhase("ready");
       })
@@ -297,7 +301,7 @@ export function AddContent() {
     try {
       const result = await addAdSet({
         name: setName,
-        targeting: { ageMin: audience.ageMin, ageMax: audience.ageMax, genders: audience.gender },
+        targeting: { ageMin: audience.ageMin, ageMax: audience.ageMax, genders: audience.gender, cities: audience.cities },
         ads: created.map((d) => ({ clientKey: d.clientKey, name: d.name, creativeId: d.creativeId! })),
         additionKey,
       });

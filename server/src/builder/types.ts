@@ -24,6 +24,21 @@ export interface CreateAdSetTargeting {
   ageMax: number;
   genders: number[]; // Meta shape: [] = all, [1] = male, [2] = female
   countries: string[];
+  /**
+   * AIC-157 — the cities/regions this ad set actually serves.
+   *
+   * Empty means the whole country, which is what EVERY ad set we had ever
+   * created targeted: no screen offered a geo control, so `countries: ["IL"]`
+   * was not a default anyone chose. A local business on ₪15/day paying for
+   * nationwide reach is the single most expensive thing the builder could get
+   * wrong, and `customers.geo_area` had been collecting the right answer the
+   * whole time.
+   *
+   * `key` is Meta's own adgeolocation key from `search?type=adgeolocation`,
+   * never a name we transcribe. `name` rides along for the ad-set NAME
+   * (naming.ts) and for nothing else — Meta ignores it.
+   */
+  cities?: Array<{ key: string; name: string; type: "city" | "region" }>;
 }
 
 export interface CreateAdSetParams {

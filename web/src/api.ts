@@ -667,6 +667,11 @@ export async function createCreative(body: CreateCreativeBody, customerId?: stri
   return res.json() as Promise<{ creativeId: string }>;
 }
 
+/** AIC-157 — a place the ad set targets. `key` is Meta's own adgeolocation
+ *  key and the only part Meta reads; `name` is carried for the ad-set name and
+ *  the review line. */
+export interface GeoPlace { key: string; name: string; type: "city" | "region"; region?: string | null; }
+
 export interface BuildCampaignBody {
   localCampaignId: string;
   /**
@@ -688,7 +693,7 @@ export interface BuildCampaignBody {
   destinationUrl?: string;
   pixelId?: string;
   conversionEvent?: string;
-  targeting: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[] };
+  targeting: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[]; cities?: GeoPlace[] };
   ads: Array<{ clientKey: string; name: string; creativeId: string }>;
 }
 export interface BuildCampaignResult {
@@ -701,6 +706,12 @@ export const buildCampaign = (body: BuildCampaignBody, customerId?: string) =>
 // AIC-89 — the website-destination step's Pixel picker + recency guard.
 export interface PixelOption { id: string; name: string; }
 export const getBuilderPixels = (customerId?: string) => api<{ pixels: PixelOption[] }>(`${builderBasePath(customerId)}/pixels`);
+
+/** AIC-157 — Meta's own city/region lookup for the audience step's location
+ *  picker. Results come back localized to Hebrew; Meta itself answers in
+ *  English whatever you ask in. */
+export const searchGeoPlaces = (q: string, customerId?: string) =>
+  api<{ places: GeoPlace[] }>(`${builderBasePath(customerId)}/geo?q=${encodeURIComponent(q)}`);
 export const checkBuilderPixel = (pixelId: string, conversionEvent: string, customerId?: string) =>
   api<{ hasRecentEvents: boolean | null }>(`${builderBasePath(customerId)}/pixel-check`, {
     method: "POST",
@@ -863,7 +874,7 @@ export const addAd = (body: AddAdBody) => api<AddResult>("/app/additions/ad", { 
 
 export interface AddAdSetBody {
   name: string;
-  targeting: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[] };
+  targeting: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[]; cities?: GeoPlace[] };
   ads: Array<{ clientKey: string; name: string; creativeId: string }>;
   additionKey: string;
 }

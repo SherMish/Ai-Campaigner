@@ -96,15 +96,23 @@ export function adSetName(targeting: {
   ageMax: number | null;
   genders: "all" | "male" | "female";
   countries?: string[] | null;
+  // AIC-157: the chosen cities/regions, when there are any. They REPLACE the
+  // country in the name for the same reason they replace it in the Meta
+  // payload — an ad set targeting Ramat Gan is not an ad set targeting Israel,
+  // and a name saying otherwise is the kind of small lie that gets trusted.
+  cities?: Array<{ name: string }> | null;
 }): string {
+  const places = targeting.cities?.length
+    ? targeting.cities.map((c) => c.name)
+    : (targeting.countries ?? []);
   return composeAudienceLabel({
     genders: targeting.genders,
     ageMin: targeting.ageMin,
     ageMax: targeting.ageMax,
     // Same two-place cap and same localization the display labels use, so a
-    // country-only audience reads "ישראל" in both places rather than "IL" in
-    // one of them.
-    geoSummary: (targeting.countries ?? []).map(localizePlace).slice(0, 2).join(", "),
+    // city reads "רמת גן" here and on the dashboard rather than "Ramat Gan" in
+    // one of them — Meta's geo search answers in English whatever you ask in.
+    geoSummary: places.map(localizePlace).slice(0, 2).join(", "),
   });
 }
 

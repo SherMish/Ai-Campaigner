@@ -6,6 +6,24 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-08-31 — AIC-157: campaigns can finally target a place
+
+Every ad set we had ever created targeted all of Israel — not by choice, but
+because no screen offered one and all three write paths defaulted to
+`countries: ["IL"]`. The audience step disclosed it honestly, which made it a
+known limitation rather than a hidden bug, and did not make it any cheaper for
+a local business on ₪15/day. There is now a city/region picker on the shared
+`AudienceFields` — so the customer builder, the admin builder and add-content
+all get it — backed by Meta's own `search?type=adgeolocation`, localized
+server-side through the same map the dashboard's audience labels use. The
+critical rule, locked in by tests at both the unit and adapter level: chosen
+cities REPLACE `countries` inside `geo_locations`, never accompany it, because
+Meta unions those fields and sending both would target the cities plus the
+whole country while looking correct everywhere but the bill. Nothing existing
+is retargeted.
+
+---
+
 ### 2026-08-31 — AIC-155: the builder's ad preview showed our CRM name, not the Page
 
 Reported from the existing-post step: the preview header read "Liam Aboros"

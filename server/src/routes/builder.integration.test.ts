@@ -32,6 +32,12 @@ function mockMetaFetch() {
     if (u.includes("me/accounts")) {
       return jsonRes({ data: [{ id: "page_it_1", access_token: "PAGE_TOKEN" }] });
     }
+    if (u.includes("type=adgeolocation")) {
+      return jsonRes({ data: [
+        { key: "1014712", name: "Ramat Gan", type: "city", region: "Tel Aviv" },
+        { key: "1721", name: "Tel Aviv District", type: "region", region: "Tel Aviv" },
+      ] });
+    }
     if (u.includes("fields=name,picture")) {
       return jsonRes({ name: "am nails IT", picture: { data: { url: "https://x/page.jpg" } } });
     }
@@ -51,6 +57,21 @@ function mockMetaFetch() {
     if (u.endsWith("/ads")) return jsonRes({ id: `meta_ad_${++counter}` });
     throw new Error(`builder.integration.test: unexpected fetch ${u}`);
   });
+}
+
+// The POST body the adapter actually sent for a given edge. The mock only
+// declares `url`, but vi.fn records every argument, so the init object is
+// there — which is the only way to assert on the payload Meta RECEIVED rather
+// than on what we meant to send.
+//
+// Form-urlencoded, not JSON: postCreate builds a URLSearchParams and
+// JSON.stringifies each non-string field, so nested objects come back as
+// strings and are parsed per-field.
+function sentFields(edgeSuffix: string): Record<string, string> {
+  const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+  const call = calls.find((c) => String(c[0]).endsWith(edgeSuffix));
+  if (!call) throw new Error(`no fetch recorded for ${edgeSuffix}`);
+  return Object.fromEntries(new URLSearchParams(String((call[1] as { body?: unknown })?.body)));
 }
 
 // Seeds a customer ready to build: healthy connection, ad account, Page — no
@@ -241,6 +262,13 @@ d("guided builder routes (DB + HTTP)", () => {
     expect(page.status).toBe(200);
     expect(page.body).toEqual({ name: "am nails IT", pictureUrl: "https://x/page.jpg" });
 
+    // AIC-157: Meta answers the Hebrew query in English; we localize once, on
+    // the server, using the same map the dashboard's audience labels use — so
+    // a customer who picks רמת גן never later reads "Ramat Gan" about it.
+    const geo = await request(app).get("/api/app/builder/geo?q=%D7%A8%D7%9E%D7%AA%20%D7%92%D7%9F").set("Authorization", `Bearer ${token}`);
+    expect(geo.status).toBe(200);
+    expect(geo.body.places[0]).toEqual({ key: "1014712", name: "רמת גן", type: "city", region: "תל אביב" });
+
     const creative = await request(app)
       .post("/api/app/builder/creative")
       .set("Authorization", `Bearer ${token}`)
@@ -258,13 +286,25 @@ d("guided builder routes (DB + HTTP)", () => {
         dailyBudgetAgorot: 4000,
         specialAdCategories: [],
         whatsappDestination: "972500000000",
-        targeting: { ageMin: 18, ageMax: 45, genders: "female" },
+        targeting: {
+          ageMin: 18, ageMax: 45, genders: "female",
+          cities: [{ key: "1014712", name: "רמת גן", type: "city" }],
+        },
         ads: [{ clientKey: "adset-1-ad-1", name: "Ad 1", creativeId }],
       });
     expect(build.status).toBe(200);
     expect(build.body.metaCampaignId).toBeTruthy();
     expect(build.body.adSets).toHaveLength(1);
     expect(build.body.adSets[0].ads).toHaveLength(1);
+
+    // AIC-157, end to end through the REAL adapter: the ad set Meta receives
+    // targets the chosen city and NOT the country. Both halves matter — the
+    // country surviving alongside the city is the failure that would look
+    // correct on every screen and only appear in the bill.
+    const adSetFields = sentFields("/adsets");
+    expect(JSON.parse(adSetFields.targeting).geo_locations).toEqual({ cities: [{ key: "1014712" }] });
+    // …and the ad set is NAMED for where it actually runs.
+    expect(adSetFields.name).toBe("נשים · 18–45 · רמת גן");
 
     const camp = await pool.query(`SELECT meta_campaign_id, status FROM managed_campaigns WHERE id = $1`, [localCampaignId]);
     expect(camp.rows[0].meta_campaign_id).toBe(build.body.metaCampaignId);
