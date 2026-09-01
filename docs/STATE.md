@@ -6,6 +6,28 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-01 — the ad-set button that enabled on one rule and refused on another (AIC-173)
+
+Reported live minutes after AIC-172 shipped: three creatives ready, cities
+chosen, `הוספת קבוצת המודעות` live — click, nothing. No request in the Railway
+log, no error, no spinner.
+
+AIC-172 made the ad-set name optional in three places (the gate, the label, the
+route) and missed the fourth: `submitAdSet` held its own copy of the
+precondition and still required a name. So the button enabled on the new rule
+and the handler refused on the old one, with a bare `return` that had nothing
+to say.
+
+The fix deletes the copy rather than patching it — the handler now calls the
+same `adSetSubmitBlocker` the button reads. That is what `builder-gates.ts`
+(AIC-163) was created for, and this is the first time a private duplicate got
+past it.
+
+No failing test first, honestly: `web/vitest.config.ts` is `environment: "node"`
+with no jsdom, so no click handler in this repo is reachable by a test. Routing
+the guard through the gate puts it behind the test that already asserts the
+correct rule; the coverage comes from removing the untestable copy.
+
 ### 2026-09-01 — the audience panel opens itself on a stopped campaign
 
 Operator request, and the right shape: when the campaign is stopped, the hero

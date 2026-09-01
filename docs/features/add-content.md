@@ -241,6 +241,14 @@ invent an internal label for a thing we can already name correctly, and the
 submit button stayed dead until they did. The field now says what happens if
 they skip it, because an unexplained empty box invites exactly that invention.
 
+**Both the button and the submit handler read `adSetSubmitBlocker`** — there is
+no second copy of this precondition anywhere, deliberately. AIC-172 changed the
+rule in the gate, the label and the route, and missed a private duplicate in
+`submitAdSet`; for one deploy the button enabled on the new rule while the
+handler refused on the old one and returned without a word (AIC-173). A guard
+that restates what the gate already decides is a bug waiting for the next rule
+change.
+
 ## Naming (AIC-154)
 
 The ad SET keeps the name the customer types — the one name in this flow a

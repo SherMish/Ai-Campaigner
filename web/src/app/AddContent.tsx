@@ -297,12 +297,16 @@ export function AddContent() {
 
   async function submitAdSet() {
     const created = groupAdDrafts.filter((d) => d.creativeId);
-    if (!setName.trim() || created.length === 0) return;
+    // AIC-173: the SAME gate the button reads, not a second copy of it. This
+    // guard kept AIC-172's deleted name requirement for exactly one deploy,
+    // so the button enabled on the new rule and the handler refused on the
+    // old one — and a bare `return` has nothing to say to the customer.
+    if (adSetSubmitBlocker({ createdAdCount: created.length })) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
       const result = await addAdSet({
-        name: setName,
+        name: setName.trim(),
         targeting: { ageMin: audience.ageMin, ageMax: audience.ageMax, genders: audience.gender, cities: audience.cities },
         ads: created.map((d) => ({ clientKey: d.clientKey, name: d.name, creativeId: d.creativeId! })),
         additionKey,
