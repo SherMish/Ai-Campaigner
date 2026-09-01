@@ -316,6 +316,25 @@ tells the customer an ad has data outside the window; beside it, on any range
 but `allTime`, is a control that switches to it. A note pointing at something
 unreachable is only half a message.
 
+## The audience panel opens itself when the customer has to act
+
+`homeState === "stopped"` opens the audience detail on load, and loads it —
+`toggle` used to be the only path that fetched, so a panel that started open
+would otherwise start empty.
+
+The hero for that state says *"אפשר להפעיל מחדש בלחיצה — פתחו את פירוט הקהלים
+למטה"*: the product already knows the customer must open the panel, and the
+only control that can restart anything lives inside it. Making them perform the
+step we just told them to take is friction we created and then charged them for.
+
+`attention` is deliberately NOT included. Its causes — a broken connection, a
+delivery problem, tracking — are ours to fix, not the customer's, so opening a
+panel full of pause/resume controls would suggest an action they should not be
+taking.
+
+Opening it by default never re-opens a panel the customer has closed: the
+auto-load fires once, guarded by a ref.
+
 ## A stopped campaign lists its ad sets on every range (AIC-167)
 
 `buildCampaignAudiences` includes every existing ad set when

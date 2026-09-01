@@ -495,7 +495,18 @@ export function Home() {
           )}
 
           {/* opt-in per-audience / per-creative details (AIC-37) — collapsed by default */}
-          {ov.campaign && <AudienceDetails activeAds={activeAds} range={range} onRange={setRange} />}
+          {ov.campaign && (
+            <AudienceDetails
+              activeAds={activeAds}
+              range={range}
+              onRange={setRange}
+              // Stopped means the customer has to turn something back on, and
+              // this panel holds the only control that can. `attention` is
+              // deliberately NOT included: its causes are ours to fix, not
+              // theirs, so opening a control panel would suggest otherwise.
+              openByDefault={state === "stopped"}
+            />
+          )}
 
           {/* Bug fix, 2026-08-14: a pending recommendation while state is ok/
               collecting is now folded straight into the hero above (see
@@ -726,8 +737,19 @@ function Metric({ label, value, small }: { label: string; value: string; small?:
 // applied preemptively to the ~95% who have one audience.
 const ADAPTIVE_COLLAPSE_ABOVE = 3;
 
-function AudienceDetails({ activeAds, range, onRange }: { activeAds: number; range: RangeKey; onRange: (r: RangeKey) => void }) {
-  const [open, setOpen] = useState(false);
+function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
+  activeAds: number;
+  range: RangeKey;
+  onRange: (r: RangeKey) => void;
+  /**
+   * AIC-169 follow-up — the campaign needs the customer to turn something back
+   * on, and this panel is the only place they can. The hero literally says
+   * "פתחו את פירוט הקהלים למטה"; making them perform that step first is
+   * friction we asked for and then charged them for.
+   */
+  openByDefault: boolean;
+}) {
+  const [open, setOpen] = useState(openByDefault);
   const [data, setData] = useState<CampaignAudiences | null>(null);
   const [loading, setLoading] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -784,16 +806,24 @@ function AudienceDetails({ activeAds, range, onRange }: { activeAds: number; ran
     }
   }
 
-  function toggle() {
-    const next = !open;
-    setOpen(next);
-    if (next && !data) fetchAudiences(range);
-    if (next && !ctl) getControlState().then(setCtl).catch(noteIfKnownReason);
-    if (next && media.size === 0) {
+  // What opening the panel costs: the rows, the LIVE statuses (which the
+  // badges and every pause/resume button read), and the creative thumbnails.
+  // Shared by the click and by the open-by-default path, so a panel that
+  // starts open is not a panel that starts empty.
+  function load() {
+    if (!data) fetchAudiences(range);
+    if (!ctl) getControlState().then(setCtl).catch(noteIfKnownReason);
+    if (media.size === 0) {
       getAdMedia()
         .then((r) => setMedia(new Map(r.ads.map((m) => [m.adId, m]))))
         .catch(noteIfKnownReason); // degrade to names, but say why if we know
     }
+  }
+
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next) load();
   }
 
   // AIC-95: the panel now follows the switcher, so a range change while it's
@@ -807,6 +837,19 @@ function AudienceDetails({ activeAds, range, onRange }: { activeAds: number; ran
     if (open) fetchAudiences(range);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
+
+  // Opened by default (a stopped campaign) → load without a click. `toggle`
+  // does this on the way in, and nothing calls it when the panel starts open,
+  // so the rows would otherwise never arrive. Guarded on `data` so it fires
+  // once, and on `openByDefault` so a customer who CLOSES it is not reopened
+  // by a rerender.
+  const didAutoLoad = useRef(false);
+  useEffect(() => {
+    if (!openByDefault || didAutoLoad.current) return;
+    didAutoLoad.current = true;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openByDefault]);
 
   const isPaused = (kind: "ad" | "ad_set", id: string) =>
     (kind === "ad" ? ctl?.adStatuses[id] : ctl?.adSetStatuses[id]) === "paused";

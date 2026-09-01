@@ -6,6 +6,15 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-01 — the audience panel opens itself on a stopped campaign
+
+Operator request, and the right shape: when the campaign is stopped, the hero
+already tells the customer to open the audience detail, and the only control
+that can restart anything is inside it. It now opens and loads on its own.
+`attention` is excluded on purpose — those causes are ours to fix, not theirs.
+
+---
+
 ### 2026-09-01 — AIC-169: an ad set's status changed with the selected range
 
 Reported: the same ad set read "לא מתפרסם · אין מודעה פעילה" on הכל and "מפרסם"
