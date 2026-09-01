@@ -521,7 +521,6 @@ export function AddContent() {
                       pagePictureUrl={page.pictureUrl}
                       ads={adDrafts}
                       onChange={setAdDrafts}
-                      whatsappCampaign={!!whatsappNumber}
                       whatsappNumber={whatsappNumber}
                       getPosts={getAdditionPosts}
                       uploadFile={uploadAdditionFile}
@@ -579,7 +578,6 @@ export function AddContent() {
                   pagePictureUrl={page.pictureUrl}
                   ads={groupAdDrafts}
                   onChange={setGroupAdDrafts}
-                  whatsappCampaign={!!whatsappNumber}
                   whatsappNumber={whatsappNumber}
                   getPosts={getAdditionPosts}
                   uploadFile={uploadAdditionFile}

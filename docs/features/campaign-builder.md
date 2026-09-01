@@ -1132,30 +1132,36 @@ they have had for months. The IG failure is swallowed and logged; a Facebook
 failure still propagates, because a Page is required for this flow to mean
 anything at all.
 
-**An Instagram post cannot serve a click-to-WhatsApp campaign.** Proven by a
-live write on our OWN ad account (2026-08-31), which is the only way this was
-ever going to be known — Meta contradicts itself on the combination:
+**An Instagram post CAN serve a click-to-WhatsApp campaign** — it just takes
+Meta's canonical shape, not ours:
 
-| Payload | Meta's answer |
-| --- | --- |
-| IG media, `WHATSAPP_MESSAGE` CTA, no `link` | "The link field is required." |
-| IG media, `WHATSAPP_MESSAGE` CTA, with `link` | "Please remove parameter link from the value of WHATSAPP_MESSAGE call to action type." |
-| IG media, `LEARN_MORE` + `link` | accepted |
-| IG media, no CTA at all | accepted |
-| Facebook post + `instagram_user_id` + WhatsApp CTA | accepted — no "DOF spec" error, contrary to the docs' warning |
+```json
+"call_to_action": { "type": "WHATSAPP_MESSAGE",
+  "value": { "link": "https://api.whatsapp.com/send", "app_destination": "WHATSAPP" } }
+```
 
-So no payload satisfies both conditions: the combination is impossible, not
-un-permissioned and not transient. `createCreativeFromExistingPost` refuses it
-by name (`InstagramPostNotSupportedError`) before any Meta call, the routes
-answer **409, never 502** — our precondition, not Meta breaking, the same
-distinction the budget refusals draw — and the picker disables Instagram posts
-on a WhatsApp campaign with copy naming both alternatives. Left to Meta, the
-customer's click would have surfaced as "The link field is required" inside a
-502: an error about a field no screen in this product has, on a campaign type
-where no link exists.
+A Facebook post carries the number in the creative (`whatsapp_number`);
+Instagram media does not, and Meta refuses that field here. It also refuses a
+`wa.me` deep link. Verified live on our own ad account against **v21.0, v23.0
+and v25.0**.
 
-This matters more than it sounds, because click-to-WhatsApp is most of what we
-run. Instagram posts are usable on website and engagement campaigns today.
+**The number therefore comes from the Page's connected WhatsApp Business
+number**, not from `managed_campaigns.whatsapp_destination`. For an IG-post ad
+the number typed in the wizard has no effect. That is Meta's model for this
+creative type, not a gap here — but it is worth knowing before someone
+"fixes" it.
+
+**Correcting the record (AIC-170).** AIC-166 concluded the opposite: that Meta
+contradicted itself, demanding a `link` and forbidding one, so no payload could
+exist. The refusal was real but it was of *our probe's* link — a `wa.me` URL —
+not of the combination. That mistake blocked Instagram posts on WhatsApp
+campaigns, which is most of what we run, for a day. Two signals were already in
+hand and not joined up: Meta's own *Ads that Click to WhatsApp* guide documents
+this exact payload, and the customer's adopted GelNails ad reads back as
+precisely this shape while having produced eight messaging conversations. The
+guide's `degrees_of_freedom_spec.standard_enhancements` is stale — Meta answers
+"Including standard enhancements field in creative has been deprecated" — so it
+is omitted.
 
 **Un-boostable media is shown disabled, with Meta's own reason.** Media with
 licensed music or interactive filters cannot be promoted, and

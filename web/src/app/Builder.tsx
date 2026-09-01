@@ -566,7 +566,6 @@ export function Builder({ customerId, onExit }: Props = {}) {
                 businessName={page.name ?? undefined}
                 pagePictureUrl={page.pictureUrl}
                 ads={ads} onChange={setAds} localCampaignId={localCampaignId} customerId={customerId} postsOnly={isEngagement}
-                whatsappCampaign={!isWebsite && !isEngagement}
                 whatsappNumber={isWebsite ? undefined : wizard.whatsappNumber}
                 destination={isWebsite ? wizard.destination : undefined}
                 destinationUrl={isWebsite ? wizard.destinationUrl : undefined}

@@ -6,7 +6,7 @@
 // paused-invariant is safety-critical and cheap to pin down here directly).
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { FIXED_DESTINATION, FIXED_CTA, WEBSITE_DESTINATION, WEBSITE_CTA, ENGAGEMENT_DESTINATION } from "@aic/shared";
-import { GraphCampaignAdapter, GraphWriteError, InstagramPostNotSupportedError } from "./campaign-adapter.js";
+import { GraphCampaignAdapter, GraphWriteError } from "./campaign-adapter.js";
 
 function fakeFetch(respond: { id: string }) {
   return vi.fn(async (_url: string, init?: RequestInit) => {
@@ -612,30 +612,47 @@ describe("GraphCampaignAdapter creative handling (AIC-51)", () => {
     expect(body.has("object_story_id")).toBe(false);
   });
 
-  it("REFUSES an Instagram post on a click-to-WhatsApp campaign, before any Meta call", async () => {
-    // PROVEN LIVE against our own ad account (2026-08-31). Meta contradicts
-    // itself on this exact combination:
-    //   no `link`   → "The link field is required."
-    //   with `link` → "Please remove parameter link from WHATSAPP_MESSAGE."
-    // No payload satisfies both, so the combination is impossible — not
-    // missing permission, not a transient failure. The same media promotes
-    // fine with LEARN_MORE + link, and with no CTA at all.
-    //
-    // Left to Meta, the customer's click would surface as "The link field is
-    // required" inside a 502 — an error about a field no screen in this
-    // product has, on a campaign type where no link exists.
-    const mock = vi.fn();
+  // REPLACED by AIC-170. This asserted that an Instagram post could never
+  // serve a click-to-WhatsApp campaign — a conclusion drawn from a live probe
+  // that sent a wa.me deep link, which Meta refuses. It accepts its own
+  // canonical link, and the path works. A test defending a wrong conclusion is
+  // worse than no test: it makes the next person trust it.
+  it("an Instagram post on a WhatsApp campaign uses Meta's canonical CTA, never a wa.me link", async () => {
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ id: "crea_ig_wa" }) } as unknown as Response));
     vi.stubGlobal("fetch", mock);
-    const adapter = new GraphCampaignAdapter("tok");
 
-    await expect(
-      adapter.createCreativeFromExistingPost({
-        adAccountId: "act_123", pageId: "page_1", name: "IG ad",
-        postId: "media_1", postSource: "instagram", instagramUserId: "ig_1",
-        destination: FIXED_DESTINATION, whatsappNumber: "972500000000",
-      }),
-    ).rejects.toBeInstanceOf(InstagramPostNotSupportedError);
-    expect(mock).not.toHaveBeenCalled();
+    await new GraphCampaignAdapter("tok").createCreativeFromExistingPost({
+      adAccountId: "act_123", pageId: "page_1", name: "IG ad",
+      postId: "media_1", postSource: "instagram", instagramUserId: "ig_1",
+      destination: FIXED_DESTINATION, whatsappNumber: "972500000000",
+    });
+
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    const body = new URLSearchParams(String(init.body));
+    const cta = JSON.parse(String(body.get("call_to_action")));
+    expect(cta).toEqual({
+      type: FIXED_CTA,
+      value: { link: "https://api.whatsapp.com/send", app_destination: "WHATSAPP" },
+    });
+    // The number is NOT in the creative for this shape — Meta resolves it from
+    // the Page's connected WhatsApp Business number. Sending it is refused.
+    expect(JSON.stringify(cta)).not.toContain("972500000000");
+    expect(JSON.stringify(cta)).not.toContain("wa.me");
+  });
+
+  it("a FACEBOOK post still carries the number in the creative", async () => {
+    const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({ id: "crea_fb_wa" }) } as unknown as Response));
+    vi.stubGlobal("fetch", mock);
+
+    await new GraphCampaignAdapter("tok").createCreativeFromExistingPost({
+      adAccountId: "act_123", pageId: "page_1", name: "FB ad",
+      postId: "post_9", postSource: "facebook",
+      destination: FIXED_DESTINATION, whatsappNumber: "972500000000",
+    });
+
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    const cta = JSON.parse(String(new URLSearchParams(String(init.body)).get("call_to_action")));
+    expect(cta.value).toEqual({ whatsapp_number: "972500000000" });
   });
 
   it("ALLOWS an Instagram post on a website campaign — LEARN_MORE + link is a real shape", async () => {

@@ -98,20 +98,12 @@ import type { AdAccountOption, PageOption, InstagramOption, DiscoveredCampaign, 
 const BASE = "https://graph.facebook.com";
 
 /**
- * AIC-156 — an Instagram post asked to serve a click-to-WhatsApp campaign.
- *
- * Not a Meta failure and not our bug: Meta genuinely has no creative shape for
- * this combination (see createCreativeFromExistingPost). Its own name so the
- * route can answer 409 with copy the customer can act on — "pick a Facebook
- * post, or upload" — rather than 502 "Meta is broken", the same distinction
- * BudgetLimitError already draws.
+ * AIC-170 — the ONLY link Meta accepts on a click-to-WhatsApp CTA built from
+ * Instagram media. A wa.me deep link is refused ("Please remove parameter
+ * link…"), and that refusal is what AIC-166 misread as the combination being
+ * impossible. Named, so nobody re-derives it from a phone number again.
  */
-export class InstagramPostNotSupportedError extends Error {
-  constructor() {
-    super("an Instagram post cannot serve a click-to-WhatsApp campaign — Meta supports no such creative");
-    this.name = "InstagramPostNotSupportedError";
-  }
-}
+const WHATSAPP_CANONICAL_LINK = "https://api.whatsapp.com/send";
 
 /**
  * The ad-set fields destination detection reads. Shared (AIC-160) between
@@ -1316,23 +1308,6 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
    */
   async createCreativeFromExistingPost(params: CreatePostCreativeParams): Promise<string> {
     const fromInstagram = params.postSource === "instagram";
-    // AIC-156, PROVEN LIVE on our own account (2026-08-31): an Instagram post
-    // cannot carry a click-to-WhatsApp CTA. Meta refuses it both ways —
-    //
-    //   no `link`   → "The link field is required."
-    //   with `link` → "Please remove parameter link from the value of
-    //                  WHATSAPP_MESSAGE call to action type."
-    //
-    // — a flat contradiction, so there is no payload that satisfies it. The
-    // same media promotes fine with LEARN_MORE + link (website) or with no
-    // CTA at all (engagement), both verified in the same session.
-    //
-    // Refused HERE, by name. Left to Meta, the customer's click would surface
-    // as "The link field is required" inside a 502 — an error about a field
-    // no screen in this product has, on a campaign type where no link exists.
-    if (fromInstagram && params.destination && resolveDestinationShape(params.destination).ctaType === FIXED_CTA) {
-      throw new InstagramPostNotSupportedError();
-    }
     if (fromInstagram && !params.instagramUserId) {
       throw new Error(
         "createCreativeFromExistingPost: an Instagram post needs instagramUserId — " +
@@ -1357,10 +1332,33 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       // chose to run. resolveDestinationShape already encodes that, so this
       // needs no engagement special-case of its own.
       if (shape.ctaType) {
-        fields.call_to_action =
-          shape.destinationType === "WEBSITE"
-            ? { type: shape.ctaType, value: { link: params.destinationUrl } }
-            : { type: shape.ctaType, value: { whatsapp_number: params.whatsappNumber } };
+        if (shape.destinationType === "WEBSITE") {
+          fields.call_to_action = { type: shape.ctaType, value: { link: params.destinationUrl } };
+        } else if (fromInstagram) {
+          // AIC-170 — an Instagram post takes Meta's CANONICAL click-to-WhatsApp
+          // shape, not ours.
+          //
+          // A Page post carries the number in the creative
+          // (`whatsapp_number`); Instagram media does not, and Meta refuses
+          // that field here. It also refuses a wa.me deep link — the exact
+          // refusal AIC-166 mistook for "an Instagram post cannot serve a
+          // WhatsApp campaign at all", which was wrong and blocked the whole
+          // path for a day. `api.whatsapp.com/send` is the only link it
+          // accepts, and it is the same shape the customer's own adopted ad
+          // reads back as.
+          //
+          // The number therefore comes from the PAGE's connected WhatsApp
+          // Business number, not from managed_campaigns.whatsapp_destination.
+          // That is Meta's model for this creative type, not an omission here.
+          //
+          // Verified live on our own account against v21.0, v23.0 and v25.0.
+          fields.call_to_action = {
+            type: shape.ctaType,
+            value: { link: WHATSAPP_CANONICAL_LINK, app_destination: "WHATSAPP" },
+          };
+        } else {
+          fields.call_to_action = { type: shape.ctaType, value: { whatsapp_number: params.whatsappNumber } };
+        }
       }
     }
 

@@ -15,6 +15,24 @@ that can restart anything is inside it. It now opens and loads on its own.
 
 ---
 
+### 2026-09-01 — AIC-170: Instagram posts CAN click to WhatsApp; AIC-166 was wrong
+
+The operator asked "double check — do we really can't post ig?" and was right
+to. AIC-166 blocked Instagram posts on WhatsApp campaigns after a live probe
+returned "Please remove parameter link from the value of WHATSAPP_MESSAGE" —
+but that refused OUR link, a `wa.me` URL, not the combination. Meta's canonical
+`https://api.whatsapp.com/send` with `app_destination: WHATSAPP` works, verified
+on v21.0, v23.0 and v25.0. Two signals were already in hand and not joined up:
+Meta's own click-to-WhatsApp guide documents the exact payload, and the
+customer's adopted ad reads back as that shape while having produced eight
+conversations. The refusal, its error type, the picker's disabling and its copy
+are all removed; the test that asserted the wrong conclusion is replaced by one
+asserting the working shape. Note for the future: for this creative type the
+WhatsApp number comes from the Page's connected number, not from
+`whatsapp_destination`.
+
+---
+
 ### 2026-09-01 — the status badge claimed "מפרסם" whenever it could not read
 
 Reported right after AIC-169: the badge still said מפרסם on a stopped campaign.
