@@ -6,6 +6,22 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-01 — AIC-166: every adopted WhatsApp ad was called broken
+
+The customer dashboard showed "הכפתור במודעה לא מוביל לשום מקום… התקציב מתבזבז"
+on a campaign with eight recorded messaging conversations through that button,
+and `no_rec_reason = cta_broken` suppressed the engine while it said so. Meta
+has two representations of a wired click-to-WhatsApp button — `{whatsapp_number}`
+for ads our builder writes, `{app_destination, link}` for ads built outside —
+and `judge()` recognised only ours. It looked correct only because every
+campaign it had ever judged was one we built; AIC-162 made adoption possible and
+the first adopted campaign tripped it immediately. Broken now means none of the
+three fields, so AIC-128's real case (an empty `call_to_action.value`) still
+fires. Also: the rail card's leads row honours `hasRangeData`, having printed 0
+for a window the KPI beside it rendered as "—".
+
+---
+
 ### 2026-08-31 — AIC-165 + AIC-163: a rolled-back build counted, and four silent controls
 
 AIC-164's fix did not take on the customer it was written for: `was_built_here`

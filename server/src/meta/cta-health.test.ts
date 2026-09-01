@@ -5,7 +5,7 @@ function ad(over: Partial<AdCreativeDestination> = {}): AdCreativeDestination {
   return {
     adId: "ad_1", adName: "מודעה 1", adSetId: "as_1",
     destinationType: "WHATSAPP", ctaType: "WHATSAPP_MESSAGE",
-    whatsappNumber: "972526964069", link: null,
+    whatsappNumber: "972526964069", link: null, appDestination: null,
     ...over,
   };
 }
@@ -14,8 +14,12 @@ describe("CTA health (AIC-128)", () => {
   // THE LIVE BUG, exactly as it appeared: ad set promises WHATSAPP, Meta
   // reports a CTA *type* it inferred, and the creative carries no number — so
   // the button opens nothing and renders as a generic "See more".
-  it("flags a WhatsApp ad whose creative has a CTA type but no number", () => {
-    const s = summarizeCta([ad({ whatsappNumber: null })]);
+  // AIC-166 widened what counts as "wired": the real failure is a creative
+  // with NOTHING behind the button, so the fixture clears all three fields.
+  // Clearing only the number no longer reproduces it — that shape is how a
+  // perfectly working ADOPTED ad reads back from Meta.
+  it("flags a WhatsApp ad whose creative has a CTA type but nothing behind it", () => {
+    const s = summarizeCta([ad({ whatsappNumber: null, appDestination: null, link: null })]);
     expect(s.state).toBe("broken");
     expect(s.brokenAdIds).toEqual(["ad_1"]);
     expect(s.reason).toMatch(/missing_whatsapp_number/);
@@ -86,9 +90,9 @@ describe("CTA health (AIC-128)", () => {
   it("clears when every ad that was broken has since been deleted", () => {
     const gone = [
       { adId: "a1", adSetId: "s1", destinationType: "WHATSAPP", ctaType: "WHATSAPP_MESSAGE",
-        whatsappNumber: null, link: null, effectiveStatus: "DELETED" },
+        whatsappNumber: null, link: null, appDestination: null, effectiveStatus: "DELETED" },
       { adId: "a2", adSetId: "s1", destinationType: "WHATSAPP", ctaType: "WHATSAPP_MESSAGE",
-        whatsappNumber: null, link: null, effectiveStatus: "ARCHIVED" },
+        whatsappNumber: null, link: null, appDestination: null, effectiveStatus: "ARCHIVED" },
     ];
     // Both WOULD be broken if they could still serve; neither can.
     expect(summarizeCta(gone).state).toBe("not_applicable");
@@ -126,5 +130,37 @@ describe("CTA health (AIC-128)", () => {
       const s = summarizeCta([ad({ destinationType: dest, whatsappNumber: null, link: null })]);
       expect(s.state, dest).toBe("ok");
     }
+  });
+});
+
+describe("CTA health: Meta's two shapes for a wired WhatsApp button (AIC-166)", () => {
+  // Verified live on two real accounts on 2026-09-01. The rule only ever
+  // recognised the shape OUR builder writes, which is why it looked correct
+  // until AIC-162 made adoption possible and the first adopted campaign was
+  // instantly declared broken — on the customer's dashboard, in red, claiming
+  // their budget was being wasted, while suppressing the whole engine.
+  //
+  // That campaign had EIGHT recorded messaging conversations through the
+  // button it called dead.
+  it("accepts an ADOPTED ad, which reads back as app_destination + link", () => {
+    const s = summarizeCta([
+      ad({ whatsappNumber: null, appDestination: "WHATSAPP", link: "https://api.whatsapp.com/send" }),
+    ]);
+    expect(s.state).toBe("ok");
+    expect(s.brokenAdIds).toEqual([]);
+  });
+
+  it("still accepts an ad WE built, which reads back as whatsapp_number", () => {
+    expect(summarizeCta([ad({ whatsappNumber: "972526964069" })]).state).toBe("ok");
+  });
+
+  it("app_destination alone is enough — the link is Meta's boilerplate", () => {
+    expect(summarizeCta([ad({ whatsappNumber: null, appDestination: "WHATSAPP", link: null })]).state).toBe("ok");
+  });
+
+  it("but NOTHING behind the button is still broken — AIC-128's real failure", () => {
+    const s = summarizeCta([ad({ whatsappNumber: null, appDestination: null, link: null })]);
+    expect(s.state).toBe("broken");
+    expect(s.brokenAdIds).toEqual(["ad_1"]);
   });
 });

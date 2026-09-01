@@ -40,6 +40,13 @@ export interface AdCreativeDestination {
   ctaType: string | null;
   whatsappNumber: string | null; // call_to_action.value.whatsapp_number
   link: string | null; // call_to_action.value.link
+  // AIC-166 — Meta's OTHER representation of a wired button
+  // (call_to_action.value.app_destination). An ad our builder writes comes
+  // back as {whatsapp_number}; an ad built outside and adopted comes back as
+  // {app_destination: "WHATSAPP", link: "…/send"} for the same working button.
+  // Both verified live. Reading only the first is why the first adopted
+  // campaign we ever managed was declared broken.
+  appDestination: string | null;
 }
 
 export interface CtaReader {
@@ -74,10 +81,25 @@ function judge(ad: AdCreativeDestination): BrokenAd | null {
   const dest = (ad.destinationType ?? "").toUpperCase();
   if (!ACTIONABLE.has(dest)) return null; // not applicable to this ad
 
-  // A messaging destination needs a number in the creative. Meta will happily
-  // report ctaType WHATSAPP_MESSAGE without one — that is the whole bug.
+  // A messaging destination needs something actually behind the button. Meta
+  // will report ctaType WHATSAPP_MESSAGE with an EMPTY value — that is
+  // AIC-128's real failure, and it is still caught below.
+  //
+  // AIC-166: but "something behind it" has two shapes, and this rule knew only
+  // ours. An ad our builder writes reads back as {whatsapp_number}; an adopted
+  // ad reads back as {app_destination: "WHATSAPP", link: "…/send"}. Both were
+  // verified live on real accounts. Demanding the number alone meant every
+  // campaign adopted from outside was told its button leads nowhere — on the
+  // customer's dashboard, in red, claiming their budget was being wasted, and
+  // suppressing the recommendation engine while it said so.
+  //
+  // The campaign that exposed it had EIGHT recorded messaging conversations
+  // through that button. Broken now means none of the three: no number, no
+  // app destination, and no link.
   if (dest === "WHATSAPP") {
-    if (!ad.whatsappNumber || !ad.whatsappNumber.trim()) {
+    const wired =
+      !!ad.whatsappNumber?.trim() || !!ad.appDestination?.trim() || !!ad.link?.trim();
+    if (!wired) {
       return {
         adId: ad.adId,
         adName: ad.adName ?? null,

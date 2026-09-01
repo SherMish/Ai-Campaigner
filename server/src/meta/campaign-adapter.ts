@@ -490,7 +490,14 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       name?: string;
       adset_id?: string;
       effective_status?: string;
-      creative?: { call_to_action?: { type?: string; value?: { whatsapp_number?: string; link?: string } } };
+      creative?: {
+        call_to_action?: {
+          type?: string;
+          // AIC-166: app_destination is Meta's shape for an adopted WhatsApp
+          // ad's button. Not reading it made every one of them look broken.
+          value?: { whatsapp_number?: string; link?: string; app_destination?: string };
+        };
+      };
     };
     return (((adsBody.data as RawAd[]) ?? [])).map((a) => {
       const cta = a.creative?.call_to_action;
@@ -504,6 +511,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
         ctaType: cta?.type ?? null,
         whatsappNumber: cta?.value?.whatsapp_number ?? null,
         link: cta?.value?.link ?? null,
+        appDestination: cta?.value?.app_destination ?? null,
       };
     });
   }

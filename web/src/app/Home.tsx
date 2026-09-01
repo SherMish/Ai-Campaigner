@@ -572,7 +572,12 @@ export function Home() {
                   have this". */}
               <div className="summary-row"><span className="k">{h.sBudget}</span><b>{hasLiveCampaign && ov.campaign ? `${shekels(ov.campaign.liveBudgetAgorot ?? ov.campaign.agreedBudgetAgorot)} ${period}` : L.none}</b></div>
               <div className="summary-row"><span className="k">{h.sAds}</span><b>{activeAds > 0 ? `${activeAds} ${L.adsActive}` : L.none}</b></div>
-              <div className="summary-row"><span className="k">{h.sLeads}</span><b>{hasLiveCampaign ? leads : L.none}</b></div>
+              {/* AIC-166: and only when the window HAS data. The KPI beside it
+                  already renders "—" for an empty window (AIC-130: no rows
+                  means we have not measured zero, we have measured nothing) —
+                  this row printed 0 for the same window and the same fact, so
+                  one screen showed both answers at once. */}
+              <div className="summary-row"><span className="k">{h.sLeads}</span><b>{hasLiveCampaign && hasRangeData ? leads : L.none}</b></div>
             </div>
           </div>
           {r && <LeadsGraph isEngagement={isEngagementCampaign} daily={r.daily} />}

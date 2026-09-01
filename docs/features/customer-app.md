@@ -259,6 +259,35 @@ first month). P0's billing decision (AIC-19) was **manual billing, no gateway**.
 This divergence needs a call — tracked in its own ticket. The screen is built; no
 payment integration is wired.
 
+## Meta has two shapes for a wired WhatsApp button (AIC-166)
+
+`judge()` (`meta/cta-health.ts`) treats a WhatsApp ad as broken only when it has
+**none** of `whatsapp_number`, `app_destination`, `link`.
+
+It used to require `whatsapp_number` alone, which is the shape **our own
+builder** writes — so the rule looked correct for as long as every campaign it
+judged was one we built. AIC-162 made adoption possible, and the first adopted
+campaign was instantly declared broken. Verified live on two real accounts:
+
+| Ad origin | `call_to_action.value` |
+| --- | --- |
+| built by our builder | `{whatsapp_number: "972…"}` |
+| built outside, adopted | `{app_destination: "WHATSAPP", link: "…/send"}` |
+
+Same working button, two representations. The customer was shown a red
+attention state — *"הכפתור במודעה לא מוביל לשום מקום… התקציב מתבזבז. זו תקלה
+אצלנו"* — about a campaign with **eight recorded messaging conversations
+through that button**. And `no_rec_reason = cta_broken` suppressed the
+recommendation engine while it said so, which is the quieter half of the harm.
+
+AIC-128's real failure — a creative whose `call_to_action.value` is empty — is
+still caught, because it has none of the three.
+
+**The rail card's leads figure honours `hasRangeData`.** It printed `0` for a
+window the KPI beside it rendered as `—`: one screen, one fact, two answers.
+AIC-130's rule (no rows means we have not measured zero, we have measured
+nothing) applies to both or neither.
+
 ## "Did we build this?" means the campaign we are linked to (AIC-165)
 
 `was_built_here` requires the `create_campaign` action's `target_meta_id` to
