@@ -1239,6 +1239,13 @@ export const strings = {
         backToStatus: "חזרה לסטטוס ההקמה",
       },
       home: {
+        // AIC-175 — read from the receipt written by add-content, so the
+        // customer who lands here right after adding sees that it worked even
+        // though the dashboard's own numbers have not caught up yet.
+        recentAdditionTitle: "התוספת שלכם נקלטה",
+        recentAdditionBody: "המודעות שהוספתם נוצרו בהצלחה בחשבון המודעות שלכם. הן יופיעו כאן ברגע שהנתונים יתעדכנו.",
+        recentAdditionReview: "חלק מהמודעות עדיין ממתינות לאישור מטא — זה נורמלי למודעה חדשה.",
+        recentAdditionDismiss: "סגירה",
         title: "הקמפיין שלך",
         navHome: "ראשי", navRecs: "המלצות", navSettings: "עזרה והגדרות",
         periods: { month: "החודש", days7: "7 ימים", prev: "חודש קודם" },
@@ -2339,6 +2346,23 @@ export const strings = {
       submitAdCtaPlural: "הוספת המודעות",
       submitAdSetCta: "הוספת קבוצת המודעות",
       submitting: "מוסיף…",
+      // AIC-175 — the confirmation the customer actually needs, in a modal
+      // they have to dismiss. The inline panel it replaces was correct and
+      // easy to walk past, and it lived only in React state: one reload and
+      // the only record of a real spend on a real ad account was in our logs.
+      addedModalTitle: "נוסף בהצלחה",
+      addedModalAdSetBody: "קבוצת המודעות והמודעות שלה נוצרו בחשבון המודעות שלכם.",
+      addedModalAdBody: "המודעות נוצרו והתווספו לקבוצת המודעות שבחרתם.",
+      // Meta's review is the honest reason a brand-new ad is not live yet, and
+      // saying so up front is the difference between waiting and worrying.
+      addedModalReview: "מטא בודקת כל מודעה חדשה לפני שהיא מתחילה לרוץ. בדרך כלל כמה דקות, לפעמים עד כמה שעות.",
+      // The specific question that prompted this: nothing appeared on the
+      // dashboard, so had it worked? The lag is ours (hourly ingestion), not a
+      // sign that anything failed, and hiding that reads as a bug.
+      addedModalDashboard: "הלוח מתעדכן אחת לשעה, אז ייתכן שייקח קצת זמן עד שהמודעות החדשות יופיעו בו. זה תקין — הן כבר קיימות אצל מטא.",
+      addedModalReviewNote: "מודעה שלא אושרה עדיין תופיע כאן ברגע שמטא תסיים לבדוק אותה.",
+      addedModalClose: "הבנתי",
+      addedModalAnother: "הוספת עוד",
       submitSuccessTitle: "נוסף ופעיל",
       submitSuccessBody: "המודעה רצה עכשיו.",
       submitSuccessBodyPlural: "המודעות רצות עכשיו.",

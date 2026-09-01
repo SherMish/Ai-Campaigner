@@ -14,6 +14,7 @@ import { AudienceFields, type AudienceValue, type Gender } from "./AudienceField
 import { BuilderCreatives, newAdDraft, type AdDraft } from "./BuilderCreatives";
 import { adSetSubmitBlocker } from "./builder-gates";
 import { metaRefusalOf, type MetaRefusalView } from "./meta-refusal";
+import { saveReceipt } from "./addition-receipt";
 const cc = strings.he.builder.creatives;
 
 const s = strings.he.additions;
@@ -21,6 +22,47 @@ const c = strings.he.app.connect;
 
 function freshKey(): string {
   return Math.random().toString(36).slice(2, 10);
+}
+
+// AIC-175 — the "it worked" the customer has to dismiss.
+//
+// Replaces nothing: the inline panel below still renders underneath, so the
+// state is still there after the modal is closed. What the modal adds is that
+// it CANNOT be walked past, and that it answers the two questions the inline
+// panel never did — why a brand-new ad is not live yet (Meta reviews it), and
+// why the dashboard still shows the old numbers (we ingest hourly). Both were
+// asked within a minute of a successful create.
+function AddedModal({
+  kind, ads, live, onClose, onAnother,
+}: {
+  kind: "ad" | "ad_set";
+  ads: number;
+  live: boolean;
+  onClose: () => void;
+  onAnother: () => void;
+}) {
+  return (
+    <div className="op-modal-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="op-modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+        <StatusPill variant={live ? "ok" : "warn"}>{s.addedModalTitle}</StatusPill>
+        <p style={{ marginTop: 14 }}>
+          {kind === "ad_set" ? s.addedModalAdSetBody : s.addedModalAdBody}
+        </p>
+        {/* The count is the customer's own: they laid out three ads and want to
+            read back a three. */}
+        <p className="muted" style={{ marginTop: 8 }}>
+          {ads > 1 ? s.submitSuccessBodyPlural : s.submitSuccessBody}
+        </p>
+        <p className="muted" style={{ marginTop: 12 }}>{s.addedModalReview}</p>
+        {!live && <p className="muted" style={{ marginTop: 8 }}>{s.addedModalReviewNote}</p>}
+        <p className="muted" style={{ marginTop: 12 }}>{s.addedModalDashboard}</p>
+        <div className="row gap12" style={{ marginTop: 20 }}>
+          <button className="btn btn-primary btn-sm" onClick={onClose}>{s.addedModalClose}</button>
+          <button className="btn btn-outline btn-sm" onClick={onAnother}>{s.addedModalAnother}</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // AIC-174 — a Meta refusal, with the fix attached.
@@ -218,6 +260,9 @@ export function AddContent() {
   // thing and then try again", and it renders with the fix attached.
   const [refusal, setRefusal] = useState<MetaRefusalView | null>(null);
   const [justAdded, setJustAdded] = useState(false);
+  // AIC-175 — dismissed independently of justAdded, so closing the modal
+  // leaves the inline success panel standing rather than resetting the form.
+  const [modalOpen, setModalOpen] = useState(false);
   // AIC-106: creating content activates it immediately — true in the
   // overwhelmingly common case. False only means the create itself
   // succeeded but activation didn't (a rare Meta-side hiccup); the pending
@@ -291,6 +336,7 @@ export function AddContent() {
     setSubmitError(null);
     setRefusal(null);
     setJustAdded(false);
+    setModalOpen(false);
   }
 
   async function submitAd() {
@@ -317,6 +363,10 @@ export function AddContent() {
       setSubmittedCount(done);
       setJustAddedLive(allLive);
       setJustAdded(true);
+      setModalOpen(true);
+      // AIC-175: written BEFORE anything can navigate. The confirmation the
+      // customer keeps must not depend on them staying on this screen.
+      saveReceipt({ kind: "ad", ads: done, live: allLive, at: Date.now() });
       refreshPending();
     } catch (e) {
       // A refusal outranks the generic copy, but NOT the partial-progress
@@ -353,8 +403,12 @@ export function AddContent() {
         ads: created.map((d) => ({ clientKey: d.clientKey, name: d.name, creativeId: d.creativeId! })),
         additionKey,
       });
-      setJustAddedLive(result.activation.outcome === "approved" || result.activation.outcome === "already_approved");
+      const live = result.activation.outcome === "approved" || result.activation.outcome === "already_approved";
+      setSubmittedCount(created.length);
+      setJustAddedLive(live);
       setJustAdded(true);
+      setModalOpen(true);
+      saveReceipt({ kind: "ad_set", ads: created.length, live, at: Date.now() });
       refreshPending();
     } catch (e) {
       const refused = metaRefusalOf(e);
@@ -367,6 +421,7 @@ export function AddContent() {
 
   function addAnother() {
     setJustAdded(false);
+    setModalOpen(false);
     setAdditionKey(freshKey());
     setSelectedAdSetId(null);
     setAdDrafts([newAdDraft(1)]);
@@ -466,6 +521,15 @@ export function AddContent() {
 
   return (
     <div className="wrap page">
+      {modalOpen && (
+        <AddedModal
+          kind={mode === "ad_set" ? "ad_set" : "ad"}
+          ads={submittedCount}
+          live={justAddedLive}
+          onClose={() => setModalOpen(false)}
+          onAnother={addAnother}
+        />
+      )}
       <div style={{ marginBottom: 24 }}>
         <div className="eyebrow">{s.eyebrow}</div>
         <h1 style={{ marginTop: 10 }}>{s.title}</h1>

@@ -249,6 +249,29 @@ handler refused on the old one and returned without a word (AIC-173). A guard
 that restates what the gate already decides is a bug waiting for the next rule
 change.
 
+## Confirming the add (AIC-175)
+
+Success opens a **modal** the customer has to dismiss, and writes a **receipt**
+to `localStorage` (`web/src/app/addition-receipt.ts`) before anything can
+navigate. The dashboard reads that receipt and shows a banner until it is
+dismissed or expires (6h).
+
+Both halves earn their place:
+
+- The old confirmation was an inline panel held in React state. It was correct,
+  easy to walk past, and gone after any reload — so a customer who left the
+  screen had no way to tell whether a real write to their real ad account had
+  happened. Our logs were the only record.
+- The modal answers the two questions the panel never did: a brand-new ad is
+  not live yet because **Meta reviews it**, and the dashboard still shows the
+  old numbers because **we ingest hourly**. Both were asked within a minute of
+  a successful create, and neither is a fault.
+
+The receipt is validated field-by-field on read, not cast: it survives across
+builds and can be hand-edited, and the failure mode of trusting it is a banner
+that renders `undefined מודעות`. A receipt dated in the future is a clock
+change, not a success, and is discarded.
+
 ## When Meta refuses (AIC-174)
 
 Meta populates `error_user_msg` only when it thinks a **person** can fix the

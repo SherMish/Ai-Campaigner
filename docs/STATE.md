@@ -6,6 +6,34 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-01 — the add worked, and nothing said so (AIC-175)
+
+An ad set and its three ads were created on Meta at 19:46:57. The customer's
+next message was "was it successful?".
+
+It was. `נשים · 20–35 · רמת גן, גבעתיים` with `מודעה 1/2/3` under it — the
+AIC-154 naming and the AIC-172 derived name, both working exactly as intended.
+The confirmation existed as React state, the page then loaded fresh, and the
+only remaining record of a real spend on a real ad account was in our logs.
+
+Success now opens a modal that must be dismissed, and writes a receipt to
+localStorage BEFORE anything can navigate. The dashboard reads it and shows a
+banner, because the dashboard is where the customer goes to check and — with
+hourly ingestion — is exactly where the evidence is missing for up to an hour.
+
+The modal also answers the two questions the old inline panel never did: a
+brand-new ad is not live yet because Meta reviews it, and the dashboard is
+behind because we ingest hourly. Neither is a fault, and both read as one.
+
+`decodeReceipt` validates every field rather than casting. The value survives
+across builds and can be hand-edited; trusting it renders `undefined מודעות`.
+
+What I could NOT determine: why the browser did a full page load seconds after
+the successful submit. The log window that would show it had already rolled
+off. The fix does not depend on the answer — a confirmation that only survives
+if the customer stays put is too fragile either way — but the cause is unknown
+rather than explained.
+
 ### 2026-09-01 — Meta said exactly what was wrong; we showed "something went wrong" (AIC-174)
 
 Adding an ad set failed. The customer got the generic copy. The cause was in

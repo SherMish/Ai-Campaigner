@@ -35,6 +35,28 @@ import { AD_DELIVERY_BADGE, AD_DELIVERY_TONE, deliveryStatus } from "./delivery-
 import { InfoTip } from "./InfoTip";
 import { StatusPill } from "./components";
 import { useSharedOverview, invalidateOverview } from "./overview-store";
+import { loadReceipt, clearReceipt, type AdditionReceipt } from "./addition-receipt";
+
+// AIC-175 — "it worked", for the customer who lands here right after adding.
+//
+// The dashboard ingests hourly, so for up to an hour after a successful add
+// this screen honestly shows no trace of it. That silence is what produced
+// "was it successful?" — the ad set and its three ads existed on Meta the
+// whole time. The receipt is written by add-content and expires on its own.
+function RecentAdditionNote({ receipt, onDismiss }: { receipt: AdditionReceipt; onDismiss: () => void }) {
+  return (
+    <div className="card" style={{ marginBottom: 16, borderColor: "var(--green, var(--line))" }}>
+      <b style={{ display: "block", marginBottom: 6 }}>{strings.he.app.home.recentAdditionTitle}</b>
+      <p className="muted" style={{ margin: 0 }}>{strings.he.app.home.recentAdditionBody}</p>
+      {!receipt.live && (
+        <p className="muted" style={{ margin: "6px 0 0" }}>{strings.he.app.home.recentAdditionReview}</p>
+      )}
+      <button className="btn btn-outline btn-sm" style={{ marginTop: 12 }} onClick={onDismiss}>
+        {strings.he.app.home.recentAdditionDismiss}
+      </button>
+    </div>
+  );
+}
 
 const a = strings.he.app;
 const h = a.home;
@@ -344,6 +366,10 @@ export function Home() {
   const { data: ov, loading, error: err, reload } = useSharedOverview(); // shared with Sidebar/Settings (AIC-42)
   const [launchOpen, setLaunchOpen] = useState(false);
   const [range, setRange] = useState<RangeKey>("week");
+  // AIC-175 — read once on mount. Dismissing clears the stored receipt too, so
+  // it does not return on the next visit; it also expires on its own.
+  const [receipt, setReceipt] = useState<AdditionReceipt | null>(() => loadReceipt());
+  const dismissReceipt = () => { clearReceipt(); setReceipt(null); };
 
   if (loading && !ov)
     return <div className="wrap page"><p className="muted">{a.loading}</p></div>;
@@ -428,6 +454,7 @@ export function Home() {
 
   return (
     <div className="wrap page dash">
+      {receipt && <RecentAdditionNote receipt={receipt} onDismiss={dismissReceipt} />}
       {/* Design reference: the range switcher sits inline with the page
           title, not stacked below the hero. */}
       <div className="dash-head">
