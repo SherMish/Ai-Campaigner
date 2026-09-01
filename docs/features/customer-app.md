@@ -284,6 +284,38 @@ Applied only to catches that actually ANSWER the client. A catch that merely
 logs — a Telegram notification, a best-effort cache refresh — is a side path;
 a throttle there is not the customer's business and must not become a response.
 
+## An ad set's status is a live fact, not a property of the date range (AIC-169)
+
+The audience row's badge is derived from `ControlState`, which is live and
+campaign-wide, never from `aud.creatives` — the rows in the selected window.
+
+**The bug:** one ad set read `לא מתפרסם · אין מודעה פעילה` on **הכל** and
+`מפרסם` on **היום**. `noLiveAds` required `aud.creatives.length > 0` before it
+would judge, and on a range with no delivery that list is empty — so the badge
+fell through to "running". A claim about *right now* changed with the dates the
+customer chose, and contradicted the campaign hero directly above it, which said
+`לא מתפרסם` on both.
+
+The old guard's instinct was right — "with no creatives in the window this view
+knows nothing about what's running, and guessing would replace one false badge
+with another" — but the fallthrough WAS the guess. Not knowing produced a
+confident "מפרסם".
+
+**The evidence existed; the view could not reach it.** `ControlState` already
+carried live `adStatuses` straight from Meta, but not which ad belongs to which
+ad set, so the view had to borrow the windowed rows. `getCampaignState` now
+returns `adSetByAd` — one extra field on the `{campaign}/ads` read it was
+already making, no additional Meta request — and the badge asks the question it
+always meant to: does this ad set have any live ad.
+
+Without live statuses (the `/state` 409 path) it asserts nothing rather than
+falling back to "running".
+
+**The "data in another period" note now takes you there.** `moreCreativesCount`
+tells the customer an ad has data outside the window; beside it, on any range
+but `allTime`, is a control that switches to it. A note pointing at something
+unreachable is only half a message.
+
 ## A stopped campaign lists its ad sets on every range (AIC-167)
 
 `buildCampaignAudiences` includes every existing ad set when

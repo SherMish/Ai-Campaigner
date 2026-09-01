@@ -50,6 +50,10 @@ export interface ControlWriter {
   getCampaignState(metaCampaignId: string): Promise<{
     adStatuses: Record<string, ObjectIntent>;
     adSetStatuses: Record<string, ObjectIntent>;
+    // AIC-169: which ad sits under which ad set, so a consumer can resolve an
+    // ad set's live state without borrowing whichever ads happen to have rows
+    // in a selected date window.
+    adSetByAd: Record<string, string>;
     campaignStatus: ObjectIntent;
   }>;
 }
@@ -59,6 +63,7 @@ export interface ControlWriter {
 // (additions/types.ts).
 export class FakeControlWriter implements ControlWriter {
   public statuses = new Map<string, string>();
+  public adSetByAd: Record<string, string> = {};
   public setAdCalls: Array<{ id: string; status: ManualObjectStatus }> = [];
   public setAdSetCalls: Array<{ id: string; status: ManualObjectStatus }> = [];
   public failNextWrite = 0;
@@ -105,6 +110,11 @@ export class FakeControlWriter implements ControlWriter {
     return {
       adStatuses: collapse(this.campaignAds),
       adSetStatuses: collapse(this.campaignAdSets),
+      // Every fake ad belongs to the first fake ad set unless a test says
+      // otherwise — enough structure for the audience rule, no more.
+      adSetByAd: Object.fromEntries(
+        this.campaignAds.map((id) => [id, this.adSetByAd[id] ?? this.campaignAdSets[0] ?? ""]),
+      ),
       campaignStatus: intentStatus(this.campaignStatus),
     };
   }

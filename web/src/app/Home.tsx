@@ -495,7 +495,7 @@ export function Home() {
           )}
 
           {/* opt-in per-audience / per-creative details (AIC-37) — collapsed by default */}
-          {ov.campaign && <AudienceDetails activeAds={activeAds} range={range} />}
+          {ov.campaign && <AudienceDetails activeAds={activeAds} range={range} onRange={setRange} />}
 
           {/* Bug fix, 2026-08-14: a pending recommendation while state is ok/
               collecting is now folded straight into the hero above (see
@@ -726,7 +726,7 @@ function Metric({ label, value, small }: { label: string; value: string; small?:
 // applied preemptively to the ~95% who have one audience.
 const ADAPTIVE_COLLAPSE_ABOVE = 3;
 
-function AudienceDetails({ activeAds, range }: { activeAds: number; range: RangeKey }) {
+function AudienceDetails({ activeAds, range, onRange }: { activeAds: number; range: RangeKey; onRange: (r: RangeKey) => void }) {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<CampaignAudiences | null>(null);
   const [loading, setLoading] = useState(false);
@@ -824,7 +824,7 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
       // row update immediately instead of occasionally showing the pre-write
       // state until a manual refresh.
       setCtl((prev) => {
-        const base = prev ?? { adStatuses: {}, adSetStatuses: {}, campaignStatus: "active" as const };
+        const base = prev ?? { adStatuses: {}, adSetStatuses: {}, adSetByAd: {}, campaignStatus: "active" as const };
         const key = kind === "ad" ? "adStatuses" : "adSetStatuses";
         return { ...base, [key]: { ...base[key], [id]: result.status === "ACTIVE" ? "active" : "paused" } };
       });
@@ -933,23 +933,33 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
               {data.audiences.map((aud) => {
                 const audPaused = isPaused("ad_set", aud.adSetId);
                 // AIC-130: an ad set switched ON delivers nothing if every ad
-                // under it is off. Only asserted when we actually have live
-                // statuses AND rows to judge — with no creatives in the window
-                // this view knows nothing about what's running, and guessing
-                // would replace one false badge with another.
+                // under it is off.
+                //
+                // AIC-169 — judged from LIVE statuses, never from the rows in
+                // the selected window. This read `aud.creatives`, which is
+                // range-scoped: on a range with no delivery that list is
+                // empty, the guard `length > 0` failed, and the badge fell
+                // through to "מפרסם". So one ad set said לא מתפרסם on הכל and
+                // מפרסם on היום — a claim about RIGHT NOW that changed with
+                // the dates the customer was looking at, contradicting the
+                // hero directly above it.
+                //
+                // ctl.adSetByAd is the campaign's real ad→ad-set map from
+                // Meta, so this now asks the question it always meant to ask:
+                // does this ad set have any live ad at all.
+                const liveAdsHere = ctl
+                  ? Object.keys(ctl.adSetByAd).filter((adId) => ctl.adSetByAd[adId] === aud.adSetId)
+                  : [];
                 const noLiveAds =
                   !audPaused &&
-                  // Every ad we can see is paused...
-                  ((!!ctl && aud.creatives.length > 0 &&
-                    aud.creatives.every((c) => isPaused("ad", c.metaObjectId))) ||
-                   // ...or every ad this audience has was removed, so there is
-                   // nothing left to run at all. Without this second case an ad
-                   // set whose last ad was deleted reads מפרסם forever — an
-                   // ACTIVE switch with nothing behind it. Requires at least
-                   // one removed ad as evidence: an empty `creatives` on its
-                   // own only means "no data in this window", which says
-                   // nothing about what is running.
-                   (aud.creatives.length === 0 && aud.removedCreatives.length > 0));
+                  // It has ads, and every one of them is off...
+                  ((!!ctl && liveAdsHere.length > 0 &&
+                    liveAdsHere.every((adId) => isPaused("ad", adId))) ||
+                   // ...or Meta reports no ads under it at all, so there is
+                   // nothing left to run. Only assertable WITH live statuses:
+                   // without them an empty list means "we could not read",
+                   // which says nothing about what is running.
+                   (!!ctl && liveAdsHere.length === 0));
                 const shown = !collapsed.has(aud.adSetId);
                 return (
                   <div key={aud.adSetId} className="soft" style={{ borderRadius: 14, padding: 14 }}>
@@ -998,6 +1008,22 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
                         {aud.moreCreativesCount === 1
                           ? D.moreCreativesOne
                           : `${D.moreCreativesManyPrefix} ${aud.moreCreativesCount} ${D.moreCreativesManySuffix}`}
+                        {/* The note says data exists in another period; on any
+                            range but "all" it now also takes the customer
+                            there, instead of describing something they have to
+                            work out how to reach. */}
+                        {range !== "allTime" && (
+                          <>
+                            {" "}
+                            <button
+                              type="button"
+                              className="linklike"
+                              onClick={() => onRange("allTime")}
+                            >
+                              {D.moreCreativesSeeAll}
+                            </button>
+                          </>
+                        )}
                       </p>
                     )}
 

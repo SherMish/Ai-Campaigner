@@ -6,6 +6,20 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-01 — AIC-169: an ad set's status changed with the selected range
+
+Reported: the same ad set read "לא מתפרסם · אין מודעה פעילה" on הכל and "מפרסם"
+on היום, while the campaign hero said "לא מתפרסם" on both. `noLiveAds` was
+computed from the creative rows in the selected window, and an empty window made
+it fall through to "running" — a claim about right now, decided by which dates
+were selected. `getCampaignState` now also returns `adSetByAd` (one extra field
+on a read it was already making), `ControlState` carries it, and the badge is
+derived from live statuses on every range; with no live statuses it asserts
+nothing. Also: the "עוד מודעה אחת עם נתונים מתקופה אחרת" note now carries a
+control that switches the range to הכל.
+
+---
+
 ### 2026-09-01 — AIC-168: the throttle was handled at one call site, not once
 
 A customer clicked הפעלת המודעה and got "לא הצלחנו לבצע את השינוי. נסו שוב."

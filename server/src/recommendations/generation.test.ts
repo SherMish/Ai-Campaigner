@@ -70,7 +70,7 @@ async function seedWeak(store: InMemorySnapshotStore) {
 }
 
 const okReader = (agorot = 7000): MetaReader => ({
-  getCampaignState: async () => ({ dailyBudgetAgorot: agorot, adStatuses: {}, adSetStatuses: {} }),
+  getCampaignState: async () => ({ dailyBudgetAgorot: agorot, adStatuses: {}, adSetStatuses: {}, adSetByAd: {} }),
 });
 
 function tick(campaigns: GenCampaign[], reader: MetaReader, snapshots: InMemorySnapshotStore, recs: InMemoryRecommendationStore) {
@@ -111,7 +111,7 @@ describe("runGenerationTick", () => {
     await seedWeak(snapshots); // cr_weak fires pause_creative under okReader()
     const recs = new InMemoryRecommendationStore();
     const pausedReader: MetaReader = {
-      getCampaignState: async () => ({ dailyBudgetAgorot: 7000, adStatuses: { cr_weak: "paused" }, adSetStatuses: {} }),
+      getCampaignState: async () => ({ dailyBudgetAgorot: 7000, adStatuses: { cr_weak: "paused" }, adSetStatuses: {}, adSetByAd: {} }),
     };
 
     const res = await tick([CAMP], pausedReader, snapshots, recs);

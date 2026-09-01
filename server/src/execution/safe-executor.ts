@@ -9,6 +9,19 @@ export interface LiveCampaignState {
   dailyBudgetAgorot: number;
   adStatuses: Record<string, "active" | "paused">;
   adSetStatuses: Record<string, "active" | "paused">;
+  /**
+   * AIC-169 — which ad belongs to which ad set, from the same live read.
+   *
+   * Without it a consumer holding these statuses cannot ask "does THIS ad set
+   * have any live ad", and the customer view fell back to the ads it happened
+   * to have rows for IN THE SELECTED DATE WINDOW. On a range with no delivery
+   * that is an empty list, so an ad set with every ad paused rendered
+   * "מפרסם" — a live claim that changed when the customer changed the dates.
+   *
+   * Free: `{campaign}/ads` is already being read here; this is one more field
+   * on the same request.
+   */
+  adSetByAd: Record<string, string>;
 }
 
 export interface MetaReader {

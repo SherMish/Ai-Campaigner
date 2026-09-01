@@ -254,12 +254,17 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     }
     this.budgetObj.set(metaCampaignId, budgetObjId);
 
-    const ads = await this.get(`${metaCampaignId}/ads?fields=id,status&limit=100`);
+    // AIC-169: adset_id rides along on the read we were already making, so a
+    // consumer can resolve "does this ad set have a live ad" from LIVE data
+    // instead of from whichever ads happen to have rows in a date window.
+    const ads = await this.get(`${metaCampaignId}/ads?fields=id,status,adset_id&limit=100`);
     const adStatuses: Record<string, ObjectIntent> = {};
+    const adSetByAd: Record<string, string> = {};
     for (const ad of (ads.data as Array<Record<string, unknown>>) ?? []) {
       adStatuses[String(ad.id)] = intentStatus(ad.status as string | undefined);
+      if (ad.adset_id) adSetByAd[String(ad.id)] = String(ad.adset_id);
     }
-    return { dailyBudgetAgorot: dailyBudgetAgorot > 0 ? dailyBudgetAgorot : 0, adStatuses, adSetStatuses, campaignStatus };
+    return { dailyBudgetAgorot: dailyBudgetAgorot > 0 ? dailyBudgetAgorot : 0, adStatuses, adSetStatuses, adSetByAd, campaignStatus };
   }
 
   async setDailyBudget(metaCampaignId: string, agorot: number): Promise<void> {

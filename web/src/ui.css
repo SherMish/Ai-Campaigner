@@ -675,3 +675,14 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
   background: var(--cream-2); color: var(--muted);
   font-size: 0.72rem; vertical-align: middle;
 }
+
+/* AIC-169 — a button that reads as inline text, for a link that acts on the
+   page (switching the range) rather than navigating. A real <button> so it is
+   reachable by keyboard and announced as an action, styled to sit inside a
+   sentence. */
+.linklike {
+  font: inherit; color: inherit; cursor: pointer;
+  background: none; border: 0; padding: 0;
+  text-decoration: underline;
+}
+.linklike:hover, .linklike:focus-visible { color: var(--ink); }

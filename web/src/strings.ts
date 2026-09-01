@@ -1452,6 +1452,8 @@ export const strings = {
           // note is a DB-only fact (creative has data outside this window),
           // never a claim about whether the ad is actually still delivering.
           moreCreativesOne: "עוד מודעה אחת עם נתונים מתקופה אחרת.",
+          // AIC-169: הערה שמצביעה על נתונים במקום אחר צריכה גם לקחת לשם.
+          moreCreativesSeeAll: "הצגת כל התקופות",
           moreCreativesManyPrefix: "עוד",
           moreCreativesManySuffix: "מודעות עם נתונים מתקופה אחרת.",
           // AIC-128. The toggle that reveals removed ads, and the line that

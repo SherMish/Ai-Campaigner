@@ -49,9 +49,9 @@ describe("ControlService.assertExecutable (the control gate)", () => {
 class FakeMeta {
   public state: LiveCampaignState;
   constructor(state: { dailyBudgetAgorot: number; adStatuses: Record<string, "active" | "paused">; adSetStatuses?: Record<string, "active" | "paused"> }) {
-    this.state = { adSetStatuses: {}, ...state };
+    this.state = { adSetStatuses: {}, adSetByAd: {}, ...state };
   }
-  async getCampaignState(): Promise<LiveCampaignState> { return { dailyBudgetAgorot: this.state.dailyBudgetAgorot, adStatuses: { ...this.state.adStatuses }, adSetStatuses: { ...this.state.adSetStatuses } }; }
+  async getCampaignState(): Promise<LiveCampaignState> { return { dailyBudgetAgorot: this.state.dailyBudgetAgorot, adStatuses: { ...this.state.adStatuses }, adSetStatuses: { ...this.state.adSetStatuses }, adSetByAd: {} }; }
   async setDailyBudget(_id: string, agorot: number) { this.state.dailyBudgetAgorot = agorot; }
   async pauseAd(id: string) { this.state.adStatuses[id] = "paused"; }
   async pauseAdSet(id: string) { this.state.adSetStatuses[id] = "paused"; }

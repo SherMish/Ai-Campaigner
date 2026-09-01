@@ -397,6 +397,10 @@ export type ControlOutcome = "changed" | "already" | "not_found" | "failed";
 export interface ControlState {
   adStatuses: Record<string, "active" | "paused">;
   adSetStatuses: Record<string, "active" | "paused">;
+  /** AIC-169 — which ad belongs to which ad set, so an ad set's live status can
+   *  be resolved from live data rather than from the ads that happen to have
+   *  rows in the selected date window. */
+  adSetByAd: Record<string, string>;
   // AIC-100: the campaign's own intent — an ad and its ad set can both read
   // "active" while the campaign itself is paused, so resolving an ad's real
   // delivery needs all three. See app/delivery-status.ts.

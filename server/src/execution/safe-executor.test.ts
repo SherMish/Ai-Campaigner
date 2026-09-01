@@ -19,14 +19,15 @@ class FakeMeta {
     dailyBudgetAgorot: number;
     adStatuses: Record<string, "active" | "paused">;
     adSetStatuses?: Record<string, "active" | "paused">;
+    adSetByAd?: Record<string, string>;
   }) {
-    this.state = { adSetStatuses: {}, ...state };
+    this.state = { adSetStatuses: {}, adSetByAd: {}, ...state };
   }
   async getCampaignState(): Promise<LiveCampaignState> {
     return {
       dailyBudgetAgorot: this.state.dailyBudgetAgorot,
       adStatuses: { ...this.state.adStatuses },
-      adSetStatuses: { ...this.state.adSetStatuses },
+      adSetStatuses: { ...this.state.adSetStatuses }, adSetByAd: {}
     };
   }
   async setDailyBudget(_id: string, agorot: number): Promise<void> {
@@ -112,7 +113,7 @@ describe("SafeExecutor — happy paths", () => {
   });
 
   it("executes a pause_adset and verifies the ad set is paused", async () => {
-    const meta = new FakeMeta({ dailyBudgetAgorot: 7000, adStatuses: {}, adSetStatuses: { as_2: "active" } });
+    const meta = new FakeMeta({ dailyBudgetAgorot: 7000, adStatuses: {}, adSetStatuses: { as_2: "active" }, adSetByAd: {} });
     const { service, store, executor } = setup({ meta });
     const rec = await approvedRec(service, draft({ type: "pause_adset", targetMetaId: "as_2", currentBudgetAgorot: null, proposedBudgetAgorot: null, evidence: { adSetId: "as_2" } }));
 
@@ -123,7 +124,7 @@ describe("SafeExecutor — happy paths", () => {
   });
 
   it("aborts a pause_adset when the ad set is no longer active (external change)", async () => {
-    const meta = new FakeMeta({ dailyBudgetAgorot: 7000, adStatuses: {}, adSetStatuses: { as_2: "paused" } });
+    const meta = new FakeMeta({ dailyBudgetAgorot: 7000, adStatuses: {}, adSetStatuses: { as_2: "paused" }, adSetByAd: {} });
     const { service, store, executor } = setup({ meta });
     const rec = await approvedRec(service, draft({ type: "pause_adset", targetMetaId: "as_2", currentBudgetAgorot: null, proposedBudgetAgorot: null }));
 
