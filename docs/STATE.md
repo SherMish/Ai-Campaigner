@@ -6,6 +6,21 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-01 — AIC-168: the throttle was handled at one call site, not once
+
+A customer clicked הפעלת המודעה and got "לא הצלחנו לבצע את השינוי. נסו שוב."
+Railway showed Meta code 17 again — the same throttle AIC-160 diagnosed, on a
+different route. AIC-160 had taught only the admin campaign picker to answer
+429 with an honest reason; every other route still folded code 17 into its own
+generic failure. `respondIfMetaThrottled` is now consulted by every catch that
+answers a client (28 of them across controls, additions, builder and
+admin-builder), and the customer control surface renders Hebrew copy saying it
+is temporary and the campaign is fine. Catches that only log are deliberately
+untouched — a throttle on a best-effort side path is not the customer's
+business.
+
+---
+
 ### 2026-09-01 — AIC-167: a stopped campaign hid its own resume controls
 
 The hero told the customer to open the audience detail and turn an ad set back

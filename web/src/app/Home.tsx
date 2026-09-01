@@ -738,6 +738,7 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
   const [media, setMedia] = useState<Map<string, AdMedia>>(new Map());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [ctlFailed, setCtlFailed] = useState(false);
+  const [ctlThrottled, setCtlThrottled] = useState(false);
   // Bug fix, 2026-08-15: /state and /media 409 with a specific reason
   // (missing_page/connection_issue/not_launched) when the connection can't
   // support these reads — set from whichever of the two calls below fails
@@ -833,7 +834,11 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
       // headline "מצב" and מודעות פעילות count pick it up now, not on the
       // next navigation/reload. Per-row badges above are already live via ctl.
       invalidateOverview();
-    } catch {
+    } catch (e) {
+      // AIC-168: a Meta throttle is temporary and fixed by waiting — the
+      // generic "לא הצלחנו לבצע את השינוי" reads as a broken product and
+      // gives the customer nothing to do but click again into the same wall.
+      setCtlThrottled(e instanceof ApiError && e.status === 429);
       setCtlFailed(true);
     } finally {
       setBusyId(null);
@@ -901,7 +906,7 @@ function AudienceDetails({ activeAds, range }: { activeAds: number; range: Range
               AIC-95 reuses it here rather than inventing a second one, since
               this panel now reads the exact same still-updating window. */}
           {range === "day" && <p className="muted" style={{ fontSize: "0.8rem", marginBottom: 10 }}>{h.provisional}</p>}
-          {ctlFailed && <p className="muted" style={{ color: "var(--orange)", marginBottom: 10 }}>{CT.failed}</p>}
+          {ctlFailed && <p className="muted" style={{ color: "var(--orange)", marginBottom: 10 }}>{ctlThrottled ? CT.throttled : CT.failed}</p>}
           {removeError && <p className="muted" style={{ color: "var(--orange)", marginBottom: 10 }}>{removeError}</p>}
           {readUnavailable && (
             <p className="muted" style={{ marginBottom: 10 }}>

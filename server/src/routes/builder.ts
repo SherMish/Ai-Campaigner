@@ -14,6 +14,7 @@ import { adSetName, campaignName } from "../meta/naming.js";
 import { pageIdentityOrNulls } from "../builder/page-identity.js";
 import { searchGeoOrEmpty } from "../builder/geo-search.js";
 import { listPromotableContent } from "../builder/promotable-content.js";
+import { respondIfMetaThrottled } from "../meta/throttle-response.js";
 
 // The guided builder's HTTP surface (AIC-52) — a thin layer over AIC-50's
 // create-writes and AIC-51's creative handling. Every route resolves the
@@ -47,6 +48,9 @@ builderRouter.get("/context", requireAuth, async (req, res) => {
     // BuilderContext, never from anything the operator typed.
     res.json({ category: ctx.category, businessName: ctx.businessName, agreedBudgetAgorot: ctx.agreedBudgetAgorot });
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[builder] context failed", e);
     res.status(500).json({ error: "failed to load builder context" });
   }
@@ -61,6 +65,9 @@ builderRouter.post("/start", requireAuth, async (req, res) => {
     const { id } = await startBuilderCampaign(pool, ctx.customerId, ctx.adAccountUuid);
     res.json({ localCampaignId: id });
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[builder] start failed", e);
     res.status(500).json({ error: "failed to start" });
   }
@@ -84,6 +91,9 @@ builderRouter.post("/upload", requireAuth, upload.single("file"), async (req, re
     });
     res.json({ media });
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[builder] upload failed", e);
     res.status(502).json({ error: "upload failed" });
   }
@@ -100,6 +110,9 @@ builderRouter.get("/posts", requireAuth, async (req, res) => {
     const posts = await listPromotableContent(writer, ctx.pageId, ctx.instagramId);
     res.json({ posts });
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[builder] list posts failed", e);
     res.status(502).json({ error: "failed to load posts" });
   }
@@ -133,6 +146,9 @@ builderRouter.get("/geo", requireAuth, async (req, res) => {
   try {
     res.json({ places: await searchGeoOrEmpty(buildBuilderWriter(), String(req.query.q ?? "")) });
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[builder] geo search failed", e);
     res.status(502).json({ error: "geo search failed" });
   }
@@ -149,6 +165,9 @@ builderRouter.get("/pixels", requireAuth, async (req, res) => {
     const pixels = await writer.listPixels(ctx.metaAdAccountId);
     res.json({ pixels });
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[builder] list pixels failed", e);
     res.status(502).json({ error: "failed to load pixels" });
   }
@@ -178,6 +197,9 @@ builderRouter.post("/pixel-check", requireAuth, async (req, res) => {
     const result = await writer.checkPixelEventRecency(body.pixelId, body.conversionEvent);
     res.json(result);
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[builder] pixel check failed", e);
     res.status(502).json({ error: "failed to check pixel" });
   }
@@ -259,6 +281,9 @@ builderRouter.post("/creative", requireAuth, async (req, res) => {
     const creativeId = await createCreativeIdempotent(pool, writer, body.localCampaignId!, body.clientKey, spec);
     res.json({ creativeId });
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     // AIC-156: Meta supports no creative shape for an Instagram post on a
     // click-to-WhatsApp campaign (proven live). Our precondition, not Meta
     // breaking — so 409 with actionable copy, never 502 "Meta is broken",
@@ -354,6 +379,9 @@ builderRouter.post("/build", requireAuth, async (req, res) => {
     const result = await buildCampaignOnMeta(pool, writer, input);
     res.json(result);
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     // AIC-106 — a budget refusal is a precondition WE enforced, not a Meta
     // failure, so it must not be reported as 502 ("Meta is broken"). That
     // wrong diagnosis lands on an operator mid-call and sends them to check

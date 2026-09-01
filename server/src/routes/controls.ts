@@ -10,6 +10,7 @@ import type { AdMediaReader } from "../meta/ad-media.js";
 import type { AdDetailReader } from "../meta/ad-detail.js";
 import { refreshDeliveryNow } from "../services/delivery-monitor.js";
 import { OpsQueue } from "../services/ops-queue.js";
+import { respondIfMetaThrottled } from "../meta/throttle-response.js";
 
 const ops = new OpsQueue(pool);
 
@@ -65,6 +66,7 @@ controlsRouter.get("/state", requireAuth, async (req, res) => {
     const state = await writer.getCampaignState(availability.ctx.metaCampaignId);
     res.json({ adStatuses: state.adStatuses, adSetStatuses: state.adSetStatuses, campaignStatus: state.campaignStatus });
   } catch (e) {
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[controls] state failed", e);
     res.status(502).json({ error: "failed to read current state" });
   }
@@ -88,6 +90,7 @@ controlsRouter.get("/media", requireAuth, async (req, res) => {
     if (!reader) return unavailable(res);
     res.json({ ads: await reader.getAdMedia(availability.ctx.metaCampaignId) });
   } catch (e) {
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[controls] media failed", e);
     res.status(502).json({ error: "failed to read creative media" });
   }
@@ -147,6 +150,9 @@ for (const action of ["pause", "resume"] as const) {
 
       res.json({ outcome: result.outcome, status: result.newStatus });
     } catch (e) {
+      // AIC-168: a throttle is temporary and customer-fixable by waiting;
+      // the generic branch below would call it a failure of ours.
+      if (respondIfMetaThrottled(res, e)) return;
       console.error(`[controls] ${action} failed`, e);
       res.status(502).json({ error: "failed to apply the change" });
     }
@@ -182,6 +188,7 @@ controlsRouter.get("/ad/:metaAdId", requireAuth, async (req, res) => {
     }
     res.json(detail);
   } catch (e) {
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[controls] ad detail failed", e);
     res.status(502).json({ error: "failed to load the ad" });
   }
@@ -206,6 +213,7 @@ controlsRouter.get("/hidden", requireAuth, async (req, res) => {
     const ads = await listHiddenAds(pool, ctx.localCampaignId);
     res.json({ ads: ads.map((a) => ({ metaAdId: a.metaAdId, hiddenAt: a.hiddenAt.toISOString() })) });
   } catch (e) {
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[controls] hidden failed", e);
     res.status(502).json({ error: "failed to read removed ads" });
   }
@@ -260,6 +268,9 @@ for (const action of ["hide", "unhide"] as const) {
       }
       res.json({ outcome });
     } catch (e) {
+      // AIC-168: a throttle is temporary and customer-fixable by waiting;
+      // the generic branch below would call it a failure of ours.
+      if (respondIfMetaThrottled(res, e)) return;
       console.error(`[controls] ${action} failed`, e);
       res.status(502).json({ error: "failed to apply the change" });
     }

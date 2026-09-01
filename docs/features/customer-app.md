@@ -259,6 +259,31 @@ first month). P0's billing decision (AIC-19) was **manual billing, no gateway**.
 This divergence needs a call — tracked in its own ticket. The screen is built; no
 payment integration is wired.
 
+## Meta's throttle is answered the same way everywhere (AIC-168)
+
+`respondIfMetaThrottled` (`server/src/meta/throttle-response.ts`) turns Meta's
+per-ad-account rate limit (code 17) into **429** with `code:
+"meta_rate_limited"`, and every route's catch consults it before its own
+generic branch. The customer surface renders Hebrew copy saying it is
+temporary, the change did not happen, and nothing is wrong with the campaign.
+
+AIC-160 fixed exactly one route this way — the admin campaign picker. Every
+other route kept folding code 17 into its own failure, so a customer clicking
+**הפעלת המודעה** during a throttle got *"לא הצלחנו לבצע את השינוי. נסו שוב."*
+with no reason and no sense of how long. "Try again" is accidentally the right
+advice, arriving in a form that reads as a broken product.
+
+The information was never missing: `GraphWriteError` has always carried the
+code and Meta's own operator-facing sentence. What was missing is that each
+route decided for itself whether to look, so "we handle the throttle" was true
+only where someone remembered. **One function consulted everywhere is the
+difference between a rule and a habit** — which is why this is a shared helper
+and not a fourth copy of the same `if`.
+
+Applied only to catches that actually ANSWER the client. A catch that merely
+logs — a Telegram notification, a best-effort cache refresh — is a side path;
+a throttle there is not the customer's business and must not become a response.
+
 ## A stopped campaign lists its ad sets on every range (AIC-167)
 
 `buildCampaignAudiences` includes every existing ad set when

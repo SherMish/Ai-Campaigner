@@ -21,6 +21,7 @@ import type { AdDetailReader } from "../meta/ad-detail.js";
 import { sendTelegram } from "../notify/telegram.js";
 import { listPromotableContent } from "../builder/promotable-content.js";
 import { InstagramPostNotSupportedError } from "../meta/campaign-adapter.js";
+import { respondIfMetaThrottled } from "../meta/throttle-response.js";
 
 // Adding content to a campaign we ALREADY manage (AIC-63) — the everyday
 // management action, distinct from the first-time builder (routes/builder.ts):
@@ -124,6 +125,9 @@ additionsRouter.get("/context", requireAuth, async (req, res) => {
       missingConfigFields: ctx.missingConfigFields,
     });
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[additions] context failed", e);
     res.status(500).json({ error: "failed to load context" });
   }
@@ -154,6 +158,9 @@ additionsRouter.get("/creative-context", requireAuth, async (req, res) => {
     // After responding: the notification must never delay or fail the screen.
     void notifyContextOpened(ctx.customerId, context, (req as AuthedRequest).userId!);
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[additions] creative context failed", e);
     res.status(500).json({ error: "failed to load the creative context" });
   }
@@ -213,6 +220,9 @@ additionsRouter.get("/ad-sets", requireAuth, async (req, res) => {
     const adsets = (await writer.getAdSetMeta(ctx.metaCampaignId)).filter((a) => a.existsOnMeta);
     res.json({ adSets: adsets.map((a) => ({ id: a.adSetId, name: a.name, status: a.status })) });
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[additions] list ad sets failed", e);
     res.status(502).json({ error: "failed to load ad sets" });
   }
@@ -257,6 +267,9 @@ additionsRouter.post("/upload", requireAuth, upload.single("file"), async (req, 
     });
     res.json({ media });
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[additions] upload failed", e);
     res.status(502).json({ error: "upload failed" });
   }
@@ -272,6 +285,9 @@ additionsRouter.get("/posts", requireAuth, async (req, res) => {
     const posts = await listPromotableContent(writer, ctx.pageId, ctx.instagramId);
     res.json({ posts });
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[additions] list posts failed", e);
     res.status(502).json({ error: "failed to load posts" });
   }
@@ -361,6 +377,9 @@ additionsRouter.post("/creative", requireAuth, async (req, res) => {
     const creativeId = await createCreativeIdempotent(pool, writer, ctx.localCampaignId, body.clientKey, spec);
     res.json({ creativeId });
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     // AIC-156: Meta supports no creative shape for an Instagram post on a
     // click-to-WhatsApp campaign (proven live). Our precondition, not Meta
     // breaking — so 409 with actionable copy, never 502 "Meta is broken",
@@ -425,6 +444,9 @@ additionsRouter.post("/ad", requireAuth, async (req, res) => {
     await refreshAfterAdd(ctx, writer);
     res.json(result);
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[additions] add ad failed", e);
     res.status(502).json({ error: "failed to add ad" });
   }
@@ -511,6 +533,9 @@ additionsRouter.post("/ad-set", requireAuth, async (req, res) => {
     });
     res.json(result);
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[additions] add ad set failed", e);
     res.status(502).json({ error: "failed to add ad set" });
   }
@@ -524,6 +549,9 @@ additionsRouter.get("/pending", requireAuth, async (req, res) => {
     const pending = await listPendingAdditions(pool, ctx.localCampaignId);
     res.json({ pending });
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[additions] list pending failed", e);
     res.status(500).json({ error: "failed to load pending additions" });
   }
@@ -542,6 +570,9 @@ additionsRouter.post("/:id/approve", requireAuth, async (req, res) => {
     if (result.outcome === "not_found") { res.status(404).json({ error: "addition not found" }); return; }
     res.json(result);
   } catch (e) {
+    // AIC-168: a throttle is temporary and fixed by waiting — never
+    // this route's own generic failure.
+    if (respondIfMetaThrottled(res, e)) return;
     console.error("[additions] approve failed", e);
     res.status(500).json({ error: "failed to approve" });
   }
