@@ -15,6 +15,19 @@ that can restart anything is inside it. It now opens and loads on its own.
 
 ---
 
+### 2026-09-01 — the status badge claimed "מפרסם" whenever it could not read
+
+Reported right after AIC-169: the badge still said מפרסם on a stopped campaign.
+Cause: a Meta throttle made the live `/state` read fail, so `ctl` was null,
+`noLiveAds` evaluated false, and the ternary's final branch asserted "running" —
+the most confident claim available, made at the moment we knew least. AIC-169's
+commit message said this was handled; it was not. A fourth state, `לא ידוע
+כרגע`, now covers it. Also added the "i" on the lead-quality question defining
+what counts as a relevant enquiry, with `InfoDot` extracted from `StatusInfo`
+so the popover mechanics exist once.
+
+---
+
 ### 2026-09-01 — AIC-169: an ad set's status changed with the selected range
 
 Reported: the same ad set read "לא מתפרסם · אין מודעה פעילה" on הכל and "מפרסם"

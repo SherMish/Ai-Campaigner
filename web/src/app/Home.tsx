@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { strings } from "../strings";
 import {
@@ -64,12 +64,31 @@ const noRecCard = noRecCopy;
 // Opens on hover, tap (click), AND keyboard focus — hover-only is
 // unusable on the phones customers actually check campaigns on.
 function StatusInfo({ tooltipKey }: { tooltipKey: ReturnType<typeof statusTooltipKey> }) {
+  const copy = STATUS_TOOLTIP_COPY[tooltipKey];
+  return (
+    <InfoDot popId="status-info-popover">
+      <p style={{ margin: 0, fontSize: "0.85rem" }}>{copy.meaning}</p>
+      <div className="row between" style={{ marginTop: 8, fontSize: "0.78rem" }}>
+        <span className="muted">{ST.spendQuestion}</span>
+        <b>{copy.spend}</b>
+      </div>
+      <div className="row between" style={{ marginTop: 4, fontSize: "0.78rem" }}>
+        <span className="muted">{ST.whoActsQuestion}</span>
+        <b>{copy.whoActs}</b>
+      </div>
+    </InfoDot>
+  );
+}
+
+// The "i" affordance and its popover, with the content left to the caller.
+// Extracted when a SECOND one was needed (the lead-quality card) — the
+// positioning, the three open triggers and the dismissal handling are the
+// hard part and are not worth having twice.
+function InfoDot({ popId, children }: { popId: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 280 });
-  const copy = STATUS_TOOLTIP_COPY[tooltipKey];
-  const popId = "status-info-popover";
 
   useEffect(() => {
     if (!open) return;
@@ -140,15 +159,7 @@ function StatusInfo({ tooltipKey }: { tooltipKey: ReturnType<typeof statusToolti
           className="info-popover"
           style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width }}
         >
-          <p style={{ margin: 0, fontSize: "0.85rem" }}>{copy.meaning}</p>
-          <div className="row between" style={{ marginTop: 8, fontSize: "0.78rem" }}>
-            <span className="muted">{ST.spendQuestion}</span>
-            <b>{copy.spend}</b>
-          </div>
-          <div className="row between" style={{ marginTop: 4, fontSize: "0.78rem" }}>
-            <span className="muted">{ST.whoActsQuestion}</span>
-            <b>{copy.whoActs}</b>
-          </div>
+          {children}
         </div>
       )}
     </span>
@@ -1027,9 +1038,24 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
                             <Chevron open={shown} />
                           </button>
                         )}
+                        {/* AIC-169 follow-up, found live: without `ctl` this
+                            rendered "מפרסם". `/state` is the LIVE read, and it
+                            fails whenever Meta throttles the ad account — so
+                            exactly when we know least, the badge made its most
+                            confident claim, on a stopped campaign whose hero
+                            said the opposite two inches above.
+
+                            Three states, not two: running, not running, and
+                            we could not read it. The last one is a real
+                            answer. */}
                         <RowStatus
-                          label={audPaused ? D.statusPausedByYou : noLiveAds ? D.statusNoLiveAds : D.statusRunning}
-                          tone={audPaused || noLiveAds ? "neutral" : "ok"}
+                          label={
+                            audPaused ? D.statusPausedByYou
+                              : noLiveAds ? D.statusNoLiveAds
+                                : ctl ? D.statusRunning
+                                  : D.statusUnknown
+                          }
+                          tone={audPaused || noLiveAds || !ctl ? "neutral" : "ok"}
                         />
                         <b><bdi>{aud.label}</bdi></b>
                       </div>
@@ -1556,7 +1582,16 @@ function LeadQualityCard({ leadQuality }: { leadQuality: LeadQualityStatus }) {
         </>
       ) : (
         <>
-          <div style={{ fontSize: "1.25rem", fontWeight: 700, marginTop: 10 }}>{h.pendingQuestion}</div>
+          <div style={{ fontSize: "1.25rem", fontWeight: 700, marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6 }}>
+            {h.pendingQuestion}
+            {/* What "relevant" means is the whole basis of this answer, and it
+                decides which audiences the engine later prefers — so it cannot
+                be left to each customer's own definition. */}
+            <InfoDot popId="lead-quality-info">
+              <p style={{ margin: 0, fontSize: "0.85rem" }}>{h.relevantMeaning}</p>
+              <p className="muted" style={{ margin: "8px 0 0", fontSize: "0.78rem" }}>{h.relevantWhy}</p>
+            </InfoDot>
+          </div>
           <p className="muted" style={{ margin: "8px 0 16px" }}>{h.pendingPrefix} {pending} {h.pendingSuffix}</p>
           <div className="row gap16" style={{ flexWrap: "wrap" }}>
             <div className="stepper-inline">

@@ -284,6 +284,36 @@ Applied only to catches that actually ANSWER the client. A catch that merely
 logs — a Telegram notification, a best-effort cache refresh — is a side path;
 a throttle there is not the customer's business and must not become a response.
 
+## Three status states, because "we could not read it" is an answer
+
+The audience badge is `paused` / `not delivering` / `running` / **unknown**.
+Without `ControlState` — the LIVE read, which fails whenever Meta throttles the
+ad account — it says `לא ידוע כרגע` instead of falling through to `מפרסם`.
+
+Found immediately after AIC-169 shipped: a throttle made `/state` fail, `ctl`
+was null, `noLiveAds` evaluated false, and the ternary's last branch asserted
+`מפרסם` on a stopped campaign whose hero said the opposite two inches above.
+So the badge made its most confident claim exactly when it knew least. (The
+AIC-169 commit message claimed this was already handled; it was not — the
+intent was written down and the branch was never added.)
+
+`ControlState` is also the reason this matters more than it sounds: **every
+pause/resume button on the page reads it**, so when it is missing the panel has
+no live truth at all, and the honest badge is the one that says so.
+
+## The "i" beside "כמה מהן היו רלוונטיות?"
+
+What counts as relevant is the whole basis of the answer, and the answer feeds
+the engine's audience preferences (AIC-133) — so leaving each customer to their
+own definition makes the numbers incomparable between them. The popover states
+it: a real prospective customer who asked about the service, a price or an
+appointment; not spam, a wrong number, or someone too far away. And that the
+deal need not close — only that the enquiry was worth the time.
+
+`InfoDot` was extracted from `StatusInfo` when this second one was needed. The
+positioning, the three open triggers (hover, tap, keyboard focus) and the
+dismissal handling are the hard part and are not worth having twice.
+
 ## An ad set's status is a live fact, not a property of the date range (AIC-169)
 
 The audience row's badge is derived from `ControlState`, which is live and

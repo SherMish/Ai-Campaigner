@@ -1471,6 +1471,9 @@ export const strings = {
           // AIC-73 round 2: per-row state, so "is this running?" is readable
           // without inferring it from which direction the action button points.
           statusRunning: "מפרסם",
+          // AIC-169 follow-up: כשאין קריאה חיה מ-Meta (למשל חסימת קצב), לא
+          // יודעים אם הקהל רץ. "מפרסם" הוא הצהרה, ובלי ראיה היא לפעמים שקר.
+          statusUnknown: "לא ידוע כרגע",
           statusPausedByYou: "מושהה על ידך",
           // AIC-130, seen live: an audience badged מפרסם with both of its ads
           // showing מושהה על ידך. The ad set's own switch was on, so the badge
@@ -1695,6 +1698,10 @@ export const strings = {
         pendingPrefix: "יש לך",
         pendingSuffix: "פניות חדשות מאז הפעם האחרונה",
         pendingQuestion: "כמה מהן היו רלוונטיות?",
+        // ההגדרה עצמה — היא בסיס התשובה, והתשובה קובעת אילו קהלים המנוע יעדיף
+        // בהמשך. בלעדיה כל לקוח עונה לפי הגדרה משלו והמספרים לא ניתנים להשוואה.
+        relevantMeaning: "פנייה רלוונטית היא פנייה מלקוח פוטנציאלי אמיתי — מישהו ששאל על השירות, על מחיר או על תור. פנייה לא רלוונטית היא ספאם, טעות, מישהו שמחפש משהו אחר לגמרי, או מי שמרוחק מדי גיאוגרפית.",
+        relevantWhy: "לא צריך שהעסקה תיסגר — רק שהפנייה הייתה שווה את הזמן. לפי זה נדע אילו קהלים מביאים פניות טובות יותר, ונעדיף אותם.",
         caughtUpBadge: "מעודכן",
         caughtUpBody: "אין כרגע פניות חדשות לדירוג.",
         toReviewBadge: "לדירוג",
