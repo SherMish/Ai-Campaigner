@@ -15,6 +15,27 @@ that can restart anything is inside it. It now opens and loads on its own.
 
 ---
 
+### 2026-09-01 — AIC-171: an ad set on another Page, and a reaper burning calls on dead ids
+
+"failed to add ad", in English, after the customer had written four ads. The
+adopted campaign holds two ad sets on two different Facebook Pages; the one
+they picked publishes from a Page our System User has no role on, so Meta
+answered "Pages Don't Match" and nothing we build can ever go there. `/ad-sets`
+now returns `usable`, the picker disables those with the reason before any work
+is done, and the server refuses by name with a 409.
+
+Found in the same logs: the creative reaper was retrying nine ad-account ids
+that exist nowhere on Meta — `act_add_*`, `act_route_*`, `act_admin_builder_*`,
+integration-test fixtures that reached production on 2026-08-30 — on every
+tick, costing nine Meta calls an hour against a real customer's rate limit and
+burying real errors. `listReapCandidates` now joins to `ad_accounts`, which is
+the honest rule (a creative whose ad account we no longer hold is not ours to
+reap) rather than a filter on the shape of an id. The ten rows were deleted
+from production. The reaper's own fixture never created an ad-accounts row —
+it now does, because a real creative always has one.
+
+---
+
 ### 2026-09-01 — AIC-170: Instagram posts CAN click to WhatsApp; AIC-166 was wrong
 
 The operator asked "double check — do we really can't post ig?" and was right

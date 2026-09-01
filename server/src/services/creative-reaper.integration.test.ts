@@ -40,9 +40,22 @@ async function age(id: string, hours: number) {
 d("creative reaper (AIC-131)", () => {
   beforeAll(async () => {
     await pool.query(`DELETE FROM created_creatives WHERE meta_ad_account_id = $1`, [ACC]);
+    // AIC-171: the reaper now only considers ad accounts we still hold a
+    // connection to, so the fixture has to model one. It always should have —
+    // a real creative belongs to a managed ad account, and this fixture's
+    // ad account existed nowhere, which is exactly the shape that had the
+    // reaper retrying nine dead ids against Meta on every tick in production.
+    const cust = await pool.query<{ id: string }>(
+      `INSERT INTO customers (business_name, is_test) VALUES ('__it_reap_cust', true) RETURNING id`);
+    const conn = await pool.query<{ id: string }>(
+      `INSERT INTO meta_connections (customer_id) VALUES ($1) RETURNING id`, [cust.rows[0].id]);
+    await pool.query(
+      `INSERT INTO ad_accounts (connection_id, meta_ad_account_id) VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`, [conn.rows[0].id, ACC]);
   });
   afterAll(async () => {
     await pool.query(`DELETE FROM created_creatives WHERE meta_ad_account_id = $1`, [ACC]);
+    await pool.query(`DELETE FROM customers WHERE business_name = '__it_reap_cust'`);
     await pool.end();
   });
 
@@ -99,6 +112,22 @@ d("creative reaper (AIC-131)", () => {
     });
     expect(r.considered).toBe(0);
     expect(meta.deleted).toEqual([]);
+  });
+
+  it("ignores a creative whose ad account we no longer manage — AIC-171", async () => {
+    // Nine such ids sat in production, every one an integration-test fixture
+    // that had reached the real database. The reaper retried each on every
+    // tick: nine wasted Meta calls an hour against a real customer's rate
+    // limit, and nine error lines burying the real ones.
+    await pool.query(
+      `INSERT INTO created_creatives (meta_creative_id, meta_ad_account_id, campaign_id)
+       VALUES ('cr_orphan_acct', 'act__it_reap_gone', NULL)`);
+    await age("cr_orphan_acct", 48);
+
+    const candidates = await listReapCandidates(pool);
+    expect(candidates.map((c) => c.creativeId)).not.toContain("cr_orphan_acct");
+
+    await pool.query(`DELETE FROM created_creatives WHERE meta_creative_id = 'cr_orphan_acct'`);
   });
 
   it("deletes NOTHING when the in-use read fails", async () => {

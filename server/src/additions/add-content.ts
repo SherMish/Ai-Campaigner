@@ -41,6 +41,9 @@ export interface AddAdInput {
   // refreshAdMetaNow call below for why that matters to the customer.
   metaCampaignId: string;
   metaAdSetId: string; // an EXISTING ad set — caller must verify ownership first
+  // AIC-171: the Page this customer is connected to, compared against the ad
+  // set's own promoted Page before writing anything.
+  pageId: string;
   name: string;
   creativeId: string;
   // AIC-137: who is doing this — 'customer' from their own dashboard,
@@ -122,6 +125,26 @@ async function recordPending(
   return rows[0].id;
 }
 
+/**
+ * AIC-171 — the target ad set promotes a different Facebook Page than the one
+ * this customer is connected to.
+ *
+ * An adopted campaign can hold ad sets belonging to Pages we have no role on.
+ * Meta refuses the ad ("Pages Don't Match", subcode 1885029) and we cannot
+ * satisfy it by using the ad set's own Page either — our System User cannot
+ * post as it. So nothing we build can ever land there, and this is a refusal
+ * rather than a failure.
+ *
+ * Named so the route can answer 409 with copy the customer can act on. Found
+ * live only after someone had written four ads and pressed submit.
+ */
+export class AdSetPageMismatchError extends Error {
+  constructor(public readonly adSetPageId: string, public readonly connectedPageId: string) {
+    super(`ad set promotes page ${adSetPageId}, but this customer is connected to page ${connectedPageId}`);
+    this.name = "AdSetPageMismatchError";
+  }
+}
+
 export async function addAdToExistingCampaign(
   pool: pg.Pool,
   writer: BuilderWriter & AdditionWriter & AdMetaReader,
@@ -129,6 +152,14 @@ export async function addAdToExistingCampaign(
 ): Promise<AddResult> {
   const outbox = new WriteOutbox(pool);
   const creator = asCreatingWriter(writer);
+
+  // AIC-171: the picker disables these, but the picker is a courtesy — this is
+  // the guarantee. Checked before any Meta write, so the refusal names the
+  // reason instead of arriving as Meta's "Pages Don't Match" inside a 502.
+  const target = (await writer.getAdSetMeta(input.metaCampaignId)).find((a) => a.adSetId === input.metaAdSetId);
+  if (target?.promotedPageId && target.promotedPageId !== input.pageId) {
+    throw new AdSetPageMismatchError(target.promotedPageId, input.pageId);
+  }
 
   // AIC-154 — THE COLLISION THIS FIXES. The name used to come from the
   // client, where it was `מודעה ${i}` counted per DRAFTING SESSION: adding one

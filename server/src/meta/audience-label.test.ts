@@ -115,7 +115,7 @@ describe("normalizeAdSetMeta — isManaged (AIC-65: exclude dead/draft ad sets)"
 });
 
 function meta(o: Partial<AdSetMeta> & Pick<AdSetMeta, "adSetId">): AdSetMeta {
-  return { name: "", ageMin: null, ageMax: null, genders: "all", geoSummary: "", isDynamicCreative: false, status: "active", isManaged: true, existsOnMeta: true, ...o };
+  return { name: "", ageMin: null, ageMax: null, genders: "all", geoSummary: "", isDynamicCreative: false, status: "active", isManaged: true, existsOnMeta: true, promotedPageId: null, ...o };
 }
 
 describe("deriveAudienceLabels — never a raw ad-set name, compose from the ad set's OWN targeting (AIC-73)", () => {

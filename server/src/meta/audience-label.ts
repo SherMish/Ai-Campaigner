@@ -30,6 +30,10 @@ export interface RawAdSetMeta {
   // AIC-65: at least one ad, requested as ads.limit(1){id} — the cheapest way
   // to tell "a never-published draft" from a real ad set without a full count.
   ads?: { data?: Array<{ id: string }> } | null;
+  // AIC-171: the Facebook Page this ad set promotes. An ADOPTED campaign can
+  // hold ad sets on Pages we are not connected to, and Meta refuses an ad
+  // whose creative Page differs from its ad set's ("Pages Don't Match").
+  promoted_object?: { page_id?: string } | null;
 }
 
 export interface AdSetMeta {
@@ -71,6 +75,9 @@ export interface AdSetMeta {
   // caller. Display consumers still want `isManaged`; anything asking "can I
   // write here?" wants this.
   existsOnMeta: boolean;
+  // AIC-171: which Page this ad set promotes, so a caller can tell whether we
+  // are able to put content into it at all. Null when Meta reports none.
+  promotedPageId: string | null;
 }
 
 function isDeletedOrArchived(status?: string | null): boolean {
@@ -148,6 +155,7 @@ export function normalizeAdSetMeta(row: RawAdSetMeta): AdSetMeta {
     status: row.effective_status === "ACTIVE" ? "active" : "paused",
     isManaged: !isDeletedOrArchived(row.effective_status) && !isDraftWithNoAds,
     existsOnMeta: !isDeletedOrArchived(row.effective_status),
+    promotedPageId: row.promoted_object?.page_id ?? null,
   };
 }
 

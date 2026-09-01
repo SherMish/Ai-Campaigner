@@ -407,7 +407,8 @@ export function AddContent() {
   }
   if (phase === "error") return <div className="wrap page"><div className="card"><p className="muted">{s.unavailable}</p></div></div>;
 
-  const adReady = !!selectedAdSetId && adDrafts.some((d) => d.creativeId);
+  const selectedAdSetUsable = (adSets ?? []).find((a) => a.id === selectedAdSetId)?.usable !== false;
+  const adReady = !!selectedAdSetId && selectedAdSetUsable && adDrafts.some((d) => d.creativeId);
   // AIC-163 — its sibling (the add-ONE-ad button) got its reason in AIC-136;
   // this one was missed, and the two sit on the same screen.
   const adSetGate = adSetSubmitBlocker({
@@ -497,10 +498,31 @@ export function AddContent() {
                 ) : (
                   <div className="stack gap12">
                     {adSets.map((set) => (
-                      <label key={set.id} className="row gap12" style={{ alignItems: "center", cursor: "pointer" }}>
-                        <input type="radio" name="ad-set-pick" checked={selectedAdSetId === set.id} onChange={() => setSelectedAdSetId(set.id)} />
-                        <span>{set.name || set.id}</span>
-                        {set.status === "paused" && <StatusPill variant="neutral">{s.adSetPaused}</StatusPill>}
+                      // AIC-171: an adopted campaign can hold an ad set that
+                      // publishes from a different Facebook Page. Nothing we
+                      // build can go there. Shown disabled WITH the reason,
+                      // never hidden — a short list reads as "I have fewer
+                      // audiences than I do" — and said HERE, before four ads
+                      // get written against it.
+                      <label
+                        key={set.id}
+                        className="row gap12"
+                        style={{ alignItems: "flex-start", cursor: set.usable ? "pointer" : "not-allowed", opacity: set.usable ? 1 : 0.55 }}
+                      >
+                        <input
+                          type="radio" name="ad-set-pick" disabled={!set.usable}
+                          checked={selectedAdSetId === set.id}
+                          onChange={() => setSelectedAdSetId(set.id)}
+                        />
+                        <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                          <span className="row gap8" style={{ alignItems: "center", flexWrap: "wrap" }}>
+                            <span>{set.name || set.id}</span>
+                            {set.status === "paused" && <StatusPill variant="neutral">{s.adSetPaused}</StatusPill>}
+                          </span>
+                          {!set.usable && (
+                            <span className="muted" style={{ fontSize: "0.78rem" }}>{s.adSetOtherPage}</span>
+                          )}
+                        </span>
                       </label>
                     ))}
                   </div>

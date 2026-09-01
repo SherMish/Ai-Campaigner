@@ -15,7 +15,11 @@ import type { AdSetMeta } from "../meta/audience-label.js";
 export async function upsertAdSetMeta(
   pool: pg.Pool,
   campaignId: string,
-  adsets: Omit<AdSetMeta, "status" | "isManaged" | "existsOnMeta">[],
+  // AIC-171: promotedPageId is excluded for the same reason status/isManaged
+  // are — it is a LIVE fact read from Meta per request, not something this
+  // cache stores. A cached Page id could go stale against a reassigned ad set
+  // and produce exactly the "Pages Don't Match" failure it exists to prevent.
+  adsets: Omit<AdSetMeta, "status" | "isManaged" | "existsOnMeta" | "promotedPageId">[],
 ): Promise<void> {
   for (const a of adsets) {
     await pool.query(

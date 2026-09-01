@@ -8,7 +8,7 @@ import {
   acceptsWhatsappWrites, whatsappWriteBlock, type WhatsappWriteBlock,
   resolveCreativeDestination, type CreativeBlockReason,
 } from "../additions/session.js";
-import { addAdToExistingCampaign, addAdSetToExistingCampaign } from "../additions/add-content.js";
+import { addAdToExistingCampaign, addAdSetToExistingCampaign, AdSetPageMismatchError } from "../additions/add-content.js";
 import { refreshDeliveryNow } from "../services/delivery-monitor.js";
 import type { DeliveryReader } from "../meta/delivery-health.js";
 import { OpsQueue } from "../services/ops-queue.js";
@@ -217,7 +217,25 @@ additionsRouter.get("/ad-sets", requireAuth, async (req, res) => {
     // to OFFER it here, not to hide it, so this caller asks the narrower
     // question: does the object exist on Meta?
     const adsets = (await writer.getAdSetMeta(ctx.metaCampaignId)).filter((a) => a.existsOnMeta);
-    res.json({ adSets: adsets.map((a) => ({ id: a.adSetId, name: a.name, status: a.status })) });
+    // AIC-171 — an ADOPTED campaign can hold ad sets on a Facebook Page we are
+    // not connected to. Meta refuses an ad whose creative Page differs from
+    // its ad set's ("Pages Don't Match"), and we cannot use the ad set's own
+    // Page either: our System User has no role on it, so nothing we build can
+    // ever go there.
+    //
+    // Reported live after the customer wrote FOUR ads and pressed submit. Sent
+    // now, so the picker can disable it with a reason before any of that work
+    // — AIC-98's rule, applied to a list that looked complete and wasn't.
+    res.json({
+      adSets: adsets.map((a) => ({
+        id: a.adSetId,
+        name: a.name,
+        status: a.status,
+        // null = Meta reported no promoted Page; treated as usable rather than
+        // blocked, because "it did not say" is not "it said no".
+        usable: a.promotedPageId === null || a.promotedPageId === ctx.pageId,
+      })),
+    });
   } catch (e) {
     // AIC-168: a throttle is temporary and fixed by waiting — never
     // this route's own generic failure.
@@ -427,6 +445,7 @@ additionsRouter.post("/ad", requireAuth, async (req, res) => {
       metaAdAccountId: ctx.metaAdAccountId,
       metaCampaignId: ctx.metaCampaignId,
       metaAdSetId: body.metaAdSetId,
+      pageId: ctx.pageId,
       name: body.name,
       creativeId: body.creativeId,
       additionKey: body.additionKey,
@@ -438,6 +457,12 @@ additionsRouter.post("/ad", requireAuth, async (req, res) => {
     // AIC-168: a throttle is temporary and fixed by waiting — never
     // this route's own generic failure.
     if (respondIfMetaThrottled(res, e)) return;
+    // AIC-171: our precondition, not Meta breaking — 409 with a reason the
+    // customer can act on, never a raw "Pages Don't Match" inside a 502.
+    if (e instanceof AdSetPageMismatchError) {
+      res.status(409).json({ error: e.message, code: "adset_page_mismatch" });
+      return;
+    }
     console.error("[additions] add ad failed", e);
     res.status(502).json({ error: "failed to add ad" });
   }

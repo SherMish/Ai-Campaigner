@@ -433,7 +433,7 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     const body = await this.get(
       // age_range is REQUIRED, not optional: age_min/age_max report the
       // Advantage+ expansion ceiling, not the configured range (AIC-73).
-      `${metaCampaignId}/adsets?fields=id,name,is_dynamic_creative,effective_status,targeting{age_min,age_max,age_range,genders,geo_locations},ads.limit(1){id}&limit=100`,
+      `${metaCampaignId}/adsets?fields=id,name,is_dynamic_creative,effective_status,promoted_object,targeting{age_min,age_max,age_range,genders,geo_locations},ads.limit(1){id}&limit=100`,
     );
     // Root-caused live (AIC-65, 2026-08-12): Meta OMITS the `ads` connection
     // field entirely when it's genuinely empty, rather than returning

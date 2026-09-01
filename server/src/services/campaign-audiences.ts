@@ -234,7 +234,7 @@ export async function buildCampaignAudiences(
       // deriveAudienceLabels — this view never surfaces an ad set's status.
       status: "active",
       isManaged: true, // filtered above — only managed ad sets reach here
-      existsOnMeta: true,
+      existsOnMeta: true, promotedPageId: null,
     };
   });
   const labels = deriveAudienceLabels(asMetaList);

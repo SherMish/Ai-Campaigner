@@ -823,6 +823,10 @@ export interface ExistingAdSet {
   id: string;
   name: string;
   status: "active" | "paused";
+  /** AIC-171 — false when this ad set publishes from a different Facebook Page
+   *  than the one connected. Meta refuses the ad ("Pages Don't Match") and we
+   *  cannot post as that Page, so nothing we build can ever go there. */
+  usable: boolean;
 }
 export const getExistingAdSets = () => api<{ adSets: ExistingAdSet[] }>("/app/additions/ad-sets");
 

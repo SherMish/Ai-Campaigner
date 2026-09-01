@@ -47,6 +47,7 @@ d("add content to an existing campaign (DB)", () => {
       metaAdAccountId: "act_123",
       metaCampaignId: "meta_camp_it",
       metaAdSetId: "as_existing_1",
+      pageId: "page_1",
       name: "New Ad",
       creativeId: "crea_1",
       additionKey: "attempt-1", actor: "customer",
@@ -75,7 +76,8 @@ d("add content to an existing campaign (DB)", () => {
   it("adding an ad is idempotent per additionKey: a resubmit never creates a second ad, a second row, or re-activates", async () => {
     const { campaignId } = await makeExistingCampaign("ad-idem");
     const writer = new FakeAddContentWriter();
-    const input = { localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "same-key" , actor: "customer"};
+    const input = { localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it", metaAdSetId: "as_1",
+      pageId: "page_1", name: "Ad", creativeId: "crea_1", additionKey: "same-key" , actor: "customer"};
 
     const first = await addAdToExistingCampaign(pool, writer, input);
     const second = await addAdToExistingCampaign(pool, writer, input);
@@ -144,6 +146,7 @@ d("add content to an existing campaign (DB)", () => {
       metaAdAccountId: "act_123",
       metaCampaignId: "meta_camp_it",
       metaAdSetId: "as_existing_1",
+      pageId: "page_1",
       name: "whatever the client called it",
       creativeId: "crea_1",
       additionKey: "attempt-naming", actor: "customer",
@@ -212,7 +215,8 @@ d("add content to an existing campaign (DB)", () => {
     writer.failNextActivateAd = 1;
 
     const result = await addAdToExistingCampaign(pool, writer, {
-      localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "a-1", actor: "customer",
+      localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it", metaAdSetId: "as_1",
+      pageId: "page_1", name: "Ad", creativeId: "crea_1", additionKey: "a-1", actor: "customer",
     });
 
     expect(result.metaAdIds).toHaveLength(1); // the ad DID get created
@@ -229,7 +233,8 @@ d("add content to an existing campaign (DB)", () => {
     const { campaignId } = await makeExistingCampaign("approve-idem");
     const writer = new FakeAddContentWriter();
     const added = await addAdToExistingCampaign(pool, writer, {
-      localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "a-1", actor: "customer",
+      localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it", metaAdSetId: "as_1",
+      pageId: "page_1", name: "Ad", creativeId: "crea_1", additionKey: "a-1", actor: "customer",
     });
 
     // Already activated by the create itself; a further call must no-op.
@@ -245,7 +250,8 @@ d("add content to an existing campaign (DB)", () => {
     const b = await makeExistingCampaign("owner-b");
     const writer = new FakeAddContentWriter();
     const added = await addAdToExistingCampaign(pool, writer, {
-      localCampaignId: a.campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it", metaAdSetId: "as_1", name: "Ad", creativeId: "crea_1", additionKey: "a-1", actor: "customer",
+      localCampaignId: a.campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it", metaAdSetId: "as_1",
+      pageId: "page_1", name: "Ad", creativeId: "crea_1", additionKey: "a-1", actor: "customer",
     });
     const otherWriter = new FakeAdditionWriter();
 
@@ -264,7 +270,8 @@ d("add content to an existing campaign (DB)", () => {
     const writer = new FakeAddContentWriter();
     await addAdToExistingCampaign(pool, writer, {
       localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_it",
-      metaAdSetId: "as_existing_1", name: "Ad", creativeId: "cr_1", additionKey: "k-actor",
+      metaAdSetId: "as_existing_1",
+      pageId: "page_1", name: "Ad", creativeId: "cr_1", additionKey: "k-actor",
       actor: "customer",
     });
 

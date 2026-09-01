@@ -224,7 +224,13 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
 
     const adSets = await request(app).get("/api/app/additions/ad-sets").set("Authorization", `Bearer ${token}`);
     expect(adSets.status).toBe(200);
-    expect(adSets.body.adSets).toEqual([{ id: "as_existing_1", name: "Women 18-45", status: "active" }]);
+    // AIC-171: `usable` says whether this ad set publishes from the Page we
+    // are connected to. An adopted campaign can hold ad sets on another Page,
+    // and Meta refuses an ad whose creative Page differs from its ad set's —
+    // so the picker needs to know BEFORE the customer writes four ads.
+    expect(adSets.body.adSets).toEqual([
+      { id: "as_existing_1", name: "Women 18-45", status: "active", usable: true },
+    ]);
 
     const creative = await request(app)
       .post("/api/app/additions/creative")

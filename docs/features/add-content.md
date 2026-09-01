@@ -196,6 +196,40 @@ customer's own account rather than the nameless Page-backed shadow profile.
 Full rationale and the two Meta payloads:
 [campaign-builder.md](campaign-builder.md).
 
+## An ad set can belong to a Page we are not connected to (AIC-171)
+
+`/ad-sets` returns `usable` per ad set — false when its
+`promoted_object.page_id` differs from the connection's Page. The picker
+renders those **disabled, with the reason**, and `addAdToExistingCampaign`
+refuses them by name (`AdSetPageMismatchError` → 409), because the picker is a
+courtesy and the server guard is the guarantee.
+
+**Found live, after a customer had written four ads.** The adopted GelNails
+campaign holds two ad sets on two different Pages:
+
+```
+נשים · 21–46  →  100457729476059   the connected Page (Byliam nails)
+נשים · 18–35  →  2005652353029981  another Page entirely
+```
+
+Every creative is built with the connection's Page, so Meta answered *"Pages
+Don't Match"* (subcode 1885029) and the screen said `failed to add ad` — in
+English, after all the work was done.
+
+And we cannot satisfy Meta by using the ad set's own Page: `me/accounts`
+returns only the three Pages our System User holds, and that one is not among
+them. So no content can ever go there through us. It is a refusal, not a
+failure — hence a named error and a 409, not a 502.
+
+Invisible before AIC-162, because adoption was impossible: every campaign we
+managed had been built by us, against the single Page we hold. The first
+adopted campaign brought a second Page with it.
+
+**Choosing an Instagram post does not change this.** An IG-post creative still
+carries a Facebook Page (`object_id`), and Meta still requires it to match the
+ad set's. The creative is created fine; the failure is at the next step, when
+the ad is attached.
+
 ## Naming (AIC-154)
 
 The ad SET keeps the name the customer types — the one name in this flow a

@@ -63,12 +63,26 @@ export async function listReapCandidates(
   minAgeHours: number = MIN_AGE_HOURS,
 ): Promise<ReapCandidate[]> {
   const { rows } = await pool.query<{ meta_creative_id: string; meta_ad_account_id: string }>(
-    `SELECT meta_creative_id, meta_ad_account_id
-       FROM created_creatives
-      WHERE attached_at IS NULL
-        AND reaped_at IS NULL
-        AND created_at < now() - ($1 || ' hours')::interval
-      ORDER BY created_at`,
+    // AIC-171 — only ad accounts we still manage.
+    //
+    // Found in the logs: nine ad-account ids that exist nowhere on Meta
+    // (act_add_*, act_route_*, act_admin_builder_* — integration-test fixtures
+    // that reached production) were retried on EVERY tick, forever. Nine
+    // wasted Meta calls an hour against a real customer's rate limit, and nine
+    // error lines burying the real ones.
+    //
+    // The join is the honest rule, not a filter on the ids' shape: a creative
+    // whose ad account we no longer hold a connection to is not ours to reap,
+    // whether it came from a stray test or a customer who left.
+    `SELECT cc.meta_creative_id, cc.meta_ad_account_id
+       FROM created_creatives cc
+      WHERE cc.attached_at IS NULL
+        AND cc.reaped_at IS NULL
+        AND cc.created_at < now() - ($1 || ' hours')::interval
+        AND EXISTS (
+          SELECT 1 FROM ad_accounts aa WHERE aa.meta_ad_account_id = cc.meta_ad_account_id
+        )
+      ORDER BY cc.created_at`,
     [String(minAgeHours)],
   );
   return rows.map((r) => ({ creativeId: r.meta_creative_id, adAccountId: r.meta_ad_account_id }));

@@ -307,7 +307,7 @@ async function seedFlexibleCreative(store: InMemorySnapshotStore) {
 }
 
 function adSetMeta(adSetId: string, isDynamicCreative: boolean, isManaged = true): AdSetMeta {
-  return { adSetId, name: adSetId, ageMin: null, ageMax: null, genders: "all", geoSummary: "", isDynamicCreative, status: "active", isManaged, existsOnMeta: true };
+  return { adSetId, name: adSetId, ageMin: null, ageMax: null, genders: "all", geoSummary: "", isDynamicCreative, status: "active", isManaged, existsOnMeta: true, promotedPageId: null };
 }
 
 describe("runGenerationTick — flexible/Advantage+ creative exclusion (AIC-36)", () => {
@@ -347,7 +347,7 @@ describe("runGenerationTick — flexible/Advantage+ creative exclusion (AIC-36)"
     await seedFlexibleCreative(snapshots);
     const recs = new InMemoryRecommendationStore();
     // Exists on Meta, but every ad under it has been deleted.
-    const emptyButLive: AdSetMeta = { ...adSetMeta("as_empty", false, false), existsOnMeta: true };
+    const emptyButLive: AdSetMeta = { ...adSetMeta("as_empty", false, false), existsOnMeta: true, promotedPageId: null };
     const audienceMetaReader: AudienceMetaReader = { getAdSetMeta: async () => [emptyButLive] };
     let cached: AdSetMeta[] | null = null;
 
