@@ -6,6 +6,34 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-01 — Meta said exactly what was wrong; we showed "something went wrong" (AIC-174)
+
+Adding an ad set failed. The customer got the generic copy. The cause was in
+the log, already written for a person:
+
+> Page With WhatsApp Business Account Required — The WhatsApp number linked to
+> your Page is a personal account. You must connect a WhatsApp Business account
+> to drive traffic to WhatsApp.
+
+Precise, actionable, about a minute to fix, and invisible. AIC-168 rescued ONE
+refusal (the throttle) from the generic catch; every other thing Meta declines
+still landed as a 502 with no reason.
+
+`meta/graph-refusal.ts` now answers any refusal carrying `error_user_msg` with
+400 + Meta's sentence + a `reason` slug, and the four customer write routes
+consult it. `error_user_msg` is the line itself: Meta sets it when a person can
+fix the problem, so our own bad payloads stay a 502 nobody but us should read.
+
+Hebrew copy for `whatsapp_business_required`, with the fix and — because it is
+the first thing anyone asks — why a Facebook Page governs a WhatsApp
+destination on an ad whose creative runs from Instagram. An unmapped reason
+degrades to Meta's English, never to the generic failure.
+
+Client-side reading lives in `web/src/app/meta-refusal.ts` rather than the
+component, for the reason AIC-173 just demonstrated: web tests run in
+`environment: "node"`, so nothing inside a React component is reachable by any
+test in this repo.
+
 ### 2026-09-01 — the ad-set button that enabled on one rule and refused on another (AIC-173)
 
 Reported live minutes after AIC-172 shipped: three creatives ready, cities

@@ -249,6 +249,32 @@ handler refused on the old one and returned without a word (AIC-173). A guard
 that restates what the gate already decides is a bug waiting for the next rule
 change.
 
+## When Meta refuses (AIC-174)
+
+Meta populates `error_user_msg` only when it thinks a **person** can fix the
+problem — configuration, permissions, policy. That set is worth showing
+verbatim; everything else (our own malformed payloads) has no such message and
+stays a 502 only we should read. `meta/graph-refusal.ts` draws exactly that
+line, and the four customer write routes consult it right after the throttle
+check.
+
+A refused write answers **400**, not 502: Meta understood the request and said
+no. The body carries `code: "meta_refused"`, Meta's own sentence, and a
+`reason` slug for the refusals we have Hebrew for. **An unmapped reason falls
+back to Meta's English sentence, never to the generic failure** — true and
+actionable beats fluent and useless.
+
+Known reasons:
+
+| reason | what it means |
+| --- | --- |
+| `whatsapp_business_required` | The WhatsApp number linked to the customer's **Page** is a personal account. A click-to-WhatsApp ad set resolves its destination through `promoted_object.page_id`, so this is a Page setting — including for ads whose creative runs from Instagram, which is the question this refusal always provokes and the reason the copy answers it inline. |
+
+Seen live on 2026-09-01 against `Byliam nails`, whose own ad set on the same
+Page and the same shape had been ACTIVE since 2026-08-09 — so Meta enforces
+this against the Page's linkage **at create time**, not against anything the
+campaign carries.
+
 ## Naming (AIC-154)
 
 The ad SET keeps the name the customer types — the one name in this flow a

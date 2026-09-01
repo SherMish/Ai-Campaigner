@@ -13,6 +13,7 @@ import { StatusPill, SupportCard, WA } from "./components";
 import { AudienceFields, type AudienceValue, type Gender } from "./AudienceFields";
 import { BuilderCreatives, newAdDraft, type AdDraft } from "./BuilderCreatives";
 import { adSetSubmitBlocker } from "./builder-gates";
+import { metaRefusalOf, type MetaRefusalView } from "./meta-refusal";
 const cc = strings.he.builder.creatives;
 
 const s = strings.he.additions;
@@ -20,6 +21,33 @@ const c = strings.he.app.connect;
 
 function freshKey(): string {
   return Math.random().toString(36).slice(2, 10);
+}
+
+// AIC-174 — a Meta refusal, with the fix attached.
+//
+// Deliberately not styled as an error line. "Something went wrong, try again"
+// is a dead end; this is a short list of instructions that ends with the
+// button working. The `why` line answers the question this particular refusal
+// always provokes — the ad runs on Instagram, so why is a Facebook Page
+// deciding anything — because a customer who does not believe the message will
+// not act on it.
+//
+// An unmapped refusal renders Meta's own sentence and nothing else: no fix, no
+// why, because we would be inventing both.
+function MetaRefusalNote({ refusal }: { refusal: MetaRefusalView }) {
+  const known = refusal.reason === "whatsapp_business_required";
+  return (
+    <div className="card" style={{ borderColor: "var(--orange)", marginTop: 12 }}>
+      <strong>{s.metaRefusedTitle}</strong>
+      <p style={{ marginTop: 8 }}>{known ? s.whatsappBusinessRequired : refusal.message}</p>
+      {known && (
+        <>
+          <p style={{ marginTop: 8 }}>{s.whatsappBusinessRequiredFix}</p>
+          <p className="muted" style={{ marginTop: 8 }}>{s.whatsappBusinessRequiredWhy}</p>
+        </>
+      )}
+    </div>
+  );
 }
 
 const shekels = (agorot: number) => `₪${(agorot / 100).toFixed(agorot % 100 === 0 ? 0 : 1)}`;
@@ -185,6 +213,10 @@ export function AddContent() {
   const [additionKey, setAdditionKey] = useState(freshKey);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // AIC-174 — kept apart from submitError because a Meta refusal is a
+  // different KIND of failure: it is not "try again", it is "change this one
+  // thing and then try again", and it renders with the fix attached.
+  const [refusal, setRefusal] = useState<MetaRefusalView | null>(null);
   const [justAdded, setJustAdded] = useState(false);
   // AIC-106: creating content activates it immediately — true in the
   // overwhelmingly common case. False only means the create itself
@@ -257,6 +289,7 @@ export function AddContent() {
     setMode(next);
     setAdditionKey(freshKey());
     setSubmitError(null);
+    setRefusal(null);
     setJustAdded(false);
   }
 
@@ -266,6 +299,7 @@ export function AddContent() {
     if (created.length === 0) return;
     setSubmitting(true);
     setSubmitError(null);
+    setRefusal(null);
     submittedSoFar.current = 0;
     try {
       let allLive = true;
@@ -285,8 +319,15 @@ export function AddContent() {
       setJustAdded(true);
       refreshPending();
     } catch (e) {
+      // A refusal outranks the generic copy, but NOT the partial-progress
+      // message: "3 ads were created and then it stopped" is the fact the
+      // customer needs first, and AIC-136 exists because losing it sends them
+      // back believing nothing happened while an ad is already running.
+      const refused = submittedSoFar.current === 0 ? metaRefusalOf(e) : null;
+      setRefusal(refused);
       setSubmitError(
-        submittedSoFar.current > 0
+        refused ? null
+          : submittedSoFar.current > 0
           ? `${s.submitErrorPartialPrefix} ${submittedSoFar.current} ${s.submitErrorPartialSuffix}`
           : e instanceof ApiError ? e.message : s.submitError,
       );
@@ -304,6 +345,7 @@ export function AddContent() {
     if (adSetSubmitBlocker({ createdAdCount: created.length })) return;
     setSubmitting(true);
     setSubmitError(null);
+    setRefusal(null);
     try {
       const result = await addAdSet({
         name: setName.trim(),
@@ -315,7 +357,9 @@ export function AddContent() {
       setJustAdded(true);
       refreshPending();
     } catch (e) {
-      setSubmitError(e instanceof ApiError ? e.message : s.submitError);
+      const refused = metaRefusalOf(e);
+      setRefusal(refused);
+      setSubmitError(refused ? null : e instanceof ApiError ? e.message : s.submitError);
     } finally {
       setSubmitting(false);
     }
@@ -553,6 +597,7 @@ export function AddContent() {
                     />
                   </div>
 
+                  {refusal && <MetaRefusalNote refusal={refusal} />}
                   {submitError && <p className="muted" style={{ color: "var(--orange)" }}>{submitError}</p>}
                   {/* AIC-136: a disabled button that explains nothing is the
                       same dead end as the missing-ad-set screen, just later in
@@ -614,7 +659,8 @@ export function AddContent() {
                 />
               </div>
 
-              {submitError && <p className="muted" style={{ color: "var(--orange)" }}>{submitError}</p>}
+              {refusal && <MetaRefusalNote refusal={refusal} />}
+                  {submitError && <p className="muted" style={{ color: "var(--orange)" }}>{submitError}</p>}
               <button className="btn btn-primary btn-wide" disabled={!adSetReady || submitting} onClick={submitAdSet}>
                 {submitting ? s.submitting : s.submitAdSetCta}
               </button>

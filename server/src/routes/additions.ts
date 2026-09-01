@@ -21,6 +21,7 @@ import type { AdDetailReader } from "../meta/ad-detail.js";
 import { sendTelegram } from "../notify/telegram.js";
 import { listPromotableContent } from "../builder/promotable-content.js";
 import { respondIfMetaThrottled } from "../meta/throttle-response.js";
+import { respondIfMetaRefused } from "../meta/graph-refusal.js";
 import { adSetName } from "../meta/naming.js";
 
 // Adding content to a campaign we ALREADY manage (AIC-63) — the everyday
@@ -398,6 +399,10 @@ additionsRouter.post("/creative", requireAuth, async (req, res) => {
     // AIC-168: a throttle is temporary and fixed by waiting — never
     // this route's own generic failure.
     if (respondIfMetaThrottled(res, e)) return;
+    // AIC-174: Meta refused with a sentence written for a person — show it,
+    // never this route's own generic failure. Always AFTER the throttle,
+    // which is transient and has its own status code and copy.
+    if (respondIfMetaRefused(res, e)) return;
     console.error("[additions] create creative failed", e);
     res.status(502).json({ error: "failed to create creative" });
   }
@@ -458,6 +463,10 @@ additionsRouter.post("/ad", requireAuth, async (req, res) => {
     // AIC-168: a throttle is temporary and fixed by waiting — never
     // this route's own generic failure.
     if (respondIfMetaThrottled(res, e)) return;
+    // AIC-174: Meta refused with a sentence written for a person — show it,
+    // never this route's own generic failure. Always AFTER the throttle,
+    // which is transient and has its own status code and copy.
+    if (respondIfMetaRefused(res, e)) return;
     // AIC-171: our precondition, not Meta breaking — 409 with a reason the
     // customer can act on, never a raw "Pages Don't Match" inside a 502.
     if (e instanceof AdSetPageMismatchError) {
@@ -565,6 +574,10 @@ additionsRouter.post("/ad-set", requireAuth, async (req, res) => {
     // AIC-168: a throttle is temporary and fixed by waiting — never
     // this route's own generic failure.
     if (respondIfMetaThrottled(res, e)) return;
+    // AIC-174: Meta refused with a sentence written for a person — show it,
+    // never this route's own generic failure. Always AFTER the throttle,
+    // which is transient and has its own status code and copy.
+    if (respondIfMetaRefused(res, e)) return;
     console.error("[additions] add ad set failed", e);
     res.status(502).json({ error: "failed to add ad set" });
   }
@@ -602,6 +615,10 @@ additionsRouter.post("/:id/approve", requireAuth, async (req, res) => {
     // AIC-168: a throttle is temporary and fixed by waiting — never
     // this route's own generic failure.
     if (respondIfMetaThrottled(res, e)) return;
+    // AIC-174: Meta refused with a sentence written for a person — show it,
+    // never this route's own generic failure. Always AFTER the throttle,
+    // which is transient and has its own status code and copy.
+    if (respondIfMetaRefused(res, e)) return;
     console.error("[additions] approve failed", e);
     res.status(500).json({ error: "failed to approve" });
   }

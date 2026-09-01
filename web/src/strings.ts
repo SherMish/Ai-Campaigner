@@ -2349,6 +2349,19 @@ export const strings = {
       submitSuccessBodyRetryPlural: "המודעות נוצרו בהצלחה, אבל היה קושי להפעיל אותן. אפשר לנסות שוב למטה.",
       submitAnother: "הוספת עוד",
       submitError: "משהו השתבש בהוספה. אפשר לנסות שוב — מה שכבר נוצר לא ייווצר פעמיים.",
+      // AIC-174 — Meta's refusals, in Hebrew, keyed by the `reason` the server
+      // sends. A refusal we have no copy for still shows Meta's own English
+      // sentence rather than the generic failure above: true and actionable
+      // beats fluent and useless.
+      metaRefusedTitle: "מטא לא אישרה את הפעולה",
+      whatsappBusinessRequired:
+        "מספר הוואטסאפ המקושר לעמוד הפייסבוק שלכם רשום כחשבון פרטי. מודעות שמובילות לוואטסאפ מחייבות חשבון WhatsApp Business.",
+      whatsappBusinessRequiredFix:
+        "מה עושים: בהגדרות עמוד הפייסבוק → וואטסאפ, מחברים מספר שרשום באפליקציית WhatsApp Business. אפשר להעביר את אותו מספר. אחר כך אפשר לנסות שוב כאן.",
+      // Why the FACEBOOK page decides this even when the ad runs on Instagram —
+      // the first question anyone asks, and the answer is not guessable.
+      whatsappBusinessRequiredWhy:
+        "גם מודעה שרצה מהאינסטגרם שלכם מחוברת אצל מטא לעמוד פייסבוק, והוואטסאפ שאליו היא מובילה נלקח מהעמוד הזה — לא מהאינסטגרם.",
       // AIC-136: the submit creates the ads one at a time, so a failure on the
       // second leaves the first ALREADY CREATED. Reporting that as a flat
       // failure sends the customer back to retry believing nothing happened,
