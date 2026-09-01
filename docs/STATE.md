@@ -6,6 +6,36 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-01 — the new ad set was invisible, and the status contradicted the numbers (AIC-176)
+
+Two reports on one screenshot, both real.
+
+**The new ad set did not appear.** Adding an *ad* refreshed the per-ad cache
+in-request; adding an *ad set* refreshed nothing. `campaign-audiences` builds
+its rows by iterating `ad_set_meta`, so a just-created ad set had no row and
+הצג פירוט showed only the ad sets the customer already had — for up to an hour,
+right after we told them it worked. `refreshAdSetMetaNow` is the sibling of
+`refreshAdMetaNow` and should have existed at the same time; the ad-set path
+now calls both.
+
+**The status contradicted the numbers beside it.** The badge read "אוספים
+נתונים" directly above ₪8.7 of spend and 2 leads, with a tooltip claiming
+neither had been recorded. `hasData` read only `readout.current` — the engine's
+seven COMPLETE days ending yesterday — and this campaign had resumed that
+morning, so that window was genuinely empty while today was not.
+
+The complete-days window is right for the engine (a partial day makes the
+7-day CPL noisy) and wrong as the sole basis for telling a customer we have
+nothing. `readout.today` already carried the answer; the branch never looked.
+Test-first: the new case failed with `expected 'collecting' to be 'ok'` before
+the fix.
+
+"ok" is not a promotion — its badge claims only that the campaign is active and
+we can see data, and the hero beside it still comes from the engine's own
+reason copy, which correctly says there is not yet enough settled data to
+recommend anything. The `collecting` tooltip becomes true again as a
+side-effect: that state now fires only when there really is nothing.
+
 ### 2026-09-01 — the add worked, and nothing said so (AIC-175)
 
 An ad set and its three ads were created on Meta at 19:46:57. The customer's

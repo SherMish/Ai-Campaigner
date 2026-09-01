@@ -163,11 +163,28 @@ function deriveHomeState(
   // ad-set status. Outranks `collecting`: a campaign with everything paused
   // will never accumulate data no matter how long we wait.
   if (!campaign.delivering) return "stopped";
+  // AIC-176, reported live. This read ONLY `readout.current` — the engine's
+  // seven COMPLETE days ending YESTERDAY — so a customer whose campaign
+  // resumed this morning saw the badge "אוספים נתונים", and a tooltip saying
+  // no spend or leads had been recorded, sitting directly above ₪8.7 and two
+  // leads that the very same screen was showing them.
+  //
+  // The complete-days window is right for the ENGINE (blending a partial day
+  // into the 7-day CPL makes that ratio noisy mid-day and helps no one) and
+  // wrong as the sole basis for a customer-facing claim that we have nothing.
+  // `readout.today` already carried the answer; this branch never looked.
+  //
+  // "ok" is the honest outcome, not a promotion: its badge claims only that
+  // the campaign is active and we are seeing data, and the hero body beside it
+  // comes from the engine's own reason copy — which still says, correctly,
+  // that there is not yet enough settled data to recommend anything.
   const hasData =
     !!readout &&
     (readout.current.spendAgorot > 0 ||
       readout.current.leads > 0 ||
-      readout.perCreative.length > 0);
+      readout.perCreative.length > 0 ||
+      readout.today.spendAgorot > 0 ||
+      readout.today.leads > 0);
   if (!hasData) return "collecting";
   return "ok";
 }

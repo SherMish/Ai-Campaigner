@@ -249,6 +249,20 @@ handler refused on the old one and returned without a word (AIC-173). A guard
 that restates what the gate already decides is a bug waiting for the next rule
 change.
 
+## The caches refresh in-request (AIC-176)
+
+Adding an **ad** refreshes the per-ad cache before returning
+(`refreshAdMetaNow`). Adding an **ad set** refreshes *both*
+(`refreshAdSetMetaNow` + `refreshAdMetaNow`), because both objects are new.
+
+`campaign-audiences` builds its rows by iterating `ad_set_meta`, so without the
+first call the ad set the customer just created has no row at all and הצג פירוט
+shows only the ad sets they already had — for up to an hour, immediately after
+we told them it worked.
+
+Both calls are isolated: the objects are already live on Meta, so a
+cache-refresh failure must never turn a successful add into a reported failure.
+
 ## Confirming the add (AIC-175)
 
 Success opens a **modal** the customer has to dismiss, and writes a **receipt**

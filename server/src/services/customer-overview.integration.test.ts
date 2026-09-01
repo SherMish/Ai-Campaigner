@@ -10,7 +10,7 @@ import { buildCustomerOverview } from "./customer-overview.js";
 import { recordNoRecReason } from "./evaluation-reason.js";
 import { recordLiveBudget } from "./live-budget.js";
 import { signAuthToken } from "../auth/tokens.js";
-import { rollingPeriods } from "../meta/scheduled-ingestion.js";
+import { rollingPeriods, todayPeriod } from "../meta/scheduled-ingestion.js";
 import { PgSnapshotStore } from "../meta/snapshot-store.js";
 import type { SnapshotUpsert } from "../meta/insights.js";
 import type { RecommendationDraft } from "../recommendations/types.js";
@@ -118,6 +118,34 @@ d("customer overview (DB + HTTP)", () => {
     const ov = await buildCustomerOverview(pool, userId);
     expect(ov!.homeState).toBe("collecting");
     expect(ov!.readout?.current.leads).toBe(0);
+  });
+
+  // AIC-176, reported live. The customer's dashboard showed the badge
+  // "אוספים נתונים" directly above ₪8.7 of spend and 2 leads, and its tooltip
+  // said "עדיין לא נרשמו הוצאה או פניות" — a claim the same screen disproved.
+  //
+  // The cause: hasData read ONLY readout.current, the engine's seven COMPLETE
+  // days ending yesterday. Their campaign had resumed that morning, so that
+  // window was genuinely empty while today was not. The window is right for
+  // the engine (a partial day would make the 7-day CPL noisy) and wrong as the
+  // sole basis for a customer-facing "we have no data" claim.
+  //
+  // readout.today already carried the answer; deriveHomeState just never
+  // looked at it.
+  it("is not 'collecting' when TODAY has data, even with an empty engine window — AIC-176", async () => {
+    const { userId, campaignId } = await seedChain("today");
+    const store = new PgSnapshotStore(pool);
+    const t = todayPeriod();
+    await store.upsert([
+      snap(campaignId, { periodStart: t.start, periodEnd: t.end, spendAgorot: 870, leads: 2, cplAgorot: 435 }),
+    ]);
+    const ov = await buildCustomerOverview(pool, userId);
+    // The engine still has nothing settled to judge — that part was never wrong.
+    expect(ov!.readout?.current.leads).toBe(0);
+    expect(ov!.readout?.today.leads).toBe(2);
+    // …but the customer is not "waiting for data" when their money is already
+    // moving and two people have written in.
+    expect(ov!.homeState).toBe("ok");
   });
 
   // AIC-158, found live on a real customer. The wizard's connect-only branch

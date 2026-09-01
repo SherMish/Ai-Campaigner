@@ -74,3 +74,31 @@ export async function listAdSetMeta(pool: pg.Pool, campaignId: string): Promise<
     isDynamicCreative: r.is_dynamic_creative,
   }));
 }
+
+// AIC-176 — refresh one campaign's AD-SET cache from Meta right now.
+//
+// The sibling of refreshAdMetaNow, and it should have existed at the same
+// time. Adding a whole ad set refreshed the per-AD cache and nothing else, so
+// the new ad set had no row in ad_set_meta — and campaign-audiences iterates
+// that cache to build its rows. The customer created an ad set with three ads,
+// was told it worked, opened הצג פירוט, and saw only the ad sets they already
+// had. Everything was correct on Meta; our own view was up to an hour behind
+// the action the customer had just taken.
+//
+// `existsOnMeta` is the filter, exactly as generation.ts uses for the cache
+// (NOT `isManaged`, which is the engine's narrower question): an ad set that
+// exists should be visible, and whether it currently has ads decides what the
+// engine does with it, not whether the customer may see it.
+export interface AdSetMetaReader {
+  getAdSetMeta(metaCampaignId: string): Promise<AdSetMeta[]>;
+}
+
+export async function refreshAdSetMetaNow(
+  pool: pg.Pool,
+  reader: AdSetMetaReader,
+  campaignId: string,
+  metaCampaignId: string,
+): Promise<void> {
+  const adsets = await reader.getAdSetMeta(metaCampaignId);
+  await upsertAdSetMeta(pool, campaignId, adsets.filter((a) => a.existsOnMeta));
+}

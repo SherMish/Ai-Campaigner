@@ -7,6 +7,7 @@ import { adName, nextAdIndex } from "../meta/naming.js";
 import type { BuilderWriter, CreateAdSetTargeting } from "../builder/types.js";
 import { approveAddition, type ApproveResult } from "./approve.js";
 import { refreshAdMetaNow, type AdMetaReader } from "../services/ad-meta-cache.js";
+import { refreshAdSetMetaNow, type AdSetMetaReader } from "../services/audience-meta-cache.js";
 import type { AdditionWriter } from "./types.js";
 
 // Adding content to a campaign we ALREADY manage (AIC-63) — the everyday
@@ -232,7 +233,10 @@ export async function addAdToExistingCampaign(
 
 export async function addAdSetToExistingCampaign(
   pool: pg.Pool,
-  writer: BuilderWriter & AdditionWriter,
+  // AIC-176: the reader halves are required here for the same reason the ad
+  // path requires AdMetaReader — this function refreshes both caches in-request
+  // so the customer's own view is not an hour behind their own action.
+  writer: BuilderWriter & AdditionWriter & AdMetaReader & AdSetMetaReader,
   input: AddAdSetInput,
 ): Promise<AddResult> {
   const outbox = new WriteOutbox(pool);
@@ -290,5 +294,30 @@ export async function addAdSetToExistingCampaign(
   // Activates the new ad set AND every ad under it (approveAddition's
   // kind='ad_set' branch) — a live ad set with paused ads would spend nothing.
   const activation = await approveAddition(pool, writer, additionId, input.localCampaignId);
+
+  // AIC-176 — refresh BOTH caches, for the reason the ad path already refreshes
+  // one. campaign-audiences builds its rows by iterating ad_set_meta, so
+  // without the first call the ad set the customer just created has no row at
+  // all and הצג פירוט shows only the ad sets they already had — for up to an
+  // hour, right after we told them it worked.
+  //
+  // The ad path (addAdToExistingAdSet) refreshes only the AD cache because the
+  // ad set it targets is already cached by definition. Creating an ad set is
+  // the case where both are new, and it was the case nobody refreshed.
+  //
+  // Isolated, same as the ad path: the ad set and its ads are already live on
+  // Meta, so a cache-refresh failure must never turn a successful add into a
+  // reported failure.
+  try {
+    await refreshAdSetMetaNow(pool, writer, input.localCampaignId, input.metaCampaignId);
+  } catch (e) {
+    console.error(`[additions] ad-set-meta refresh failed after add — ${(e as Error).message}`);
+  }
+  try {
+    await refreshAdMetaNow(pool, writer, input.localCampaignId, input.metaCampaignId);
+  } catch (e) {
+    console.error(`[additions] ad-meta refresh failed after ad-set add — ${(e as Error).message}`);
+  }
+
   return { additionId, metaAdSetId, metaAdIds, activation };
 }
