@@ -121,14 +121,18 @@ export function adCreateBlocker(ad: {
   return null;
 }
 
-export type AdSetSubmitBlocker = "set_name_missing" | "no_created_ads";
+export type AdSetSubmitBlocker = "no_created_ads";
 
 /**
  * Why add-content's "add an ad set" button is dead. Its sibling — the add-ONE-
  * ad button — got its reason in AIC-136; this one was missed, and the two sit
  * on the same screen.
+ *
+ * AIC-172: the ad-set NAME is no longer required. Left blank, the server
+ * derives the same audience label every ad set we build already carries
+ * (naming.ts) — so demanding one was a required field that earned nothing and
+ * blocked the button for a customer with nothing useful to type.
  */
-export function adSetSubmitBlocker(input: { setName: string; createdAdCount: number }): AdSetSubmitBlocker | null {
-  if (!input.setName.trim()) return "set_name_missing";
+export function adSetSubmitBlocker(input: { createdAdCount: number }): AdSetSubmitBlocker | null {
   return input.createdAdCount >= 1 ? null : "no_created_ads";
 }

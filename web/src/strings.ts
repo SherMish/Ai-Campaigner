@@ -2101,7 +2101,6 @@ export const strings = {
         gateBudget: "ממלאים תקציב יומי גדול מאפס.",
         gateAge: "טווח הגילאים צריך להיות בין 13 ל-65, וגיל המקסימום גדול מהמינימום.",
         gateNoAds: "יוצרים לפחות מודעה אחת כדי להמשיך.",
-        gateAdSetName: "ממלאים שם לקבוצת המודעות.",
         gateAdPost: "בוחרים פוסט קיים.",
         gateAdMedia: "מעלים תמונה או סרטון.",
         gateAdHeadline: "ממלאים כותרת.",
@@ -2325,7 +2324,10 @@ export const strings = {
       adsTitle: "המודעה",
 
       // add-ad-set mode
-      adSetNameLabel: "שם פנימי לקבוצת המודעות",
+      adSetNameLabel: "שם פנימי לקבוצת המודעות (לא חובה)",
+      // AIC-172: אומרים מה קורה אם משאירים ריק. שדה ריק בלי הסבר מזמין את
+      // הלקוח להמציא תווית למשהו שאנחנו כבר יודעים לקרוא לו נכון.
+      adSetNameOptional: "אפשר להשאיר ריק — ניתן שם אוטומטית לפי הקהל שבחרתם, למשל \"נשים · 35–55 · רמת גן\".",
       adSetNamePlaceholder: "למשל: נשים 35-55",
 
       // AIC-106: creating content activates it immediately — no more "add it

@@ -21,6 +21,7 @@ import type { AdDetailReader } from "../meta/ad-detail.js";
 import { sendTelegram } from "../notify/telegram.js";
 import { listPromotableContent } from "../builder/promotable-content.js";
 import { respondIfMetaThrottled } from "../meta/throttle-response.js";
+import { adSetName } from "../meta/naming.js";
 
 // Adding content to a campaign we ALREADY manage (AIC-63) — the everyday
 // management action, distinct from the first-time builder (routes/builder.ts):
@@ -519,7 +520,8 @@ additionsRouter.post("/ad-set", requireAuth, async (req, res) => {
     const block = whatsappWriteBlock(ctx);
     if (block) return refuseWhatsappWrite(res, block);
     const body = req.body as AddAdSetBody;
-    if (!body.name?.trim()) { res.status(400).json({ error: "name is required" }); return; }
+    // AIC-172: the name is OPTIONAL now. Blank derives the same convention
+    // every ad set we create already uses (naming.ts) — see below.
     if (!body.targeting) { res.status(400).json({ error: "targeting is required" }); return; }
     if (!Array.isArray(body.ads) || body.ads.length === 0) { res.status(400).json({ error: "at least one ad is required" }); return; }
     if (!body.additionKey) { res.status(400).json({ error: "additionKey is required" }); return; }
@@ -532,7 +534,18 @@ additionsRouter.post("/ad-set", requireAuth, async (req, res) => {
       metaAdAccountId: ctx.metaAdAccountId,
       metaCampaignId: ctx.metaCampaignId,
       pageId: ctx.pageId,
-      name: body.name,
+      // AIC-172 — typed name wins; blank derives the audience label, which is
+      // the SAME convention adSetName gives every ad set we build (AIC-154),
+      // and the same string the dashboard shows for that audience. Asking a
+      // customer to invent an internal label for something we can already name
+      // correctly is a required field that earns nothing.
+      name: body.name?.trim() || adSetName({
+        ageMin: body.targeting.ageMin,
+        ageMax: body.targeting.ageMax,
+        genders: body.targeting.genders,
+        countries: body.targeting.countries?.length ? body.targeting.countries : ["IL"],
+        cities: body.targeting.cities,
+      }),
       targeting: {
         ageMin: body.targeting.ageMin,
         ageMax: body.targeting.ageMax,

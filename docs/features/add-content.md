@@ -230,6 +230,17 @@ carries a Facebook Page (`object_id`), and Meta still requires it to match the
 ad set's. The creative is created fine; the failure is at the next step, when
 the ad is attached.
 
+## The ad-set name is optional (AIC-172)
+
+Left blank, the server derives it with `adSetName` — the same convention every
+ad set we build already carries, and the same string the dashboard shows for
+that audience (`נשים · 35–55 · ישראל`). A typed name still wins.
+
+It used to be required, and required nothing useful: the customer was asked to
+invent an internal label for a thing we can already name correctly, and the
+submit button stayed dead until they did. The field now says what happens if
+they skip it, because an unexplained empty box invites exactly that invention.
+
 ## Naming (AIC-154)
 
 The ad SET keeps the name the customer types — the one name in this flow a

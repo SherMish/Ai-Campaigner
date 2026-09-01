@@ -412,7 +412,6 @@ export function AddContent() {
   // AIC-163 — its sibling (the add-ONE-ad button) got its reason in AIC-136;
   // this one was missed, and the two sit on the same screen.
   const adSetGate = adSetSubmitBlocker({
-    setName,
     createdAdCount: groupAdDrafts.filter((d) => d.creativeId).length,
   });
   const adSetReady = adSetGate === null;
@@ -581,6 +580,10 @@ export function AddContent() {
                 <div className="field">
                   <label>{s.adSetNameLabel}</label>
                   <input type="text" placeholder={s.adSetNamePlaceholder} value={setName} onChange={(e) => setSetName(e.target.value)} />
+                  {/* AIC-172: optional, and says what happens if it is left
+                      blank — an unexplained empty field invites the customer
+                      to invent a label for something we can already name. */}
+                  <p className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>{s.adSetNameOptional}</p>
                 </div>
               </div>
 
@@ -613,7 +616,7 @@ export function AddContent() {
               </button>
               {!submitting && adSetGate && (
                 <p className="muted" style={{ fontSize: "0.85rem", marginTop: 8 }}>
-                  {adSetGate === "set_name_missing" ? cc.gateAdSetName : cc.gateNoAds}
+                  {cc.gateNoAds}
                 </p>
               )}
             </div>

@@ -15,6 +15,15 @@ that can restart anything is inside it. It now opens and loads on its own.
 
 ---
 
+### 2026-09-01 — AIC-172: the ad-set name stops being a required field
+
+Operator request. Blank now derives the audience label via `adSetName` — the
+same convention every ad set we build already carries and the same string the
+dashboard shows — instead of holding the submit button until the customer
+invents an internal name for something we can name correctly. The field says so.
+
+---
+
 ### 2026-09-01 — AIC-171: an ad set on another Page, and a reaper burning calls on dead ids
 
 "failed to add ad", in English, after the customer had written four ads. The

@@ -97,9 +97,11 @@ describe("adCreateBlocker", () => {
 });
 
 describe("adSetSubmitBlocker", () => {
-  it("names the missing set name before the missing ads", () => {
-    expect(adSetSubmitBlocker({ setName: "  ", createdAdCount: 2 })).toBe("set_name_missing");
-    expect(adSetSubmitBlocker({ setName: "נשים 35-55", createdAdCount: 0 })).toBe("no_created_ads");
-    expect(adSetSubmitBlocker({ setName: "נשים 35-55", createdAdCount: 1 })).toBeNull();
+  it("only the ads block it — the name is optional (AIC-172)", () => {
+    // A blank name derives the audience label server-side, the same convention
+    // every ad set we build already uses. Requiring one was a field that
+    // earned nothing and stopped a customer with nothing useful to type.
+    expect(adSetSubmitBlocker({ createdAdCount: 0 })).toBe("no_created_ads");
+    expect(adSetSubmitBlocker({ createdAdCount: 1 })).toBeNull();
   });
 });

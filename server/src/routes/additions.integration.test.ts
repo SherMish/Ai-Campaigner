@@ -285,7 +285,9 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
       .post("/api/app/additions/ad-set")
       .set("Authorization", `Bearer ${token}`)
       .send({
-        name: "Older women",
+        // AIC-172: NO name. It is optional now, and blank derives the same
+        // audience label every ad set we build already carries (naming.ts) —
+        // asserted below against the body Meta actually received.
         targeting: { ageMin: 35, ageMax: 55, genders: "female" },
         ads: [
           { clientKey: "c1", name: "Ad A", creativeId: c1.body.creativeId },
@@ -295,6 +297,11 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
       });
     expect(addSet.status).toBe(200);
     expect(addSet.body.metaAdIds).toHaveLength(2);
+
+    const adSetCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith("/adsets"));
+    expect(adSetCall).toBeTruthy();
+    expect(new URLSearchParams(String((adSetCall![1] as { body?: unknown })?.body)).get("name"))
+      .toBe("נשים · 35–55 · ישראל");
     expect(addSet.body.activation).toEqual({ outcome: "approved" }); // ad set AND both ads, live already
 
     // A manual /approve after the fact is still safe — idempotent, not required.
