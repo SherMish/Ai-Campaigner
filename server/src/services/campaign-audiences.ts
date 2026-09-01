@@ -132,6 +132,19 @@ export async function buildCampaignAudiences(
   const campaignId = await resolveCampaignId(pool, userId);
   if (!campaignId) return null;
 
+  // AIC-167 — is anything running right now? The engine's own per-tick answer,
+  // so the hero and this panel cannot disagree about it.
+  //
+  // When nothing is delivering, this panel stops being a performance view and
+  // becomes the CONTROL surface: it is where pause/resume lives, and it is
+  // where the "לא מתפרסם" hero explicitly sends the customer. See the spine
+  // rule below for why that mattered.
+  const deliveringRow = await pool.query<{ delivering: boolean }>(
+    `SELECT delivering FROM managed_campaigns WHERE id = $1`,
+    [campaignId],
+  );
+  const campaignDelivering = deliveringRow.rows[0]?.delivering !== false;
+
   const window = resolveRangeWindow(range, ref);
   const allTimeWindow = resolveRangeWindow("allTime", ref);
   const store = new PgSnapshotStore(pool);
@@ -192,8 +205,20 @@ export async function buildCampaignAudiences(
   const adSetsWithAnyData = new Set(
     (range === "allTime" ? adsetStats : allTimeAdsetStats).map((a) => a.adSetId),
   );
+  //
+  // AIC-167, third case, and the one that broke a real customer: the campaign
+  // is STOPPED. Then it has no data in any recent window by definition, so
+  // both clauses above are false for every ad set with history and the panel
+  // renders EMPTY — while the hero above it says "כל קבוצות הפרסום מושהות…
+  // אפשר להפעיל מחדש בלחיצה — פתחו את פירוט הקהלים למטה".
+  //
+  // The one action the product told the customer to take did not exist on the
+  // screen. The wall-of-zeroes reasoning does not apply here: a stopped
+  // campaign has nothing else to show, the panel already says "אין נתונים
+  // לתקופה שנבחרה" above these rows, and the rows carry the only affordance
+  // that can change the situation.
   const spine = meta.filter(
-    (m) => statsByAdSet.has(m.adSetId) || !adSetsWithAnyData.has(m.adSetId),
+    (m) => !campaignDelivering || statsByAdSet.has(m.adSetId) || !adSetsWithAnyData.has(m.adSetId),
   );
   const spineIds = new Set(spine.map((m) => m.adSetId));
   const asMetaList: AdSetMeta[] = spine.map((m) => {

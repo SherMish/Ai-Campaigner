@@ -304,6 +304,41 @@ d("campaign audiences (DB + HTTP)", () => {
     expect(allTime?.audiences[0].spendAgorot).toBe(6000); // today + the old day
   });
 
+  // AIC-167, reported live. The hero said "כל קבוצות הפרסום מושהות… אפשר
+  // להפעיל מחדש בלחיצה — פתחו את פירוט הקהלים למטה" and the panel was EMPTY:
+  // the one action the product told the customer to take did not exist on the
+  // screen.
+  //
+  // A stopped campaign has no data in a recent window BY DEFINITION, so the
+  // range rule above (show it if it has stats in-window, or has never had data
+  // anywhere) excluded every ad set that had history — and this panel is where
+  // pause/resume lives.
+  it("a STOPPED campaign lists its ad sets on every range — the panel is the control surface", async () => {
+    const { userId, campaignId } = await seedChain("stopped-controls");
+    const store = new PgSnapshotStore(pool);
+    const longAgo = "2026-01-05"; // history, but nothing recent
+    await store.upsert([
+      snap(campaignId, { grain: "adset", metaObjectId: "as_s", periodStart: longAgo, periodEnd: longAgo, spendAgorot: 5000, leads: 5, cplAgorot: 1000 }),
+    ]);
+    await upsertAdSetMeta(pool, campaignId, [
+      { adSetId: "as_s", name: "Set S", ageMin: 25, ageMax: 40, genders: "all", geoSummary: "", isDynamicCreative: false },
+    ]);
+
+    // While it is still delivering, the narrow-range rule is unchanged: an ad
+    // set with data only outside the window stays hidden, so picking "today"
+    // does not render last quarter as a wall of zeroes.
+    await pool.query(`UPDATE managed_campaigns SET delivering = true WHERE id = $1`, [campaignId]);
+    expect((await buildCampaignAudiences(pool, userId, "day"))?.audiences).toHaveLength(0);
+
+    // Stopped, the panel's job changes: it is the only place the customer can
+    // turn anything back on.
+    await pool.query(`UPDATE managed_campaigns SET delivering = false WHERE id = $1`, [campaignId]);
+    for (const range of ["day", "week", "month", "allTime"] as const) {
+      const a = await buildCampaignAudiences(pool, userId, range);
+      expect(a?.audiences.map((x) => x.adSetId), `range ${range}`).toEqual(["as_s"]);
+    }
+  });
+
   // REGRESSION (real live bug, reported on production): the campaign card
   // said "2 מודעות פעילות" but opening פירוט showed only 1 ad, with no
   // acknowledgment a second one exists — read as "one ad vanished". Root

@@ -6,6 +6,19 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-01 — AIC-167: a stopped campaign hid its own resume controls
+
+The hero told the customer to open the audience detail and turn an ad set back
+on; the panel was empty. The spine rule shows an ad set with stats in the
+selected window, or one that has never had data anywhere — and a stopped
+campaign has no recent data by definition, so every ad set with history was
+filtered out of the panel that carries pause/resume. Measured on the reported
+customer before the fix: day 0, week 0, month 2, allTime 2. Now a
+non-delivering campaign lists every existing ad set on every range; a
+delivering one keeps the narrow-range behaviour unchanged.
+
+---
+
 ### 2026-09-01 — AIC-166: every adopted WhatsApp ad was called broken
 
 The customer dashboard showed "הכפתור במודעה לא מוביל לשום מקום… התקציב מתבזבז"

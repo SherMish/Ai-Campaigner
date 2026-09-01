@@ -259,6 +259,28 @@ first month). P0's billing decision (AIC-19) was **manual billing, no gateway**.
 This divergence needs a call — tracked in its own ticket. The screen is built; no
 payment integration is wired.
 
+## A stopped campaign lists its ad sets on every range (AIC-167)
+
+`buildCampaignAudiences` includes every existing ad set when
+`managed_campaigns.delivering` is false, whatever range is selected.
+
+The range rule that governs a *delivering* campaign is unchanged and still
+right: show an ad set with stats in the window, or one that has never had data
+anywhere (a campaign built minutes ago, AIC-116) — but not one whose only data
+sits outside the window, so picking "today" does not render last quarter as a
+wall of zeroes.
+
+**A stopped campaign has no recent data by definition**, so that rule excluded
+every ad set with history — and this panel is where pause/resume lives. The
+hero said *"כל קבוצות הפרסום מושהות… אפשר להפעיל מחדש בלחיצה — פתחו את פירוט
+הקהלים למטה"* and the panel was empty. The one action the product told the
+customer to take did not exist on the screen. Measured on the reported
+customer: `day` and `week` returned **0** audiences, `month` and `allTime`
+returned 2.
+
+`delivering` is the engine's own per-tick answer, so the hero and the spine
+read one fact and cannot disagree about it.
+
 ## Meta has two shapes for a wired WhatsApp button (AIC-166)
 
 `judge()` (`meta/cta-health.ts`) treats a WhatsApp ad as broken only when it has
