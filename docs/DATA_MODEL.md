@@ -13,6 +13,41 @@ integer money, cascade deletes, snapshot idempotency key). Runs via
 `npm --workspace server run test:integration` against a real Postgres; self-skips
 when `DATABASE_URL` is unset.
 
+### The integration suite refuses to run against production (AIC-84)
+
+`server/.env` holds the **production** `DATABASE_URL` — the server needs it —
+and the integration suite reads the same variable. So the default outcome of
+typing `npm run test:integration` in a checkout used to be ~460 tests seeding,
+mutating and deleting rows in the live database, with nothing between that and
+permanent debris except every `afterAll` running. A failed assertion, a timeout
+or a Ctrl-C each prevent that. It leaked twice.
+
+A `globalSetup` guard now fails the whole run before any file opens a
+connection:
+
+| Target | Result |
+| --- | --- |
+| `localhost` / `127.0.0.1` | allowed — CI's service container and a developer's throwaway both live here |
+| remote **with** the `aic_test_database` marker | allowed — an ephemeral Neon branch can opt in |
+| remote **without** it | **refused**, naming the host and printing the two commands to run instead |
+| `DATABASE_URL` unset | allowed — the suite already self-skips, and refusing here would break the thing the guard protects |
+
+An unparseable URL counts as remote. Guessing wrong the other way means
+writing to production.
+
+Marking is a separate, explicit command (`npm run --workspace server
+db:test:prepare`) and never something the suite does for itself: a guard that
+can grant its own permission is not a guard. The point is that somebody
+decided, once, that this database is safe to destroy.
+
+To run the suite locally:
+
+```
+createdb aic_test
+DATABASE_URL="postgresql://$(whoami)@localhost:5432/aic_test" npm run --workspace server db:migrate
+DATABASE_URL="postgresql://$(whoami)@localhost:5432/aic_test" npm run --workspace server test:integration
+```
+
 ---
 
 ## Conventions

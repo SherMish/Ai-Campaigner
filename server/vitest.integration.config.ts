@@ -20,6 +20,11 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.integration.test.ts"],
+    // AIC-84 — refuse the whole run if DATABASE_URL is not a disposable
+    // database. server/.env holds the PRODUCTION url (the server needs it),
+    // and this suite reads the same variable, so without this the default
+    // outcome of running it in a checkout is ~460 tests writing to prod.
+    globalSetup: ["src/db/integration-setup.ts"],
     hookTimeout: 30_000,
     testTimeout: 30_000,
     // SEQUENTIAL, and this is not a performance concession — it is correctness.

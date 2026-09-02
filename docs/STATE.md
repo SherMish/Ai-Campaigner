@@ -6,6 +6,40 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-02 — the integration suite can no longer write to production (AIC-84)
+
+`server/.env` holds the production DATABASE_URL because the server needs it,
+and the integration suite reads the same variable. The default outcome of
+running it in a checkout was ~460 tests writing to the live database, with only
+`afterAll` discipline in the way — and a failed assertion, timeout or Ctrl-C
+each skip that. It leaked twice before (the `__it_outbox` customers visible in
+the ops console; the AIC-76 verification seeding).
+
+A `globalSetup` guard now refuses the run before any file opens a connection.
+Local targets pass (CI's service container and a developer throwaway both live
+there); a remote target must carry an explicit `aic_test_database` marker,
+which production never will. An unparseable URL counts as remote — guessing
+wrong the other way means writing to production. A missing DATABASE_URL still
+passes, because the suite self-skips and refusing there would break the case
+the guard exists to protect.
+
+Verified by pointing it at the real production URL: it refused, named the Neon
+host, ran zero tests, and wrote zero rows.
+
+Marking is a separate explicit command, never something the suite can do for
+itself — a guard that grants its own permission is not a guard.
+
+Not done, and deliberately: the ticket proposed ephemeral **Neon branches**.
+CI already achieves that isolation with a throwaway postgres:16 container
+(AIC-109), and this guard closes the local half, so the goal is met without
+the extra machinery. The Neon-branch mechanism stays unbuilt rather than
+claimed.
+
+Also confirmed while here: production holds **zero** `__it_*` rows in
+customers, app_users, managed_campaigns or ops_queue_items, and
+`write-outbox.integration.test.ts` passes — the failure that drove the original
+leak was fixed by AIC-109's sequential file execution.
+
 ### 2026-09-02 — a declined card stopped a campaign for 19h and nothing noticed (AIC-182)
 
 The cause of the day's dark campaign turned out to be the customer's credit
