@@ -6,6 +6,30 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-02 — a migration narrowed a CHECK and rolled back the deploy (AIC-181)
+
+CI was green; Railway failed the healthcheck because `db:migrate:prod` threw.
+
+Migration 052 re-created `ops_queue_items_type_check` by copying the list out
+of migration 046 and adding `ads_not_serving`. That list was two behind — 047
+added `leads_possibly_overcounted`, 051 added `business_profile_incomplete` —
+and prod holds live `business_profile_incomplete` rows. Re-adding a CHECK
+re-validates every existing row, so the narrowed list failed on
+`ATRewriteTable` and the whole migration rolled back.
+
+Nothing was left half-applied: `ad_serving_watch` did not exist on prod
+afterwards, so 052 was corrected in place rather than chased with a 053.
+
+The real defect is that two places enumerate this set —
+`shared/src/domain.ts` and the migration — and nothing checked them against
+each other. `ops-type-check.integration.test.ts` now inserts every
+`OPS_QUEUE_TYPE` inside a rolled-back transaction and NAMES the ones the CHECK
+rejects. Verified against the broken constraint first: it fails with exactly
+`['leads_possibly_overcounted', 'business_profile_incomplete']`.
+
+Lesson worth keeping: when a migration re-adds a CHECK, the list must be the
+current set IN FULL, never the previous migration's plus yours.
+
 ### 2026-09-02 — הצג פירוט gains impressions and clicks (AIC-180)
 
 Operator request. Each ad-set and ad row now shows הוצאה · הצגות · לחיצות ·

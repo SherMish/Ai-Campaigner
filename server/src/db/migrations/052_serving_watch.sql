@@ -27,10 +27,23 @@ CREATE TABLE IF NOT EXISTS ad_serving_watch (
 
 CREATE INDEX IF NOT EXISTS ad_serving_watch_campaign_idx ON ad_serving_watch (campaign_id);
 
+-- The FULL current set, taken from shared/src/domain.ts OPS_QUEUE_TYPE.
+--
+-- The first version of this migration copied the list out of migration 046 and
+-- added one entry to it. That list was two behind: 047 added
+-- leads_possibly_overcounted and 051 added business_profile_incomplete. Prod
+-- holds live business_profile_incomplete rows, so the narrowed CHECK failed on
+-- ATRewriteTable and the whole deploy rolled back.
+--
+-- Re-adding a CHECK means re-validating EVERY EXISTING ROW. The list must
+-- therefore be the current one in full, never the previous migration's plus
+-- yours — the comment in domain.ts says both sides enumerate the set, and this
+-- is what it costs to forget.
 ALTER TABLE ops_queue_items DROP CONSTRAINT ops_queue_items_type_check;
 ALTER TABLE ops_queue_items ADD CONSTRAINT ops_queue_items_type_check CHECK (type IN (
   'meta_connection_failure','campaign_not_delivering','campaign_rejected',
   'unusual_performance','recommendation_review','support_request',
   'missing_creative','account_restriction','campaign_tracking_broken',
   'campaign_cta_broken','ad_account_cannot_spend','lead_event_stopped',
+  'leads_possibly_overcounted','business_profile_incomplete',
   'ads_not_serving'));
