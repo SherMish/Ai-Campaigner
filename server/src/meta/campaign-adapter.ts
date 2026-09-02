@@ -3,6 +3,7 @@ import { normalizeAdSet, isProblem, type AdSetHealth, type DeliveryReader, type 
 import { normalizeAdSetMeta, type AdSetMeta, type RawAdSetMeta } from "./audience-label.js";
 import { normalizeAdDetail, type AdDetail, type RawAdDetail } from "./ad-detail.js";
 import type { BuilderWriter, CreateCampaignParams, CreateAdSetParams, CreateAdParams, PixelOption, PixelRecencyCheck } from "../builder/types.js";
+import type { Placement } from "@aic/shared";
 import type {
   CreativeWriter,
   UploadedImage,
@@ -145,6 +146,18 @@ export interface GeoLocationOption {
  * the nationwide spend the picker exists to prevent, wearing the appearance
  * of a narrowed audience.
  */
+// AIC-177 — the placement choice, as Meta's targeting expects it.
+//
+// Returns a SPREADABLE object rather than a value, because "let Meta decide"
+// is expressed by the field being absent. There is no automatic-placements
+// value to send: supplying `publisher_platforms` at all is what switches
+// Advantage+ placements off. Sending `undefined` explicitly would serialize
+// and be refused, so the empty object is the point.
+export function publisherPlatforms(placement?: Placement): Record<string, string[]> {
+  if (!placement || placement === "advantage") return {};
+  return { publisher_platforms: [placement] };
+}
+
 export function geoLocations(t: { countries: string[]; cities?: Array<{ key: string; type: "city" | "region" }> }): Record<string, unknown> {
   const cities = (t.cities ?? []).filter((c) => c.type === "city").map((c) => ({ key: c.key }));
   const regions = (t.cities ?? []).filter((c) => c.type === "region").map((c) => ({ key: c.key }));
@@ -923,6 +936,11 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
         // English names ("Ramat Gan") for Hebrew queries, and a transcribed
         // name is not a targetable value at all.
         geo_locations: geoLocations(params.targeting),
+        // AIC-177 — omitted entirely for "advantage", which is how Meta is
+        // told to use automatic placements. Sending an explicit list is what
+        // turns Advantage+ placements OFF, so the absence IS the instruction;
+        // there is no "automatic" value to send.
+        ...publisherPlatforms(params.targeting.placement),
         // Meta REFUSES the create outright if this is absent — it must be an
         // explicit 0 or 1 (found live 2026-08-19: "you need to enable or
         // disable the Advantage audience feature"). The value is a stated

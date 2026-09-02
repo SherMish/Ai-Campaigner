@@ -1,3 +1,4 @@
+import type { Placement } from "@aic/shared";
 // Meta create-write shapes (AIC-50) — the builder's write surface, separate
 // from ExecWriter (safe-executor.ts): these create NEW objects, never modify
 // an existing recommendation's target, so they don't belong on that
@@ -24,6 +25,13 @@ export interface CreateAdSetTargeting {
   ageMax: number;
   genders: number[]; // Meta shape: [] = all, [1] = male, [2] = female
   countries: string[];
+  /**
+   * AIC-177 — where the ads may run. Optional so every existing caller keeps
+   * Meta's automatic placements, which is exactly what they got before.
+   * Absent and "advantage" are the same instruction: send no
+   * publisher_platforms and let Meta decide.
+   */
+  placement?: Placement;
   /**
    * AIC-157 — the cities/regions this ad set actually serves.
    *

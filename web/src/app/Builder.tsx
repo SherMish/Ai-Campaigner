@@ -15,6 +15,7 @@ import {
 import { Stepper, StatusPill, SupportCard, Recommended } from "./components";
 import { BuilderCreatives, newAdDraft, type AdDraft } from "./BuilderCreatives";
 import { AudienceFields, type Gender } from "./AudienceFields";
+import { DEFAULT_PLACEMENT, type Placement } from "@aic/shared";
 import { createCampaignBlocker, nextBlocker } from "./builder-gates";
 
 const b = strings.he.builder;
@@ -36,6 +37,8 @@ interface WizardState {
   // AIC-157 — where the ads run. Empty = all of Israel, which used to be the
   // only possibility.
   cities: GeoPlace[];
+  // AIC-177 — where the ads may run; Advantage+ by default.
+  placement: Placement;
 }
 
 interface Props {
@@ -137,6 +140,8 @@ export function Builder({ customerId, onExit }: Props = {}) {
   const [category, setCategory] = useState<BusinessCategory>("other");
   // AIC-106 — from the customer record via /builder/context, never typed here.
   const [businessName, setBusinessName] = useState("");
+  // AIC-177 — gates the Instagram-only placement option.
+  const [hasInstagram, setHasInstagram] = useState(false);
   // AIC-155: the PAGE, which is who Meta publishes the ad as — not
   // businessName, which is what we typed into the customers row. Loaded
   // separately from the context so its two live Meta reads never delay the
@@ -170,6 +175,7 @@ export function Builder({ customerId, onExit }: Props = {}) {
         const cat = normalizeBusinessCategory(ctx.category);
         setCategory(cat);
         setBusinessName(ctx.businessName ?? "");
+        setHasInstagram(ctx.hasInstagram);
         getBuilderPage(customerId).then(setPage).catch(() => {
           /* the preview falls back to the placeholder — never break the step */
         });
@@ -188,6 +194,7 @@ export function Builder({ customerId, onExit }: Props = {}) {
           specialCategory: RECOMMENDED_SPECIAL_AD_CATEGORY,
           ageMin: aud.ageMin, ageMax: aud.ageMax, gender: aud.genders,
           cities: [],
+          placement: DEFAULT_PLACEMENT,
         });
         return startBuilder(customerId);
       })
@@ -318,7 +325,7 @@ export function Builder({ customerId, onExit }: Props = {}) {
         destinationUrl: isWebsite ? wizard.destinationUrl : undefined,
         pixelId: isWebsite ? wizard.pixelId : undefined,
         conversionEvent: isWebsite ? wizard.conversionEvent : undefined,
-        targeting: { ageMin: wizard.ageMin, ageMax: wizard.ageMax, genders: wizard.gender, cities: wizard.cities },
+        targeting: { ageMin: wizard.ageMin, ageMax: wizard.ageMax, genders: wizard.gender, cities: wizard.cities, placement: wizard.placement },
         ads: createdAds.map((a) => ({ clientKey: a.clientKey, name: a.name, creativeId: a.creativeId! })),
       }, customerId);
       setBuildResult(result);
@@ -544,8 +551,9 @@ export function Builder({ customerId, onExit }: Props = {}) {
           {step === 4 && (
             <AudienceFields
               category={category}
-              value={{ ageMin: wizard.ageMin, ageMax: wizard.ageMax, gender: wizard.gender, cities: wizard.cities }}
+              value={{ ageMin: wizard.ageMin, ageMax: wizard.ageMax, gender: wizard.gender, cities: wizard.cities, placement: wizard.placement }}
               onCategoryChange={setCategory}
+              hasInstagram={hasInstagram}
               onChange={patch}
               customerId={customerId}
             />

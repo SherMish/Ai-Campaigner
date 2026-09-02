@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { BUSINESS_CATEGORY, resolveAudienceDefault, type BusinessCategory } from "@aic/shared";
+import { BUSINESS_CATEGORY, PLACEMENT, resolveAudienceDefault, type BusinessCategory, type Placement } from "@aic/shared";
+import { placementBlocker, placementFallback } from "./placement-gate";
 import { searchGeoPlaces, type GeoPlace } from "../api";
 import { strings } from "../strings";
 import { Recommended } from "./components";
@@ -19,6 +20,10 @@ export interface AudienceValue {
   // choice. It lives on the SHARED audience value so the builder and
   // add-content cannot end up with different targeting powers.
   cities: GeoPlace[];
+  // AIC-177 — where the ads may run. Same reasoning as `cities` above: it
+  // lives on the SHARED audience value so the builder and add-content cannot
+  // end up offering different placement powers.
+  placement: Placement;
 }
 
 const b = strings.he.builder;
@@ -32,9 +37,11 @@ interface Props {
   /** Present when an operator is driving this for a customer — the geo lookup
    *  routes through the admin path then, same as every other builder read. */
   customerId?: string;
+  /** AIC-177 — decides whether the Instagram-only option is choosable. */
+  hasInstagram: boolean;
 }
 
-export function AudienceFields({ category, value, onCategoryChange, onChange, customerId }: Props) {
+export function AudienceFields({ category, value, onCategoryChange, onChange, customerId, hasInstagram }: Props) {
   return (
     <div>
       <div className="row between"><b style={{ fontSize: "1.2rem" }}>{au.title}</b><Recommended /></div>
@@ -74,7 +81,75 @@ export function AudienceFields({ category, value, onCategoryChange, onChange, cu
         onChange={(cities) => onChange({ cities })}
         customerId={customerId}
       />
+      <PlacementPicker
+        value={value.placement}
+        hasInstagram={hasInstagram}
+        onChange={(placement) => onChange({ placement })}
+      />
       <p className="muted" style={{ marginTop: 12 }}>{au.categoryRationale[category]}</p>
+    </div>
+  );
+}
+
+
+/*
+ * Where the ads run (AIC-177).
+ *
+ * Advantage+ is the default AND the recommendation, which is not a hedge: Meta
+ * moves budget to whatever converts, and an SMB has no basis to beat it. Every
+ * ad set we ever created already ran this way — the difference is that it is
+ * now a choice someone made rather than the absence of a control, which is
+ * exactly what AIC-157 fixed for geo.
+ *
+ * An unavailable option is rendered DISABLED WITH ITS REASON BESIDE IT, never
+ * hidden and never silently inert. Hiding it would leave a customer who
+ * expects Instagram wondering where it went; leaving it clickable-but-dead is
+ * the AIC-173 failure. The reason names the fix.
+ */
+function PlacementPicker({ value, hasInstagram, onChange }: {
+  value: Placement;
+  hasInstagram: boolean;
+  onChange: (p: Placement) => void;
+}) {
+  // A held choice that became unavailable is corrected on sight rather than at
+  // submit time, where the server's refusal would name something the customer
+  // cannot see from this screen.
+  useEffect(() => {
+    const fallback = placementFallback(value, { hasInstagram });
+    if (fallback) onChange(fallback);
+  }, [value, hasInstagram, onChange]);
+
+  return (
+    <div className="field" style={{ marginTop: 12 }}>
+      <label>{au.placementLabel}</label>
+      <div className="stack gap8" style={{ marginTop: 6 }}>
+        {PLACEMENT.map((p) => {
+          const blocked = placementBlocker(p, { hasInstagram });
+          return (
+            <label
+              key={p}
+              className="row gap8"
+              style={{ alignItems: "flex-start", opacity: blocked ? 0.55 : 1, cursor: blocked ? "not-allowed" : "pointer" }}
+            >
+              <input
+                type="radio"
+                name="placement"
+                value={p}
+                checked={value === p}
+                disabled={!!blocked}
+                onChange={() => onChange(p)}
+                style={{ marginTop: 4 }}
+              />
+              <span>
+                <b>{au.placementOptions[p]}</b>
+                <span className="muted" style={{ display: "block", fontSize: "0.82rem" }}>
+                  {blocked ? au.placementBlocked[blocked] : au.placementHints[p]}
+                </span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
     </div>
   );
 }

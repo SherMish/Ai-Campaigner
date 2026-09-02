@@ -4,6 +4,8 @@
 //
 // Admin routes (/admin/*) require a bearer token (server requireAdmin). The ops
 // console stores it in localStorage via the AdminGate; we attach it here.
+import type { Placement } from "@aic/shared";
+
 const ADMIN_TOKEN_KEY = "aic_admin_token";
 const AUTH_TOKEN_KEY = "aic_auth_token";
 
@@ -595,7 +597,8 @@ function builderBasePath(customerId?: string): string {
 
 export const getBuilderContext = (customerId?: string) =>
   // AIC-106 — businessName names the customer in the creation confirmation.
-  api<{ category: string; businessName: string; agreedBudgetAgorot: number | null }>(`${builderBasePath(customerId)}/context`);
+  // AIC-177: hasInstagram gates the Instagram-only placement option.
+  api<{ category: string; businessName: string; agreedBudgetAgorot: number | null; hasInstagram: boolean }>(`${builderBasePath(customerId)}/context`);
 export const startBuilder = (customerId?: string) =>
   api<{ localCampaignId: string }>(`${builderBasePath(customerId)}/start`, { method: "POST" });
 
@@ -710,7 +713,9 @@ export interface BuildCampaignBody {
   destinationUrl?: string;
   pixelId?: string;
   conversionEvent?: string;
-  targeting: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[]; cities?: GeoPlace[] };
+  // AIC-177 — placement is optional on the wire: absent means Advantage+,
+  // which is exactly what every request before this shipped meant.
+  targeting: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[]; cities?: GeoPlace[]; placement?: Placement };
   ads: Array<{ clientKey: string; name: string; creativeId: string }>;
 }
 export interface BuildCampaignResult {
@@ -768,6 +773,8 @@ export interface AdditionContext {
   campaignName: string;
   category: string;
   whatsappDestination: string;
+  // AIC-177: gates the Instagram-only placement option.
+  hasInstagram: boolean;
   // AIC-103: which per-campaign-type required fields (shared's
   // CampaignRequiredField) are missing — [] when the campaign is fully
   // configured. Present even on a 200 (this never 409s the screen — an
@@ -895,7 +902,9 @@ export const addAd = (body: AddAdBody) => api<AddResult>("/app/additions/ad", { 
 
 export interface AddAdSetBody {
   name: string;
-  targeting: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[]; cities?: GeoPlace[] };
+  // AIC-177 — placement is optional on the wire: absent means Advantage+,
+  // which is exactly what every request before this shipped meant.
+  targeting: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[]; cities?: GeoPlace[]; placement?: Placement };
   ads: Array<{ clientKey: string; name: string; creativeId: string }>;
   additionKey: string;
 }

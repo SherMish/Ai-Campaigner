@@ -15,6 +15,7 @@ import { pageIdentityOrNulls } from "../builder/page-identity.js";
 import { searchGeoOrEmpty } from "../builder/geo-search.js";
 import { listPromotableContent } from "../builder/promotable-content.js";
 import { respondIfMetaThrottled } from "../meta/throttle-response.js";
+import { isPlacement, type Placement } from "@aic/shared";
 
 // The guided builder's HTTP surface (AIC-52) — a thin layer over AIC-50's
 // create-writes and AIC-51's creative handling. Every route resolves the
@@ -46,7 +47,9 @@ builderRouter.get("/context", requireAuth, async (req, res) => {
     // AIC-106 — businessName rides along so the client can name the customer
     // in the creation confirmation. Sourced from the customer record via
     // BuilderContext, never from anything the operator typed.
-    res.json({ category: ctx.category, businessName: ctx.businessName, agreedBudgetAgorot: ctx.agreedBudgetAgorot });
+    // AIC-177: hasInstagram decides whether the Instagram-only placement is
+    // choosable. A boolean, not the id — the screen needs to know IF, not WHICH.
+    res.json({ category: ctx.category, businessName: ctx.businessName, agreedBudgetAgorot: ctx.agreedBudgetAgorot, hasInstagram: !!ctx.instagramId });
   } catch (e) {
     // AIC-168: a throttle is temporary and fixed by waiting — never
     // this route's own generic failure.
@@ -299,8 +302,28 @@ interface BuildBody {
   destinationUrl?: string; // website only
   pixelId?: string; // website only
   conversionEvent?: string; // website only
-  targeting?: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[]; cities?: Array<{ key: string; name: string; type: "city" | "region" }> };
+  targeting?: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[]; cities?: Array<{ key: string; name: string; type: "city" | "region" }>; placement?: string };
   ads?: Array<{ clientKey: string; name: string; creativeId: string }>;
+}
+
+
+// AIC-177 — the placement, or undefined for Advantage+.
+//
+// Throws on an unknown value rather than silently defaulting: a string this
+// build does not recognise means the client is ahead of the server, and
+// quietly running Advantage+ instead would put a customer's ads somewhere they
+// did not choose. Same stance as resolveDestinationShape and campaignName.
+function placementOf(v: unknown): Placement | undefined {
+  if (v === undefined || v === "advantage") return undefined;
+  if (!isPlacement(v)) throw new BadPlacementError(String(v));
+  return v;
+}
+
+export class BadPlacementError extends Error {
+  constructor(public readonly value: string) {
+    super(`unknown placement "${value}"`);
+    this.name = "BadPlacementError";
+  }
 }
 
 // POST /build — the final step: campaign → 1 ad set (AIC-38/49's recommended
@@ -363,11 +386,21 @@ builderRouter.post("/build", requireAuth, async (req, res) => {
             // geo_locations (see geoLocations()); an empty list keeps the
             // nationwide behaviour that was the only option until now.
             cities: body.targeting.cities ?? [],
+            // AIC-177 — validated below the same way add-content does; the
+            // builder and add-content create ad sets through one adapter and
+            // must not disagree about which placements are allowed.
+            placement: placementOf(body.targeting.placement),
           },
           ads: body.ads,
         },
       ],
     };
+    // AIC-177 — the same rule the picker renders disabled, enforced where it
+    // cannot be bypassed by a stale tab or the admin builder.
+    if (body.targeting.placement === "instagram" && !ctx.instagramId) {
+      res.status(409).json({ error: "no Instagram account is connected", code: "placement_no_instagram" });
+      return;
+    }
     const result = await buildCampaignOnMeta(pool, writer, input);
     res.json(result);
   } catch (e) {
@@ -378,6 +411,12 @@ builderRouter.post("/build", requireAuth, async (req, res) => {
     // failure, so it must not be reported as 502 ("Meta is broken"). That
     // wrong diagnosis lands on an operator mid-call and sends them to check
     // Meta rather than the one field they actually need to fill.
+    // AIC-177 — our own validation, not Meta breaking: 400 with the value
+    // named, never a 502 that sends an operator to check Meta.
+    if (e instanceof BadPlacementError) {
+      res.status(400).json({ error: e.message, code: "bad_placement" });
+      return;
+    }
     if (e instanceof BudgetCeilingMissingError) {
       res.status(409).json({ error: "no agreed daily budget is set for this customer — set it in provisioning before building", code: "budget_ceiling_missing" });
       return;

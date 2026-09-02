@@ -6,6 +6,33 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-02 — the customer can choose where their ads run (AIC-177)
+
+Every ad set we have ever created ran on Meta's automatic placements — not
+because anyone chose that, but because no screen offered the choice. Same shape
+as geo before AIC-157: a default nobody picked.
+
+Three options on the shared `AudienceFields`, so the builder and add-content
+cannot diverge: Advantage+ (default, badged מומלץ), Instagram only, Facebook
+only. Not Meta's sixteen — that list is the decision fatigue this product
+exists to remove.
+
+The subtle part is that **the absence is the instruction**: there is no
+"automatic" value to send, because supplying `publisher_platforms` at all is
+what turns Advantage+ placements off. `publisherPlatforms()` returns a
+spreadable object, empty for advantage, and a test asserts it emits no key —
+an empty array would quietly change where every default ad set runs.
+
+Instagram-only is disabled with its reason when no Instagram is connected, and
+refused again server-side (409) because the picker is not the only caller. An
+unknown placement is a 400 naming the value rather than a silent fallback —
+running a customer's ads somewhere they did not choose is the failure worth
+being loud about.
+
+Only Instagram can be blocked. A Facebook placement needs a Page, which is
+already required to create any ad set, so a `no_page` variant could never be
+produced and was not invented (the AIC-172 lesson about unreachable variants).
+
 ### 2026-09-01 — the new ad set was invisible, and the status contradicted the numbers (AIC-176)
 
 Two reports on one screenshot, both real.

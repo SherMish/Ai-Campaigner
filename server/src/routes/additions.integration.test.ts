@@ -309,6 +309,82 @@ d("add-to-existing-campaign routes (DB + HTTP)", () => {
     expect(approve.body).toEqual({ outcome: "already_approved" });
   });
 
+  // AIC-177 — the placement choice, end to end.
+  it("sends no publisher_platforms by default, so Meta keeps Advantage+ placements", async () => {
+    const { token } = await seedExistingCampaign("place-default");
+    const { fetchMock } = mockMetaFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    const c1 = await request(app).post("/api/app/additions/creative").set("Authorization", `Bearer ${token}`).send({ clientKey: "c1", name: "A", postId: "post_1" });
+
+    const res = await request(app).post("/api/app/additions/ad-set").set("Authorization", `Bearer ${token}`).send({
+      targeting: { ageMin: 25, ageMax: 45, genders: "all" },
+      ads: [{ clientKey: "c1", name: "A", creativeId: c1.body.creativeId }],
+      additionKey: "place-default-1",
+    });
+    expect(res.status).toBe(200);
+
+    const call = fetchMock.mock.calls.find((c) => String(c[0]).endsWith("/adsets"))!;
+    const targeting = JSON.parse(new URLSearchParams(String((call[1] as { body?: unknown })?.body)).get("targeting")!);
+    // The ABSENCE is the instruction — sending the key at all disables
+    // Advantage+ placements, so an empty array or a null here would silently
+    // change where every default ad set runs.
+    expect(targeting).not.toHaveProperty("publisher_platforms");
+  });
+
+  it("refuses Instagram-only when no Instagram account is connected, before any Meta write", async () => {
+    // The SAME rule the picker renders disabled. Enforced here because the UI
+    // is not the only caller: a stale tab, a replayed request and the admin
+    // builder all reach this route.
+    const { token } = await seedExistingCampaign("place-no-ig");
+    const { fetchMock } = mockMetaFetch();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await request(app).post("/api/app/additions/ad-set").set("Authorization", `Bearer ${token}`).send({
+      targeting: { ageMin: 25, ageMax: 45, genders: "all", placement: "instagram" },
+      ads: [{ clientKey: "c1", name: "A", creativeId: "crea_1" }],
+      additionKey: "place-no-ig-1",
+    });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("placement_no_instagram");
+    expect(fetchMock.mock.calls.find((c) => String(c[0]).endsWith("/adsets"))).toBeUndefined();
+  });
+
+  it("restricts to Instagram when the customer chooses it", async () => {
+    const { token, customerId } = await seedExistingCampaign("place-ig");
+    await pool.query(`UPDATE meta_connections SET instagram_id = 'ig_1' WHERE customer_id = $1`, [customerId]);
+    const { fetchMock } = mockMetaFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    const c1 = await request(app).post("/api/app/additions/creative").set("Authorization", `Bearer ${token}`).send({ clientKey: "c1", name: "A", postId: "post_1" });
+
+    const res = await request(app).post("/api/app/additions/ad-set").set("Authorization", `Bearer ${token}`).send({
+      targeting: { ageMin: 25, ageMax: 45, genders: "all", placement: "instagram" },
+      ads: [{ clientKey: "c1", name: "A", creativeId: c1.body.creativeId }],
+      additionKey: "place-ig-1",
+    });
+    expect(res.status).toBe(200);
+    const call = fetchMock.mock.calls.find((c) => String(c[0]).endsWith("/adsets"))!;
+    const targeting = JSON.parse(new URLSearchParams(String((call[1] as { body?: unknown })?.body)).get("targeting")!);
+    expect(targeting.publisher_platforms).toEqual(["instagram"]);
+  });
+
+  it("refuses an unknown placement with the value named, and writes nothing", async () => {
+    const { token } = await seedExistingCampaign("place-bad");
+    const { fetchMock } = mockMetaFetch();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await request(app).post("/api/app/additions/ad-set").set("Authorization", `Bearer ${token}`).send({
+      targeting: { ageMin: 25, ageMax: 45, genders: "all", placement: "tiktok" },
+      ads: [{ clientKey: "c1", name: "A", creativeId: "crea_1" }],
+      additionKey: "place-bad-1",
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("bad_placement");
+    expect(res.body.error).toContain("tiktok");
+    // Refused BEFORE any Meta write — a bad placement must not leave a
+    // half-built ad set behind.
+    expect(fetchMock.mock.calls.find((c) => String(c[0]).endsWith("/adsets"))).toBeUndefined();
+  });
+
   // AIC-65 reached the engine tick but NOT these customer-facing routes — found
   // live on 2026-08-12 when the real dead GelNails ad set was still offered in
   // the add-ad picker. An ad added to a dead ad set would never deliver.

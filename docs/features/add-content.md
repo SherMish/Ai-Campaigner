@@ -249,6 +249,39 @@ handler refused on the old one and returned without a word (AIC-173). A guard
 that restates what the gate already decides is a bug waiting for the next rule
 change.
 
+## Placements (AIC-177)
+
+Three options, on the SHARED `AudienceFields` so the builder and add-content
+cannot offer different placement powers (the AIC-157 rule for geo, applied
+again):
+
+| Option | Sent to Meta |
+| --- | --- |
+| `advantage` — Meta decides (**default, recommended**) | nothing |
+| `instagram` — Instagram only | `publisher_platforms: ["instagram"]` |
+| `facebook` — Facebook only | `publisher_platforms: ["facebook"]` |
+
+**The absence is the instruction.** There is no "automatic placements" value:
+supplying `publisher_platforms` at all is what turns Advantage+ placements
+*off*. So `publisherPlatforms()` returns a spreadable object, empty for
+advantage — an empty array or a null would silently change where every default
+ad set runs.
+
+Three options and not Meta's sixteen because handing an SMB owner that list is
+the decision fatigue this product exists to remove. These three are the only
+ones a business owner can hold a reason about.
+
+**Instagram-only is refused when no Instagram account is connected** — disabled
+in the picker with the reason beside it, and refused again server-side (409
+`placement_no_instagram`) because the UI is not the only caller: a stale tab,
+a replayed request and the admin builder all reach the same route. An unknown
+value is a 400 naming it (`bad_placement`), never a silent fallback to
+Advantage+ — that would run a customer's ads somewhere they did not choose.
+
+Only Instagram can be blocked. A Facebook placement needs a Page, and a Page is
+already required to create any ad set, so a `no_page` blocker could never be
+produced and does not exist.
+
 ## The caches refresh in-request (AIC-176)
 
 Adding an **ad** refreshes the per-ad cache before returning

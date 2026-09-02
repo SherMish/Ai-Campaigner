@@ -41,3 +41,19 @@ export function metaRefusalOf(e: unknown): MetaRefusalView | null {
   const reason = KNOWN.find((r) => r === body.reason) ?? null;
   return { reason, message };
 }
+
+// AIC-177 — OUR OWN refusals, distinct from Meta's.
+//
+// A placement the server rejects is not a Meta failure and must not read as
+// one: `placement_no_instagram` means the customer's Instagram is gone since
+// the page loaded, and `bad_placement` means this tab is older than the
+// server. Both have a fix; neither is "something went wrong".
+export type LocalRefusalReason = "placement_no_instagram" | "bad_placement";
+
+const LOCAL: readonly LocalRefusalReason[] = ["placement_no_instagram", "bad_placement"];
+
+export function localRefusalOf(e: unknown): LocalRefusalReason | null {
+  const body = (e as { body?: unknown } | null)?.body as { code?: unknown } | undefined;
+  const code = body?.code;
+  return LOCAL.find((c) => c === code) ?? null;
+}

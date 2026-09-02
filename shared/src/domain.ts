@@ -121,3 +121,26 @@ export function isOneOf<T extends readonly string[]>(
 ): value is T[number] {
   return typeof value === "string" && (allowed as readonly string[]).includes(value);
 }
+
+// AIC-177 — where the customer's ads are allowed to run.
+//
+// Meta's own default is Advantage+ placements: it decides the mix across
+// Facebook, Instagram, Audience Network and WhatsApp. That is genuinely the
+// right default for almost everyone — it is also what EVERY ad set we have
+// ever created got, because no screen offered the choice, so it was never a
+// choice anyone made. Same shape as the geo control before AIC-157.
+//
+// Three options, not sixteen. Meta exposes 16 individual placements; handing
+// an SMB owner that list is the decision fatigue this product exists to
+// remove. These three are the only ones with a reason a business owner can
+// actually hold: "let Meta decide", "run this on my Instagram", "run this on
+// my Facebook page".
+export const PLACEMENT = ["advantage", "instagram", "facebook"] as const;
+export type Placement = (typeof PLACEMENT)[number];
+
+/** Meta's own default, and ours. Recommended in the UI. */
+export const DEFAULT_PLACEMENT: Placement = "advantage";
+
+export function isPlacement(v: unknown): v is Placement {
+  return typeof v === "string" && (PLACEMENT as readonly string[]).includes(v);
+}

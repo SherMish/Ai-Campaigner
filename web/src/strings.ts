@@ -2016,6 +2016,24 @@ export const strings = {
         // AIC-157 — the location picker. geoNote used to say "בשלב הזה
         // הקמפיין מטרגט את כל ישראל… יתווסף בהמשך", which was honest and
         // expensive: a local business on ₪15/day paid for nationwide reach.
+        // AIC-177 — where the ads may run. Three options, because sixteen is
+        // the decision fatigue this product exists to remove.
+        placementLabel: "איפה המודעות ירוצו",
+        placementOptions: {
+          advantage: "מטא מחליטה (מומלץ)",
+          instagram: "אינסטגרם בלבד",
+          facebook: "פייסבוק בלבד",
+        },
+        placementHints: {
+          advantage: "מטא מציגה את המודעה בפייסבוק, באינסטגרם ובשאר המקומות שלה, ומעבירה תקציב למקום שמביא הכי הרבה פניות. כמעט תמיד זו הבחירה הנכונה.",
+          instagram: "המודעה תרוץ רק באינסטגרם. מתאים אם חשוב לכם שהלקוחות יגיעו לפרופיל האינסטגרם שלכם — אבל זה מצמצם את הקהל, ולפעמים המודעה תוציא פחות תקציב.",
+          facebook: "המודעה תרוץ רק בפייסבוק. מצמצם את הקהל באותו אופן.",
+        },
+        // The reason an option is unclickable, shown NEXT to it — never a
+        // dead radio button with no explanation.
+        placementBlocked: {
+          no_instagram: "אין חשבון אינסטגרם מחובר. אפשר לחבר אותו בהגדרות ואז לבחור באפשרות הזו.",
+        },
         geoLabel: "איפה להציג את המודעות",
         geoPlaceholder: "הקלידו עיר או אזור — למשל רמת גן",
         geoHint: "רק מי שנמצא באזורים שתבחרו יראה את המודעה. בלי בחירה — הקמפיין רץ על כל ישראל, וזה כמעט תמיד רחב מדי לעסק מקומי.",
@@ -2377,6 +2395,9 @@ export const strings = {
       // sends. A refusal we have no copy for still shows Meta's own English
       // sentence rather than the generic failure above: true and actionable
       // beats fluent and useless.
+      // AIC-177 — OUR refusals, not Meta's. Different cause, different fix.
+      placementNoInstagram: "בחרתם אינסטגרם בלבד, אבל אין כרגע חשבון אינסטגרם מחובר. אפשר לחבר אותו בהגדרות, או לבחור באפשרות המומלצת (מטא מחליטה).",
+      placementUnknown: "האפשרות שנבחרה כבר לא קיימת. רעננו את הדף ובחרו שוב.",
       metaRefusedTitle: "מטא לא אישרה את הפעולה",
       whatsappBusinessRequired:
         "מספר הוואטסאפ המקושר לעמוד הפייסבוק שלכם רשום כחשבון פרטי. מודעות שמובילות לוואטסאפ מחייבות חשבון WhatsApp Business.",

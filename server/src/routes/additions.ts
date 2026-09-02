@@ -22,6 +22,7 @@ import { sendTelegram } from "../notify/telegram.js";
 import { listPromotableContent } from "../builder/promotable-content.js";
 import { respondIfMetaThrottled } from "../meta/throttle-response.js";
 import { respondIfMetaRefused } from "../meta/graph-refusal.js";
+import { isPlacement } from "@aic/shared";
 import { adSetName } from "../meta/naming.js";
 
 // Adding content to a campaign we ALREADY manage (AIC-63) — the everyday
@@ -124,6 +125,9 @@ additionsRouter.get("/context", requireAuth, async (req, res) => {
       whatsappDestination: ctx.whatsappNumber ?? "",
       canAddContent: acceptsWhatsappWrites(ctx),
       missingConfigFields: ctx.missingConfigFields,
+      // AIC-177 — decides whether the Instagram-only placement is choosable.
+      // A boolean, not the id: the screen needs to know IF, never WHICH.
+      hasInstagram: !!ctx.instagramId,
     });
   } catch (e) {
     // AIC-168: a throttle is temporary and fixed by waiting — never
@@ -480,7 +484,7 @@ additionsRouter.post("/ad", requireAuth, async (req, res) => {
 
 interface AddAdSetBody {
   name?: string;
-  targeting?: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[]; cities?: Array<{ key: string; name: string; type: "city" | "region" }> };
+  targeting?: { ageMin: number; ageMax: number; genders: "all" | "male" | "female"; countries?: string[]; cities?: Array<{ key: string; name: string; type: "city" | "region" }>; placement?: string };
   ads?: Array<{ clientKey: string; name: string; creativeId: string }>;
   additionKey?: string;
 }
@@ -532,6 +536,22 @@ additionsRouter.post("/ad-set", requireAuth, async (req, res) => {
     // AIC-172: the name is OPTIONAL now. Blank derives the same convention
     // every ad set we create already uses (naming.ts) — see below.
     if (!body.targeting) { res.status(400).json({ error: "targeting is required" }); return; }
+    // AIC-177 — the placement, validated here rather than trusted. Two
+    // separate refusals, because they are two different mistakes:
+    //   * an unknown string is a client/version bug — 400 with the value named
+    //   * instagram-only with no connected Instagram account is a real
+    //     customer-facing condition, and the SAME rule the picker renders
+    //     disabled. The UI stops it first; this stops a stale tab, a replayed
+    //     request, and the admin builder driving the same route.
+    const rawPlacement = body.targeting.placement;
+    if (rawPlacement !== undefined && !isPlacement(rawPlacement)) {
+      res.status(400).json({ error: `unknown placement "${rawPlacement}"`, code: "bad_placement" });
+      return;
+    }
+    if (rawPlacement === "instagram" && !ctx.instagramId) {
+      res.status(409).json({ error: "no Instagram account is connected", code: "placement_no_instagram" });
+      return;
+    }
     if (!Array.isArray(body.ads) || body.ads.length === 0) { res.status(400).json({ error: "at least one ad is required" }); return; }
     if (!body.additionKey) { res.status(400).json({ error: "additionKey is required" }); return; }
 
@@ -560,6 +580,8 @@ additionsRouter.post("/ad-set", requireAuth, async (req, res) => {
         ageMax: body.targeting.ageMax,
         genders: gendersOf(body.targeting.genders),
         countries: body.targeting.countries?.length ? body.targeting.countries : ["IL"],
+        // AIC-177 — validated above; undefined means Advantage+.
+        placement: rawPlacement,
         // AIC-157 — the same control the builder has. Two screens creating ad
         // sets with different targeting powers is exactly the divergence
         // AIC-155 was.

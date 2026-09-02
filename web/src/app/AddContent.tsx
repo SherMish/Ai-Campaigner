@@ -13,7 +13,8 @@ import { StatusPill, SupportCard, WA } from "./components";
 import { AudienceFields, type AudienceValue, type Gender } from "./AudienceFields";
 import { BuilderCreatives, newAdDraft, type AdDraft } from "./BuilderCreatives";
 import { adSetSubmitBlocker } from "./builder-gates";
-import { metaRefusalOf, type MetaRefusalView } from "./meta-refusal";
+import { metaRefusalOf, localRefusalOf, type MetaRefusalView } from "./meta-refusal";
+import { DEFAULT_PLACEMENT } from "@aic/shared";
 import { saveReceipt } from "./addition-receipt";
 const cc = strings.he.builder.creatives;
 
@@ -248,8 +249,10 @@ export function AddContent() {
   // the location picker from the same component the builder uses — two screens
   // creating ad sets with different targeting powers is the AIC-155 divergence
   // all over again.
-  const [audience, setAudience] = useState<AudienceValue>({ ageMin: 18, ageMax: 65, gender: "all", cities: [] });
+  const [audience, setAudience] = useState<AudienceValue>({ ageMin: 18, ageMax: 65, gender: "all", cities: [], placement: DEFAULT_PLACEMENT });
   const [setName, setSetName] = useState("");
+  // AIC-177 — from /context; gates the Instagram-only placement option.
+  const [hasInstagram, setHasInstagram] = useState(false);
   const [groupAdDrafts, setGroupAdDrafts] = useState<AdDraft[]>([newAdDraft(1), newAdDraft(2), newAdDraft(3)]);
 
   const [additionKey, setAdditionKey] = useState(freshKey);
@@ -287,7 +290,8 @@ export function AddContent() {
         const cat = normalizeBusinessCategory(ctx.category);
         setCategory(cat);
         const d = resolveAudienceDefault(cat);
-        setAudience({ ageMin: d.ageMin, ageMax: d.ageMax, gender: d.genders, cities: [] });
+        setAudience({ ageMin: d.ageMin, ageMax: d.ageMax, gender: d.genders, cities: [], placement: DEFAULT_PLACEMENT });
+        setHasInstagram(ctx.hasInstagram);
         setMissingConfigFields(ctx.missingConfigFields);
         setPhase("ready");
       })
@@ -399,7 +403,7 @@ export function AddContent() {
     try {
       const result = await addAdSet({
         name: setName.trim(),
-        targeting: { ageMin: audience.ageMin, ageMax: audience.ageMax, genders: audience.gender, cities: audience.cities },
+        targeting: { ageMin: audience.ageMin, ageMax: audience.ageMax, genders: audience.gender, cities: audience.cities, placement: audience.placement },
         ads: created.map((d) => ({ clientKey: d.clientKey, name: d.name, creativeId: d.creativeId! })),
         additionKey,
       });
@@ -413,7 +417,15 @@ export function AddContent() {
     } catch (e) {
       const refused = metaRefusalOf(e);
       setRefusal(refused);
-      setSubmitError(refused ? null : e instanceof ApiError ? e.message : s.submitError);
+      // AIC-177 — our own refusal outranks the generic copy. It names a fix;
+      // "משהו השתבש" does not.
+      const local = refused ? null : localRefusalOf(e);
+      setSubmitError(
+        refused ? null
+          : local === "placement_no_instagram" ? s.placementNoInstagram
+          : local === "bad_placement" ? s.placementUnknown
+          : e instanceof ApiError ? e.message : s.submitError,
+      );
     } finally {
       setSubmitting(false);
     }
@@ -704,6 +716,7 @@ export function AddContent() {
                 <AudienceFields
                   category={category}
                   value={audience}
+                  hasInstagram={hasInstagram}
                   onCategoryChange={setCategory}
                   onChange={(patch) => setAudience((prev) => ({ ...prev, ...patch }))}
                 />
