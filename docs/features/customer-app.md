@@ -649,6 +649,18 @@ and these two split it:
 
 That third row is exactly the failure this product spent 2026-09-02 chasing.
 
+**For a WhatsApp campaign, the clicks→leads gap is the point.** Our only CTA
+opens WhatsApp, so a click is an intent to message — and on GelNails' own
+history, 45 clicks produced 9 conversations. **Four out of five people who tap
+never send a message**, consistently (29/20/20/20/0/50% per day). That is the
+largest leak in the funnel and nothing else on the dashboard shows it, which is
+why the `i` on לחיצות explains the GAP rather than the metric.
+
+Caveat carried in the copy's honesty, not hidden: clicks count every tap while
+leads count distinct conversations in a 7-day window, so one person tapping
+twice widens the gap. The ratio is approximate — but nowhere near the ~100%
+that "clicks ≈ leads" would require.
+
 **These are not the ad-jargon metrics this surface keeps out.** CPM, CTR,
 frequency and reach stay out, unchanged. A count of times shown and times
 clicked is something a business owner already has words for; a ratio per mille
