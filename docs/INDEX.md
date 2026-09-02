@@ -47,3 +47,4 @@ See also: [STATE.md](STATE.md) (dated changelog) · [POSTMORTEM-2026-08-19.md](P
 | Customer recommendations — approve/dismiss over the safe-execute pipeline | [features/customer-recommendations.md](features/customer-recommendations.md) |
 | Campaign builder (P1) — recommended defaults, create-writes, guided UI, launch gate | [features/campaign-builder.md](features/campaign-builder.md) |
 | Add content to an existing campaign — new ad/ad-set, destination shapes | [features/add-content.md](features/add-content.md) |
+| An ACTIVE ad set serving nothing — the 12h measured check → Telegram | [features/serving-watch.md](features/serving-watch.md) |

@@ -78,6 +78,9 @@ export const strings = {
         lead_event_stopped: "אירוע הפנייה הפסיק להירשם בפיקסל",
         business_profile_incomplete: "חסרים פרטים על העסק — אי אפשר לכתוב קופי בלי הצעה ובידול",
         leads_possibly_overcounted: "ייתכן שהפניות נספרות פעמיים",
+        // AIC-178 — measured, not Meta-reported. Named so an operator can tell
+        // it apart from campaign_not_delivering, which believes Meta's status.
+        ads_not_serving: "קבוצת מודעות פעילה שלא הציגה כלום 12 שעות",
       } satisfies Record<OpsQueueType, string> as Record<OpsQueueType, string>,
       queueSeverityAll: "הכל",
       queueSeverityHigh: "גבוהה",

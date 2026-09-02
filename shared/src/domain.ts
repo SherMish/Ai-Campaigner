@@ -105,6 +105,12 @@ export const OPS_QUEUE_TYPE = [
   // ops type whose fix is ours rather than Meta's. Must stay in sync with the
   // CHECK in migration 051.
   "business_profile_incomplete",
+  // AIC-178: the ad set is ACTIVE and has served NOTHING for 12h. Distinct
+  // from campaign_not_delivering, which believes Meta's own delivery status —
+  // this one is measured. On 2026-09-02 a campaign ran dark all day while
+  // every status we read said healthy. Must stay in sync with the CHECK in
+  // migration 052; both enumerate the allowed set.
+  "ads_not_serving",
 ] as const;
 export type OpsQueueType = (typeof OPS_QUEUE_TYPE)[number];
 

@@ -6,6 +6,41 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-02 — catch an ad set that is ACTIVE and serving nothing (AIC-178)
+
+Operator request, from the day that produced it: a campaign ran dark for a
+full day while Meta reported every object ACTIVE, `issues_info` empty, and our
+own `delivery_ok` stayed true. Nothing we checked was wrong, because everything
+we checked was Meta's OWN STATUS — and Meta's status said healthy throughout.
+
+`serving-watch.ts` asks the other question: did anything measurably happen. An
+ACTIVE ad set with zero impressions for **12 hours** raises `ads_not_serving`,
+which the existing relay carries to Telegram. Ad-set grain, not per-ad: the ad
+set is the unit the customer can act on, and a single dark ad inside a serving
+ad set is usually the optimizer doing its job.
+
+Three things keep it from becoming noise:
+- the silence clock starts at `first_seen_at`, so a brand-new ad set in review
+  or learning does not page anyone;
+- a paused ad set never alerts — silence is the point of pausing;
+- `alerted_at` is set on the alert and cleared the moment it serves again, so
+  one dark spell is one message and the next spell is still reportable.
+
+Impressions, not spend: an ad set can serve real impressions on rounding-error
+spend, and calling that "not serving" would be false.
+
+### 2026-09-02 — a real customer was flagged is_test, silencing every alert
+
+`Liam Aboros` — live, spending, 10 leads — carried `is_test = true`. The
+notification relay claims test rows and skips the send, so every ops alert for
+that account was marked notified and never delivered, including
+`campaign_not_delivering` at 14:03 (claimed 14:04:42, sent to nobody). It also
+excluded them from growth stats.
+
+Flipped to false on explicit operator instruction, in a transaction with an
+`admin_audit_log` row recording the before/after and why. Per the standing
+rule, test status is never inferred — only set or cleared on instruction.
+
 ### 2026-09-02 — the customer can choose where their ads run (AIC-177)
 
 Every ad set we have ever created ran on Meta's automatic placements — not

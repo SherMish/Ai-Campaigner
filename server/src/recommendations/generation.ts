@@ -9,7 +9,7 @@ import { PgSnapshotStore } from "../meta/snapshot-store.js";
 import { PgRecommendationStore, type RecommendationStore } from "./recommendation-store.js";
 import { RecommendationService } from "./recommendation-service.js";
 import { refreshRecommendations } from "./staleness.js";
-import { rollingPeriods } from "../meta/scheduled-ingestion.js";
+import { rollingPeriods, todayPeriod } from "../meta/scheduled-ingestion.js";
 import { summarize, type DeliveryReader, type DeliverySummary } from "../meta/delivery-health.js";
 import { recordCampaignDelivery } from "../services/delivery-monitor.js";
 import { summarizeTracking, type TrackingReader, type TrackingSummary } from "../meta/tracking-health.js";
@@ -27,6 +27,7 @@ import { LEAD_ACTION_PRIORITY } from "../meta/insights.js";
 import { deriveAudienceLabels, type AdSetMeta } from "../meta/audience-label.js";
 import { upsertAdSetMeta } from "../services/audience-meta-cache.js";
 import { refreshAdMetaNow } from "../services/ad-meta-cache.js";
+import { recordServing, todayImpressionsByAdSet } from "../services/serving-watch.js";
 import { recordNoRecReason } from "../services/evaluation-reason.js";
 import { recordLiveBudget } from "../services/live-budget.js";
 import { recordLeadsToDate } from "../services/leads-to-date.js";
@@ -196,6 +197,11 @@ export async function runGenerationTick(deps: {
   // labels and cache them (via recordAudienceMeta) for the customer surface.
   audienceMetaReader?: AudienceMetaReader;
   recordAudienceMeta?: (campaign: GenCampaign, adsets: AdSetMeta[]) => Promise<void>;
+  // AIC-178 — the measured "is anything actually serving" check. Separate dep
+  // from recordAudienceMeta because it asks a different question of different
+  // data (our own snapshots, not Meta's status) and must be able to fail on
+  // its own without costing the audience cache.
+  recordServing?: (campaign: GenCampaign, adsets: AdSetMeta[]) => Promise<void>;
   // AIC-64: cache WHY this tick had nothing to propose (or clear it when
   // something did), so the dashboard/ops console can show a real reason.
   recordNoRecReason?: (campaign: GenCampaign, draft: RecommendationDraft) => Promise<void>;
@@ -291,6 +297,13 @@ export async function runGenerationTick(deps: {
         // ads decides what the engine does with it, not whether the customer
         // is allowed to see where their money went.
         await deps.recordAudienceMeta?.(campaign, allAdsets.filter((a) => a.existsOnMeta));
+        // AIC-178 — isolated from the cache write above: a monitor that can
+        // fail an engine tick is worse than no monitor.
+        try {
+          await deps.recordServing?.(campaign, allAdsets.filter((a) => a.existsOnMeta));
+        } catch (e) {
+          log?.error(`[generation] ${campaign.id}: serving watch failed — ${(e as Error).message}`);
+        }
       } catch (e) {
         log?.error(`[generation] ${campaign.id}: audience-meta read failed — ${(e as Error).message}`);
       }
@@ -601,6 +614,29 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
             console.error(`[generation] ad-meta refresh failed for ${campaign.id} — ${(e as Error).message}`);
           }
         }
+      },
+      // AIC-178 — one Telegram message when an ACTIVE ad set has served
+      // nothing for 12 hours. The gap it closes: on 2026-09-02 a campaign ran
+      // dark all day while Meta reported every object ACTIVE with no issues
+      // and delivery_ok stayed true. Every check we had asked Meta for its
+      // status; none asked our own numbers whether anything happened.
+      recordServing: async (campaign, adsets) => {
+        const today = todayPeriod();
+        const impressions = await todayImpressionsByAdSet(pool, campaign.id, today.start, today.end);
+        await recordServing({
+          pool, ops,
+          campaignId: campaign.id,
+          customerId: campaign.customerId,
+          campaignRef: campaign.metaCampaignId,
+          observations: adsets.map((a) => ({
+            metaObjectId: a.adSetId,
+            name: a.name || a.adSetId,
+            impressions: impressions.get(a.adSetId) ?? 0,
+            // Meta's own status, from the read we just made — a paused ad set
+            // is silent on purpose and must never alert.
+            active: (a.status ?? "").toLowerCase() === "active",
+          })),
+        });
       },
       // AIC-133: per-audience lead quality from the customer's own reviews.
       // Reads only stored rows, so it needs no Meta call and cannot fail the tick.
