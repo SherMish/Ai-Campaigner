@@ -6,6 +6,29 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-02 — the pause button vanished exactly when it was needed (AIC-179)
+
+Reported live: "why no button to pause ads". `/controls/state` is a live Meta
+read, the ad account was throttled (code 17), `ctl` came back null — and the
+pause link rendered only when `ctl` loaded. No status, no button.
+
+At the moment an operator most wants to stop spend, the product silently
+removed the ability to. Worse than a control that refuses without saying why:
+a control that is not there to refuse.
+
+Pausing never needed the status. Reading failed; writing was fine, and pausing
+something already paused is idempotent. Only the toggle DIRECTION depended on
+the read, so only the direction degrades — unknown status offers **pause**,
+never resume. Resuming on a guessed status spends real money against a
+customer who may have paused deliberately; pausing twice costs nothing.
+
+`status_unknown` outranks every other note, because the others assert a state
+we know and we have just admitted we do not.
+
+Self-inflicted trigger, recorded honestly: the throttle came from our own
+diagnostic calls against that ad account while working AIC-176/178. The bug
+was real and pre-existing; we are what surfaced it.
+
 ### 2026-09-02 — catch an ad set that is ACTIVE and serving nothing (AIC-178)
 
 Operator request, from the day that produced it: a campaign ran dark for a

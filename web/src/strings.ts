@@ -1390,6 +1390,9 @@ export const strings = {
           throttled: "Meta חסמה לרגע בקשות לחשבון הפרסום (יותר מדי קריאות). מחכים כדקה ומנסים שוב — השינוי לא בוצע, ואין תקלה בקמפיין.",
           // An ad set carries every ad under it — say so plainly before they click.
           adSetNote: "השהיית קהל עוצרת את כל המודעות שרצות אליו.",
+          // AIC-179 — the control STAYS when the live read fails. Pausing
+          // never needed the status; only the toggle direction did.
+          statusUnknownNote: "לא הצלחנו לקרוא כרגע את המצב מ-Meta, אז אנחנו לא יודעים אם זה רץ. אפשר עדיין להשהות — אם זה כבר מושהה, לא יקרה כלום.",
           resumeNote: "הפעלה מחדש מחזירה את ההוצאה על האובייקט הזה.",
           // AIC-70: a successful pause/resume used to produce silence — the row
           // still looked untouched, which invited a second click. Shown inline,

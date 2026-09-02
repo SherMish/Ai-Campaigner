@@ -609,3 +609,26 @@ Two things caught by rendering it: the image had no height cap, so a tall
 creative pushed the copy and both buttons past the fold (measured at 1030px in a
 720px viewport); and the button showed the raw enum `WHATSAPP_MESSAGE`, the same
 raw-Meta-names problem AIC-73 fixed in the panel itself.
+
+## The pause control survives an unreadable status (AIC-179)
+
+`/controls/state` is a LIVE Meta read, and Meta throttles it (code 17) exactly
+when the ad account has been busy. When it fails, `ctl` is null and the row
+badge honestly reads `לא ידוע כרגע` (AIC-169).
+
+It used to also **remove the pause button entirely** — so at the moment an
+operator most wants to stop spend, the product silently took away the ability
+to. Worse than a control that refuses without saying why: a control that is not
+there to refuse.
+
+Pausing never needed the status. Reading is what failed; writing is unaffected,
+and pausing something already paused is harmless and idempotent. Only the
+toggle DIRECTION depended on the read, so only the direction degrades:
+
+- unknown status ⇒ the control offers **pause**, never resume. Resuming on a
+  guessed status spends real money against a customer who may have paused
+  deliberately; pausing twice costs nothing.
+- the note says we could not read the state and that pausing is still safe.
+
+`status_unknown` outranks every other note (`pause-control.ts`): the others all
+assert a state we know, and we have just admitted we do not.

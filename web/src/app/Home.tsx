@@ -36,6 +36,7 @@ import { InfoTip } from "./InfoTip";
 import { StatusPill } from "./components";
 import { useSharedOverview, invalidateOverview } from "./overview-store";
 import { loadReceipt, clearReceipt, type AdditionReceipt } from "./addition-receipt";
+import { pauseAction, pauseNote } from "./pause-control";
 
 // AIC-175 — "it worked", for the customer who lands here right after adding.
 //
@@ -656,7 +657,7 @@ export function Home() {
 // element in the row after the title. Reading order should be
 // "what is this → how is it doing → (quietly) what can I do".
 function PauseLink({
-  kind, metaObjectId, paused, busy, justSucceeded, onToggle, onRemove, alreadyNotDelivering,
+  kind, metaObjectId, paused, busy, justSucceeded, onToggle, onRemove, alreadyNotDelivering, statusUnknown = false,
 }: {
   kind: "ad" | "ad_set";
   metaObjectId: string;
@@ -676,17 +677,22 @@ function PauseLink({
   // the ad's own intent so it stays paused once the parent resumes), but
   // nothing said so, reading as an action with no effect.
   alreadyNotDelivering?: boolean;
+  // AIC-179 — the live /controls/state read failed (Meta throttles it), so we
+  // do not know whether this is running. The control STAYS: pausing never
+  // needed the status, and removing it silently is worse than any wrong label.
+  statusUnknown?: boolean;
 }) {
+  const action = pauseAction({ paused, statusUnknown });
+  const resume = action === "resume";
   const label = kind === "ad_set"
-    ? (paused ? CT.resumeAdSet : CT.pauseAdSet)
-    : (paused ? CT.resumeAd : CT.pauseAd);
-  const title = kind === "ad_set" && !paused
-    ? CT.adSetNote
-    : paused
-      ? CT.resumeNote
-      : alreadyNotDelivering
-        ? CT.pauseBlockedNote
-        : undefined;
+    ? (resume ? CT.resumeAdSet : CT.pauseAdSet)
+    : (resume ? CT.resumeAd : CT.pauseAd);
+  const note = pauseNote({ kind, paused, statusUnknown, alreadyNotDelivering });
+  const title = note === "status_unknown" ? CT.statusUnknownNote
+    : note === "resume" ? CT.resumeNote
+      : note === "ad_set_scope" ? CT.adSetNote
+        : note === "already_not_delivering" ? CT.pauseBlockedNote
+          : undefined;
   return (
     <span className="row gap8" style={{ alignItems: "center" }}>
       {justSucceeded && !busy && (
@@ -699,7 +705,7 @@ function PauseLink({
         disabled={busy}
         style={{ background: "none", border: "none", padding: "6px 2px", fontSize: "0.82rem", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}
         title={title}
-        onClick={(e) => { e.stopPropagation(); onToggle(kind, metaObjectId, !paused); }}
+        onClick={(e) => { e.stopPropagation(); onToggle(kind, metaObjectId, action === "pause"); }}
       >
         {busy ? CT.working : label}
       </button>
@@ -1086,13 +1092,12 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
                         />
                         <b><bdi>{aud.label}</bdi></b>
                       </div>
-                      {ctl && (
-                        <PauseLink
-                          kind="ad_set" metaObjectId={aud.adSetId}
-                          paused={audPaused} busy={busyId === aud.adSetId}
-                          justSucceeded={successId === aud.adSetId} onToggle={onToggle}
-                        />
-                      )}
+                      <PauseLink
+                        kind="ad_set" metaObjectId={aud.adSetId}
+                        paused={audPaused} busy={busyId === aud.adSetId}
+                        statusUnknown={!ctl}
+                        justSucceeded={successId === aud.adSetId} onToggle={onToggle}
+                      />
                     </div>
                     <div className="row gap16" style={{ flexWrap: "wrap", marginTop: 6 }}>
                       <Metric label={D.spendCol} value={shekels(aud.spendAgorot)} />
@@ -1177,15 +1182,14 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
                                         {m && m.assetCount > 1 ? `${m.assetCount} ${D.adCreativesSuffix}` : D.adOne}
                                       </button>
                                     </div>
-                                    {ctl && (
-                                      <PauseLink
-                                        kind="ad" metaObjectId={c.metaObjectId}
-                                        paused={adPaused} busy={busyId === c.metaObjectId}
-                                        justSucceeded={successId === c.metaObjectId} onToggle={onToggle}
-                                        onRemove={(id) => { setRemoveError(null); setConfirmRemove(id); }}
-                                        alreadyNotDelivering={adDelivery === "blocked_by_adset" || adDelivery === "blocked_by_campaign"}
-                                      />
-                                    )}
+                                    <PauseLink
+                                      kind="ad" metaObjectId={c.metaObjectId}
+                                      paused={adPaused} busy={busyId === c.metaObjectId}
+                                      statusUnknown={!ctl}
+                                      justSucceeded={successId === c.metaObjectId} onToggle={onToggle}
+                                      onRemove={(id) => { setRemoveError(null); setConfirmRemove(id); }}
+                                      alreadyNotDelivering={adDelivery === "blocked_by_adset" || adDelivery === "blocked_by_campaign"}
+                                    />
                                   </div>
 
                                   {/* The ads ARE pictures — a comma-separated
