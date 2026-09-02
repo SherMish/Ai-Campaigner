@@ -179,3 +179,145 @@ export async function todayImpressionsByAdSet(
   );
   return new Map(rows.map((r) => [r.meta_object_id, Number(r.impressions)]));
 }
+
+// ── Campaign grain (AIC-182) ────────────────────────────────────────────────
+//
+// A whole campaign with at least one ACTIVE ad set, spending nothing.
+//
+// This exists because AIC-72's account-health check could not catch the thing
+// it was built for. On 2026-09-02 a customer's card was declining charges for
+// 19 hours while Meta reported account_status = 1 (ACTIVE) and disable_reason
+// = 0 throughout — Meta moves that status only after its own billing retry
+// cycle, long after delivery has stopped. Meta never exposes "your last charge
+// was declined", so no config read can see it.
+//
+// What IS visible is that a live campaign is spending nothing. That is the
+// symptom of a declined card, a spend cap, a policy block, and half a dozen
+// other things — so the alert carries the account state alongside it, and the
+// operator rules the obvious cause in or out in seconds instead of an hour of
+// Graph probing.
+
+/** Campaign grain gets a much shorter fuse than a single ad set's 12h. */
+export const CAMPAIGN_SILENT_HOURS = 3;
+
+/**
+ * Only judged during local daytime. A campaign that serves nothing between
+ * 02:00 and 06:00 is not news, and a monitor that pages at 3am about normal
+ * overnight quiet is a monitor that gets muted before it ever catches
+ * anything real.
+ */
+export const DAYTIME = { fromHour: 9, toHour: 22 };
+
+export function israelHour(now: Date): number {
+  return Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Jerusalem", hour: "2-digit", hour12: false,
+    }).format(now),
+  );
+}
+
+export interface CampaignSpendInput {
+  /** Impressions measured campaign-wide in the current (today) window. */
+  impressions: number;
+  /** At least one ad set is ACTIVE — something is SUPPOSED to be running. */
+  hasActiveAdSet: boolean;
+}
+
+/**
+ * Same three-verdict shape as `judgeServing`, and the same reasons behind each
+ * guard — with one addition: nothing active means nothing is expected, so
+ * silence is correct rather than alarming.
+ */
+export function judgeCampaignSpending(
+  input: CampaignSpendInput,
+  state: WatchState,
+  now: Date,
+  silentHours = CAMPAIGN_SILENT_HOURS,
+): WatchVerdict {
+  if (input.impressions > 0) return { kind: "serving" };
+  if (!input.hasActiveAdSet) return { kind: "quiet" };
+  const hour = israelHour(now);
+  if (hour < DAYTIME.fromHour || hour >= DAYTIME.toHour) return { kind: "quiet" };
+  if (state.alertedAt) return { kind: "quiet" };
+  const since = state.lastServedAt ?? state.firstSeenAt;
+  const hours = (now.getTime() - since.getTime()) / 3_600_000;
+  if (hours < silentHours) return { kind: "quiet" };
+  return { kind: "alert", silentHours: Math.floor(hours) };
+}
+
+/**
+ * The account state, as one line for the alert.
+ *
+ * Read from what AIC-72 already cached on the connection — no extra Meta call,
+ * and no second definition of account health. Printed even when it says
+ * ACTIVE: "account ACTIVE, card on file" is exactly what lets an operator stop
+ * suspecting billing and look elsewhere, and on 2026-09-02 that read WAS
+ * ACTIVE while the card was declining.
+ */
+export async function accountContext(pool: pg.Pool, campaignId: string): Promise<string> {
+  const { rows } = await pool.query<{ account_ok: boolean | null; account_reason: string | null; checked: Date | null }>(
+    `SELECT con.account_ok, con.account_reason, con.account_checked_at AS checked
+       FROM managed_campaigns mc
+       JOIN customers c ON c.id = mc.customer_id
+       JOIN meta_connections con ON con.customer_id = c.id
+      WHERE mc.id = $1
+      LIMIT 1`,
+    [campaignId],
+  );
+  const r = rows[0];
+  if (!r) return "מצב החשבון: לא ידוע";
+  if (r.account_ok === false) return `מצב החשבון: בעיה — ${r.account_reason ?? "לא ידוע"}`;
+  // Deliberately hedged. Meta said ACTIVE through a real card decline, so this
+  // must not read as "billing is fine".
+  return "מטא מדווחת שהחשבון תקין — אבל זה לא שולל כרטיס אשראי שנדחה, מטא מעדכנת את הסטטוס באיחור";
+}
+
+export async function recordCampaignSpending(deps: {
+  pool: pg.Pool;
+  ops: OpsQueue;
+  campaignId: string;
+  customerId: string | null;
+  campaignRef: string;
+  input: CampaignSpendInput;
+  now?: Date;
+  silentHours?: number;
+}): Promise<{ alerted: boolean }> {
+  const { pool, ops, campaignId, customerId, campaignRef, input } = deps;
+  const now = deps.now ?? new Date();
+  const key = `campaign:${campaignRef}`;
+
+  const row = await pool.query<{ first_seen_at: Date; last_served_at: Date | null; alerted_at: Date | null }>(
+    `INSERT INTO ad_serving_watch (meta_object_id, campaign_id, grain, first_seen_at)
+     VALUES ($1, $2, 'campaign', $3)
+     ON CONFLICT (meta_object_id) DO UPDATE SET campaign_id = EXCLUDED.campaign_id
+     RETURNING first_seen_at, last_served_at, alerted_at`,
+    [key, campaignId, now],
+  );
+  const state: WatchState = {
+    firstSeenAt: row.rows[0].first_seen_at,
+    lastServedAt: row.rows[0].last_served_at,
+    alertedAt: row.rows[0].alerted_at,
+  };
+
+  const verdict = judgeCampaignSpending(input, state, now, deps.silentHours);
+  if (verdict.kind === "serving") {
+    await pool.query(
+      `UPDATE ad_serving_watch SET last_served_at = $2, alerted_at = NULL WHERE meta_object_id = $1`,
+      [key, now],
+    );
+    return { alerted: false };
+  }
+  if (verdict.kind !== "alert") return { alerted: false };
+
+  await ops.create({
+    customerId,
+    campaignId,
+    type: "campaign_not_spending",
+    severity: "high",
+    detail:
+      `הקמפיין פעיל, יש בו קבוצת מודעות פעילה, ולא הוצא שקל ${verdict.silentHours} שעות. ` +
+      `${await accountContext(pool, campaignId)}. campaign ${campaignRef}.`,
+  });
+  await pool.query(`UPDATE ad_serving_watch SET alerted_at = $2 WHERE meta_object_id = $1`, [key, now]);
+  return { alerted: true };
+}

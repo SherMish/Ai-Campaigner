@@ -6,6 +6,35 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-02 — a declined card stopped a campaign for 19h and nothing noticed (AIC-182)
+
+The cause of the day's dark campaign turned out to be the customer's credit
+card declining charges. AIC-72's account-health check exists for exactly this
+and never fired: Meta reported `account_status: 1` and `disable_reason: 0`
+throughout, moving neither until long after delivery had stopped. Meta never
+exposes "your last charge was declined", so no config read can catch it.
+
+The symptom is therefore the only signal. `judgeCampaignSpending` alerts when a
+campaign with at least one ACTIVE ad set has spent nothing for **3 hours** —
+much shorter than the 12h an individual ad set gets, because one quiet ad set
+is ordinary and a whole campaign is not. Judged only between 09:00 and 22:00
+Israel time: a campaign quiet at 3am is not news, and a monitor that pages then
+is muted before it ever catches anything real.
+
+The alert carries the account state beside it, read from the cache AIC-72
+already keeps. It prints even when Meta says the account is healthy — and says
+plainly that this does not rule out a declined card, because on this exact day
+it did not.
+
+It also reaches the **customer dashboard**, not only Telegram:
+`attentionKind: "not_spending"`, placed above the delivery/tracking/CTA checks
+because it EXPLAINS them — a campaign that cannot spend fails all three, and
+telling a customer to fix a button when their card was declined is the wrong
+instruction. The hero names payment as the most likely cause.
+
+Three exhaustive `Record<>` maps refused to compile until the new cause had its
+own copy, which is the whole reason they are typed that way.
+
 ### 2026-09-02 — a migration narrowed a CHECK and rolled back the deploy (AIC-181)
 
 CI was green; Railway failed the healthcheck because `db:migrate:prod` threw.

@@ -27,7 +27,7 @@ import { LEAD_ACTION_PRIORITY } from "../meta/insights.js";
 import { deriveAudienceLabels, type AdSetMeta } from "../meta/audience-label.js";
 import { upsertAdSetMeta } from "../services/audience-meta-cache.js";
 import { refreshAdMetaNow } from "../services/ad-meta-cache.js";
-import { recordServing, todayImpressionsByAdSet } from "../services/serving-watch.js";
+import { recordServing, recordCampaignSpending, todayImpressionsByAdSet } from "../services/serving-watch.js";
 import { recordNoRecReason } from "../services/evaluation-reason.js";
 import { recordLiveBudget } from "../services/live-budget.js";
 import { recordLeadsToDate } from "../services/leads-to-date.js";
@@ -623,6 +623,20 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
       recordServing: async (campaign, adsets) => {
         const today = todayPeriod();
         const impressions = await todayImpressionsByAdSet(pool, campaign.id, today.start, today.end);
+        // AIC-182 — campaign grain first, on a 3-hour fuse. A whole campaign
+        // with an active ad set spending nothing is the signature of a
+        // declined card, a spend cap or a policy block; one quiet ad set is
+        // ordinary. Meta's account_status stayed ACTIVE through a real decline,
+        // so this symptom is the only thing that sees it.
+        const active = adsets.filter((a) => (a.status ?? "").toLowerCase() === "active");
+        const campaignImpressions = [...impressions.values()].reduce((n, v) => n + v, 0);
+        await recordCampaignSpending({
+          pool, ops,
+          campaignId: campaign.id,
+          customerId: campaign.customerId,
+          campaignRef: campaign.metaCampaignId,
+          input: { impressions: campaignImpressions, hasActiveAdSet: active.length > 0 },
+        });
         await recordServing({
           pool, ops,
           campaignId: campaign.id,

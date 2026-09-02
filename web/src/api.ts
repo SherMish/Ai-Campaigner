@@ -48,7 +48,7 @@ export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campa
 // fourth cause can't ship without its own message — the three existing ones
 // all wear the same "צריך טיפול" badge and would otherwise silently collapse
 // into one another.
-export type AttentionKind = "connection" | "delivery" | "tracking" | "cta"; // AIC-128
+export type AttentionKind = "connection" | "not_spending" | "delivery" | "tracking" | "cta"; // AIC-128, AIC-182
 // AIC-98: mirrors server/src/recommendations/rules.ts. Was `string | null` on
 // CustomerOverview, which defeated exhaustiveness at the boundary — a new
 // engine reason type-checked fine and rendered the generic fallback.

@@ -111,6 +111,12 @@ export const OPS_QUEUE_TYPE = [
   // every status we read said healthy. Must stay in sync with the CHECK in
   // migration 052; both enumerate the allowed set.
   "ads_not_serving",
+  // AIC-182: the whole campaign has active ad sets and is spending NOTHING.
+  // Distinct from ads_not_serving (one ad set) and from
+  // ad_account_cannot_spend (Meta's own account_status, which stayed ACTIVE
+  // through a real card decline on 2026-09-02). Must stay in sync with the
+  // CHECK in migration 053.
+  "campaign_not_spending",
 ] as const;
 export type OpsQueueType = (typeof OPS_QUEUE_TYPE)[number];
 

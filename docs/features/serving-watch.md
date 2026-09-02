@@ -61,6 +61,30 @@ dashboard groups by it. A single dark ad inside a serving ad set is usually
 Meta's optimizer doing its job, and alerting on it would train everyone to
 ignore the channel.
 
+## Campaign grain: nothing is spending at all (AIC-182)
+
+A second, sharper check at campaign grain, with a **3-hour** fuse instead of 12.
+
+| Condition | Why |
+| --- | --- |
+| campaign-wide impressions = 0 | measured, not reported |
+| at least one ACTIVE ad set | something is *supposed* to run; all-paused is not a fault |
+| 09:00–22:00 Israel time | a campaign quiet at 3am is not news, and a monitor that pages then gets muted before it catches anything real |
+| 3h since it last served | one quiet ad set is ordinary; a whole campaign is not |
+
+**Why it exists, and why AIC-72 could not do the job.** On 2026-09-02 a
+customer's credit card declined charges for 19 hours. Meta reported
+`account_status: 1` (ACTIVE) and `disable_reason: 0` for the entire outage —
+the account-health check built for exactly this failure never fired, because
+Meta only moves that status after its own billing retry cycle, long after
+delivery stops. **Meta never exposes "your last charge was declined."**
+
+So the config read cannot see it and the symptom is the only signal. The alert
+carries the account state alongside it (`accountContext`, read from the cache
+AIC-72 already keeps — no extra Meta call), deliberately including the case
+where Meta says the account is fine: that read was ACTIVE while the card was
+failing, so the copy says so rather than implying billing is ruled out.
+
 ## Delivery
 
 `ads_not_serving` is an ordinary `ops_queue_items` row, so the existing relay

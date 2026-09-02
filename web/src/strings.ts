@@ -81,6 +81,7 @@ export const strings = {
         // AIC-178 — measured, not Meta-reported. Named so an operator can tell
         // it apart from campaign_not_delivering, which believes Meta's status.
         ads_not_serving: "קבוצת מודעות פעילה שלא הציגה כלום 12 שעות",
+        campaign_not_spending: "קמפיין פעיל שלא מוציא תקציב כלל — לרוב בעיית תשלום",
       } satisfies Record<OpsQueueType, string> as Record<OpsQueueType, string>,
       queueSeverityAll: "הכל",
       queueSeverityHigh: "גבוהה",
@@ -1286,6 +1287,16 @@ export const strings = {
           // independent of what the engine currently recommends).
           ok: { badge: "פעיל" },
           collecting: { badge: "אוספים נתונים" },
+          // AIC-182 — nothing is being spent at all. Named as its own cause
+          // because it EXPLAINS the others: a campaign that cannot spend fails
+          // every delivery and CTA check downstream, and telling the customer
+          // to fix a button when their card was declined is the wrong
+          // instruction.
+          notSpending: {
+            badge: "צריך טיפול",
+            title: "הקמפיין לא מוציא תקציב",
+            body: "הקמפיין פעיל ויש בו מודעות פעילות, אבל כבר כמה שעות לא הוצא שקל ואף אחד לא ראה את המודעות. הסיבה הכי שכיחה היא בעיית תשלום — כרטיס אשראי שנדחה או שפג תוקפו. שווה לבדוק את אמצעי התשלום בחשבון המודעות במטא. אנחנו בודקים את זה גם מהצד שלנו.",
+          },
           paused: { badge: "מושהה", title: "הקמפיין כרגע מושהה", body: "הקמפיין מושהה ואינו מוציא תקציב או מביא פניות עד שנחזיר אותו לפעילות. לחידוש הפעילות דברו איתנו.", cta: "" },
           attention: { badge: "צריך טיפול", title: "איבדנו גישה לחשבון Meta", body: "הקמפיין עשוי להמשיך לרוץ, אבל לא נוכל לנהל אותו עד לחיבור מחדש.", cta: "חיבור מחדש" },
           setup: { badge: "בהקמה", title: "אנחנו מקימים את החשבון", body: "החשבון נפתח. אחרי שיחת ההיכרות וחיבור Meta נתחיל לנהל את הקמפיין ותוכלו לראות כאן נתונים.", cta: "לסטטוס ההקמה" },
@@ -1352,6 +1363,7 @@ export const strings = {
           noCampaignSetup: { meaning: "אנחנו עדיין מחברים את החשבון.", spend: "לא מוציא תקציב", whoActs: "אנחנו" },
           noCampaignReadyToBuild: { meaning: "החשבון מחובר, אפשר לבנות קמפיין.", spend: "לא מוציא תקציב", whoActs: "אנחנו" },
           attentionConnection: { meaning: "איבדנו גישה לחשבון המודעות ולא נוכל לנהל את הקמפיין.", spend: "ייתכן שכן", whoActs: "אתם — צריך לחדש הרשאה" },
+          attentionNotSpending: { meaning: "הקמפיין פעיל אבל לא הוצא שקל כבר כמה שעות. בדרך כלל זו בעיית תשלום בחשבון המודעות.", spend: "לא מוציא תקציב", whoActs: "אתם — כדאי לבדוק אמצעי תשלום" },
           attentionTracking: { meaning: "יש פער בין מה שאנחנו סופרים כפנייה להגדרות במטא. המספרים כאן עלולים להיות לא מדויקים.", spend: "מוציא תקציב", whoActs: "אנחנו" },
           attentionCta: { meaning: "הכפתור במודעה בלי יעד — לחיצות לא מגיעות אליכם, והתקציב שנרשם כאן נצרך על קליקים שלא הובילו לשום מקום.", spend: "מוציא תקציב", whoActs: "אנחנו" },
           attentionDelivery: { meaning: "אחת מקבוצות המודעות לא מצליחה להתפרסם.", spend: "חלקית", whoActs: "אנחנו" },

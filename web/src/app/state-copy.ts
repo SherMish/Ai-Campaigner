@@ -28,6 +28,7 @@ export interface HeroCopy {
 // connection is the customer's to fix; the other two are ours).
 export const ATTENTION_COPY: Record<AttentionKind, HeroCopy> = {
   connection: { badge: h.states.attention.badge, title: h.states.attention.title, body: h.states.attention.body },
+  not_spending: { badge: h.states.notSpending.badge, title: h.states.notSpending.title, body: h.states.notSpending.body },
   delivery: { badge: h.states.delivery.badge, title: h.states.delivery.title, body: h.states.delivery.body },
   tracking: { badge: h.states.tracking.badge, title: h.states.tracking.title, body: h.states.tracking.body },
   cta: { badge: h.states.cta.badge, title: h.states.cta.title, body: h.states.cta.body },
@@ -221,7 +222,8 @@ export function noRecCopy(
 export type StatusTooltipKey =
   | "ok" | "collecting" | "paused" | "stopped" | "ready_to_launch"
   | "no_campaign_setup" | "no_campaign_ready_to_build" | "unbuilt"
-  | "attention_connection" | "attention_tracking" | "attention_delivery" | "attention_cta";
+  | "attention_connection" | "attention_tracking" | "attention_delivery" | "attention_cta"
+  | "attention_not_spending"; // AIC-182
 
 export function statusTooltipKey(
   state: HomeState,
@@ -240,6 +242,7 @@ export function statusTooltipKey(
       const kind = attentionKind ?? "connection";
       switch (kind) {
         case "connection": return "attention_connection";
+        case "not_spending": return "attention_not_spending";
         case "tracking": return "attention_tracking";
         case "cta": return "attention_cta";
         case "delivery": return "attention_delivery";
@@ -273,6 +276,7 @@ export const STATUS_TOOLTIP_COPY: Record<StatusTooltipKey, StatusTooltipCopy> = 
   unbuilt: st.unbuilt,
   no_campaign_setup: st.noCampaignSetup,
   no_campaign_ready_to_build: st.noCampaignReadyToBuild,
+  attention_not_spending: st.attentionNotSpending, // AIC-182
   attention_connection: st.attentionConnection,
   attention_tracking: st.attentionTracking,
   attention_cta: st.attentionCta,

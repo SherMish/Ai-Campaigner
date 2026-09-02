@@ -23,7 +23,7 @@ export type HomeState = "ok" | "collecting" | "paused" | "attention" | "no_campa
 // map can be Record<AttentionKind, …> — all three wear the same "צריך טיפול"
 // badge, so a fourth silently reusing another's message is the exact failure
 // the exhaustive map exists to prevent.
-export type AttentionKind = "connection" | "delivery" | "tracking" | "cta"; // AIC-128
+export type AttentionKind = "connection" | "not_spending" | "delivery" | "tracking" | "cta"; // AIC-128, AIC-182
 
 export interface CustomerOverview {
   account: { name: string; email: string };
@@ -70,6 +70,10 @@ export interface CustomerOverview {
     // null = never checked / could not determine — never treated as a problem.
     trackingOk: boolean | null;
     ctaOk: boolean | null;
+    // AIC-182 — the campaign has an active ad set and has spent nothing for
+    // hours. Sourced from the serving watch, not from Meta's account_status:
+    // that stayed ACTIVE through a real card decline on 2026-09-02.
+    notSpending: boolean;
     // AIC-64: why the engine's last tick had nothing to propose — null before
     // the engine has ever run, or when an acting recommendation exists instead.
     noRecReason: NoActionReason | null;
@@ -144,6 +148,11 @@ function deriveHomeState(
   // AIC-53: review-approved but not yet customer-activated outranks delivery/
   // collecting — a still-PAUSED campaign has no delivery data to judge yet,
   // and the one actionable thing is the launch approval itself.
+  // AIC-182: nothing is being spent at all. Placed above the delivery/tracking
+  // /CTA checks because it EXPLAINS them — a campaign that cannot spend will
+  // fail every one of them, and sending the customer to fix a CTA when their
+  // card was declined is the wrong instruction.
+  if (campaign.notSpending) return "attention";
   if (campaign.readyToLaunch) return "ready_to_launch";
   if (!campaign.deliveryOk) return "attention"; // a not-delivering ad set (AIC-39)
   // AIC-88: the lead numbers are structurally wrong (declared lead definition
@@ -346,6 +355,18 @@ export async function buildCustomerOverview(
       }
     : null;
 
+  // AIC-182 — is the serving watch currently flagging this campaign as
+  // spending nothing? Read from the watch row rather than the ops queue: the
+  // queue keeps resolved history, and this must reflect the state RIGHT NOW,
+  // clearing itself the moment delivery resumes.
+  const notSpending = campRes.rows[0]
+    ? (await pool.query<{ n: string }>(
+        `SELECT count(*) AS n FROM ad_serving_watch
+          WHERE campaign_id = $1 AND grain = 'campaign' AND alerted_at IS NOT NULL`,
+        [campRes.rows[0].id],
+      )).rows[0].n !== "0"
+    : false;
+
   const campaign = campRes.rows[0]
     ? {
         id: campRes.rows[0].id,
@@ -359,6 +380,7 @@ export async function buildCustomerOverview(
         deliveryOk: campRes.rows[0].delivery_ok,
         trackingOk: campRes.rows[0].tracking_ok,
         ctaOk: campRes.rows[0].cta_ok,
+        notSpending: notSpending,
         // AIC-164 — the launch gate applies ONLY to a campaign we built.
         //
         // It exists (AIC-53) so a customer approves before OUR build first
@@ -452,6 +474,8 @@ export async function buildCustomerOverview(
   const attentionKind: AttentionKind | null =
     connection && connection.accessHealth !== "ok"
       ? "connection"
+      : campaign && campaign.notSpending
+        ? "not_spending"
       : campaign && !campaign.deliveryOk
         ? "delivery"
         : campaign && campaign.trackingOk === false
