@@ -759,14 +759,27 @@ function Chevron({ open }: { open: boolean }) {
 // A labeled number — the details panel's core honesty fix (AIC-73): every
 // value shown carries its own label directly above it, so "9.5₪ · 1 · 9.5₪"
 // never again reads like a rendering bug.
-function Metric({ label, value, small }: { label: string; value: string; small?: boolean }) {
+function Metric({ label, value, small, info, infoId }: {
+  label: string; value: string; small?: boolean;
+  // AIC-180 — an "i" beside the label for the two metrics whose MEANING is not
+  // obvious from the name. Spend, leads and CPL need none; "הצגות" does, and
+  // the explanation is what makes the number actionable rather than trivia.
+  info?: ReactNode; infoId?: string;
+}) {
   return (
     <span className="stack" style={{ gap: 2 }}>
-      <span className="muted" style={{ fontSize: small ? "0.66rem" : "0.72rem" }}>{label}</span>
+      <span className="muted row gap8" style={{ fontSize: small ? "0.66rem" : "0.72rem", alignItems: "center" }}>
+        {label}
+        {info && infoId && <InfoDot popId={infoId}>{info}</InfoDot>}
+      </span>
       <b style={{ fontSize: small ? "0.85rem" : "0.92rem" }}>{value}</b>
     </span>
   );
 }
+
+// Thousands separator. A four-digit impression count reads as a typo without
+// one, and these are the first metrics on this surface that get large.
+const count = (n: number) => n.toLocaleString("he-IL");
 
 // AIC-73 round 2: the nested disclosure is GONE. One click on "פירוט" reveals
 // audiences AND their ads. Progressive disclosure solved a volume problem that
@@ -1101,6 +1114,8 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
                     </div>
                     <div className="row gap16" style={{ flexWrap: "wrap", marginTop: 6 }}>
                       <Metric label={D.spendCol} value={shekels(aud.spendAgorot)} />
+                      <Metric label={D.impressionsCol} value={count(aud.impressions)} info={D.impressionsInfo} infoId={`imp-${aud.adSetId}`} />
+                      <Metric label={D.clicksCol} value={count(aud.linkClicks)} info={D.clicksInfo} infoId={`clk-${aud.adSetId}`} />
                       <Metric label={D.leadsCol} value={String(aud.leads)} />
                       <Metric label={D.cplCol} value={aud.cplAgorot === null ? L.none : shekels(aud.cplAgorot)} />
                     </div>
@@ -1223,6 +1238,8 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
                                   {c.hasData ? (
                                     <div className="row gap12" style={{ flexWrap: "wrap", marginTop: 6 }}>
                                       <Metric label={D.spendCol} value={shekels(c.spendAgorot)} small />
+                                      <Metric label={D.impressionsCol} value={count(c.impressions)} small info={D.impressionsInfo} infoId={`imp-${c.metaObjectId}`} />
+                                      <Metric label={D.clicksCol} value={count(c.linkClicks)} small info={D.clicksInfo} infoId={`clk-${c.metaObjectId}`} />
                                       <Metric label={D.leadsCol} value={String(c.leads)} small />
                                       <Metric label={D.cplCol} value={c.cplAgorot === null ? L.none : shekels(c.cplAgorot)} small />
                                     </div>

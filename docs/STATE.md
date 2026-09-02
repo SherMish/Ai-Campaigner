@@ -6,6 +6,30 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-02 — הצג פירוט gains impressions and clicks (AIC-180)
+
+Operator request. Each ad-set and ad row now shows הוצאה · הצגות · לחיצות ·
+פניות · עלות לפנייה, with an "i" on the two new ones.
+
+They earn their place by splitting a fact that used to hide three problems.
+"0 פניות" alone says nothing about which; with these two it says everything:
+no impressions is a DELIVERY problem, impressions without clicks is a CREATIVE
+problem, clicks without leads is a DESTINATION problem. That last one is
+exactly what this product spent the day chasing.
+
+Chosen over engagement deliberately: clicks are on the path to a lead and are
+already stored; engagement is neither.
+
+Not a loosening of the no-ad-jargon rule — CPM, CTR, frequency and reach stay
+out. A count of times shown and times clicked is something a business owner
+already has words for; a ratio per mille is not. The boundary is
+comprehension, not category.
+
+Threaded through both snapshot stores (rolling and daily, pg and in-memory) so
+every consumer sees the same numbers. The store test was strengthened rather
+than patched: it now seeds impressions and clicks and asserts they SUM across
+days, like the events they are.
+
 ### 2026-09-02 — the pause button vanished exactly when it was needed (AIC-179)
 
 Reported live: "why no button to pause ads". `/controls/state` is a live Meta

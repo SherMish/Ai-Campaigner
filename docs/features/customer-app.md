@@ -632,3 +632,32 @@ toggle DIRECTION depended on the read, so only the direction degrades:
 
 `status_unknown` outranks every other note (`pause-control.ts`): the others all
 assert a state we know, and we have just admitted we do not.
+
+## Impressions and clicks in הצג פירוט (AIC-180)
+
+Each ad-set and ad row shows five numbers: **הוצאה · הצגות · לחיצות · פניות ·
+עלות לפנייה**. The two new ones each carry an "i".
+
+They exist because "0 פניות" is one fact that hides three different problems,
+and these two split it:
+
+| Reading | What is actually wrong |
+| --- | --- |
+| 0 impressions | it is not serving — a delivery problem, not a content one |
+| impressions, 0 clicks | the creative is not pulling |
+| clicks, 0 leads | something after the click is broken (destination, WhatsApp) |
+
+That third row is exactly the failure this product spent 2026-09-02 chasing.
+
+**These are not the ad-jargon metrics this surface keeps out.** CPM, CTR,
+frequency and reach stay out, unchanged. A count of times shown and times
+clicked is something a business owner already has words for; a ratio per mille
+is not — the boundary is comprehension, not category.
+
+Counts sum across days like spend and leads (they are events, not a status to
+take the latest of), and are rendered with a thousands separator: a four-digit
+impression count reads as a typo without one.
+
+The removed-ads list deliberately keeps only the original three. Its job is
+reconciling the spend/leads gap under an ad set, and two more columns there
+would bury the arithmetic it exists to show.

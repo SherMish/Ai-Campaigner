@@ -209,6 +209,9 @@ export interface AudienceCreativeRow {
   creativeName: string | null;
   spendAgorot: number;
   leads: number;
+  // AIC-180 — the two numbers between spend and a lead.
+  impressions: number;
+  linkClicks: number;
   cplAgorot: number | null;
   deliveryStatus: string;
   // 2026-08-22: an ad can now appear here with NO measured data — one Meta is
@@ -231,6 +234,9 @@ export interface AudienceRow {
   label: string;
   spendAgorot: number;
   leads: number;
+  // AIC-180 — the two numbers between spend and a lead.
+  impressions: number;
+  linkClicks: number;
   cplAgorot: number | null;
   creatives: AudienceCreativeRow[];
   // AIC-95 followup: creatives with real historical data outside the selected

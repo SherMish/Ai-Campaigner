@@ -20,6 +20,13 @@ export interface CreativeStatRow {
   spendAgorot: number;
   leads: number;
   cplAgorot: number | null;
+  // AIC-180 — the two numbers between spend and a lead. Impressions says the
+  // ads are actually SERVING (the thing that silently failed on 2026-09-02);
+  // clicks says the creative is working. Together they turn "0 leads" from one
+  // fact into a locatable one: no impressions is a delivery problem, clicks
+  // without leads is a destination problem.
+  impressions: number;
+  linkClicks: number;
   deliveryStatus: string;
 }
 
@@ -30,6 +37,13 @@ export interface AdsetStatRow {
   spendAgorot: number;
   leads: number;
   cplAgorot: number | null;
+  // AIC-180 — the two numbers between spend and a lead. Impressions says the
+  // ads are actually SERVING (the thing that silently failed on 2026-09-02);
+  // clicks says the creative is working. Together they turn "0 leads" from one
+  // fact into a locatable one: no impressions is a delivery problem, clicks
+  // without leads is a destination problem.
+  impressions: number;
+  linkClicks: number;
   deliveryStatus: string;
 }
 
@@ -181,10 +195,13 @@ export class PgSnapshotStore implements SnapshotStore {
       spend_agorot: number;
       leads: number;
       cpl_agorot: number | null;
+      impressions: string | null;
+      link_clicks: string | null;
       delivery_status: string;
     }>(
       `SELECT DISTINCT ON (meta_object_id)
-              meta_object_id, parent_meta_id, creative_name, spend_agorot, leads, cpl_agorot, delivery_status
+              meta_object_id, parent_meta_id, creative_name, spend_agorot, leads, cpl_agorot,
+              impressions, link_clicks, delivery_status
        FROM insight_snapshots
        WHERE campaign_id = $1 AND grain = 'creative'
          AND period_start >= $2 AND period_end <= $3
@@ -200,6 +217,8 @@ export class PgSnapshotStore implements SnapshotStore {
         spendAgorot: Number(r.spend_agorot),
         leads: Number(r.leads),
         cplAgorot: r.cpl_agorot === null ? null : Number(r.cpl_agorot),
+        impressions: Number(r.impressions ?? 0),
+        linkClicks: Number(r.link_clicks ?? 0),
         deliveryStatus: r.delivery_status,
       }))
       .sort((a, b) => b.spendAgorot - a.spendAgorot);
@@ -215,10 +234,12 @@ export class PgSnapshotStore implements SnapshotStore {
       spend_agorot: number;
       leads: number;
       cpl_agorot: number | null;
+      impressions: string | null;
+      link_clicks: string | null;
       delivery_status: string;
     }>(
       `SELECT DISTINCT ON (meta_object_id)
-              meta_object_id, spend_agorot, leads, cpl_agorot, delivery_status
+              meta_object_id, spend_agorot, leads, cpl_agorot, impressions, link_clicks, delivery_status
        FROM insight_snapshots
        WHERE campaign_id = $1 AND grain = 'adset'
          AND period_start >= $2 AND period_end <= $3
@@ -232,6 +253,8 @@ export class PgSnapshotStore implements SnapshotStore {
         spendAgorot: Number(r.spend_agorot),
         leads: Number(r.leads),
         cplAgorot: r.cpl_agorot === null ? null : Number(r.cpl_agorot),
+        impressions: Number(r.impressions ?? 0),
+        linkClicks: Number(r.link_clicks ?? 0),
         deliveryStatus: r.delivery_status,
       }))
       .sort((a, b) => b.spendAgorot - a.spendAgorot);
@@ -263,6 +286,8 @@ export class PgSnapshotStore implements SnapshotStore {
       creative_name: string | null;
       spend_agorot: string;
       leads: string;
+      impressions: string;
+      link_clicks: string;
       delivery_status: string;
     }>(
       // insight_snapshot_daily (migration 030) already excludes the rolling
@@ -274,6 +299,8 @@ export class PgSnapshotStore implements SnapshotStore {
               (array_agg(creative_name ORDER BY period_start DESC))[1] AS creative_name,
               SUM(spend_agorot)::int AS spend_agorot,
               SUM(leads)::int        AS leads,
+              COALESCE(SUM(impressions), 0)::bigint AS impressions,
+              COALESCE(SUM(link_clicks), 0)::bigint AS link_clicks,
               (array_agg(delivery_status ORDER BY period_start DESC))[1] AS delivery_status
        FROM insight_snapshot_daily
        WHERE campaign_id = $1 AND grain = 'creative'
@@ -292,6 +319,8 @@ export class PgSnapshotStore implements SnapshotStore {
           spendAgorot,
           leads,
           cplAgorot: computeCpl(spendAgorot, leads),
+          impressions: Number(r.impressions ?? 0),
+          linkClicks: Number(r.link_clicks ?? 0),
           deliveryStatus: r.delivery_status,
         };
       })
@@ -303,11 +332,15 @@ export class PgSnapshotStore implements SnapshotStore {
       meta_object_id: string;
       spend_agorot: string;
       leads: string;
+      impressions: string;
+      link_clicks: string;
       delivery_status: string;
     }>(
       `SELECT meta_object_id,
               SUM(spend_agorot)::int AS spend_agorot,
               SUM(leads)::int        AS leads,
+              COALESCE(SUM(impressions), 0)::bigint AS impressions,
+              COALESCE(SUM(link_clicks), 0)::bigint AS link_clicks,
               (array_agg(delivery_status ORDER BY period_start DESC))[1] AS delivery_status
        FROM insight_snapshot_daily
        WHERE campaign_id = $1 AND grain = 'adset'
@@ -324,6 +357,8 @@ export class PgSnapshotStore implements SnapshotStore {
           spendAgorot,
           leads,
           cplAgorot: computeCpl(spendAgorot, leads),
+          impressions: Number(r.impressions ?? 0),
+          linkClicks: Number(r.link_clicks ?? 0),
           deliveryStatus: r.delivery_status,
         };
       })
@@ -405,6 +440,8 @@ export class InMemorySnapshotStore implements SnapshotStore {
         spendAgorot: r.spendAgorot,
         leads: r.leads,
         cplAgorot: r.cplAgorot,
+        impressions: r.impressions ?? 0,
+        linkClicks: r.linkClicks ?? 0,
         deliveryStatus: r.deliveryStatus,
       }))
       .sort((a, b) => b.spendAgorot - a.spendAgorot);
@@ -422,6 +459,8 @@ export class InMemorySnapshotStore implements SnapshotStore {
         spendAgorot: r.spendAgorot,
         leads: r.leads,
         cplAgorot: r.cplAgorot,
+        impressions: r.impressions ?? 0,
+        linkClicks: r.linkClicks ?? 0,
         deliveryStatus: r.deliveryStatus,
       }))
       .sort((a, b) => b.spendAgorot - a.spendAgorot);
@@ -447,14 +486,16 @@ export class InMemorySnapshotStore implements SnapshotStore {
   // wide. Keeping this a shared private helper is what keeps the two methods
   // from drifting the way the Pg queries deliberately share one predicate.
   private sumDailyPerObject(campaignId: string, grain: SnapshotUpsert["grain"], start: string, end: string) {
-    const byObject = new Map<string, { spendAgorot: number; leads: number; parentMetaId: string | null; creativeName: string | null; deliveryStatus: string; latestDate: string }>();
+    const byObject = new Map<string, { spendAgorot: number; leads: number; impressions: number; linkClicks: number; parentMetaId: string | null; creativeName: string | null; deliveryStatus: string; latestDate: string }>();
     for (const r of this.rows.values()) {
       if (r.campaignId !== campaignId || r.grain !== grain) continue;
       if (r.periodStart !== r.periodEnd) continue; // rolling row — excluded
       if (r.periodStart < start || r.periodStart > end) continue;
-      const cur = byObject.get(r.metaObjectId) ?? { spendAgorot: 0, leads: 0, parentMetaId: null, creativeName: null, deliveryStatus: r.deliveryStatus, latestDate: "" };
+      const cur = byObject.get(r.metaObjectId) ?? { spendAgorot: 0, leads: 0, impressions: 0, linkClicks: 0, parentMetaId: null, creativeName: null, deliveryStatus: r.deliveryStatus, latestDate: "" };
       cur.spendAgorot += r.spendAgorot;
       cur.leads += r.leads;
+      cur.impressions += r.impressions ?? 0;
+      cur.linkClicks += r.linkClicks ?? 0;
       if (r.periodStart >= cur.latestDate) {
         cur.parentMetaId = r.parentMetaId;
         cur.creativeName = r.creativeName;
@@ -476,6 +517,8 @@ export class InMemorySnapshotStore implements SnapshotStore {
         spendAgorot: v.spendAgorot,
         leads: v.leads,
         cplAgorot: computeCpl(v.spendAgorot, v.leads),
+        impressions: v.impressions,
+        linkClicks: v.linkClicks,
         deliveryStatus: v.deliveryStatus,
       }))
       .sort((a, b) => b.spendAgorot - a.spendAgorot);
@@ -489,6 +532,8 @@ export class InMemorySnapshotStore implements SnapshotStore {
         spendAgorot: v.spendAgorot,
         leads: v.leads,
         cplAgorot: computeCpl(v.spendAgorot, v.leads),
+        impressions: v.impressions,
+        linkClicks: v.linkClicks,
         deliveryStatus: v.deliveryStatus,
       }))
       .sort((a, b) => b.spendAgorot - a.spendAgorot);

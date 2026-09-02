@@ -1450,6 +1450,14 @@ export const strings = {
           emptyNoDataInRange: "אין נתונים לתקופה שנבחרה. הנתונים האחרונים שיש לנו הם מ־",
           empty: "עדיין אין מספיק נתונים לפירוט לפי קהל.",
           audienceCol: "קהל",
+          // AIC-180 — the two numbers between spend and a lead, each with its
+          // own "i". Counts a business owner already has words for; the ratios
+          // (CPM, CTR, frequency) stay out, same boundary as the rest of this
+          // surface.
+          impressionsCol: "הצגות",
+          clicksCol: "לחיצות",
+          impressionsInfo: "כמה פעמים המודעה הוצגה על המסך של מישהו. אם המספר הזה 0 — המודעה לא באמת רצה, וזו בעיה של הצגה, לא של תוכן.",
+          clicksInfo: "כמה אנשים לחצו על הכפתור במודעה. הרבה הצגות בלי לחיצות = התוכן לא מושך. הרבה לחיצות בלי פניות = משהו לא עובד אחרי הלחיצה.",
           spendCol: "הוצאה",
           leadsCol: "פניות",
           cplCol: "עלות לפנייה",

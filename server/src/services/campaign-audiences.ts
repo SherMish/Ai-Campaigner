@@ -28,6 +28,16 @@ export interface AudienceCreativeRow {
   creativeName: string | null;
   spendAgorot: number;
   leads: number;
+  // AIC-180 — the two numbers between spend and a lead. Impressions says the
+  // ads are actually SERVING; clicks say the creative is working. Together
+  // they turn "0 פניות" from one fact into a locatable one: no impressions is
+  // a delivery problem, clicks without leads is a destination problem.
+  //
+  // These are NOT the ad-jargon metrics this surface keeps out (CPM, CTR,
+  // frequency, reach). A count of times shown and times clicked is something a
+  // business owner already has words for; a ratio per mille is not.
+  impressions: number;
+  linkClicks: number;
   cplAgorot: number | null;
   deliveryStatus: string;
   // Found live 2026-08-22: this list is built from insight_snapshots, i.e.
@@ -68,6 +78,16 @@ export interface AudienceRow {
   label: string; // human dimension, or the ad-set name if nothing else distinguishes it
   spendAgorot: number;
   leads: number;
+  // AIC-180 — the two numbers between spend and a lead. Impressions says the
+  // ads are actually SERVING; clicks say the creative is working. Together
+  // they turn "0 פניות" from one fact into a locatable one: no impressions is
+  // a delivery problem, clicks without leads is a destination problem.
+  //
+  // These are NOT the ad-jargon metrics this surface keeps out (CPM, CTR,
+  // frequency, reach). A count of times shown and times clicked is something a
+  // business owner already has words for; a ratio per mille is not.
+  impressions: number;
+  linkClicks: number;
   cplAgorot: number | null;
   creatives: AudienceCreativeRow[];
   // Real live bug: the campaign card said "2 active ads", but this ad set's
@@ -278,6 +298,8 @@ export async function buildCampaignAudiences(
       list.push({
         metaObjectId: c.metaObjectId,
         creativeName: c.creativeName,
+        impressions: c.impressions,
+        linkClicks: c.linkClicks,
         spendAgorot: c.spendAgorot,
         leads: c.leads,
         cplAgorot: c.cplAgorot,
@@ -301,6 +323,8 @@ export async function buildCampaignAudiences(
       spendAgorot: c.spendAgorot,
       leads: c.leads,
       cplAgorot: c.cplAgorot,
+      impressions: c.impressions,
+      linkClicks: c.linkClicks,
       deliveryStatus: c.deliveryStatus,
       // Prefer the cached live status over the snapshot's, which is only as
       // fresh as the last ingestion tick.
@@ -349,6 +373,7 @@ export async function buildCampaignAudiences(
       const list = removedByAdSet.get(a.adSetId) ?? [];
       list.push({
         metaObjectId: a.adId, creativeName: a.name, spendAgorot: 0, leads: 0, cplAgorot: null,
+        impressions: 0, linkClicks: 0,
         deliveryStatus: a.effectiveStatus, adState: state, hasData: false, removed: removedNoData,
       });
       removedByAdSet.set(a.adSetId, list);
@@ -370,6 +395,8 @@ export async function buildCampaignAudiences(
     list.push({
       metaObjectId: a.adId,
       creativeName: a.name,
+      impressions: 0,
+      linkClicks: 0,
       // Zeroes here are NOT a claim of zero results — hasData:false is what
       // tells the UI to render "no results yet" instead of "₪0, 0 leads".
       spendAgorot: 0,
@@ -407,6 +434,8 @@ export async function buildCampaignAudiences(
       spendAgorot: a?.spendAgorot ?? 0,
       leads: a?.leads ?? 0,
       cplAgorot: a?.cplAgorot ?? null,
+      impressions: a?.impressions ?? 0,
+      linkClicks: a?.linkClicks ?? 0,
       creatives: (creativesByAdSet.get(m.adSetId) ?? []).sort((x, y) => y.spendAgorot - x.spendAgorot),
       moreCreativesCount,
       removedCreativesCount: (removedByAdSet.get(m.adSetId) ?? []).length,

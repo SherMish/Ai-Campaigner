@@ -49,11 +49,13 @@ describe("InMemorySnapshotStore — creativeRangeStats/adsetRangeStats (AIC-95)"
   it("adsetRangeStats sums per ad set the same way", async () => {
     const store = new InMemorySnapshotStore();
     await store.upsert([
-      snap({ grain: "adset", metaObjectId: "as_1", parentMetaId: null, creativeName: null, periodStart: "2026-08-10", periodEnd: "2026-08-10", spendAgorot: 1500, leads: 1 }),
-      snap({ grain: "adset", metaObjectId: "as_1", parentMetaId: null, creativeName: null, periodStart: "2026-08-11", periodEnd: "2026-08-11", spendAgorot: 2500, leads: 2 }),
+      snap({ grain: "adset", metaObjectId: "as_1", parentMetaId: null, creativeName: null, periodStart: "2026-08-10", periodEnd: "2026-08-10", spendAgorot: 1500, leads: 1, impressions: 400, linkClicks: 12 }),
+      snap({ grain: "adset", metaObjectId: "as_1", parentMetaId: null, creativeName: null, periodStart: "2026-08-11", periodEnd: "2026-08-11", spendAgorot: 2500, leads: 2, impressions: 900, linkClicks: 25 }),
     ]);
     const rows = await store.adsetRangeStats("camp-1", "2026-08-08", "2026-08-14");
-    expect(rows).toEqual([{ adSetId: "as_1", spendAgorot: 4000, leads: 3, cplAgorot: 1333, deliveryStatus: "active" }]);
+    // AIC-180: impressions and clicks SUM across days exactly as spend and
+    // leads do — they are counts of events, not a status to take the latest of.
+    expect(rows).toEqual([{ adSetId: "as_1", spendAgorot: 4000, leads: 3, cplAgorot: 1333, impressions: 1300, linkClicks: 37, deliveryStatus: "active" }]);
   });
 
   it("returns nothing for a window with no rows, even if the object has data elsewhere", async () => {
