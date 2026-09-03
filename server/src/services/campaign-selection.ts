@@ -112,7 +112,15 @@ export async function listOwnedCampaigns(pool: pg.Pool, userId: string): Promise
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function campaignIdParam(raw: unknown): string | null {
-  return typeof raw === "string" && UUID.test(raw) ? raw : null;
+  // AIC-195 — an ARRAY is the shape Express produces when the same query
+  // parameter arrives twice, and it cost a day of "the switcher does not
+  // work": the client appended the id and the api layer injected it again,
+  // Express turned that into ["x","x"], this returned null, and the request
+  // quietly served the DEFAULT campaign. The duplicate is fixed at the source;
+  // this accepts the shape anyway, because falling back to the wrong
+  // campaign's numbers is far worse than tolerating a repeated parameter.
+  const one = Array.isArray(raw) ? raw[raw.length - 1] : raw;
+  return typeof one === "string" && UUID.test(one) ? one : null;
 }
 
 /**

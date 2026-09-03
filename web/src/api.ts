@@ -985,10 +985,15 @@ export interface CampaignChoice {
 }
 export const getCampaigns = () => api<{ campaigns: CampaignChoice[] }>("/app/campaigns");
 
-// AIC-186 — scoped to one campaign when the customer has more than one. An id
-// that is not theirs falls back to their default rather than erroring.
-export const getOverview = (campaignId?: string | null) =>
-  api<CustomerOverview>(`/app/overview${campaignId ? `?campaignId=${encodeURIComponent(campaignId)}` : ""}`);
+// AIC-186 — scoped to one campaign when the customer has more than one.
+//
+// AIC-195: the id is NOT appended here. api() injects it into every /app
+// request, and appending it a second time produced ?campaignId=X&campaignId=X,
+// which Express parses as an ARRAY — rejected by the validator, silently
+// falling back to the default campaign. The switcher moved and the dashboard
+// did not. One injection point, at the bottom, is the whole design.
+export const getOverview = (_campaignId?: string | null) =>
+  api<CustomerOverview>("/app/overview");
 // AIC-67: `relevant` answers about the PENDING delta only — the server reads
 // how many leads are pending from the caller's own watermark, never a
 // client-supplied total, so this can never re-rate already-reviewed leads.
