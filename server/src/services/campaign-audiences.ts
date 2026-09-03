@@ -148,8 +148,12 @@ export async function buildCampaignAudiences(
   userId: string,
   range: RangeKey = "week",
   ref: Date = new Date(),
+  // AIC-192 — which campaign. הצג פירוט showed the DEFAULT campaign's ad sets
+  // no matter which campaign the switcher was on, so a customer could pause an
+  // audience belonging to a campaign they were not looking at.
+  selected?: string | null,
 ): Promise<CampaignAudiences | null> {
-  const campaignId = await resolveCampaignId(pool, userId);
+  const campaignId = await resolveCampaignId(pool, userId, selected);
   if (!campaignId) return null;
 
   // AIC-167 — is anything running right now? The engine's own per-tick answer,

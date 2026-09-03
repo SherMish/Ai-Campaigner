@@ -96,8 +96,11 @@ export async function resolveCampaignOwner(
 export async function listCustomerRecommendations(
   pool: pg.Pool,
   userId: string,
+  // AIC-192 — which campaign. Without this the switcher moved the dashboard
+  // while the recommendations under it stayed on the default campaign.
+  selected?: string | null,
 ): Promise<CustomerRecList> {
-  const campaignId = await resolveCampaignId(pool, userId);
+  const campaignId = await resolveCampaignId(pool, userId, selected);
   if (!campaignId) return { campaignId: null, pending: [], history: [], noRecReason: null, noRecDetail: null };
 
   const store = new PgRecommendationStore(pool);

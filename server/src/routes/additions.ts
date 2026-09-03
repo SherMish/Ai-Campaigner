@@ -22,6 +22,7 @@ import { sendTelegram } from "../notify/telegram.js";
 import { listPromotableContent } from "../builder/promotable-content.js";
 import { respondIfMetaThrottled } from "../meta/throttle-response.js";
 import { respondIfMetaRefused } from "../meta/graph-refusal.js";
+import { campaignIdFromRequest } from "../services/campaign-selection.js";
 import { isPlacement } from "@aic/shared";
 import { adSetName } from "../meta/naming.js";
 
@@ -151,7 +152,7 @@ additionsRouter.get("/context", requireAuth, async (req, res) => {
 // the request — so there is no id here for a client to tamper with.
 additionsRouter.get("/creative-context", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) {
       res.status(409).json({ error: "no managed campaign" });
       return;
@@ -208,7 +209,7 @@ async function notifyContextOpened(
 // just created via this same flow moments ago). Used by the add-ad picker.
 additionsRouter.get("/ad-sets", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) return notReady(res);
     const writer = buildAdditionWriter();
     if (!writer) return unavailable(res);
@@ -257,7 +258,7 @@ additionsRouter.get("/ad-sets", requireAuth, async (req, res) => {
 // missing an avatar is still a useful mock-up.
 additionsRouter.get("/page", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx?.pageId) {
       res.json({ name: null, pictureUrl: null });
       return;
@@ -277,7 +278,7 @@ additionsRouter.get("/page", requireAuth, async (req, res) => {
 // POST /upload — same one-shot-not-idempotent contract as /builder/upload.
 additionsRouter.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) return notReady(res);
     const file = req.file;
     if (!file) { res.status(400).json({ error: "no file" }); return; }
@@ -301,7 +302,7 @@ additionsRouter.post("/upload", requireAuth, upload.single("file"), async (req, 
 // GET /posts — promotable posts on the connected Page.
 additionsRouter.get("/posts", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) return notReady(res);
     const writer = buildAdditionWriter();
     if (!writer) return unavailable(res);
@@ -330,7 +331,7 @@ interface CreativeBody {
 // /builder/creative, anchored to the EXISTING campaign instead of a fresh shell.
 additionsRouter.post("/creative", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) return notReady(res);
     const body = req.body as CreativeBody;
     if (!body.clientKey || !body.name) { res.status(400).json({ error: "clientKey and name are required" }); return; }
@@ -424,7 +425,7 @@ interface AddAdBody {
 // the client — the ownership check the AC requires.
 additionsRouter.post("/ad", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) return notReady(res);
     const body = req.body as AddAdBody;
     if (!body.metaAdSetId || !body.name?.trim() || !body.creativeId || !body.additionKey) {
@@ -525,7 +526,7 @@ async function refreshAfterAdd(
 // caller's already-linked one.
 additionsRouter.post("/ad-set", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) return notReady(res);
     // Refused BEFORE validation and before any Meta call: createAdSet
     // hardcodes CONVERSATIONS/WHATSAPP, which would spend real budget on an
@@ -611,7 +612,7 @@ additionsRouter.post("/ad-set", requireAuth, async (req, res) => {
 // GET /pending — additions awaiting the customer's approval.
 additionsRouter.get("/pending", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) return notReady(res);
     const pending = await listPendingAdditions(pool, ctx.localCampaignId);
     res.json({ pending });
@@ -628,7 +629,7 @@ additionsRouter.get("/pending", requireAuth, async (req, res) => {
 // then its ad(s)) — ownership-checked against the caller's own campaign.
 additionsRouter.post("/:id/approve", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) return notReady(res);
     const writer = buildAdditionWriter();
     if (!writer) return unavailable(res);

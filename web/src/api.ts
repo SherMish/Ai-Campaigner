@@ -1004,7 +1004,54 @@ export function shekels(agorot: number): string {
   return `₪${Number.isInteger(v) ? v : v.toFixed(1)}`;
 }
 
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+// AIC-192 — which campaign every /app request is about.
+//
+// Injected HERE rather than threaded through ~30 call sites, because the
+// failure mode of threading is one forgotten call: the switcher moves the
+// dashboard while add-content quietly writes an ad set into the campaign the
+// customer is no longer looking at. One place cannot be forgotten.
+//
+// Set by the overview store when the customer switches. Held here rather than
+// imported from there because that store imports this module, and the cycle
+// would resolve to undefined at load.
+let apiCampaignId: string | null = null;
+export function setApiCampaign(id: string | null): void {
+  apiCampaignId = id;
+}
+
+/**
+ * Attach the selected campaign to a customer-app request.
+ *
+ * Query for reads, body for writes — the server reads both the same way. Only
+ * `/app/*` paths: admin routes name their customer explicitly and must never
+ * inherit a selection made in the customer shell.
+ */
+function withCampaign(path: string, init?: RequestInit): { path: string; init?: RequestInit } {
+  if (!apiCampaignId || !path.startsWith("/app/")) return { path, init };
+  const method = (init?.method ?? "GET").toUpperCase();
+  if (method === "GET") {
+    const sep = path.includes("?") ? "&" : "?";
+    return { path: `${path}${sep}campaignId=${encodeURIComponent(apiCampaignId)}`, init };
+  }
+  // A non-JSON body (FormData for uploads) is left completely alone — merging
+  // into it would corrupt the upload, and those routes resolve the campaign
+  // from the query instead.
+  if (typeof init?.body !== "string") {
+    const sep = path.includes("?") ? "&" : "?";
+    return { path: `${path}${sep}campaignId=${encodeURIComponent(apiCampaignId)}`, init };
+  }
+  try {
+    const parsed = JSON.parse(init.body) as Record<string, unknown>;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return { path, init: { ...init, body: JSON.stringify({ ...parsed, campaignId: apiCampaignId }) } };
+    }
+  } catch { /* not an object body — fall through to the query form */ }
+  const sep = path.includes("?") ? "&" : "?";
+  return { path: `${path}${sep}campaignId=${encodeURIComponent(apiCampaignId)}`, init };
+}
+
+export async function api<T>(rawPath: string, rawInit?: RequestInit): Promise<T> {
+  const { path, init } = withCampaign(rawPath, rawInit);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...((init?.headers as Record<string, string>) ?? {}),

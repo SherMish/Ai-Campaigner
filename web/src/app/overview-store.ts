@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { getOverview, type CustomerOverview } from "../api";
+import { getOverview, setApiCampaign, type CustomerOverview } from "../api";
 
 // A single shared fetch of GET /api/app/overview, deduped across the shell
 // (AIC-42): the sidebar needs the name + rec badge, Home needs the full
@@ -46,6 +46,9 @@ function load(): Promise<void> {
 export function selectCampaign(campaignId: string | null): void {
   if (selectedCampaignId === campaignId) return;
   selectedCampaignId = campaignId;
+  // Every subsequent /app request carries it — not just the overview. Without
+  // this the dashboard switches and add-content keeps writing to the old one.
+  setApiCampaign(campaignId);
   inflight = null;
   setState({ data: null, loading: true, error: false });
   load();

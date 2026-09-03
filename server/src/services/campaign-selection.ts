@@ -114,3 +114,22 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function campaignIdParam(raw: unknown): string | null {
   return typeof raw === "string" && UUID.test(raw) ? raw : null;
 }
+
+/**
+ * The campaign a REQUEST is about, from wherever the client put it.
+ *
+ * Query for reads, body for writes — a POST that carries its target in the URL
+ * and its payload in the body is the kind of split that gets one of them
+ * forgotten. Both are validated the same way, and an absent or malformed id
+ * falls back to the customer's default rather than erroring: a bad id is not
+ * worth a 500 when there is a correct campaign to show.
+ */
+export function campaignIdFromRequest(req: {
+  query?: Record<string, unknown>;
+  body?: unknown;
+}): string | null {
+  const fromQuery = campaignIdParam(req.query?.campaignId);
+  if (fromQuery) return fromQuery;
+  const body = req.body as { campaignId?: unknown } | undefined;
+  return campaignIdParam(body?.campaignId);
+}

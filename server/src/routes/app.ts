@@ -2,7 +2,7 @@ import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { getCustomerProfile, saveCustomerProfile } from "../services/customer-profile.js";
-import { listOwnedCampaigns, campaignIdParam } from "../services/campaign-selection.js";
+import { listOwnedCampaigns, campaignIdParam, campaignIdFromRequest } from "../services/campaign-selection.js";
 import { buildCustomerOverview } from "../services/customer-overview.js";
 import { recordLeadQualityReview, LeadQualityValidationError } from "../services/lead-quality-review.js";
 import {
@@ -104,7 +104,7 @@ appRouter.post("/lead-quality", requireAuth, async (req, res) => {
 // ── Recommendations (AIC-23) ───────────────────────────────────────────────
 appRouter.get("/recommendations", requireAuth, async (req, res) => {
   try {
-    res.json(await listCustomerRecommendations(pool, (req as AuthedRequest).userId!));
+    res.json(await listCustomerRecommendations(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req)));
   } catch (e) {
     console.error("[app] list recommendations failed", e);
     res.status(500).json({ error: "failed to load recommendations" });
@@ -240,7 +240,7 @@ appRouter.get("/audiences", requireAuth, async (req, res) => {
     // 400ing — a stale client sending an old value shouldn't hard-fail.
     const rawRange = req.query.range;
     const range: RangeKey = (RANGE_KEYS as readonly string[]).includes(rawRange as string) ? (rawRange as RangeKey) : "week";
-    const result = await buildCampaignAudiences(pool, (req as AuthedRequest).userId!, range);
+    const result = await buildCampaignAudiences(pool, (req as AuthedRequest).userId!, range, undefined, campaignIdFromRequest(req));
     if (!result) {
       res.status(404).json({ error: "no managed campaign" });
       return;

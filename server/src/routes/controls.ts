@@ -9,6 +9,7 @@ import type { DeliveryReader } from "../meta/delivery-health.js";
 import type { AdMediaReader } from "../meta/ad-media.js";
 import type { AdDetailReader } from "../meta/ad-detail.js";
 import type { AdSetDetailReader } from "../meta/ad-set-detail.js";
+import { campaignIdFromRequest } from "../services/campaign-selection.js";
 import { editAdSet, editAdName, type AdSetEditWriter, type AdEditWriter } from "../controls/object-edit.js";
 import type { AdSetPatch } from "../meta/ad-set-update.js";
 import { isPlacement } from "@aic/shared";
@@ -112,7 +113,7 @@ for (const action of ["pause", "resume"] as const) {
     }
 
     try {
-      const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+      const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
       if (!ctx) {
         res.status(409).json({ error: "no managed campaign" });
         return;
@@ -175,7 +176,7 @@ for (const action of ["pause", "resume"] as const) {
 // on this router; the read-back and the audit row live in editAdSet.
 controlsRouter.patch("/ad-set/:metaAdSetId", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) {
       res.status(409).json({ error: "no managed campaign" });
       return;
@@ -228,7 +229,7 @@ controlsRouter.patch("/ad-set/:metaAdSetId", requireAuth, async (req, res) => {
 // which is what add-content is for and what the detail panel already says.
 controlsRouter.patch("/ad/:metaAdId", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) {
       res.status(409).json({ error: "no managed campaign" });
       return;
@@ -267,7 +268,7 @@ controlsRouter.patch("/ad/:metaAdId", requireAuth, async (req, res) => {
 // thing on the panel a customer could not open.
 controlsRouter.get("/ad-set/:metaAdSetId", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) {
       res.status(409).json({ error: "no managed campaign" });
       return;
@@ -297,7 +298,7 @@ controlsRouter.get("/ad-set/:metaAdSetId", requireAuth, async (req, res) => {
 
 controlsRouter.get("/ad/:metaAdId", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) {
       res.status(409).json({ error: "no managed campaign" });
       return;
@@ -334,7 +335,7 @@ controlsRouter.get("/ad/:metaAdId", requireAuth, async (req, res) => {
 // pairs them with the stats and thumbnails it already fetches elsewhere.
 controlsRouter.get("/hidden", requireAuth, async (req, res) => {
   try {
-    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) {
       res.status(409).json({ error: "no managed campaign" });
       return;
@@ -356,7 +357,7 @@ for (const action of ["hide", "unhide"] as const) {
       return;
     }
     try {
-      const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+      const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
       if (!ctx) {
         res.status(409).json({ error: "no managed campaign" });
         return;
