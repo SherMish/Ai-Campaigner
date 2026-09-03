@@ -1532,6 +1532,30 @@ export const strings = {
           // AIC-184 — the ad set's own configuration. The label on the row is
           // a summary capped at two places; this is the full answer to "who am
           // I paying to reach".
+          // AIC-185 — editing from the detail panel.
+          editStart: "עריכה",
+          editSave: "שמירה",
+          editCancel: "ביטול",
+          editSaving: "שומרים…",
+          editSaved: "נשמר",
+          editNameLabel: "שם",
+          // The hard-won one. Changing targeting restarts Meta's learning, and
+          // a customer who does not know that will read the dip that follows
+          // as the product breaking.
+          editLearningWarning: "שינוי של גיל, מגדר, מיקום או איפה המודעות רצות מאפס את תהליך הלמידה של מטא. בדרך כלל לוקח יום-יומיים עד שההצגה חוזרת לקצב, ולפעמים ההוצאה יורדת בינתיים. שינוי שם לא משפיע על כלום.",
+          // Observed live 2026-09-02: sending an explicit age or gender turns
+          // Meta's own automatic expansion off for that field.
+          editExpansionNote: "שימו לב: ברגע שקובעים גיל או מגדר במפורש, מטא מפסיקה להרחיב מעבר להם לבד — הקהל מצטמצם.",
+          editFailed: "לא הצלחנו לשמור את השינוי. אפשר לנסות שוב.",
+          // The read-back caught Meta storing something else. This is not a
+          // generic failure and must not read as one.
+          editNotApplied: "מטא קיבלה את הבקשה אבל שמרה משהו אחר. השינוי לא הוחל — כדאי לבדוק בממשק של מטא.",
+          editAgeMin: "גיל מינימום",
+          editAgeMax: "גיל מקסימום",
+          editGender: "מגדר",
+          editPlacement: "איפה המודעות ירוצו",
+          editAdNameTitle: "שם המודעה",
+          editAdNameNote: "שם פנימי בלבד — הלקוחות שלכם לא רואים אותו. את תוכן המודעה עצמו אי אפשר לערוך במטא; מוסיפים מודעה חדשה במקום.",
           adSetDetailOpen: "הצגת פרטי הקהל",
           adSetDetailTitle: "פרטי הקהל",
           adSetDetailLoading: "טוענים…",

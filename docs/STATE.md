@@ -6,6 +6,30 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-03 — the detail panels became editable (AIC-185)
+
+Operator request. The audience panel now edits name, age, gender and placement;
+the ad panel edits its name. An ad's CONTENT stays uneditable because Meta
+cannot modify a creative in place — that is add-content's job, and the panel
+already said so.
+
+Two hard-won constraints shape the implementation, both learned on 2026-09-02.
+
+Meta REPLACES `targeting` wholesale, so an edit is read-modify-write and
+`mergeTargeting` spreads Meta's own object first — every key this code does not
+model survives. Rebuilding targeting from a known field list is how an edit
+silently turns off a setting nobody was discussing.
+
+And a 200 is not a write applied: age 20–35 was sent that day and 18–65 came
+back. Every edit re-reads and compares asked against stored; a mismatch is a
+409 `not_applied` logged as `failed`, never a success. Only patched fields are
+compared, because Meta normalizes what we did not touch.
+
+The panel warns that targeting changes restart Meta's learning phase, and that
+an explicit age or gender switches Meta's own expansion off for that field.
+Both were observed live on this campaign; a customer who does not know the
+first will read the delivery dip that follows as the product breaking.
+
 ### 2026-09-03 — the audience row opens, like its ads already did (AIC-184)
 
 Operator request. Inside הצג פירוט every ad row was clickable and the audience

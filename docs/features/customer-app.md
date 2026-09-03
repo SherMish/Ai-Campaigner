@@ -696,3 +696,47 @@ A live Meta read on open, never bulk-loaded with the panel — the same
 discipline as the ad detail, for the same reason: this is text nobody asked to
 see until they ask. Ownership is checked against the caller's own campaign;
 an id in a URL is not evidence of ownership.
+
+## Editing from the detail panels (AIC-185)
+
+The audience panel edits **name, age, gender and placement**. The ad panel edits
+**the name only** — Meta cannot modify a creative in place, so changing an ad's
+content means a new creative, which is what add-content is for and what the
+panel already says.
+
+### Two things make this harder than a form
+
+**Meta REPLACES `targeting` wholesale on update.** Sending only the changed
+field silently wipes everything else — Advantage+ settings, brand-safety
+levels, geo. So an edit is necessarily read-modify-write, and `mergeTargeting`
+spreads Meta's own object first so keys this code has never heard of survive.
+Rebuilding targeting from a known field list is how an edit quietly turns off a
+setting nobody was discussing.
+
+**A 200 from Meta is not a write Meta applied.** On 2026-09-02 an age of 20–35
+was sent and 18–65 came back; nothing in the response said so. Every edit
+re-reads afterwards and compares what was *asked* against what was *stored*
+(`diffApplied`). A mismatch is a **409 `not_applied`**, never a success — and
+it is logged to `action_history` as `failed`, so the customer's own history
+does not claim a change that did not happen.
+
+Only patched fields are compared. Meta legitimately normalizes things we did
+not touch, and reporting those would make every successful edit look broken.
+
+### What the customer is told
+
+Changing age, gender, location or placement **restarts Meta's learning phase**.
+The panel says so before they save, because a customer who does not know that
+will read the delivery dip that follows as the product breaking — which is
+exactly what happened to this campaign on 2 September.
+
+It also warns that setting an explicit age or gender turns Meta's own automatic
+expansion off for that field, narrowing reach. Observed live, same day.
+
+### Guards
+
+Same ownership check as every other write on this router. `advantage` **deletes**
+`publisher_platforms` rather than sending an empty array (AIC-177), Instagram-only
+is refused without a connected Instagram account, and clearing the last city
+restores `countries: ["IL"]` — cities replace countries rather than joining
+them (AIC-157), so an empty geo would otherwise target nowhere.

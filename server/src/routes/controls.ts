@@ -9,6 +9,10 @@ import type { DeliveryReader } from "../meta/delivery-health.js";
 import type { AdMediaReader } from "../meta/ad-media.js";
 import type { AdDetailReader } from "../meta/ad-detail.js";
 import type { AdSetDetailReader } from "../meta/ad-set-detail.js";
+import { editAdSet, editAdName, type AdSetEditWriter, type AdEditWriter } from "../controls/object-edit.js";
+import type { AdSetPatch } from "../meta/ad-set-update.js";
+import { isPlacement } from "@aic/shared";
+import { respondIfMetaRefused } from "../meta/graph-refusal.js";
 import { refreshDeliveryNow } from "../services/delivery-monitor.js";
 import { OpsQueue } from "../services/ops-queue.js";
 import { respondIfMetaThrottled } from "../meta/throttle-response.js";
@@ -167,6 +171,97 @@ for (const action of ["pause", "resume"] as const) {
 // the ad must live under the caller's OWN campaign. Without it this would be a
 // read oracle for any ad id in any account the system user can reach — the
 // copy, the image and the destination phone number of another business's ads.
+// AIC-185 — apply an audience edit. Same ownership check as every other write
+// on this router; the read-back and the audit row live in editAdSet.
+controlsRouter.patch("/ad-set/:metaAdSetId", requireAuth, async (req, res) => {
+  try {
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    if (!ctx) {
+      res.status(409).json({ error: "no managed campaign" });
+      return;
+    }
+    const writer = buildAdditionWriter() as (ControlWriter & AdSetEditWriter) | null;
+    if (!writer) return unavailable(res);
+
+    const metaAdSetId = String(req.params.metaAdSetId);
+    if (!(await assertOwnedByCampaign(writer, ctx.metaCampaignId, "ad_set", metaAdSetId))) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+
+    const patch = req.body as AdSetPatch;
+    // The SAME rule the placement picker renders disabled (AIC-177), enforced
+    // where a stale tab cannot bypass it.
+    if (patch.placement !== undefined && !isPlacement(patch.placement)) {
+      res.status(400).json({ error: `unknown placement "${String(patch.placement)}"`, code: "bad_placement" });
+      return;
+    }
+    if (patch.placement === "instagram" && !ctx.instagramId) {
+      res.status(409).json({ error: "no Instagram account is connected", code: "placement_no_instagram" });
+      return;
+    }
+
+    const result = await editAdSet({
+      pool, writer, campaignId: ctx.localCampaignId, metaAdSetId, patch,
+      actor: { kind: "customer", label: "customer" },
+    });
+    if (result.outcome === "invalid") { res.status(400).json({ error: result.problem, code: result.problem }); return; }
+    if (result.outcome === "not_found") { res.status(404).json({ error: "not found" }); return; }
+    // not_applied is NOT a 200 with a shrug: Meta accepted the call and stored
+    // something else, and the customer must not be told their change took.
+    if (result.outcome === "not_applied") {
+      res.status(409).json({ error: "meta stored something else", code: "not_applied", mismatches: result.mismatches, after: result.after });
+      return;
+    }
+    if (result.outcome === "failed") { res.status(502).json({ error: result.detail ?? "failed to edit the ad set" }); return; }
+    res.json(result.after);
+  } catch (e) {
+    if (respondIfMetaThrottled(res, e)) return;
+    if (respondIfMetaRefused(res, e)) return;
+    console.error("[controls] ad set edit failed", e);
+    res.status(502).json({ error: "failed to edit the ad set" });
+  }
+});
+
+// AIC-185 — an ad's NAME is the only thing editable in place. A creative
+// cannot be modified on Meta; changing an ad's content means a new creative,
+// which is what add-content is for and what the detail panel already says.
+controlsRouter.patch("/ad/:metaAdId", requireAuth, async (req, res) => {
+  try {
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    if (!ctx) {
+      res.status(409).json({ error: "no managed campaign" });
+      return;
+    }
+    const writer = buildAdditionWriter() as (ControlWriter & AdEditWriter) | null;
+    if (!writer) return unavailable(res);
+
+    const metaAdId = String(req.params.metaAdId);
+    if (!(await assertOwnedByCampaign(writer, ctx.metaCampaignId, "ad", metaAdId))) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    const result = await editAdName({
+      pool, writer, campaignId: ctx.localCampaignId, metaAdId,
+      name: String((req.body as { name?: string }).name ?? ""),
+      actor: { kind: "customer", label: "customer" },
+    });
+    if (result.outcome === "invalid") { res.status(400).json({ error: result.problem, code: result.problem }); return; }
+    if (result.outcome === "not_found") { res.status(404).json({ error: "not found" }); return; }
+    if (result.outcome === "not_applied") {
+      res.status(409).json({ error: "meta stored something else", code: "not_applied", mismatches: result.mismatches });
+      return;
+    }
+    if (result.outcome === "failed") { res.status(502).json({ error: result.detail ?? "failed to rename the ad" }); return; }
+    res.json({ ok: true });
+  } catch (e) {
+    if (respondIfMetaThrottled(res, e)) return;
+    if (respondIfMetaRefused(res, e)) return;
+    console.error("[controls] ad rename failed", e);
+    res.status(502).json({ error: "failed to rename the ad" });
+  }
+});
+
 // AIC-184 — the ad set's own configuration. Same ownership check and same
 // on-demand shape as the ad detail below it: the audience row was the only
 // thing on the panel a customer could not open.

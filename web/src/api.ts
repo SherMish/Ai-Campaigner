@@ -475,6 +475,27 @@ export interface AdSetDetail {
 export const getAdSetDetail = (metaAdSetId: string) =>
   api<AdSetDetail>(`/app/controls/ad-set/${encodeURIComponent(metaAdSetId)}`);
 
+// AIC-185 — apply an audience edit. Every field is optional: only what the
+// customer actually changed is sent, and the server merges it into Meta's own
+// targeting object rather than rebuilding one.
+export interface AdSetPatch {
+  name?: string;
+  ageMin?: number;
+  ageMax?: number;
+  genders?: "all" | "male" | "female";
+  placement?: AdSetPlacement;
+  cities?: GeoPlace[];
+}
+export const updateAdSet = (metaAdSetId: string, patch: AdSetPatch) =>
+  api<AdSetDetail>(`/app/controls/ad-set/${encodeURIComponent(metaAdSetId)}`, {
+    method: "PATCH", body: JSON.stringify(patch),
+  });
+
+export const renameAd = (metaAdId: string, name: string) =>
+  api<{ ok: true }>(`/app/controls/ad/${encodeURIComponent(metaAdId)}`, {
+    method: "PATCH", body: JSON.stringify({ name }),
+  });
+
 /** AIC-138: the customer's own business profile, on /app/settings. The server
  *  resolves the customer from the JWT and writes only a whitelisted set of
  *  columns — isTest, budget and engine thresholds are not reachable here. */

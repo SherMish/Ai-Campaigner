@@ -12,7 +12,10 @@ import {
   setAdRemoved,
   getAdDetail,
   getAdSetDetail,
+  updateAdSet,
+  renameAd,
   type AdSetDetail,
+  type AdSetPatch,
   type AdDetail,
   ApiError,
   type ControlState,
@@ -838,6 +841,17 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
   const [audienceDetailFor, setAudienceDetailFor] = useState<string | null>(null);
   const [audienceDetail, setAudienceDetail] = useState<AdSetDetail | null>(null);
   const [audienceDetailError, setAudienceDetailError] = useState(false);
+  // AIC-185 — editing the audience from this panel. `draft` non-null means the
+  // panel is in edit mode; it starts as a copy of what Meta currently has, so
+  // only fields the customer actually touched are sent.
+  const [draft, setDraft] = useState<AdSetPatch | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  // AIC-185 — the ad's name. Null means untouched, so an unopened field is
+  // never sent and the placeholder cannot overwrite the real name.
+  const [adNameDraft, setAdNameDraft] = useState<string | null>(null);
+  const [savingAdName, setSavingAdName] = useState(false);
+  const [adNameError, setAdNameError] = useState<string | null>(null);
   const [detail, setDetail] = useState<AdDetail | null>(null);
   const [detailError, setDetailError] = useState(false);
   const [removedOpen, setRemovedOpen] = useState<Set<string>>(new Set());
@@ -964,11 +978,58 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
     setAudienceDetailFor(adSetId);
     setAudienceDetail(null);
     setAudienceDetailError(false);
+    setDraft(null);
+    setEditError(null);
     getAdSetDetail(adSetId).then(setAudienceDetail).catch(() => setAudienceDetailError(true));
+  }
+
+  async function saveAudience() {
+    if (!audienceDetailFor || !draft) return;
+    setSaving(true);
+    setEditError(null);
+    try {
+      const after = await updateAdSet(audienceDetailFor, draft);
+      setAudienceDetail(after);
+      setDraft(null);
+      // The audience label and its metrics come from the overview + audiences
+      // read, not from this panel, so both have to be invalidated or the row
+      // behind the modal keeps the old targeting.
+      invalidateOverview();
+      load();
+    } catch (e) {
+      // AIC-185: "Meta stored something else" is a DIFFERENT failure from
+      // "the call failed", and the customer must not be told their change
+      // took when the read-back proved it did not.
+      const code = (e as { body?: { code?: string } } | null)?.body?.code;
+      setEditError(code === "not_applied" ? D.editNotApplied
+        : code === "placement_no_instagram" ? strings.he.additions.placementNoInstagram
+        : D.editFailed);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveAdName() {
+    if (!detailFor || adNameDraft === null) return;
+    setSavingAdName(true);
+    setAdNameError(null);
+    try {
+      await renameAd(detailFor, adNameDraft);
+      setDetail((d) => (d ? { ...d, name: adNameDraft.trim() } : d));
+      setAdNameDraft(null);
+      load();
+    } catch (e) {
+      const code = (e as { body?: { code?: string } } | null)?.body?.code;
+      setAdNameError(code === "not_applied" ? D.editNotApplied : D.editFailed);
+    } finally {
+      setSavingAdName(false);
+    }
   }
 
   function openDetail(adId: string) {
     setDetailFor(adId);
+    setAdNameDraft(null);
+    setAdNameError(null);
     setDetail(null);
     setDetailError(false);
     getAdDetail(adId).then(setDetail).catch(() => setDetailError(true));
@@ -1351,8 +1412,62 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
               <p className="muted" style={{ marginTop: 12, color: "var(--orange)" }}>{D.adSetDetailError}</p>
             ) : !audienceDetail ? (
               <p className="muted" style={{ marginTop: 12 }}>{D.adSetDetailLoading}</p>
+            ) : draft ? (
+              /* AIC-185 — edit mode. Only the fields the customer actually
+                 changes end up in `draft`, so an untouched field is never sent
+                 and can never be overwritten by a stale value. */
+              <div className="stack gap12" style={{ marginTop: 12 }}>
+                <div className="field">
+                  <label>{D.editNameLabel}</label>
+                  <input
+                    type="text"
+                    value={draft.name ?? audienceDetail.name ?? ""}
+                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                  />
+                </div>
+                <div className="field-row">
+                  <div className="field">
+                    <label>{D.editAgeMin}</label>
+                    <input type="number" min={13} max={65}
+                      value={draft.ageMin ?? audienceDetail.ageMin ?? 18}
+                      onChange={(e) => setDraft({ ...draft, ageMin: Number(e.target.value) })} />
+                  </div>
+                  <div className="field">
+                    <label>{D.editAgeMax}</label>
+                    <input type="number" min={13} max={65}
+                      value={draft.ageMax ?? audienceDetail.ageMax ?? 65}
+                      onChange={(e) => setDraft({ ...draft, ageMax: Number(e.target.value) })} />
+                  </div>
+                </div>
+                <div className="field">
+                  <label>{D.editGender}</label>
+                  <select
+                    value={draft.genders ?? audienceDetail.genders}
+                    onChange={(e) => setDraft({ ...draft, genders: e.target.value as "all" | "male" | "female" })}
+                  >
+                    <option value="all">{D.adSetDetailGenders.all}</option>
+                    <option value="male">{D.adSetDetailGenders.male}</option>
+                    <option value="female">{D.adSetDetailGenders.female}</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label>{D.editPlacement}</label>
+                  <select
+                    value={draft.placement ?? (audienceDetail.placement === "custom" ? "advantage" : audienceDetail.placement)}
+                    onChange={(e) => setDraft({ ...draft, placement: e.target.value as typeof audienceDetail.placement })}
+                  >
+                    <option value="advantage">{D.adSetDetailPlacements.advantage}</option>
+                    <option value="instagram">{D.adSetDetailPlacements.instagram}</option>
+                    <option value="facebook">{D.adSetDetailPlacements.facebook}</option>
+                  </select>
+                </div>
+                <p className="muted" style={{ fontSize: "0.82rem", margin: 0 }}>{D.editLearningWarning}</p>
+                <p className="muted" style={{ fontSize: "0.82rem", margin: 0 }}>{D.editExpansionNote}</p>
+                {editError && <p style={{ color: "var(--orange)", fontSize: "0.85rem", margin: 0 }}>{editError}</p>}
+              </div>
             ) : (
               <div className="stack gap8" style={{ marginTop: 12 }}>
+                <DetailRow label={D.editNameLabel} value={audienceDetail.name ?? ""} />
                 <DetailRow
                   label={D.adSetDetailAge}
                   value={audienceDetail.ageMin && audienceDetail.ageMax ? `${audienceDetail.ageMin}–${audienceDetail.ageMax}` : ""}
@@ -1377,10 +1492,28 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
                   label={D.adSetDetailCreated}
                   value={audienceDetail.createdAt ? new Date(audienceDetail.createdAt).toLocaleDateString("he-IL") : ""}
                 />
+                {editError && <p style={{ color: "var(--orange)", fontSize: "0.85rem", margin: 0 }}>{editError}</p>}
               </div>
             )}
-            <div className="row" style={{ marginTop: 18 }}>
-              <button className="btn btn-outline btn-sm" onClick={() => setAudienceDetailFor(null)}>{D.adSetDetailClose}</button>
+            <div className="row gap12" style={{ marginTop: 18 }}>
+              {audienceDetail && !draft && (
+                <button className="btn btn-primary btn-sm" onClick={() => { setEditError(null); setDraft({}); }}>
+                  {D.editStart}
+                </button>
+              )}
+              {draft && (
+                <>
+                  <button className="btn btn-primary btn-sm" disabled={saving} onClick={saveAudience}>
+                    {saving ? D.editSaving : D.editSave}
+                  </button>
+                  <button className="btn btn-outline btn-sm" disabled={saving} onClick={() => { setDraft(null); setEditError(null); }}>
+                    {D.editCancel}
+                  </button>
+                </>
+              )}
+              {!draft && (
+                <button className="btn btn-outline btn-sm" onClick={() => setAudienceDetailFor(null)}>{D.adSetDetailClose}</button>
+              )}
             </div>
           </div>
         </div>
@@ -1425,6 +1558,31 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
                   value={detail.ctaType ? (D.ctaLabels[detail.ctaType] ?? detail.ctaType) : null}
                 />
                 <DetailRow label={D.adDetailDestination} value={detail.whatsappNumber ?? detail.link} />
+
+                {/* AIC-185 — the ad's NAME is the only thing editable in
+                    place. Meta has no way to modify a creative, which is why
+                    the block below sends the customer to add-content for
+                    anything about the ad's content. */}
+                <div className="field" style={{ marginTop: 12 }}>
+                  <label>{D.editAdNameTitle}</label>
+                  <div className="row gap8">
+                    <input
+                      type="text"
+                      value={adNameDraft ?? detail.name ?? ""}
+                      onChange={(e) => setAdNameDraft(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      className="btn btn-primary btn-sm"
+                      disabled={savingAdName || adNameDraft === null || !adNameDraft.trim() || adNameDraft === detail.name}
+                      onClick={saveAdName}
+                    >
+                      {savingAdName ? D.editSaving : D.editSave}
+                    </button>
+                  </div>
+                  <span className="muted" style={{ fontSize: "0.8rem" }}>{D.editAdNameNote}</span>
+                  {adNameError && <p style={{ color: "var(--orange)", fontSize: "0.85rem", margin: "6px 0 0" }}>{adNameError}</p>}
+                </div>
 
                 <div className="soft" style={{ borderRadius: 12, padding: 12, marginTop: 14 }}>
                   <b style={{ fontSize: "0.9rem", display: "block", marginBottom: 4 }}>{D.adDetailEditTitle}</b>

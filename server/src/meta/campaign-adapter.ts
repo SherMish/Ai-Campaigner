@@ -1260,6 +1260,37 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     return normalizeAdSetDetail(body as unknown as RawAdSetDetail);
   }
 
+  // AIC-185 — the RAW targeting object, for the read-modify-write merge. Read
+  // separately from getAdSetDetail because that one NORMALIZES: the merge has
+  // to send back Meta's own shape, including keys this code does not model.
+  async getAdSetRawTargeting(metaAdSetId: string): Promise<Record<string, unknown>> {
+    const body = await this.get(`${metaAdSetId}?fields=targeting`);
+    return ((body?.targeting as Record<string, unknown>) ?? {});
+  }
+
+  async getAdName(metaAdId: string): Promise<string | null> {
+    const body = await this.get(`${metaAdId}?fields=name`);
+    return (body?.name as string) ?? null;
+  }
+
+  // AIC-185 — apply an audience edit. Targeting is sent WHOLE because Meta
+  // replaces it wholesale; the merge that builds it preserves every key we did
+  // not touch (mergeTargeting). The caller re-reads afterwards and compares:
+  // a 200 from Meta is not evidence the write applied.
+  async updateAdSet(metaAdSetId: string, fields: { name?: string; targeting?: Record<string, unknown> }): Promise<void> {
+    const body: Record<string, string> = {};
+    if (fields.name !== undefined) body.name = fields.name;
+    if (fields.targeting !== undefined) body.targeting = JSON.stringify(fields.targeting);
+    await this.post(metaAdSetId, body);
+  }
+
+  // The ad's NAME is the only thing editable in place. A creative cannot be
+  // modified on Meta — changing an ad's content means a new creative, which is
+  // what add-content exists for and what the detail panel points at.
+  async updateAd(metaAdId: string, fields: { name: string }): Promise<void> {
+    await this.post(metaAdId, { name: fields.name });
+  }
+
   // AIC-131: which creatives an ad currently points at, for the reaper's
   // "is anything using this?" check.
   //
