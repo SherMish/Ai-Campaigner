@@ -52,32 +52,92 @@ import { pauseAction, pauseNote } from "./pause-control";
 // this screen honestly shows no trace of it. That silence is what produced
 // "was it successful?" — the ad set and its three ads existed on Meta the
 // whole time. The receipt is written by add-content and expires on its own.
-// AIC-186 — switch between the customer's campaigns.
+// AIC-186/190 — switch between the customer's campaigns.
 //
-// Shows each campaign's TYPE beside its name, deliberately. Switching between
-// a leads campaign and an engagement campaign switches what "results" MEANS,
-// and a list of bare names invites reading 40 engagements as 40 leads.
+// A custom control rather than a native <select>, for two reasons that both
+// showed up the moment it rendered. The OS box sat in the middle of a
+// soft-cornered dashboard looking like a form on a different site; and a
+// native <option> cannot carry a <bdi>, so a mixed Hebrew/Latin name
+// ("GelNails | Leads | WhatsApp | 2026-08" beside "וואטסאפ") came out in a
+// reading order that made the type look like part of the name.
 //
-// Renders nothing for a customer with one campaign — which is every customer
-// today. A selector with a single option is a control that cannot do anything,
-// and this dashboard has spent a week removing those.
+// The type is a CHIP, not appended text — that separation is what fixes the
+// RTL ambiguity, and it also stops a customer reading a leads campaign's
+// numbers as an engagement campaign's.
+//
+// Renders nothing at all with fewer than two campaigns, which is every
+// customer today. A selector with one option is a control that cannot do
+// anything, and this dashboard has spent a week removing those.
 function CampaignSwitcher({ campaigns, selected, onSelect }: {
   campaigns: CampaignChoice[];
   selected: string | null;
   onSelect: (id: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  // Closing on an outside click AND on Escape: a menu that can only be
+  // dismissed by picking something is a menu that traps a customer who opened
+  // it to look.
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   if (campaigns.length < 2) return null;
-  const current = selected ?? campaigns.find((c) => c.isDefault)?.campaignId ?? campaigns[0].campaignId;
+  const currentId = selected ?? campaigns.find((c) => c.isDefault)?.campaignId ?? campaigns[0].campaignId;
+  const current = campaigns.find((c) => c.campaignId === currentId) ?? campaigns[0];
+  const kindOf = (d: string) => D.campaignKind[d as keyof typeof D.campaignKind] ?? d;
+
   return (
-    <div className="row gap8" style={{ alignItems: "center", marginBottom: 14 }}>
-      <span className="muted" style={{ fontSize: "0.82rem" }}>{D.campaignSwitchLabel}</span>
-      <select value={current} onChange={(e) => onSelect(e.target.value)} style={{ maxWidth: 340 }}>
-        {campaigns.map((c) => (
-          <option key={c.campaignId} value={c.campaignId}>
-            {c.name} · {D.campaignKind[c.destination as keyof typeof D.campaignKind] ?? c.destination}
-          </option>
-        ))}
-      </select>
+    <div className="camp-switch" ref={boxRef}>
+      <button
+        type="button"
+        className="camp-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={D.campaignSwitchLabel}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="camp-name"><bdi>{current.name}</bdi></span>
+        <span className="camp-kind">{kindOf(current.destination)}</span>
+        <svg className="camp-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="camp-menu" role="listbox" aria-label={D.campaignSwitchLabel}>
+          {campaigns.map((c) => {
+            const on = c.campaignId === currentId;
+            return (
+              <button
+                key={c.campaignId}
+                type="button"
+                role="option"
+                aria-selected={on}
+                className={`camp-opt${on ? " on" : ""}`}
+                onClick={() => { setOpen(false); if (!on) onSelect(c.campaignId); }}
+              >
+                <span className="camp-tick" aria-hidden="true">{on ? "✓" : ""}</span>
+                <span className="camp-name"><bdi>{c.name}</bdi></span>
+                <span className="camp-kind">{kindOf(c.destination)}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -497,16 +557,18 @@ export function Home() {
 
   return (
     <div className="wrap page dash">
-      <CampaignSwitcher
-        campaigns={campaigns}
-        selected={campaignId}
-        onSelect={(id) => { setCampaignId(id); selectCampaign(id); }}
-      />
       {receipt && <RecentAdditionNote receipt={receipt} onDismiss={dismissReceipt} />}
       {/* Design reference: the range switcher sits inline with the page
           title, not stacked below the hero. */}
       <div className="dash-head">
-        <h1 className="dash-title">{h.title}</h1>
+        <div className="dash-headline">
+          <h1 className="dash-title">{h.title}</h1>
+          <CampaignSwitcher
+            campaigns={campaigns}
+            selected={campaignId}
+            onSelect={(id) => { setCampaignId(id); selectCampaign(id); }}
+          />
+        </div>
         <RangeSwitcher value={range} onChange={setRange} />
       </div>
 

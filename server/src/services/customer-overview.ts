@@ -462,7 +462,7 @@ export async function buildCustomerOverview(
   // campaigns that no longer exist — found live 2026-08-23, where three failed
   // builds left a real customer seeing four creations for one campaign.
   const recentActivity = condense(
-    await listCustomerActionHistory(pool, customerId),
+    await listCustomerActionHistory(pool, customerId, campRes.rows[0]?.id ?? null),
     campRes.rows[0]?.meta_campaign_id ?? null,
   ).slice(0, 8);
 

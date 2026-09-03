@@ -123,13 +123,20 @@ export async function listCampaignActionHistory(
 export async function listCustomerActionHistory(
   pool: pg.Pool,
   customerId: string,
+  // AIC-191 — the campaign this feed is about. Customer-scoped was right when
+  // a customer had exactly one campaign; with two it showed the OTHER
+  // campaign's history under the one on screen. "השהיית קהל · בוצע על ידך"
+  // about an audience that does not belong to the campaign you are looking at
+  // is worse than an empty feed: it is a true sentence in a false place.
+  campaignId?: string | null,
 ): Promise<ActionHistoryEntry[]> {
   const { rows } = await pool.query(
     `SELECT ah.* FROM action_history ah
      JOIN managed_campaigns mc ON mc.id = ah.campaign_id
      WHERE mc.customer_id = $1
+       AND ($2::uuid IS NULL OR ah.campaign_id = $2::uuid)
      ORDER BY ah.occurred_at DESC`,
-    [customerId],
+    [customerId, campaignId ?? null],
   );
   return rows.map(rowToEntry);
 }

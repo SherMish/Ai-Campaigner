@@ -686,3 +686,53 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
   text-decoration: underline;
 }
 .linklike:hover, .linklike:focus-visible { color: var(--ink); }
+
+/* Campaign switcher (AIC-190) — a customer with more than one campaign.
+   Built to the same pill language as .range-switch rather than a bare <select>:
+   the native control rendered as an OS box in the middle of a soft-cornered
+   dashboard, and its mixed Hebrew/Latin option text ("GelNails | Leads · וואטסאפ")
+   came out backwards under RTL because a native <option> cannot carry a <bdi>. */
+.camp-switch { position: relative; display: inline-flex; }
+.camp-trigger {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 36px; padding: 6px 14px; border: 0; border-radius: 100px;
+  background: rgba(23, 23, 23, 0.06); color: var(--ink);
+  font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer;
+  max-width: min(460px, 70vw);
+  transition: background .15s;
+}
+.camp-trigger:hover { background: rgba(23, 23, 23, 0.1); }
+.camp-trigger .camp-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.camp-chev { flex: none; opacity: 0.55; transition: transform .15s; }
+.camp-trigger[aria-expanded="true"] .camp-chev { transform: rotate(180deg); }
+
+/* The type, as a chip rather than text appended to the name — which is what
+   made the RTL reading order ambiguous in the first place. */
+.camp-kind {
+  flex: none; font-size: 0.72rem; font-weight: 700; letter-spacing: .02em;
+  padding: 2px 8px; border-radius: 100px;
+  background: rgba(23, 23, 23, 0.08); color: rgba(23, 23, 23, 0.62);
+}
+
+.camp-menu {
+  position: absolute; top: calc(100% + 6px); inset-inline-start: 0; z-index: 40;
+  min-width: 100%; width: max-content; max-width: min(460px, 86vw);
+  background: var(--cream); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.14); padding: 6px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.camp-opt {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 12px; border: 0; border-radius: 10px; background: transparent;
+  font: inherit; font-size: 0.875rem; text-align: start; cursor: pointer;
+  color: var(--ink);
+}
+.camp-opt:hover { background: rgba(23, 23, 23, 0.06); }
+.camp-opt.on { background: rgba(23, 23, 23, 0.08); font-weight: 700; }
+.camp-opt .camp-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.camp-tick { flex: none; width: 14px; opacity: 0.75; }
+
+/* Title + switcher share one side; the range switcher keeps the other. */
+.dash-headline { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; }

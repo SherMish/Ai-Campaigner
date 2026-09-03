@@ -6,6 +6,35 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-04 — two bugs a second campaign made visible (AIC-190/191)
+
+**Ingestion was gated on `automation_enabled`.** That flag means "the engine
+may ACT on this campaign". Ingestion does not act — it reads Meta's insights
+and writes snapshots, spending nothing and changing nothing. Coupling the two
+meant turning automation off silently stopped DATA COLLECTION, so a customer
+who asked us not to touch their budget also lost their dashboard. Found the
+moment a second campaign was connected with automation off: every number read
+"—" with no reason on screen. `status <> 'unmanaged'` still answers the real
+question of whether to spend API calls on a campaign.
+
+**The activity feed was customer-scoped, not campaign-scoped.** Correct when a
+customer had exactly one campaign; with two it showed the OTHER campaign's
+history under the one on screen — "השהיית קהל · בוצע על ידך" about an audience
+belonging to a different campaign. Verified against the live account: 13
+actions on the WhatsApp campaign, 0 on the engagement one, and the engagement
+campaign was displaying all 13. A true sentence in a false place is worse than
+an empty feed.
+
+**The switcher became part of the UI (AIC-190).** It shipped as a bare native
+`<select>` and looked like a form from another site sitting in a
+soft-cornered dashboard. Worse, a native `<option>` cannot carry a `<bdi>`, so
+a mixed Hebrew/Latin name rendered with the type looking like part of the
+name. It is now a pill control in the same language as the range switcher,
+lives in the title row, and shows the campaign TYPE as a chip — the separation
+that fixes the RTL reading order and stops a leads campaign's numbers being
+read as an engagement campaign's. Closes on outside-click and on Escape: a
+menu dismissable only by choosing something traps whoever opened it to look.
+
 ### 2026-09-03 — the engine does not touch engagement campaigns (AIC-189)
 
 Step F, and now a safety issue rather than a preference: with adoption

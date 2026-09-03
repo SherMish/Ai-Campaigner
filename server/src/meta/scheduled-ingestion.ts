@@ -25,7 +25,19 @@ async function listManagedCampaigns(
      FROM managed_campaigns mc
      JOIN customers c        ON c.id = mc.customer_id
      LEFT JOIN meta_connections conn ON conn.customer_id = mc.customer_id
-     WHERE mc.status <> 'unmanaged' AND mc.automation_enabled = true`,
+     -- AIC-191: NOT gated on automation_enabled, deliberately.
+     --
+     -- That flag means "the engine may ACT on this campaign". Ingestion does
+     -- not act — it reads Meta's insights and writes snapshots, spending
+     -- nothing and changing nothing. Coupling the two meant turning automation
+     -- off silently stopped DATA COLLECTION, so a customer who asked us not to
+     -- touch their budget also lost their dashboard. Found live the moment a
+     -- second campaign was connected with automation off: every number read
+     -- "—" and the reason was invisible.
+     --
+     -- status <> unmanaged still excludes campaigns nobody is watching,
+     -- which is the real "should we spend API calls on this" question.
+     WHERE mc.status <> 'unmanaged'`,
   );
   return rows.map((r) => ({
     id: r.id,
