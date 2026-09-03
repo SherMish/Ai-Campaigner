@@ -321,17 +321,24 @@ export interface ProvisionResult {
 // here is that the wizard cannot get it wrong, rather than relying on an
 // operator remembering a warning in a markdown file at 6pm on a call.
 /**
- * AIC-162 — the customer already has a campaign linked to Meta, so there is
- * nothing to adopt into.
+ * AIC-162 — THIS Meta campaign is already linked to this customer.
  *
  * Its own type because the alternative is silently repointing a live
  * customer's campaign at a different Meta id, which would change whose numbers
  * we report without anyone deciding to. Refusing is correct; refusing with a
  * name is what lets the operator be told why.
+ *
+ * AIC-192 narrowed what it MEANS. Under the old one-campaign-per-customer
+ * constraint this fired whenever the customer had any linked campaign, and the
+ * message said so. A customer may now hold several, so the only thing being
+ * refused is a DUPLICATE of one campaign — two rows for one Meta object is how
+ * a dashboard starts double-counting spend. The old wording survived the code
+ * change and was caught end-to-end: it told an operator adding a legitimate
+ * second campaign that it was impossible, which by then was false.
  */
 export class CampaignAlreadyLinkedError extends Error {
   constructor() {
-    super("this customer already has a campaign linked to Meta — nothing to adopt into");
+    super("this campaign is already connected for this customer — pick a different one, or it is already set up");
     this.name = "CampaignAlreadyLinkedError";
   }
 }

@@ -997,7 +997,11 @@ export const strings = {
       errorGeneric: "הפעולה נכשלה. אפשר לנסות שוב.",
       // AIC-162: לא כשל — סירוב. ללקוח כבר יש קמפיין מקושר ל-Meta, ואימוץ
       // קמפיין אחר היה מפנה את הקמפיין החי שלו למזהה אחר בלי שאף אחד החליט.
-      errorCampaignAlreadyLinked: "ללקוח הזה כבר יש קמפיין מקושר ל-Meta. אי אפשר לאמץ קמפיין נוסף — אם צריך להחליף, מנתקים קודם את הקיים.",
+      // AIC-192: a customer may now hold several campaigns, so the only thing
+      // refused is a DUPLICATE of one. The old copy said adopting a second was
+      // impossible — true under the one-campaign constraint, and false the day
+      // it was dropped. Caught end-to-end, not by a test.
+      errorCampaignAlreadyLinked: "הקמפיין הזה כבר מחובר ללקוח הזה. אפשר לבחור קמפיין אחר — לקוח יכול לנהל כמה קמפיינים במקביל.",
       // AIC-161 — למה "יצירת הרשומות" עוד לא אפשרית. ארבעת הראשונים חלקו
       // קודם את errorGeneric, שלא נקב באף אחד מהם, והוצג בראש העמוד — מסך
       // שלם מעל הכפתור שנלחץ.
