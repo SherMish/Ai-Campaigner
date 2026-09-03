@@ -189,21 +189,45 @@ d("customer onboarding (DB)", () => {
       });
     });
 
-    it("REFUSES to adopt over a campaign already linked to Meta, rather than repointing it", async () => {
-      // The safety property. Without the WHERE guard the upsert would silently
-      // point a live customer's campaign at a different Meta id — changing
-      // whose numbers we report, with nobody deciding to, and invisible until
-      // the figures moved.
-      const customerId = await seedCustomer("adoptlinked");
-      await provisionConnection(pool, base(customerId), null);
+    // AIC-186 changed what "already linked" means. Adopting a DIFFERENT Meta
+    // campaign beside an existing one used to be refused by the UNIQUE
+    // constraint; that refusal was the constraint speaking, not a decision,
+    // and it is exactly what stopped a customer connecting their engagement
+    // campaign. Adopting the SAME one twice is still refused.
+    it("adds a SECOND campaign rather than refusing, and never repoints the first", async () => {
+      const customerId = await seedCustomer("adoptsecond");
+      const first = await provisionConnection(pool, base(customerId), null);
 
+      const second = await provisionConnection(
+        pool, { ...base(customerId), metaCampaignId: "camp_engagement", destinationType: "engagement", leadEventTypes: ["post_engagement"] }, null,
+      );
+      expect(second.campaignId).not.toBe(first.campaignId);
+
+      const rows = await pool.query<{ meta_campaign_id: string; destination: string }>(
+        `SELECT meta_campaign_id, destination FROM managed_campaigns WHERE customer_id = $1 ORDER BY created_at`,
+        [customerId],
+      );
+      expect(rows.rows).toHaveLength(2);
+      // THE SAFETY PROPERTY, unchanged: the first campaign still points where
+      // it did. Repointing a live campaign at a different Meta id changes
+      // whose numbers we report, with nobody deciding to, and is invisible
+      // until the figures move.
+      expect(rows.rows[0].meta_campaign_id).toBe(`camp_${customerId.slice(0, 8)}`);
+      expect(rows.rows[1].meta_campaign_id).toBe("camp_engagement");
+      expect(rows.rows[1].destination).toBe("engagement");
+    });
+
+    it("REFUSES to link the SAME Meta campaign twice", async () => {
+      // Two rows for one Meta object is how a dashboard starts double-counting
+      // spend.
+      const customerId = await seedCustomer("adoptdup");
+      await provisionConnection(pool, base(customerId), null);
       await expect(
-        provisionConnection(pool, { ...base(customerId), metaCampaignId: "camp_someone_else" }, null),
+        provisionConnection(pool, base(customerId), null),
       ).rejects.toBeInstanceOf(CampaignAlreadyLinkedError);
 
-      const after = await pool.query<{ meta_campaign_id: string }>(
-        `SELECT meta_campaign_id FROM managed_campaigns WHERE customer_id = $1`, [customerId]);
-      expect(after.rows[0].meta_campaign_id).toBe(`camp_${customerId.slice(0, 8)}`);
+      const rows = await pool.query(`SELECT 1 FROM managed_campaigns WHERE customer_id = $1`, [customerId]);
+      expect(rows.rows).toHaveLength(1);
     });
 
     it("defaults lead_event_types to the WhatsApp pair when none is given", async () => {

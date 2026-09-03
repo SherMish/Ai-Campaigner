@@ -60,6 +60,12 @@ export interface AddAdSetInput {
   pageId: string;
   name: string;
   targeting: CreateAdSetTargeting;
+  // AIC-187 — what the CAMPAIGN is for, carried rather than assumed. This was
+  // hardcoded to FIXED_DESTINATION because every managed campaign was a
+  // WhatsApp one by construction; an engagement campaign built that way would
+  // have been given a CONVERSATIONS/WHATSAPP ad set inside an
+  // OUTCOME_ENGAGEMENT campaign, which Meta refuses.
+  destination: string;
   ads: Array<{ clientKey: string; name: string; creativeId: string }>;
   actor: string;
   additionKey: string;
@@ -254,10 +260,10 @@ export async function addAdSetToExistingCampaign(
         name: input.name,
         targeting: input.targeting,
         pageId: input.pageId,
-        // The refusal guard (routes/additions.ts) already confirmed this
-        // campaign can accept WhatsApp writes before this function is ever
-        // reached — FIXED_DESTINATION is the only value that gets here.
-        destination: FIXED_DESTINATION,
+        // AIC-187 — the campaign's own destination. resolveDestinationShape
+        // turns it into the right objective/optimization/CTA triple, and
+        // THROWS on anything unknown rather than defaulting to WhatsApp.
+        destination: input.destination,
       },
     },
     creator,

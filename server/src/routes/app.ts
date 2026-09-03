@@ -2,6 +2,7 @@ import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { getCustomerProfile, saveCustomerProfile } from "../services/customer-profile.js";
+import { listOwnedCampaigns, campaignIdParam } from "../services/campaign-selection.js";
 import { buildCustomerOverview } from "../services/customer-overview.js";
 import { recordLeadQualityReview, LeadQualityValidationError } from "../services/lead-quality-review.js";
 import {
@@ -26,9 +27,27 @@ const launchOps = new OpsQueue(pool);
 // own customer via the JWT — the service only ever reads rows owned by req.userId.
 export const appRouter = Router();
 
+// AIC-186 — every campaign this customer has, for the dashboard's switcher.
+// Carries the DESTINATION, not just the name: switching between a leads
+// campaign and an engagement campaign switches the MEANING of "results", and a
+// list of names alone invites reading one as the other.
+appRouter.get("/campaigns", requireAuth, async (req, res) => {
+  try {
+    res.json({ campaigns: await listOwnedCampaigns(pool, (req as AuthedRequest).userId!) });
+  } catch (e) {
+    console.error("[app] campaign list failed", e);
+    res.status(500).json({ error: "failed to load campaigns" });
+  }
+});
+
 appRouter.get("/overview", requireAuth, async (req, res) => {
   try {
-    const overview = await buildCustomerOverview(pool, (req as AuthedRequest).userId!);
+    // AIC-186 — which campaign. An id that is not this caller's simply finds
+    // nothing and falls back to their default, rather than 404ing in a way
+    // that would confirm the id exists.
+    const overview = await buildCustomerOverview(
+      pool, (req as AuthedRequest).userId!, undefined, campaignIdParam(req.query.campaignId),
+    );
     if (!overview) {
       res.status(404).json({ error: "user not found" });
       return;
@@ -47,7 +66,12 @@ appRouter.get("/overview", requireAuth, async (req, res) => {
 // double-counting bug) is structurally impossible.
 appRouter.post("/lead-quality", requireAuth, async (req, res) => {
   try {
-    const overview = await buildCustomerOverview(pool, (req as AuthedRequest).userId!);
+    // AIC-186 — which campaign. An id that is not this caller's simply finds
+    // nothing and falls back to their default, rather than 404ing in a way
+    // that would confirm the id exists.
+    const overview = await buildCustomerOverview(
+      pool, (req as AuthedRequest).userId!, undefined, campaignIdParam(req.query.campaignId),
+    );
     if (!overview?.campaign || !overview.leadQuality) {
       res.status(404).json({ error: "no managed campaign" });
       return;

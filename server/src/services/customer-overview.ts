@@ -202,6 +202,10 @@ export async function buildCustomerOverview(
   pool: pg.Pool,
   userId: string,
   ref: Date = new Date(),
+  // AIC-186 — which campaign, when the customer has more than one. Matched
+  // inside the query against their OWN customer id, so an id that is not
+  // theirs finds nothing and falls back to their default.
+  campaignId?: string | null,
 ): Promise<CustomerOverview | null> {
   const user = await pool.query<{
     name: string;
@@ -314,8 +318,12 @@ export async function buildCustomerOverview(
                   -- because the id we linked is the id we created.
                   AND ah.target_meta_id = mc.meta_campaign_id
               ) AS was_built_here
-       FROM managed_campaigns mc WHERE mc.customer_id = $1`,
-      [customerId],
+       FROM managed_campaigns mc
+       WHERE mc.customer_id = $1
+         AND ($2::uuid IS NULL OR mc.id = $2::uuid)
+       ORDER BY mc.created_at ASC
+       LIMIT 1`,
+      [customerId, campaignId ?? null],
     ),
     pool.query<{
       plan: string;

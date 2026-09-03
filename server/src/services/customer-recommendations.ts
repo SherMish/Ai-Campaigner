@@ -1,3 +1,4 @@
+import { resolveOwnedCampaign } from "./campaign-selection.js";
 import type pg from "pg";
 import { track } from "../analytics/mixpanel.js";
 import type { RecommendationType } from "@aic/shared";
@@ -65,8 +66,11 @@ function toDto(rec: RecommendationRecord): CustomerRec {
 export async function resolveCampaignId(
   pool: pg.Pool,
   userId: string,
+  // AIC-186: which campaign, when the customer has more than one. Optional so
+  // every existing caller keeps the single-campaign behaviour unchanged.
+  campaignId?: string | null,
 ): Promise<string | null> {
-  return (await resolveCampaignOwner(pool, userId))?.campaignId ?? null;
+  return (await resolveCampaignOwner(pool, userId, campaignId))?.campaignId ?? null;
 }
 
 /**
@@ -77,18 +81,16 @@ export async function resolveCampaignId(
 export async function resolveCampaignOwner(
   pool: pg.Pool,
   userId: string,
+  campaignId?: string | null,
 ): Promise<{ campaignId: string; customerId: string; isTest: boolean } | null> {
-  const { rows } = await pool.query<{ id: string; customer_id: string; is_test: boolean | null }>(
-    `SELECT mc.id, mc.customer_id, c.is_test
-     FROM app_users u
-     JOIN managed_campaigns mc ON mc.customer_id = u.customer_id
-     JOIN customers c ON c.id = mc.customer_id
-     WHERE u.id = $1
-     LIMIT 1`,
-    [userId],
-  );
-  const r = rows[0];
-  return r ? { campaignId: r.id, customerId: r.customer_id, isTest: r.is_test === true } : null;
+  // AIC-186 — the requested campaign, RE-CHECKED against the caller's own
+  // customer in the same query that fetches it, so an unvalidated id is never
+  // in play. No id means the customer's oldest campaign, which is exactly what
+  // the old LIMIT 1 returned.
+  const owned = await resolveOwnedCampaign(pool, userId, campaignId);
+  return owned
+    ? { campaignId: owned.campaignId, customerId: owned.customerId, isTest: owned.isTest }
+    : null;
 }
 
 export async function listCustomerRecommendations(

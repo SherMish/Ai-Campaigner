@@ -587,6 +587,9 @@ additionsRouter.post("/ad-set", requireAuth, async (req, res) => {
         // AIC-155 was.
         cities: body.targeting.cities ?? [],
       },
+      // AIC-187 — the campaign's own destination, so an engagement campaign
+      // gets an engagement ad set instead of a WhatsApp one.
+      destination: ctx.destination,
       ads: body.ads,
       additionKey: body.additionKey,
       actor: "customer",

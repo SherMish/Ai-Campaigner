@@ -108,6 +108,7 @@ d("add content to an existing campaign (DB)", () => {
         { clientKey: "ad-1", name: "Ad A", creativeId: "crea_a" },
         { clientKey: "ad-2", name: "Ad B", creativeId: "crea_b" },
       ],
+      destination: "whatsapp",
       additionKey: "attempt-2", actor: "customer",
     });
 
@@ -170,6 +171,7 @@ d("add content to an existing campaign (DB)", () => {
         { clientKey: "ad-1", name: "Ad A", creativeId: "crea_a" },
         { clientKey: "ad-2", name: "Ad B", creativeId: "crea_b" },
       ],
+      destination: "whatsapp",
       additionKey: "attempt-adset-naming", actor: "customer",
     });
 
@@ -188,6 +190,7 @@ d("add content to an existing campaign (DB)", () => {
       localCampaignId: campaignId, metaAdAccountId: "act_123", metaCampaignId: "meta_camp_existing", pageId: "page_1",
       name: "Set", targeting: { ageMin: 20, ageMax: 40, genders: [], countries: ["IL"] },
       ads: [{ clientKey: "ad-1", name: "Ad A", creativeId: "crea_a" }],
+      destination: "whatsapp",
       additionKey: "attempt-3", actor: "customer",
     };
 

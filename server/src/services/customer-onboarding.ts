@@ -474,14 +474,22 @@ export async function provisionConnection(
     // caller that never sends a budget for the connect-only path is not
     // broken by this.
     if (!hasCampaign && Number.isInteger(input.agreedBudgetAgorot) && (input.agreedBudgetAgorot as number) > 0) {
-      await client.query(
-        `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, agreed_budget_agorot)
-         VALUES ($1, $2, 'under_review', $3)
-         ON CONFLICT (customer_id) DO UPDATE SET
-           agreed_budget_agorot = EXCLUDED.agreed_budget_agorot
-         WHERE managed_campaigns.meta_campaign_id IS NULL`,
+      // AIC-186: customer_id is no longer unique, so this is an explicit
+      // update-then-insert. It targets the UNLINKED shell specifically — a
+      // customer may now also hold live campaigns, and the ceiling being
+      // pre-created here belongs to the one the builder has yet to fill.
+      const shell = await client.query(
+        `UPDATE managed_campaigns SET agreed_budget_agorot = $3, ad_account_id = $2
+          WHERE customer_id = $1 AND meta_campaign_id IS NULL`,
         [input.customerId, adAccountRowId, input.agreedBudgetAgorot],
       );
+      if (shell.rowCount === 0) {
+        await client.query(
+          `INSERT INTO managed_campaigns (customer_id, ad_account_id, status, agreed_budget_agorot)
+           VALUES ($1, $2, 'under_review', $3)`,
+          [input.customerId, adAccountRowId, input.agreedBudgetAgorot],
+        );
+      }
     }
 
     let campaignId: string | null = null;
@@ -515,49 +523,65 @@ export async function provisionConnection(
       // far worse than refusing, and invisible until their numbers changed.
       // A conflict against a linked row returns no row at all, which the
       // caller turns into an explicit refusal.
-      const camp = await client.query<{ id: string }>(
+      // AIC-186 — ON CONFLICT (customer_id) is gone, because customer_id is no
+      // longer unique: a customer may now hold a WhatsApp campaign AND an
+      // engagement campaign. The intent it encoded still stands and is now
+      // stated in two explicit steps instead of a conflict clause.
+      //
+      // 1. Adopting the SAME Meta campaign twice is a refusal, not a second
+      //    row. Two rows for one Meta object is how a dashboard starts
+      //    double-counting spend.
+      const dup = await client.query(
+        `SELECT 1 FROM managed_campaigns WHERE customer_id = $1 AND meta_campaign_id = $2`,
+        [input.customerId, input.metaCampaignId],
+      );
+      if (dup.rows.length > 0) throw new CampaignAlreadyLinkedError();
+
+      // 2. Adopt INTO an unlinked shell if one is waiting, rather than beside
+      //    it. The connect-only branch writes that shell (budget only, no Meta
+      //    id) and hands off to the builder; an operator who then adopts an
+      //    existing campaign instead should fill the shell, not strand it.
+      //
+      //    `meta_campaign_id IS NULL` is the safety property, not a detail:
+      //    without it this would REPOINT a live campaign at a different Meta
+      //    id — worse than refusing, and invisible until the numbers changed.
+      const adopted = await client.query<{ id: string }>(
+        `UPDATE managed_campaigns SET
+           ad_account_id = $2, meta_campaign_id = $3, name = $4, status = 'active',
+           objective = $5, agreed_budget_agorot = $6, budget_period = $7,
+           lead_event_types = COALESCE($8::text[], lead_event_types),
+           tracking_pixel_id = $9, website_url = $10,
+           whatsapp_destination = COALESCE($11,''), destination = $12,
+           launch_approved_at = now()
+         WHERE customer_id = $1 AND meta_campaign_id IS NULL
+         RETURNING id`,
+        [
+          input.customerId, adAccountRowId, input.metaCampaignId, input.campaignName,
+          input.objective ?? "leads", input.agreedBudgetAgorot, input.budgetPeriod ?? "daily",
+          input.leadEventTypes ?? null, input.trackingPixelId ?? null, input.websiteUrl ?? null,
+          input.whatsappDestination ?? null, input.destinationType ?? "whatsapp",
+        ],
+      );
+
+      // 3. No shell waiting — this is an ADDITIONAL campaign, which is the
+      //    whole point of AIC-186 and used to be refused by the constraint.
+      const camp = adopted.rows.length > 0 ? adopted : await client.query<{ id: string }>(
         `INSERT INTO managed_campaigns
            (customer_id, ad_account_id, meta_campaign_id, name, status, objective,
-            agreed_budget_agorot, budget_period, lead_event_types, tracking_pixel_id, website_url, whatsapp_destination,
-            launch_approved_at)
+            agreed_budget_agorot, budget_period, lead_event_types, tracking_pixel_id,
+            website_url, whatsapp_destination, destination, launch_approved_at)
          VALUES ($1,$2,$3,$4,'active',$5,$6,$7,
                  COALESCE($8::text[], ARRAY['onsite_conversion.messaging_conversation_started_7d',
                                             'onsite_conversion.messaging_conversation_started']),
-                 $9,$10,COALESCE($11,''),
-                 now())
-         ON CONFLICT (customer_id) DO UPDATE SET
-           ad_account_id = EXCLUDED.ad_account_id,
-           meta_campaign_id = EXCLUDED.meta_campaign_id,
-           name = EXCLUDED.name,
-           status = 'active',
-           objective = EXCLUDED.objective,
-           agreed_budget_agorot = EXCLUDED.agreed_budget_agorot,
-           budget_period = EXCLUDED.budget_period,
-           lead_event_types = EXCLUDED.lead_event_types,
-           tracking_pixel_id = EXCLUDED.tracking_pixel_id,
-           website_url = EXCLUDED.website_url,
-           whatsapp_destination = EXCLUDED.whatsapp_destination,
-           launch_approved_at = EXCLUDED.launch_approved_at
-         WHERE managed_campaigns.meta_campaign_id IS NULL
+                 $9,$10,COALESCE($11,''),$12, now())
          RETURNING id`,
         [
-          input.customerId,
-          adAccountRowId,
-          input.metaCampaignId,
-          input.campaignName,
-          input.objective ?? "leads",
-          input.agreedBudgetAgorot,
-          input.budgetPeriod ?? "daily",
-          input.leadEventTypes ?? null,
-          input.trackingPixelId ?? null,
-          input.websiteUrl ?? null,
-          input.whatsappDestination ?? null,
+          input.customerId, adAccountRowId, input.metaCampaignId, input.campaignName,
+          input.objective ?? "leads", input.agreedBudgetAgorot, input.budgetPeriod ?? "daily",
+          input.leadEventTypes ?? null, input.trackingPixelId ?? null, input.websiteUrl ?? null,
+          input.whatsappDestination ?? null, input.destinationType ?? "whatsapp",
         ],
       );
-      // No row back means the ON CONFLICT guard refused: this customer already
-      // has a campaign linked to Meta. A real refusal with its own name, so
-      // the route can answer 409 with copy an operator can act on instead of
-      // a Postgres constraint string.
       if (camp.rows.length === 0) throw new CampaignAlreadyLinkedError();
       campaignId = camp.rows[0].id;
     }

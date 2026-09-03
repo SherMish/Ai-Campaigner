@@ -17,6 +17,7 @@ function ctx(overrides: Partial<AdditionContext>): AdditionContext {
     isMessaging: false,
     leadEventTypes: [],
     campaignName: "Test",
+    destination: "whatsapp",
     category: "beautician",
     missingConfigFields: [],
     ...overrides,
@@ -84,5 +85,29 @@ describe("resolveCreativeDestination", () => {
     expect(
       resolveCreativeDestination(ctx({ isMessaging: true, whatsappNumber: null, leadEventTypes: WA_TYPES })),
     ).toEqual({ kind: "blocked", reason: "missing_number" });
+  });
+});
+
+describe("whatsappWriteBlock and engagement (AIC-187)", () => {
+  it("never blocks an engagement campaign for a missing WhatsApp number", () => {
+    // An engagement ad promotes an existing post; its CTA is whatever the post
+    // already had, which is why resolveDestinationShape gives it a null
+    // ctaType. Demanding a phone number was this guard answering a question
+    // nobody asked — and it is why an engagement campaign could not accept a
+    // single ad set.
+    expect(whatsappWriteBlock(ctx({ destination: "engagement", whatsappNumber: null, leadEventTypes: [] }))).toBeNull();
+    expect(acceptsWhatsappWrites(ctx({ destination: "engagement", whatsappNumber: null }))).toBe(true);
+  });
+
+  it("still blocks a WhatsApp campaign whose number we do not hold", () => {
+    // The guard's original job is unchanged: an ad built without the number
+    // would carry an empty whatsapp_number and lead nowhere.
+    expect(whatsappWriteBlock(ctx({ destination: "whatsapp", whatsappNumber: null, leadEventTypes: WA_TYPES })))
+      .toBe("missing_number");
+  });
+
+  it("still blocks a campaign whose leads arrive some other way", () => {
+    expect(whatsappWriteBlock(ctx({ destination: "website", whatsappNumber: null, leadEventTypes: PIXEL_TYPES })))
+      .toBe("not_whatsapp");
   });
 });

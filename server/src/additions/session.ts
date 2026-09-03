@@ -9,6 +9,7 @@ import type { AdMetaReader } from "../services/ad-meta-cache.js";
 import { isMessagingAction, deriveIsMessaging } from "../meta/tracking-health.js";
 import { classifyConnectionReadiness, type ConnectionReadinessReason } from "../services/connection-readiness.js";
 import { resolveCreativeDestination, type CreativeDestination, type CreativeBlockReason } from "../meta/destination.js";
+import { ENGAGEMENT_DESTINATION } from "@aic/shared";
 import { FIXED_DESTINATION, WEBSITE_DESTINATION, missingRequiredFields, type CampaignRequiredField } from "@aic/shared";
 
 // Re-exported for existing consumers (routes/additions.ts, session.test.ts) —
@@ -55,6 +56,8 @@ export interface AdditionContext {
   // can reason about destination without re-querying.
   leadEventTypes: string[];
   campaignName: string;
+  /** AIC-186: 'whatsapp' | 'website' | 'engagement'. */
+  destination: string;
   category: string; // for the add-ad-set audience step's business-type prefill, same as the builder
   // AIC-103: which of THIS destination's required fields (shared/recommended-
   // defaults.ts's CAMPAIGN_TYPE_REQUIRED_FIELDS) are missing — empty when the
@@ -88,6 +91,13 @@ export type WhatsappWriteBlock =
   | "missing_number";
 
 export function whatsappWriteBlock(ctx: AdditionContext): WhatsappWriteBlock | null {
+  // AIC-187 — an ENGAGEMENT campaign needs no WhatsApp number and never did.
+  // Its ads promote an existing post, whose own CTA (or absence of one)
+  // stands; resolveDestinationShape gives it a null ctaType for exactly that
+  // reason. Refusing it for a missing phone number was this guard answering a
+  // question nobody asked of an engagement campaign, and it is why an
+  // engagement campaign could not accept a single ad set.
+  if (ctx.destination === ENGAGEMENT_DESTINATION) return null;
   if (ctx.whatsappNumber) return null;
   const messaging = ctx.leadEventTypes.length === 0 || ctx.leadEventTypes.some(isMessagingAction);
   return messaging ? "missing_number" : "not_whatsapp";
@@ -117,25 +127,36 @@ type AdditionContextRow = {
   website_url: string | null;
   tracking_pixel_id: string | null;
   lead_event_types: string[] | null;
+  destination: string | null;
   access_health: string | null;
   meta_ad_account_id: string | null;
   page_id: string | null;
   instagram_id: string | null;
 };
 
-async function fetchAdditionContextRow(pool: pg.Pool, userId: string): Promise<AdditionContextRow | undefined> {
+async function fetchAdditionContextRow(
+  pool: pg.Pool,
+  userId: string,
+  // AIC-186 — which campaign, when the customer has more than one. The id is
+  // matched INSIDE this query, against the caller's own customer, so an id
+  // that is not theirs simply finds nothing rather than being trusted.
+  campaignId?: string | null,
+): Promise<AdditionContextRow | undefined> {
   const { rows } = await pool.query<AdditionContextRow>(
     `SELECT u.customer_id, c.category, mc.id AS campaign_id, mc.name AS campaign_name,
             mc.meta_campaign_id, mc.whatsapp_destination, mc.website_url, mc.tracking_pixel_id, mc.lead_event_types,
+            mc.destination,
             conn.access_health, aa.meta_ad_account_id, conn.page_id, conn.instagram_id
      FROM app_users u
      LEFT JOIN customers c ON c.id = u.customer_id
      LEFT JOIN managed_campaigns mc ON mc.customer_id = u.customer_id
+       AND ($2::uuid IS NULL OR mc.id = $2::uuid)
      LEFT JOIN meta_connections conn ON conn.customer_id = u.customer_id
      LEFT JOIN ad_accounts aa ON aa.connection_id = conn.id
      WHERE u.id = $1
+     ORDER BY mc.created_at ASC NULLS LAST
      LIMIT 1`,
-    [userId],
+    [userId, campaignId ?? null],
   );
   return rows[0];
 }
@@ -172,6 +193,11 @@ function toContext(r: AdditionContextRow): AdditionContext {
     isMessaging,
     leadEventTypes,
     campaignName: r.campaign_name ?? "",
+    // AIC-186 — what this campaign is FOR, persisted rather than inferred.
+    // Until now every managed campaign was a WhatsApp leads campaign by
+    // construction, so the write path could hardcode it; with engagement
+    // campaigns that assumption is simply wrong.
+    destination: r.destination ?? FIXED_DESTINATION,
     category: r.category ?? "",
     missingConfigFields: missingRequiredFields(isMessaging ? FIXED_DESTINATION : WEBSITE_DESTINATION, {
       whatsappDestination: r.whatsapp_destination ?? null,
@@ -182,8 +208,12 @@ function toContext(r: AdditionContextRow): AdditionContext {
   };
 }
 
-export async function resolveAdditionContext(pool: pg.Pool, userId: string): Promise<AdditionContext | null> {
-  const r = await fetchAdditionContextRow(pool, userId);
+export async function resolveAdditionContext(
+  pool: pg.Pool,
+  userId: string,
+  campaignId?: string | null,
+): Promise<AdditionContext | null> {
+  const r = await fetchAdditionContextRow(pool, userId, campaignId);
   const reason = classifyConnectionReadiness(readinessRow(r));
   return reason ? null : toContext(r!);
 }
