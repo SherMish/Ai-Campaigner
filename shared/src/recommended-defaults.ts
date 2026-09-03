@@ -307,3 +307,20 @@ export function resolveAudienceDefault(category: string): AudienceDefault {
 export function resolveSpecialAdCategoryHint(category: string): SpecialAdCategory | null {
   return SPECIAL_AD_CATEGORY_HINT[normalizeBusinessCategory(category)] ?? null;
 }
+
+// AIC-188 — what this campaign's RESULTS are called.
+//
+// Every number the customer sees is currently named "פניות" / "עלות לפנייה",
+// because every managed campaign was a leads campaign by construction. An
+// engagement campaign's result is a post engagement — a comment, a share, a
+// save — and reporting one as a lead is precisely the "looks-like-progress"
+// failure this product exists to avoid. A customer told they got 40 leads
+// when they got 40 likes will act on a number that isn't there.
+//
+// Derived from the destination rather than stored separately: two sources for
+// one fact drift, and this one decides what a headline number MEANS.
+export type ResultKind = "leads" | "engagement";
+
+export function resultKindOf(destination: string | null | undefined): ResultKind {
+  return destination === ENGAGEMENT_DESTINATION ? "engagement" : "leads";
+}

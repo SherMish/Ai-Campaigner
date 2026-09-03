@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { strings } from "../strings";
+import { resultKindOf, type ResultKind } from "@aic/shared";
 import {
   postLeadQuality,
   getCampaignAudiences,
@@ -12,6 +13,8 @@ import {
   setAdRemoved,
   getAdDetail,
   getAdSetDetail,
+  getCampaigns,
+  type CampaignChoice,
   updateAdSet,
   renameAd,
   type AdSetDetail,
@@ -39,7 +42,7 @@ import { ATTENTION_COPY, HERO_TONE, HOME_STATE_BADGE, noRecCopy, STATUS_TOOLTIP_
 import { AD_DELIVERY_BADGE, AD_DELIVERY_TONE, deliveryStatus } from "./delivery-status";
 import { InfoTip } from "./InfoTip";
 import { StatusPill } from "./components";
-import { useSharedOverview, invalidateOverview } from "./overview-store";
+import { useSharedOverview, invalidateOverview, selectCampaign, selectedCampaign } from "./overview-store";
 import { loadReceipt, clearReceipt, type AdditionReceipt } from "./addition-receipt";
 import { pauseAction, pauseNote } from "./pause-control";
 
@@ -49,6 +52,36 @@ import { pauseAction, pauseNote } from "./pause-control";
 // this screen honestly shows no trace of it. That silence is what produced
 // "was it successful?" — the ad set and its three ads existed on Meta the
 // whole time. The receipt is written by add-content and expires on its own.
+// AIC-186 — switch between the customer's campaigns.
+//
+// Shows each campaign's TYPE beside its name, deliberately. Switching between
+// a leads campaign and an engagement campaign switches what "results" MEANS,
+// and a list of bare names invites reading 40 engagements as 40 leads.
+//
+// Renders nothing for a customer with one campaign — which is every customer
+// today. A selector with a single option is a control that cannot do anything,
+// and this dashboard has spent a week removing those.
+function CampaignSwitcher({ campaigns, selected, onSelect }: {
+  campaigns: CampaignChoice[];
+  selected: string | null;
+  onSelect: (id: string) => void;
+}) {
+  if (campaigns.length < 2) return null;
+  const current = selected ?? campaigns.find((c) => c.isDefault)?.campaignId ?? campaigns[0].campaignId;
+  return (
+    <div className="row gap8" style={{ alignItems: "center", marginBottom: 14 }}>
+      <span className="muted" style={{ fontSize: "0.82rem" }}>{D.campaignSwitchLabel}</span>
+      <select value={current} onChange={(e) => onSelect(e.target.value)} style={{ maxWidth: 340 }}>
+        {campaigns.map((c) => (
+          <option key={c.campaignId} value={c.campaignId}>
+            {c.name} · {D.campaignKind[c.destination as keyof typeof D.campaignKind] ?? c.destination}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function RecentAdditionNote({ receipt, onDismiss }: { receipt: AdditionReceipt; onDismiss: () => void }) {
   return (
     <div className="card" style={{ marginBottom: 16, borderColor: "var(--green, var(--line))" }}>
@@ -372,6 +405,10 @@ export function Home() {
   const { data: ov, loading, error: err, reload } = useSharedOverview(); // shared with Sidebar/Settings (AIC-42)
   const [launchOpen, setLaunchOpen] = useState(false);
   const [range, setRange] = useState<RangeKey>("week");
+  // AIC-186 — the customer's campaigns, for the switcher.
+  const [campaigns, setCampaigns] = useState<CampaignChoice[]>([]);
+  const [campaignId, setCampaignId] = useState<string | null>(selectedCampaign());
+  useEffect(() => { getCampaigns().then((r) => setCampaigns(r.campaigns)).catch(() => {}); }, []);
   // AIC-175 — read once on mount. Dismissing clears the stored receipt too, so
   // it does not return on the next visit; it also expires on its own.
   const [receipt, setReceipt] = useState<AdditionReceipt | null>(() => loadReceipt());
@@ -460,6 +497,11 @@ export function Home() {
 
   return (
     <div className="wrap page dash">
+      <CampaignSwitcher
+        campaigns={campaigns}
+        selected={campaignId}
+        onSelect={(id) => { setCampaignId(id); selectCampaign(id); }}
+      />
       {receipt && <RecentAdditionNote receipt={receipt} onDismiss={dismissReceipt} />}
       {/* Design reference: the range switcher sits inline with the page
           title, not stacked below the hero. */}
@@ -541,6 +583,7 @@ export function Home() {
           {/* opt-in per-audience / per-creative details (AIC-37) — collapsed by default */}
           {ov.campaign && (
             <AudienceDetails
+              kind={resultKindOf(ov.campaign?.destination)}
               activeAds={activeAds}
               range={range}
               onRange={setRange}
@@ -799,7 +842,7 @@ const count = (n: number) => n.toLocaleString("he-IL");
 // applied preemptively to the ~95% who have one audience.
 const ADAPTIVE_COLLAPSE_ABOVE = 3;
 
-function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
+function AudienceDetails({ activeAds, range, onRange, openByDefault, kind }: {
   activeAds: number;
   range: RangeKey;
   onRange: (r: RangeKey) => void;
@@ -810,6 +853,10 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
    * friction we asked for and then charged them for.
    */
   openByDefault: boolean;
+  // AIC-188 — what this campaign's results are called. Passed rather than
+  // read globally: the panel renders ONE campaign, and a mismatch between the
+  // label and the numbers under it is the exact confusion this prevents.
+  kind: ResultKind;
 }) {
   const [open, setOpen] = useState(openByDefault);
   const [data, setData] = useState<CampaignAudiences | null>(null);
@@ -1201,8 +1248,8 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
                       <Metric label={D.spendCol} value={shekels(aud.spendAgorot)} />
                       <Metric label={D.impressionsCol} value={count(aud.impressions)} info={D.impressionsInfo} infoId={`imp-${aud.adSetId}`} />
                       <Metric label={D.clicksCol} value={count(aud.linkClicks)} info={D.clicksInfo} infoId={`clk-${aud.adSetId}`} />
-                      <Metric label={D.leadsCol} value={String(aud.leads)} />
-                      <Metric label={D.cplCol} value={aud.cplAgorot === null ? L.none : shekels(aud.cplAgorot)} />
+                      <Metric label={D.resultCol[kind]} value={String(aud.leads)} />
+                      <Metric label={D.resultCostCol[kind]} value={aud.cplAgorot === null ? L.none : shekels(aud.cplAgorot)} />
                     </div>
                     {aud.moreCreativesCount > 0 && (
                       <p className="muted" style={{ fontSize: "0.8rem", marginTop: 4 }}>
@@ -1325,8 +1372,8 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
                                       <Metric label={D.spendCol} value={shekels(c.spendAgorot)} small />
                                       <Metric label={D.impressionsCol} value={count(c.impressions)} small info={D.impressionsInfo} infoId={`imp-${c.metaObjectId}`} />
                                       <Metric label={D.clicksCol} value={count(c.linkClicks)} small info={D.clicksInfo} infoId={`clk-${c.metaObjectId}`} />
-                                      <Metric label={D.leadsCol} value={String(c.leads)} small />
-                                      <Metric label={D.cplCol} value={c.cplAgorot === null ? L.none : shekels(c.cplAgorot)} small />
+                                      <Metric label={D.resultCol[kind]} value={String(c.leads)} small />
+                                      <Metric label={D.resultCostCol[kind]} value={c.cplAgorot === null ? L.none : shekels(c.cplAgorot)} small />
                                     </div>
                                   ) : (
                                     <p className="muted" style={{ fontSize: "0.8rem", marginTop: 6 }}>
@@ -1367,13 +1414,13 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
                                 money to explain. */}
                             {aud.removedSpendAgorot > 0 && (
                               <p className="muted" style={{ fontSize: "0.78rem", margin: "2px 0 0" }}>
-                                {D.removedAccountsFor} {shekels(aud.removedSpendAgorot)} · {aud.removedLeads} {D.leadsCol}
+                                {D.removedAccountsFor} {shekels(aud.removedSpendAgorot)} · {aud.removedLeads} {D.resultCol[kind]}
                               </p>
                             )}
                             {removedOpen.has(aud.adSetId) && (
                               <div className="stack gap8" style={{ marginTop: 8, opacity: 0.75 }}>
                                 {aud.removedCreatives.map((c) => (
-                                  <RemovedAdRow
+                                  <RemovedAdRow kind={kind}
                                     key={c.metaObjectId} c={c}
                                     busy={busyId === c.metaObjectId}
                                     justRestored={successId === c.metaObjectId}
@@ -1643,11 +1690,12 @@ function DetailRow({ label, value }: { label: string; value: string | null }) {
 // gone_at_meta means the object no longer exists in the ad account, and Meta
 // has no un-archive through any API, so a restore button there would be a
 // button that cannot work. It gets a plain explanation instead.
-function RemovedAdRow({ c, busy, justRestored, onRestore }: {
+function RemovedAdRow({ c, busy, justRestored, onRestore, kind }: {
   c: AudienceCreativeRow;
   busy: boolean;
   justRestored: boolean;
   onRestore: () => void;
+  kind: ResultKind;
 }) {
   const restorable = c.removed === "by_customer";
   return (
@@ -1680,8 +1728,8 @@ function RemovedAdRow({ c, busy, justRestored, onRestore }: {
       {c.hasData && (
         <div className="row gap12" style={{ flexWrap: "wrap", marginTop: 4 }}>
           <Metric label={D.spendCol} value={shekels(c.spendAgorot)} small />
-          <Metric label={D.leadsCol} value={String(c.leads)} small />
-          <Metric label={D.cplCol} value={c.cplAgorot === null ? L.none : shekels(c.cplAgorot)} small />
+          <Metric label={D.resultCol[kind]} value={String(c.leads)} small />
+          <Metric label={D.resultCostCol[kind]} value={c.cplAgorot === null ? L.none : shekels(c.cplAgorot)} small />
         </div>
       )}
     </div>

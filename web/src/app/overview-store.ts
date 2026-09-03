@@ -14,6 +14,11 @@ interface State {
 
 let state: State = { data: null, loading: true, error: false };
 let inflight: Promise<void> | null = null;
+// AIC-186 — which campaign this shared overview is showing. The store is
+// shared with the sidebar and settings, so the selection has to live HERE:
+// two components fetching different campaigns into one cache is how a
+// customer ends up reading one campaign's numbers under another's name.
+let selectedCampaignId: string | null = null;
 const subscribers = new Set<() => void>();
 
 function setState(next: Partial<State>) {
@@ -24,11 +29,30 @@ function setState(next: Partial<State>) {
 function load(): Promise<void> {
   if (inflight) return inflight;
   setState({ loading: true, error: false });
-  inflight = getOverview()
+  inflight = getOverview(selectedCampaignId)
     .then((data) => setState({ data, loading: false, error: false }))
     .catch(() => setState({ loading: false, error: true }))
     .finally(() => { inflight = null; });
   return inflight;
+}
+
+/**
+ * Switch the whole shell to another of the customer's campaigns.
+ *
+ * Clears `data` before refetching rather than leaving the previous campaign's
+ * numbers on screen under the new campaign's name — a stale headline during a
+ * switch is exactly the kind of thing that gets read as fact.
+ */
+export function selectCampaign(campaignId: string | null): void {
+  if (selectedCampaignId === campaignId) return;
+  selectedCampaignId = campaignId;
+  inflight = null;
+  setState({ data: null, loading: true, error: false });
+  load();
+}
+
+export function selectedCampaign(): string | null {
+  return selectedCampaignId;
 }
 
 function subscribe(cb: () => void): () => void {

@@ -1470,6 +1470,15 @@ export const strings = {
           clicksCol: "לחיצות",
           impressionsInfo: "כמה פעמים המודעה הוצגה על המסך של מישהו. אם המספר הזה 0 — המודעה לא באמת רצה, וזו בעיה של הצגה, לא של תוכן.",
           clicksInfo: "כמה פעמים לחצו על הכפתור שפותח וואטסאפ. לא כל מי שלוחץ באמת שולח הודעה — הפער בין המספר הזה למספר הפניות הוא אנשים שנכנסו לוואטסאפ ולא כתבו. ככל שהפער גדול יותר, כך יש יותר מה להרוויח משיפור ההודעה הפותחת ומהפרופיל שאליו הם מגיעים.",
+          // AIC-188 — results are named by what the campaign is FOR. Telling a
+          // customer they got 40 "פניות" when they got 40 post engagements is
+          // the looks-like-progress failure this product exists to avoid.
+          resultCol: { leads: "פניות", engagement: "תגובות ושיתופים" },
+          resultCostCol: { leads: "עלות לפנייה", engagement: "עלות לתגובה" },
+          resultGraphTitle: { leads: "פניות לפי שבוע", engagement: "תגובות לפי שבוע" },
+          // AIC-186 — the campaign switcher.
+          campaignSwitchLabel: "קמפיין",
+          campaignKind: { whatsapp: "וואטסאפ", website: "אתר", engagement: "מעורבות" },
           spendCol: "הוצאה",
           leadsCol: "פניות",
           cplCol: "עלות לפנייה",

@@ -106,6 +106,8 @@ export interface CustomerOverview {
     id: string; name: string; status: CampaignStatus; objective: string;
     agreedBudgetAgorot: number; budgetPeriod: "daily" | "monthly";
     automationEnabled: boolean; deliveryOk: boolean; readyToLaunch: boolean;
+    // AIC-188 — decides what this campaign's results are CALLED.
+    destination: string;
     // Bug fix, 2026-08-14: whether a real create_campaign action_history row
     // exists for this campaign — distinguishes a builder-built campaign from
     // one connected from outside the app, so the ready_to_launch hero can
@@ -973,7 +975,20 @@ export const approveAddition = (id: string) =>
 // partner BY ID, and that ID has to survive the "Ads Agent" rename unchanged.
 export const getConfig = () => api<{ businessPortfolioId: string; mixpanelToken: string | null; mixpanelApiHost: string | null }>("/config");
 
-export const getOverview = () => api<CustomerOverview>("/app/overview");
+// AIC-186 — every campaign this customer has, for the switcher.
+export interface CampaignChoice {
+  campaignId: string;
+  name: string;
+  destination: string;
+  status: string;
+  isDefault: boolean;
+}
+export const getCampaigns = () => api<{ campaigns: CampaignChoice[] }>("/app/campaigns");
+
+// AIC-186 — scoped to one campaign when the customer has more than one. An id
+// that is not theirs falls back to their default rather than erroring.
+export const getOverview = (campaignId?: string | null) =>
+  api<CustomerOverview>(`/app/overview${campaignId ? `?campaignId=${encodeURIComponent(campaignId)}` : ""}`);
 // AIC-67: `relevant` answers about the PENDING delta only — the server reads
 // how many leads are pending from the caller's own watermark, never a
 // client-supplied total, so this can never re-rate already-reviewed leads.

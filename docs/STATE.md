@@ -6,6 +6,37 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-03 — the campaign switcher and result vocabulary (AIC-186/188)
+
+Steps C and E of the multi-campaign plan.
+
+`GET /app/campaigns` lists a customer's campaigns and the dashboard shows a
+switcher — but only when there are two or more. A selector with a single option
+is a control that cannot do anything, and this dashboard has spent a week
+removing those.
+
+The switcher shows each campaign's TYPE beside its name. Switching between a
+leads campaign and an engagement campaign switches what "results" MEANS, and a
+list of bare names invites reading 40 engagements as 40 leads.
+
+Selection lives in the SHARED overview store, not in Home: the sidebar and
+settings read the same cache, and two components fetching different campaigns
+into one cache is how a customer reads one campaign's numbers under another's
+name. Switching clears the data before refetching rather than leaving the
+previous campaign's headline on screen.
+
+`resultKindOf(destination)` decides what the numbers are called —
+פניות/עלות לפנייה for a leads campaign, תגובות/עלות לתגובה for engagement. It
+is derived from the destination rather than stored twice, and passed into the
+audience panel as a prop rather than read globally: the panel renders ONE
+campaign, and a label that disagrees with the numbers under it is the exact
+confusion this prevents.
+
+The admin wizard needed nothing: AIC-107 already detects an engagement campaign
+from POST_ENGAGEMENT and provisions it with `post_engagement` as its result
+definition. It was never the wizard that blocked adoption — it was the UNIQUE
+constraint dropped in AIC-186.
+
 ### 2026-09-03 — the detail panels became editable (AIC-185)
 
 Operator request. The audience panel now edits name, age, gender and placement;

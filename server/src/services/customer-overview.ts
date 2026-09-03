@@ -74,6 +74,10 @@ export interface CustomerOverview {
     // hours. Sourced from the serving watch, not from Meta's account_status:
     // that stayed ACTIVE through a real card decline on 2026-09-02.
     notSpending: boolean;
+    // AIC-188 — what this campaign's results are CALLED. An engagement
+    // campaign's outcome is a post engagement, not a lead, and the dashboard
+    // must not report one as the other.
+    destination: string;
     // AIC-64: why the engine's last tick had nothing to propose — null before
     // the engine has ever run, or when an acting recommendation exists instead.
     noRecReason: NoActionReason | null;
@@ -290,8 +294,9 @@ export async function buildCustomerOverview(
       delivering_ad_count: number | null;
       leads_to_date: number | null;
       was_built_here: boolean;
+      destination: string | null;
     }>(
-      `SELECT mc.id, mc.name, mc.status, mc.objective, mc.agreed_budget_agorot, mc.budget_period, mc.automation_enabled, mc.delivery_ok, mc.tracking_ok, mc.cta_ok, mc.launch_approved_at, mc.meta_campaign_id, mc.no_rec_reason, mc.no_rec_detail, mc.live_budget_agorot, mc.delivering, mc.delivering_ad_count, mc.leads_to_date,
+      `SELECT mc.id, mc.name, mc.status, mc.objective, mc.destination, mc.agreed_budget_agorot, mc.budget_period, mc.automation_enabled, mc.delivery_ok, mc.tracking_ok, mc.cta_ok, mc.launch_approved_at, mc.meta_campaign_id, mc.no_rec_reason, mc.no_rec_detail, mc.live_budget_agorot, mc.delivering, mc.delivering_ad_count, mc.leads_to_date,
               EXISTS (
                 SELECT 1 FROM action_history ah
                 WHERE ah.campaign_id = mc.id
@@ -389,6 +394,7 @@ export async function buildCustomerOverview(
         trackingOk: campRes.rows[0].tracking_ok,
         ctaOk: campRes.rows[0].cta_ok,
         notSpending: notSpending,
+        destination: campRes.rows[0].destination ?? "whatsapp",
         // AIC-164 — the launch gate applies ONLY to a campaign we built.
         //
         // It exists (AIC-53) so a customer approves before OUR build first
