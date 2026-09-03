@@ -63,11 +63,15 @@ export function judgeServing(row: WatchRow, state: WatchState, now: Date, silent
   if (row.impressions > 0) return { kind: "serving" };
   if (!row.active) return { kind: "quiet" };
   if (state.alertedAt) return { kind: "quiet" }; // already reported this dark spell
+  // AIC-183 — the same daytime window and the same daytime-only clock as the
+  // campaign grain. Two of these fired at 07:20 Israel on their first morning,
+  // for silence that was entirely overnight.
+  const hour = israelHour(now);
+  if (hour < DAYTIME.fromHour || hour >= DAYTIME.toHour) return { kind: "quiet" };
   const since = state.lastServedAt ?? state.firstSeenAt;
-  const silentMs = now.getTime() - since.getTime();
-  const hours = silentMs / 3_600_000;
+  const hours = daytimeHoursBetween(since, now);
   if (hours < silentHours) return { kind: "quiet" };
-  return { kind: "alert", silentHours: Math.floor(hours) };
+  return { kind: "alert", silentHours: hours };
 }
 
 export interface ServingObservation {
@@ -216,6 +220,40 @@ export function israelHour(now: Date): number {
   );
 }
 
+
+/**
+ * Hours of SILENCE THAT ACTUALLY COUNT — only those falling inside the daytime
+ * window (AIC-183).
+ *
+ * The bug this fixes, seen the first morning the alert ran: the window guard
+ * stopped a 3am page but not a 09:20 one. A campaign that last served at 02:20
+ * had "been silent 7 hours" by 09:20, every hour of it overnight, and every
+ * campaign in the system alerted the moment the window opened. A monitor that
+ * fires every morning is a monitor nobody reads by the second morning.
+ *
+ * Wall-clock elapsed time is the wrong unit. Nobody expects delivery at 4am, so
+ * those hours are not evidence of anything. Counting only daytime hours means a
+ * campaign that stops at 20:00 has accumulated 2 hours by 22:00 and is still at
+ * 2 when the next day opens — it has to be dark through real business hours
+ * before it is worth saying anything about.
+ *
+ * Walks hour by hour rather than doing DST arithmetic: Israel shifts twice a
+ * year, and an off-by-one-hour bug here is a false page. Capped so a very old
+ * `last_served_at` cannot spin.
+ */
+export function daytimeHoursBetween(from: Date, to: Date, maxDays = 60): number {
+  if (to <= from) return 0;
+  const HOUR = 3_600_000;
+  const cap = maxDays * 24;
+  let count = 0;
+  let steps = 0;
+  for (let t = from.getTime(); t < to.getTime() && steps < cap; t += HOUR, steps++) {
+    const h = israelHour(new Date(t));
+    if (h >= DAYTIME.fromHour && h < DAYTIME.toHour) count++;
+  }
+  return count;
+}
+
 export interface CampaignSpendInput {
   /** Impressions measured campaign-wide in the current (today) window. */
   impressions: number;
@@ -240,9 +278,10 @@ export function judgeCampaignSpending(
   if (hour < DAYTIME.fromHour || hour >= DAYTIME.toHour) return { kind: "quiet" };
   if (state.alertedAt) return { kind: "quiet" };
   const since = state.lastServedAt ?? state.firstSeenAt;
-  const hours = (now.getTime() - since.getTime()) / 3_600_000;
+  // AIC-183: DAYTIME hours only. Overnight silence is not evidence.
+  const hours = daytimeHoursBetween(since, now);
   if (hours < silentHours) return { kind: "quiet" };
-  return { kind: "alert", silentHours: Math.floor(hours) };
+  return { kind: "alert", silentHours: hours };
 }
 
 /**

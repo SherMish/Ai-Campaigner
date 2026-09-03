@@ -46,24 +46,29 @@ d("serving watch (DB)", () => {
     const ops = new OpsQueue(pool);
     const base = { pool, ops, campaignId, customerId, campaignRef: "m_serve" };
 
-    // First sight: the grace anchor is set now, so a brand-new ad set that has
-    // served nothing is NOT an alert. This is the case that would otherwise
-    // page an operator about every ad set the moment it is created.
-    await recordServing({ ...base, observations: dark(), now: new Date("2026-09-02T08:00:00Z") });
+    // AIC-183: every timestamp here is DAYTIME Israel, and the thresholds are
+    // counted in daytime hours. The original fixture used 21:00Z — midnight in
+    // Israel — and expected an alert, which is precisely the overnight page
+    // that had to be removed.
+
+    // First sight (09:00 Israel): the grace anchor is set now, so a brand-new
+    // ad set that has served nothing is NOT an alert. This is the case that
+    // would otherwise page about every ad set the moment it is created.
+    await recordServing({ ...base, observations: dark(), now: new Date("2026-09-02T06:00:00Z") });
     expect(await openItems(campaignId)).toHaveLength(0);
 
-    // 6 hours dark — still inside 12.
-    await recordServing({ ...base, observations: dark(), now: new Date("2026-09-02T14:00:00Z") });
+    // 15:00 Israel — 6 daytime hours dark, still inside 12.
+    await recordServing({ ...base, observations: dark(), now: new Date("2026-09-02T12:00:00Z") });
     expect(await openItems(campaignId)).toHaveLength(0);
 
-    // 13 hours dark — this is the lived case: ACTIVE, zero impressions, Meta
-    // reporting no problem at all.
-    await recordServing({ ...base, observations: dark(), now: new Date("2026-09-02T21:00:00Z") });
+    // 21:00 Israel — 12 daytime hours. The lived case: ACTIVE, zero
+    // impressions, Meta reporting no problem at all.
+    await recordServing({ ...base, observations: dark(), now: new Date("2026-09-02T18:00:00Z") });
     expect(await openItems(campaignId)).toHaveLength(1);
 
     // Still dark next tick: one dark spell, one message. A monitor that
     // repeats hourly is a monitor everyone mutes.
-    await recordServing({ ...base, observations: dark(), now: new Date("2026-09-02T22:00:00Z") });
+    await recordServing({ ...base, observations: dark(), now: new Date("2026-09-02T18:30:00Z") });
     expect(await openItems(campaignId)).toHaveLength(1);
 
     // It serves again → the standing alert is cleared, so the NEXT dark spell
@@ -72,7 +77,7 @@ d("serving watch (DB)", () => {
     await recordServing({
       ...base,
       observations: [{ metaObjectId: "as_dark", name: "נשים · 20–35", impressions: 400, active: true }],
-      now: new Date("2026-09-02T23:00:00Z"),
+      now: new Date("2026-09-02T19:00:00Z"),
     });
     const row = await pool.query<{ alerted_at: Date | null; last_served_at: Date | null }>(
       `SELECT alerted_at, last_served_at FROM ad_serving_watch WHERE meta_object_id = 'as_dark'`,
@@ -80,8 +85,10 @@ d("serving watch (DB)", () => {
     expect(row.rows[0].alerted_at).toBeNull();
     expect(row.rows[0].last_served_at).not.toBeNull();
 
-    // A second dark spell, 13h after it last served, alerts again.
-    await recordServing({ ...base, observations: dark(), now: new Date("2026-09-03T12:30:00Z") });
+    // A second dark spell. It last served at 22:00 Israel, so the overnight
+    // hours count for nothing: the clock only reaches 12 again at 21:00 Israel
+    // the NEXT day.
+    await recordServing({ ...base, observations: dark(), now: new Date("2026-09-03T18:00:00Z") });
     expect(await openItems(campaignId)).toHaveLength(2);
   });
 

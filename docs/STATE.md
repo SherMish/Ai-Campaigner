@@ -6,6 +6,34 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-03 — the new alert fired on its first morning, for a night (AIC-183)
+
+AIC-182 shipped yesterday and alerted at 09:20 this morning: *"the campaign is
+active and has spent nothing for 7 hours"*. The campaign last served at 02:20
+Israel. Every one of those hours was overnight, and the alert fired the moment
+the daytime window opened. Two ad-set alerts fired at 07:20, outside the window
+entirely — the ad-set grain had no window at all.
+
+The window guard stopped the 3am page and not the 09:20 one, because the CLOCK
+still counted wall-clock hours. Wall-clock is the wrong unit: nobody expects
+delivery at 4am, and this campaign's own hourly data shows it serving 13:00–
+22:00 and nothing overnight.
+
+`daytimeHoursBetween` now counts only hours inside 09:00–22:00, and both grains
+use the same window and the same clock. A campaign that stops at 20:00 holds at
+2 hours through the night and has to be dark through real business hours before
+anything is said.
+
+Test-first from the real watch row: the reproduction asserts quiet at 09:20 and
+an alert at 13:00 with 4 hours. Two older fixtures encoded wall-clock hours and
+were rewritten rather than relaxed — 20 hours spanning a night is 9 hours of
+evidence, and calling it 20 is exactly what fired this.
+
+The four false-positive rows were cleared in the same pass: `alerted_at` reset
+so the next tick re-evaluates honestly, and the ops items resolved. That column
+also drives the customer dashboard's "not spending" hero, so the bad state was
+customer-visible, not just noise in Telegram.
+
 ### 2026-09-02 — the integration suite can no longer write to production (AIC-84)
 
 `server/.env` holds the production DATABASE_URL because the server needs it,
