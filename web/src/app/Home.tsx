@@ -511,10 +511,17 @@ export function Home() {
   // "today card + separate 7-day KPIs" split, which showed two sets of
   // numbers for the same campaign and read as a contradiction.
   const agg = r?.ranges[range] ?? r?.current;
-  // AIC-107: which RESULT this campaign counts. `objective` is written from
-  // the destination at build time (campaign-create.ts), so it is the same
-  // single source of truth the engine uses — not a second guess from copy.
-  const isEngagementCampaign = ov.campaign?.objective === "engagement";
+  // AIC-194: ONE source of truth for what this campaign counts.
+  //
+  // This read `objective === "engagement"` while the details panel below read
+  // `resultKindOf(destination)` — two different columns answering the same
+  // question, which is how the KPI cards and the audience rows end up
+  // disagreeing about whether a number is a lead or an engagement. `objective`
+  // is only written by OUR builder; an adopted campaign carries whatever the
+  // wizard sent (defaulting to "leads"), so destination is the column that is
+  // right for both.
+  const resultKind = resultKindOf(ov.campaign?.destination);
+  const isEngagementCampaign = resultKind === "engagement";
   // AIC-130: no rows in this window means we have NOT measured zero — we have
   // measured nothing. Rendering "₪0 · 0 פניות" under a panel that says "אין
   // נתונים לתקופה שנבחרה" was the product contradicting itself on one screen,
@@ -645,7 +652,7 @@ export function Home() {
           {/* opt-in per-audience / per-creative details (AIC-37) — collapsed by default */}
           {ov.campaign && (
             <AudienceDetails
-              kind={resultKindOf(ov.campaign?.destination)}
+              kind={resultKind}
               activeAds={activeAds}
               range={range}
               onRange={setRange}

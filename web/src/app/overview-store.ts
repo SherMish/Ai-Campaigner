@@ -19,6 +19,19 @@ let inflight: Promise<void> | null = null;
 // two components fetching different campaigns into one cache is how a
 // customer ends up reading one campaign's numbers under another's name.
 let selectedCampaignId: string | null = null;
+// AIC-194 — which load is the CURRENT one.
+//
+// The bug this fixes: switching campaigns orphaned the in-flight request but
+// could not cancel it, so its `.then` still fired and wrote the OLD campaign's
+// numbers into state. Whichever request finished LAST won, which on a slow
+// Meta-backed overview is often the one the customer already navigated away
+// from — the dashboard silently showed the previous campaign's spend and leads
+// under the new campaign's name.
+//
+// A monotonic token rather than AbortController: the stale response is not an
+// error to swallow, it is simply no longer the answer to the current question,
+// and ignoring it is the whole requirement.
+let generation = 0;
 const subscribers = new Set<() => void>();
 
 function setState(next: Partial<State>) {
@@ -28,11 +41,15 @@ function setState(next: Partial<State>) {
 
 function load(): Promise<void> {
   if (inflight) return inflight;
+  const gen = ++generation;
   setState({ loading: true, error: false });
   inflight = getOverview(selectedCampaignId)
-    .then((data) => setState({ data, loading: false, error: false }))
-    .catch(() => setState({ loading: false, error: true }))
-    .finally(() => { inflight = null; });
+    .then((data) => { if (gen === generation) setState({ data, loading: false, error: false }); })
+    .catch(() => { if (gen === generation) setState({ loading: false, error: true }); })
+    // Only the CURRENT load may clear the slot. A stale one finishing later
+    // would otherwise blank `inflight` while a newer request is still running,
+    // letting a third load start on top of it.
+    .finally(() => { if (gen === generation) inflight = null; });
   return inflight;
 }
 
