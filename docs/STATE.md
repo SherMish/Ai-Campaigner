@@ -6,6 +6,23 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-03 — the engine does not touch engagement campaigns (AIC-189)
+
+Step F, and now a safety issue rather than a preference: with adoption
+unblocked, an engagement campaign can reach the engine, and every rule in
+RULES.md is cost-per-LEAD shaped.
+
+An engagement campaign has no lead and therefore no CPL. The engine would
+compare a cost-per-comment against a lead threshold and propose a budget change
+from it — not a degraded recommendation but a confident one derived from a
+metric that does not apply, which is the looks-like-progress failure the
+product exists to avoid.
+
+Excluded in `listEligibleForGeneration` rather than filtered downstream, so no
+rule ever sees one and the reason sits next to the eligibility it governs.
+Reversing it means defining what a good engagement campaign looks like — a
+product decision, not a query change.
+
 ### 2026-09-03 — the campaign switcher and result vocabulary (AIC-186/188)
 
 Steps C and E of the multi-campaign plan.

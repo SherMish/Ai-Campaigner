@@ -137,7 +137,22 @@ export async function listEligibleForGeneration(pool: pg.Pool): Promise<GenCampa
      WHERE mc.status = 'active'
        AND mc.automation_enabled = true
        AND mc.meta_campaign_id IS NOT NULL
-       AND conn.access_health = 'ok'`,
+       AND conn.access_health = 'ok'
+       -- AIC-189: engagement campaigns are NOT optimised yet, and this
+       -- exclusion is the honest form of that.
+       --
+       -- Every rule in RULES.md is cost-per-lead shaped. An engagement
+       -- campaign has no lead and therefore no CPL, so the engine would
+       -- compare a cost-per-comment against a lead threshold and propose a
+       -- budget change from it. That is not a degraded recommendation, it is
+       -- a confident one derived from a metric that does not apply — the
+       -- exact "looks-like-progress" failure the product exists to avoid.
+       --
+       -- Excluded HERE rather than filtered downstream so no rule ever sees
+       -- one, and so the reason is stated once next to the eligibility it
+       -- governs. Reversing it means defining what a good engagement campaign
+       -- looks like, which is a product decision, not a query change.
+       AND mc.destination <> 'engagement'`,
   );
   return rows.map((r) => ({
     id: r.id,

@@ -11,6 +11,7 @@ const d = HAS_DB ? describe : describe.skip;
 // Seed one customer+connection+campaign with the given knobs; return campaign id.
 async function seed(tag: string, o: {
   status?: string; automation?: boolean; metaId?: string | null; health?: string;
+  destination?: string;
 }): Promise<string> {
   const cust = await pool.query<{ id: string }>(
     `INSERT INTO customers (business_name, is_test) VALUES ($1, true) RETURNING id`,
@@ -26,10 +27,10 @@ async function seed(tag: string, o: {
     [conn.rows[0].id, `act_gen_${conn.rows[0].id.slice(0, 8)}`],
   );
   const camp = await pool.query<{ id: string }>(
-    `INSERT INTO managed_campaigns (customer_id, ad_account_id, meta_campaign_id, name, status, automation_enabled, agreed_budget_agorot)
-     VALUES ($1,$2,$3,$4,$5,$6,1000) RETURNING id`,
+    `INSERT INTO managed_campaigns (customer_id, ad_account_id, meta_campaign_id, name, status, automation_enabled, agreed_budget_agorot, destination)
+     VALUES ($1,$2,$3,$4,$5,$6,1000,$7) RETURNING id`,
     [customerId, acct.rows[0].id, o.metaId === undefined ? "meta_gen" : o.metaId,
-     `gen_${tag}`, o.status ?? "active", o.automation ?? true],
+     `gen_${tag}`, o.status ?? "active", o.automation ?? true, o.destination ?? "whatsapp"],
   );
   return camp.rows[0].id;
 }
@@ -47,6 +48,12 @@ d("listEligibleForGeneration (DB)", () => {
     await seed("nometa", { metaId: null });
     await seed("badhealth", { health: "revoked" });
     await seed("unmanaged", { status: "unmanaged" });
+    // AIC-189 — an engagement campaign is healthy, active and automated, and
+    // still must not reach the engine: every rule is cost-per-LEAD shaped, and
+    // an engagement campaign has no lead. Comparing a cost-per-comment against
+    // a lead threshold produces a confident recommendation from a metric that
+    // does not apply.
+    await seed("engagement", { destination: "engagement" });
 
     const ids = (await listEligibleForGeneration(pool)).map((c) => c.id);
     expect(ids).toContain(eligible);
