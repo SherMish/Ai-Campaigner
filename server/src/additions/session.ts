@@ -237,8 +237,13 @@ export type AdditionUnavailableReason = ConnectionReadinessReason;
 export async function resolveAdditionAvailability(
   pool: pg.Pool,
   userId: string,
+  // AIC-192 — which campaign. This is the FIRST call the add-content screen
+  // makes and it decides which campaign the whole screen is about, so missing
+  // it here meant every other route on that screen could be correct and the
+  // screen still worked on the wrong campaign.
+  campaignId?: string | null,
 ): Promise<{ ctx: AdditionContext } | { ctx: null; reason: AdditionUnavailableReason }> {
-  const r = await fetchAdditionContextRow(pool, userId);
+  const r = await fetchAdditionContextRow(pool, userId, campaignId);
   const reason = classifyConnectionReadiness(readinessRow(r));
   if (reason) return { ctx: null, reason };
   return { ctx: toContext(r!) };

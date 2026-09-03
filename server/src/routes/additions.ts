@@ -98,7 +98,7 @@ function refuseCreativeWrite(res: import("express").Response, reason: CreativeBl
 // possible right now at all.
 additionsRouter.get("/context", requireAuth, async (req, res) => {
   try {
-    const availability = await resolveAdditionAvailability(pool, (req as AuthedRequest).userId!);
+    const availability = await resolveAdditionAvailability(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!availability.ctx) {
       // Same 409 shape as before, plus WHY — resolveAdditionContext alone
       // can't tell "no campaign yet" from "campaign exists but our Meta

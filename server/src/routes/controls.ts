@@ -62,7 +62,7 @@ function unavailable(res: import("express").Response): void {
 // AudienceDetails can render an honest note instead of silently degrading.
 controlsRouter.get("/state", requireAuth, async (req, res) => {
   try {
-    const availability = await resolveAdditionAvailability(pool, (req as AuthedRequest).userId!);
+    const availability = await resolveAdditionAvailability(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!availability.ctx) {
       res.status(409).json({ error: "no managed campaign", reason: availability.reason });
       return;
@@ -87,7 +87,7 @@ controlsRouter.get("/state", requireAuth, async (req, res) => {
 // with the error rather than being swallowed silently.
 controlsRouter.get("/media", requireAuth, async (req, res) => {
   try {
-    const availability = await resolveAdditionAvailability(pool, (req as AuthedRequest).userId!);
+    const availability = await resolveAdditionAvailability(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!availability.ctx) {
       res.status(409).json({ error: "no managed campaign", reason: availability.reason });
       return;
