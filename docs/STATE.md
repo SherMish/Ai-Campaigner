@@ -6,6 +6,29 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-03 — the audience row opens, like its ads already did (AIC-184)
+
+Operator request. Inside הצג פירוט every ad row was clickable and the audience
+row above them was not — so the one thing a customer could not open was the
+thing deciding who their money reaches.
+
+Same chrome as the ad detail on purpose: it answers the sibling question, and
+two different-looking panels for "tell me about this row" would read as two
+features. Shows age, gender, EVERY place (the row label caps at two), the
+placement, the daily budget and the creation date.
+
+Three honesty details carried from the normalizer: an absent
+`publisher_platforms` is Advantage+ (supplying the field is what turns it off);
+a mix we did not set reads as "שילוב מותאם" rather than being forced into one
+of our three; and a null ad-set budget renders as "מתוך תקציב הקמפיין", never
+₪0 — CBO and zero are different facts and one of them reads as "this audience
+gets nothing".
+
+Live read on open, never bulk-loaded, ownership scoped to the caller's own
+campaign. `targeting` is requested whole rather than sub-selected: Meta refuses
+an entire call for one unknown subfield (found live on
+`boost_eligibility_info`, AIC-156).
+
 ### 2026-09-03 — the new alert fired on its first morning, for a night (AIC-183)
 
 AIC-182 shipped yesterday and alerted at 09:20 this morning: *"the campaign is

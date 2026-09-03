@@ -11,6 +11,8 @@ import {
   setObjectPaused,
   setAdRemoved,
   getAdDetail,
+  getAdSetDetail,
+  type AdSetDetail,
   type AdDetail,
   ApiError,
   type ControlState,
@@ -831,6 +833,11 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
   // awaiting confirmation, and the server's refusal if it comes.
   // AIC-139: which ad's details modal is open, and what we loaded for it.
   const [detailFor, setDetailFor] = useState<string | null>(null);
+  // AIC-184 — the ad set's own configuration, same on-demand shape as the ad
+  // detail: a live Meta read, fetched on open, never with the panel.
+  const [audienceDetailFor, setAudienceDetailFor] = useState<string | null>(null);
+  const [audienceDetail, setAudienceDetail] = useState<AdSetDetail | null>(null);
+  const [audienceDetailError, setAudienceDetailError] = useState(false);
   const [detail, setDetail] = useState<AdDetail | null>(null);
   const [detailError, setDetailError] = useState(false);
   const [removedOpen, setRemovedOpen] = useState<Set<string>>(new Set());
@@ -953,6 +960,13 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
   // and pulling every ad's copy up front would pay for text nobody asked to
   // see. Cleared first so a slow second open never shows the previous ad's
   // copy under the new ad's title.
+  function openSetDetail(adSetId: string) {
+    setAudienceDetailFor(adSetId);
+    setAudienceDetail(null);
+    setAudienceDetailError(false);
+    getAdSetDetail(adSetId).then(setAudienceDetail).catch(() => setAudienceDetailError(true));
+  }
+
   function openDetail(adId: string) {
     setDetailFor(adId);
     setDetail(null);
@@ -1103,7 +1117,17 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
                           }
                           tone={audPaused || noLiveAds || !ctl ? "neutral" : "ok"}
                         />
-                        <b><bdi>{aud.label}</bdi></b>
+                        {/* AIC-184 — the audience row was the only thing on
+                            this panel a customer could not open. Same
+                            affordance as the ad rows below it. */}
+                        <button
+                          className="link"
+                          style={{ background: "none", border: "none", padding: 0, font: "inherit", fontWeight: 700, cursor: "pointer", textAlign: "start" }}
+                          title={D.adSetDetailOpen}
+                          onClick={(e) => { e.stopPropagation(); openSetDetail(aud.adSetId); }}
+                        >
+                          <bdi>{aud.label}</bdi>
+                        </button>
                       </div>
                       <PauseLink
                         kind="ad_set" metaObjectId={aud.adSetId}
@@ -1315,6 +1339,53 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault }: {
           the bottom says exactly that and points at the flow that does work,
           rather than offering an edit control that would silently rebuild the
           ad and restart its learning. */}
+      {/* AIC-184 — the audience's own configuration. Deliberately the SAME
+          chrome as the ad detail: it answers the sibling question, and two
+          different-looking panels for "tell me about this row" would read as
+          two different features. */}
+      {audienceDetailFor && (
+        <div className="op-modal-backdrop" onClick={() => setAudienceDetailFor(null)}>
+          <div className="op-modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+            <b style={{ fontSize: "1.05rem" }}>{D.adSetDetailTitle}</b>
+            {audienceDetailError ? (
+              <p className="muted" style={{ marginTop: 12, color: "var(--orange)" }}>{D.adSetDetailError}</p>
+            ) : !audienceDetail ? (
+              <p className="muted" style={{ marginTop: 12 }}>{D.adSetDetailLoading}</p>
+            ) : (
+              <div className="stack gap8" style={{ marginTop: 12 }}>
+                <DetailRow
+                  label={D.adSetDetailAge}
+                  value={audienceDetail.ageMin && audienceDetail.ageMax ? `${audienceDetail.ageMin}–${audienceDetail.ageMax}` : ""}
+                />
+                <DetailRow label={D.adSetDetailGender} value={D.adSetDetailGenders[audienceDetail.genders]} />
+                {/* Every place, not the two the row label shows. An empty list
+                    is nationwide — a real answer, not a blank. */}
+                <DetailRow
+                  label={D.adSetDetailPlaces}
+                  value={audienceDetail.places.length ? audienceDetail.places.join(" · ") : D.adSetDetailAllIsrael}
+                />
+                <DetailRow label={D.adSetDetailPlacement} value={D.adSetDetailPlacements[audienceDetail.placement]} />
+                {/* null is "draws from the campaign budget", which is a
+                    different fact from ₪0 and must not render as one. */}
+                <DetailRow
+                  label={D.adSetDetailBudget}
+                  value={audienceDetail.dailyBudgetAgorot === null
+                    ? D.adSetDetailBudgetFromCampaign
+                    : shekels(audienceDetail.dailyBudgetAgorot)}
+                />
+                <DetailRow
+                  label={D.adSetDetailCreated}
+                  value={audienceDetail.createdAt ? new Date(audienceDetail.createdAt).toLocaleDateString("he-IL") : ""}
+                />
+              </div>
+            )}
+            <div className="row" style={{ marginTop: 18 }}>
+              <button className="btn btn-outline btn-sm" onClick={() => setAudienceDetailFor(null)}>{D.adSetDetailClose}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {detailFor && (
         <div className="op-modal-backdrop" onClick={() => setDetailFor(null)}>
           <div className="op-modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>

@@ -673,3 +673,26 @@ impression count reads as a typo without one.
 The removed-ads list deliberately keeps only the original three. Its job is
 reconciling the spend/leads gap under an ad set, and two more columns there
 would bury the arithmetic it exists to show.
+
+## The audience row opens too (AIC-184)
+
+Inside הצג פירוט every ad row was clickable and the **audience row above them
+was not** — the one thing on the panel a customer could not open was the thing
+deciding who their money reaches.
+
+Clicking an audience opens the same chrome as the ad detail, deliberately: it
+answers the sibling question, and two different-looking panels for "tell me
+about this row" would read as two different features.
+
+| Field | Note |
+| --- | --- |
+| גיל, מגדר | as configured on Meta |
+| איפה | **every** place, uncapped — the row label shows at most two. An empty list renders as "כל ישראל", a real answer rather than a blank |
+| איפה המודעות רצות | Advantage+ / Instagram / Facebook, or **שילוב מותאם** when an ad set built in Ads Manager carries a mix of its own |
+| תקציב יומי | `null` renders as "מתוך תקציב הקמפיין" (CBO), never ₪0 — a different fact |
+| נוצר | creation date |
+
+A live Meta read on open, never bulk-loaded with the panel — the same
+discipline as the ad detail, for the same reason: this is text nobody asked to
+see until they ask. Ownership is checked against the caller's own campaign;
+an id in a URL is not evidence of ownership.

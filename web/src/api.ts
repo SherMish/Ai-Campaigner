@@ -458,6 +458,23 @@ export interface AdDetail {
 export const getAdDetail = (metaAdId: string) =>
   api<AdDetail>(`/app/controls/ad/${encodeURIComponent(metaAdId)}`);
 
+// AIC-184 — the ad set's own configuration, on demand.
+export type AdSetPlacement = "advantage" | "instagram" | "facebook" | "custom";
+export interface AdSetDetail {
+  adSetId: string;
+  name: string | null;
+  ageMin: number | null;
+  ageMax: number | null;
+  genders: "all" | "male" | "female";
+  places: string[];
+  placement: AdSetPlacement;
+  /** Null = draws from the campaign budget, which is NOT the same as zero. */
+  dailyBudgetAgorot: number | null;
+  createdAt: string | null;
+}
+export const getAdSetDetail = (metaAdSetId: string) =>
+  api<AdSetDetail>(`/app/controls/ad-set/${encodeURIComponent(metaAdSetId)}`);
+
 /** AIC-138: the customer's own business profile, on /app/settings. The server
  *  resolves the customer from the JWT and writes only a whitelisted set of
  *  columns — isTest, budget and engine thresholds are not reachable here. */

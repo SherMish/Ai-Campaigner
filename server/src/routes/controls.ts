@@ -8,6 +8,7 @@ import type { ControlObjectKind, ControlWriter } from "../controls/types.js";
 import type { DeliveryReader } from "../meta/delivery-health.js";
 import type { AdMediaReader } from "../meta/ad-media.js";
 import type { AdDetailReader } from "../meta/ad-detail.js";
+import type { AdSetDetailReader } from "../meta/ad-set-detail.js";
 import { refreshDeliveryNow } from "../services/delivery-monitor.js";
 import { OpsQueue } from "../services/ops-queue.js";
 import { respondIfMetaThrottled } from "../meta/throttle-response.js";
@@ -166,6 +167,39 @@ for (const action of ["pause", "resume"] as const) {
 // the ad must live under the caller's OWN campaign. Without it this would be a
 // read oracle for any ad id in any account the system user can reach — the
 // copy, the image and the destination phone number of another business's ads.
+// AIC-184 — the ad set's own configuration. Same ownership check and same
+// on-demand shape as the ad detail below it: the audience row was the only
+// thing on the panel a customer could not open.
+controlsRouter.get("/ad-set/:metaAdSetId", requireAuth, async (req, res) => {
+  try {
+    const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);
+    if (!ctx) {
+      res.status(409).json({ error: "no managed campaign" });
+      return;
+    }
+    const reader = buildAdditionWriter() as (ControlWriter & AdSetDetailReader) | null;
+    if (!reader) return unavailable(res);
+
+    const metaAdSetId = String(req.params.metaAdSetId);
+    // Scoped to the caller's OWN campaign, exactly as the ad route is — an id
+    // in a URL is not evidence of ownership.
+    if (!(await assertOwnedByCampaign(reader, ctx.metaCampaignId, "ad_set", metaAdSetId))) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    const detail = await reader.getAdSetDetail(metaAdSetId);
+    if (!detail) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    res.json(detail);
+  } catch (e) {
+    if (respondIfMetaThrottled(res, e)) return;
+    console.error("[controls] ad set detail failed", e);
+    res.status(502).json({ error: "failed to load the ad set" });
+  }
+});
+
 controlsRouter.get("/ad/:metaAdId", requireAuth, async (req, res) => {
   try {
     const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!);

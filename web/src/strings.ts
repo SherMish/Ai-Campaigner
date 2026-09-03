@@ -1529,6 +1529,31 @@ export const strings = {
           adOne: "מודעה אחת",
           // AIC-139: the per-ad details modal.
           adDetailOpen: "הצגת המודעה",
+          // AIC-184 — the ad set's own configuration. The label on the row is
+          // a summary capped at two places; this is the full answer to "who am
+          // I paying to reach".
+          adSetDetailOpen: "הצגת פרטי הקהל",
+          adSetDetailTitle: "פרטי הקהל",
+          adSetDetailLoading: "טוענים…",
+          adSetDetailError: "לא הצלחנו לטעון את פרטי הקהל. אפשר לנסות שוב עוד רגע.",
+          adSetDetailAge: "גיל",
+          adSetDetailGender: "מגדר",
+          adSetDetailPlaces: "איפה",
+          adSetDetailPlacement: "איפה המודעות רצות",
+          adSetDetailBudget: "תקציב יומי",
+          adSetDetailBudgetFromCampaign: "מתוך תקציב הקמפיין",
+          adSetDetailCreated: "נוצר",
+          adSetDetailClose: "סגירה",
+          adSetDetailGenders: { all: "כולם", male: "גברים", female: "נשים" },
+          adSetDetailPlacements: {
+            advantage: "מטא מחליטה (פייסבוק, אינסטגרם ועוד)",
+            instagram: "אינסטגרם בלבד",
+            facebook: "פייסבוק בלבד",
+            // Honest: an ad set built in Ads Manager can carry any mix, and
+            // claiming it matches one of ours would misstate where money goes.
+            custom: "שילוב מותאם שנקבע ישירות במטא",
+          },
+          adSetDetailAllIsrael: "כל ישראל",
           adDetailTitle: "פרטי המודעה",
           adDetailHeadline: "כותרת",
           adDetailPrimary: "טקסט ראשי",

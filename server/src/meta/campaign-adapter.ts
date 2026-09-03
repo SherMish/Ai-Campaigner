@@ -2,6 +2,7 @@ import type { LiveCampaignState, MetaReader, ExecWriter } from "../execution/saf
 import { normalizeAdSet, isProblem, type AdSetHealth, type DeliveryReader, type RawAdSetDelivery } from "./delivery-health.js";
 import { normalizeAdSetMeta, type AdSetMeta, type RawAdSetMeta } from "./audience-label.js";
 import { normalizeAdDetail, type AdDetail, type RawAdDetail } from "./ad-detail.js";
+import { normalizeAdSetDetail, type AdSetDetail, type RawAdSetDetail } from "./ad-set-detail.js";
 import type { BuilderWriter, CreateCampaignParams, CreateAdSetParams, CreateAdParams, PixelOption, PixelRecencyCheck } from "../builder/types.js";
 import type { Placement } from "@aic/shared";
 import type {
@@ -1245,6 +1246,18 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     );
     if (!body?.id) return null;
     return normalizeAdDetail(body as unknown as RawAdDetail);
+  }
+
+  // AIC-184 — the full configuration behind one audience row, on demand.
+  //
+  // Requests targeting WHOLE rather than sub-selecting its fields: Meta refuses
+  // the entire call for one unknown subfield (found live on
+  // boost_eligibility_info, AIC-156), and targeting's shape varies with what
+  // was set. Asking for the object is the shape that cannot break.
+  async getAdSetDetail(metaAdSetId: string): Promise<AdSetDetail | null> {
+    const body = await this.get(`${metaAdSetId}?fields=id,name,created_time,daily_budget,targeting`);
+    if (!body?.id) return null;
+    return normalizeAdSetDetail(body as unknown as RawAdSetDetail);
   }
 
   // AIC-131: which creatives an ad currently points at, for the reaper's
