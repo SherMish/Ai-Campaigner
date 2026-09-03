@@ -591,6 +591,8 @@ additionsRouter.post("/ad-set", requireAuth, async (req, res) => {
       // AIC-187 — the campaign's own destination, so an engagement campaign
       // gets an engagement ad set instead of a WhatsApp one.
       destination: ctx.destination,
+      // AIC-193 — used only if the campaign turns out to be ABO.
+      agreedBudgetAgorot: ctx.agreedBudgetAgorot ?? null,
       ads: body.ads,
       additionKey: body.additionKey,
       actor: "customer",

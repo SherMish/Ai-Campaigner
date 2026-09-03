@@ -60,6 +60,12 @@ export interface AddAdSetInput {
   pageId: string;
   name: string;
   targeting: CreateAdSetTargeting;
+  /**
+   * AIC-193 — the agreed daily budget, used ONLY when the campaign turns out
+   * to hold no budget of its own (ABO). Never sent for a CBO campaign, whose
+   * budget already governs every ad set under it.
+   */
+  agreedBudgetAgorot?: number | null;
   // AIC-187 — what the CAMPAIGN is for, carried rather than assumed. This was
   // hardcoded to FIXED_DESTINATION because every managed campaign was a
   // WhatsApp one by construction; an engagement campaign built that way would
@@ -245,6 +251,20 @@ export async function addAdSetToExistingCampaign(
   writer: BuilderWriter & AdditionWriter & AdMetaReader & AdSetMetaReader,
   input: AddAdSetInput,
 ): Promise<AddResult> {
+  // AIC-193 — CBO or ABO? An ad set added to a campaign that holds no budget
+  // must carry its own, and Meta refuses it outright otherwise. Best-effort:
+  // if the read fails we assume CBO, which is what every campaign we build is
+  // and preserves the behaviour that has always worked.
+  let campaignHoldsBudget = true;
+  try {
+    const reader = writer as unknown as { getCampaignDailyBudgetAgorot?: (id: string) => Promise<number | null> };
+    if (reader.getCampaignDailyBudgetAgorot) {
+      campaignHoldsBudget = (await reader.getCampaignDailyBudgetAgorot(input.metaCampaignId)) !== null;
+    }
+  } catch {
+    campaignHoldsBudget = true;
+  }
+
   const outbox = new WriteOutbox(pool);
   const creator = asCreatingWriter(writer);
 
@@ -264,6 +284,10 @@ export async function addAdSetToExistingCampaign(
         // turns it into the right objective/optimization/CTA triple, and
         // THROWS on anything unknown rather than defaulting to WhatsApp.
         destination: input.destination,
+        // AIC-193 — only for an ABO campaign. Read live rather than assumed:
+        // whether a campaign holds its own budget is a fact about the campaign
+        // on Meta, and an adopted one can be either shape.
+        adSetDailyBudgetAgorot: campaignHoldsBudget ? null : (input.agreedBudgetAgorot ?? null),
       },
     },
     creator,

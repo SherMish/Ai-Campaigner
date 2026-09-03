@@ -920,6 +920,14 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       campaign_id: params.metaCampaignId,
       status: "ACTIVE",
       billing_event: "IMPRESSIONS",
+      // AIC-193 — an ABO campaign holds no budget, so its ad sets must. Sent
+      // together with the bid strategy because Meta refuses a budgeted ad set
+      // with no strategy ("Bid amount or bid constraints required"), and
+      // LOWEST_COST_WITHOUT_CAP is the one strategy that needs no bid amount —
+      // the same default our own campaigns use.
+      ...(params.adSetDailyBudgetAgorot
+        ? { daily_budget: String(params.adSetDailyBudgetAgorot), bid_strategy: "LOWEST_COST_WITHOUT_CAP" }
+        : {}),
       optimization_goal: shape.optimizationGoal,
       destination_type: shape.destinationType,
       promoted_object: promotedObject,
@@ -1263,6 +1271,14 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   // AIC-185 — the RAW targeting object, for the read-modify-write merge. Read
   // separately from getAdSetDetail because that one NORMALIZES: the merge has
   // to send back Meta's own shape, including keys this code does not model.
+  // AIC-193 — does this campaign hold its own budget (CBO) or not (ABO)?
+  // The answer decides whether a new ad set must carry one. Null means ABO.
+  async getCampaignDailyBudgetAgorot(metaCampaignId: string): Promise<number | null> {
+    const body = await this.get(`${metaCampaignId}?fields=daily_budget,lifetime_budget`);
+    const daily = body?.daily_budget ?? body?.lifetime_budget ?? null;
+    return daily == null ? null : Number(daily);
+  }
+
   async getAdSetRawTargeting(metaAdSetId: string): Promise<Record<string, unknown>> {
     const body = await this.get(`${metaAdSetId}?fields=targeting`);
     return ((body?.targeting as Record<string, unknown>) ?? {});

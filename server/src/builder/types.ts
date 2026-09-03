@@ -58,7 +58,21 @@ export interface CreateAdSetParams {
   // Resolved via shared/src/recommended-defaults.ts's resolveDestinationShape
   // — NEVER a caller-hardcoded "whatsapp"/"CONVERSATIONS" literal.
   destination: string;
-  // AIC-89 — only meaningful when destination resolves to the WEBSITE shape:
+  /**
+   * AIC-193 — the ad set's OWN daily budget, in agorot, for a campaign that
+   * does not carry one.
+   *
+   * Meta has two budget shapes: campaign-level (CBO, what our builder always
+   * creates) and ad-set-level (ABO, extremely common in accounts built by
+   * hand). An ad set added to an ABO campaign MUST carry its own budget and
+   * bid strategy; without them Meta refuses with "Bid amount or bid
+   * constraints required", which is what adopting a real customer's ABO
+   * campaign hit the first time anyone tried to add to one.
+   *
+   * Absent means the campaign holds the budget — send nothing, which is the
+   * behaviour every CBO campaign has always had.
+   */
+  adSetDailyBudgetAgorot?: number | null;
   // promoted_object becomes { pixel_id, custom_event_type } instead of
   // { page_id }. Absent/ignored for a WhatsApp ad set.
   pixelId?: string;

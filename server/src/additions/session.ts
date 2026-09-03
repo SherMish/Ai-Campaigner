@@ -58,6 +58,8 @@ export interface AdditionContext {
   campaignName: string;
   /** AIC-186: 'whatsapp' | 'website' | 'engagement'. */
   destination: string;
+  /** AIC-193: the agreed ceiling, used only when the campaign is ABO. */
+  agreedBudgetAgorot: number | null;
   category: string; // for the add-ad-set audience step's business-type prefill, same as the builder
   // AIC-103: which of THIS destination's required fields (shared/recommended-
   // defaults.ts's CAMPAIGN_TYPE_REQUIRED_FIELDS) are missing — empty when the
@@ -128,6 +130,7 @@ type AdditionContextRow = {
   tracking_pixel_id: string | null;
   lead_event_types: string[] | null;
   destination: string | null;
+  agreed_budget_agorot: number | null;
   access_health: string | null;
   meta_ad_account_id: string | null;
   page_id: string | null;
@@ -145,7 +148,7 @@ async function fetchAdditionContextRow(
   const { rows } = await pool.query<AdditionContextRow>(
     `SELECT u.customer_id, c.category, mc.id AS campaign_id, mc.name AS campaign_name,
             mc.meta_campaign_id, mc.whatsapp_destination, mc.website_url, mc.tracking_pixel_id, mc.lead_event_types,
-            mc.destination,
+            mc.destination, mc.agreed_budget_agorot,
             conn.access_health, aa.meta_ad_account_id, conn.page_id, conn.instagram_id
      FROM app_users u
      LEFT JOIN customers c ON c.id = u.customer_id
@@ -198,6 +201,7 @@ function toContext(r: AdditionContextRow): AdditionContext {
     // construction, so the write path could hardcode it; with engagement
     // campaigns that assumption is simply wrong.
     destination: r.destination ?? FIXED_DESTINATION,
+    agreedBudgetAgorot: r.agreed_budget_agorot ?? null,
     category: r.category ?? "",
     missingConfigFields: missingRequiredFields(isMessaging ? FIXED_DESTINATION : WEBSITE_DESTINATION, {
       whatsappDestination: r.whatsapp_destination ?? null,
