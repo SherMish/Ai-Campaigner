@@ -6,6 +6,24 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-04 — automation-off campaigns lost their ad sets and ads (AIC-196)
+
+The same coupling as AIC-191, one layer further in.
+
+`ad_set_meta` and `ad_meta` are what הצג פירוט iterates to draw its rows: an ad
+set with no cache row does not appear, however much measured data it has. Those
+caches were written only by the GENERATION tick, which requires
+`automation_enabled`. So a customer who turns automation off keeps their
+numbers — AIC-191 fixed ingestion — and loses their ad sets and ads.
+
+Found live on the newly connected campaign: twelve snapshots, zero cache rows,
+and a panel claiming the campaign had only started today.
+
+The caches are refreshed with ingestion now. A cache the CUSTOMER reads is
+observation, not action, and must not depend on our permission to act on their
+behalf. Isolated per campaign and per cache — a display refresh must not fail
+an ingestion tick that has already stored real data.
+
 ### 2026-09-04 — two bugs a second campaign made visible (AIC-190/191)
 
 **Ingestion was gated on `automation_enabled`.** That flag means "the engine

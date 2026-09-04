@@ -12,6 +12,9 @@ import {
   type ManagedCampaignRef,
 } from "./ingestion-service.js";
 import { consoleLogger } from "../services/logger.js";
+import { GraphCampaignAdapter } from "./campaign-adapter.js";
+import { upsertAdSetMeta } from "../services/audience-meta-cache.js";
+import { refreshAdMetaNow } from "../services/ad-meta-cache.js";
 
 // Managed campaigns joined to their connection, for a tick.
 async function listManagedCampaigns(
@@ -130,10 +133,25 @@ export function buildIngestionTick(
       })().catch(() => {});
     },
   );
+  // AIC-196 — the ad-set and ad META CACHES are refreshed here, with
+  // ingestion, and no longer only inside the generation tick.
+  //
+  // Those caches are what הצג פירוט iterates to draw its rows: an ad set with
+  // no cache row simply does not appear, however much measured data it has.
+  // They were written by the generation tick, which requires
+  // automation_enabled — so a customer who turned automation off kept their
+  // numbers (AIC-191 fixed ingestion) and lost their AD SETS AND ADS. Found
+  // live on a campaign connected with automation off: twelve snapshots, zero
+  // cache rows, and a panel that said the campaign had only started today.
+  //
+  // Same principle as AIC-191, applied one layer further: a cache the CUSTOMER
+  // reads is observation, not action, and must not depend on our permission to
+  // act on their behalf.
+  const adapter = new GraphCampaignAdapter(token);
   return async () => {
     const campaigns = await listManagedCampaigns(pool);
     const { current } = rollingPeriods();
-    return runIngestionTick({
+    const summary = await runIngestionTick({
       campaigns,
       ingestion,
       period: current,
@@ -142,5 +160,24 @@ export function buildIngestionTick(
       logger: consoleLogger,
       connectionService,
     });
+
+    for (const c of campaigns) {
+      if (!c.metaCampaignId) continue;
+      // Isolated per campaign and per cache: this is a display refresh, and
+      // one customer's unreadable ad set must not cost everyone else theirs
+      // — nor fail an ingestion tick that has already stored real data.
+      try {
+        const adsets = await adapter.getAdSetMeta(c.metaCampaignId);
+        await upsertAdSetMeta(pool, c.id, adsets.filter((a) => a.existsOnMeta));
+      } catch (e) {
+        consoleLogger.error(`[ingestion] ad-set meta refresh failed for ${c.id}`, e);
+      }
+      try {
+        await refreshAdMetaNow(pool, adapter, c.id, c.metaCampaignId);
+      } catch (e) {
+        consoleLogger.error(`[ingestion] ad meta refresh failed for ${c.id}`, e);
+      }
+    }
+    return summary;
   };
 }
