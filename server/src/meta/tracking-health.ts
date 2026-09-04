@@ -1,3 +1,4 @@
+import { messagingChannel, acceptsWhatsappAdSets, type MessagingChannel } from "./messaging-destination.js";
 import { isEngagementResult } from "@aic/shared";
 // AIC-88: does this campaign's DECLARED lead definition actually match what
 // Meta is configured to optimize for?
@@ -236,7 +237,19 @@ export function summarizeTracking(
 // silently disagree with what the ongoing tracking-health check would judge
 // once it's connected — one source of truth, not two.
 export type DetectedDestination =
-  | { supported: true; destinationType: "whatsapp" }
+  | {
+      supported: true;
+      destinationType: "whatsapp";
+      /**
+       * AIC-197 — the app the messages actually open in. "whatsapp" only when
+       * EVERY messaging ad set is WhatsApp-only; otherwise the channel we
+       * genuinely observed. Kept beside destinationType rather than replacing
+       * it: the destination decides how we WRITE ad sets, the channel decides
+       * what we TELL the customer, and conflating them is what produced the
+       * wrong claim in the first place.
+       */
+      messagingChannel: MessagingChannel;
+    }
   | { supported: true; destinationType: "website"; trackingPixelId: string; leadEventTypes: [string] }
   // AIC-107: adoptable now that engagement is a supported campaign type.
   // Carries leadEventTypes for the same reason the website variant does —
@@ -277,7 +290,19 @@ export function detectDestination(configs: AdSetTrackingConfig[]): DetectedDesti
   if (distinct.size > 1) return { supported: false, reason: "mixed_ad_sets" };
 
   const action = judged[0].implied;
-  if (isMessagingAction(action)) return { supported: true, destinationType: "whatsapp" };
+  if (isMessagingAction(action)) {
+    // AIC-197 — WHICH messaging app. Every one of Meta's seven messaging
+    // destinations used to collapse into "whatsapp" here, because only the
+    // optimization goal was consulted. The conversation COUNT was always
+    // right — Meta reports the same action for all of them — but the claim
+    // about where it happened was a guess we then told the customer.
+    const channels = judged.map((x) => messagingChannel(x.cfg.optimizationGoal, x.cfg.destinationType));
+    return {
+      supported: true,
+      destinationType: "whatsapp",
+      messagingChannel: acceptsWhatsappAdSets(channels) ? "whatsapp" : channels[0],
+    };
+  }
 
   const pixelId = judged.find((x) => x.cfg.pixelId)?.cfg.pixelId ?? null;
   if (!pixelId) return { supported: false, reason: "unrecognized_objective" };

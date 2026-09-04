@@ -453,7 +453,7 @@ d("onboarding wizard routes (AIC-101)", () => {
 
       expect(res.status).toBe(200);
       const campaigns = res.body.campaigns as Array<{ id: string; destination: unknown }>;
-      expect(campaigns.find((c) => c.id === WHATSAPP_CAMP)?.destination).toEqual({ supported: true, destinationType: "whatsapp" });
+      expect(campaigns.find((c) => c.id === WHATSAPP_CAMP)?.destination).toEqual({ supported: true, destinationType: "whatsapp", messagingChannel: "whatsapp" });
       expect(campaigns.find((c) => c.id === PIXEL_CAMP)?.destination).toEqual({
         supported: true, destinationType: "website",
         trackingPixelId: "984664453249037", leadEventTypes: ["offsite_conversion.fb_pixel_complete_registration"],

@@ -109,15 +109,31 @@ button { font-family: inherit; }
 }
 .info-affordance-dot {
   /* 30% larger than the 10px it shipped at, requested live. */
-  width: 13px; height: 13px; border-radius: 50%; border: 1px solid var(--line);
+  width: 13px; height: 13px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  color: var(--muted); font: italic 700 9px/1 Georgia, serif;
+  font: italic 700 9px/1 Georgia, serif;
+  /* AIC-199: currentColor, not the light-ground tokens it used to name.
+     This dot sits on the cream cards AND inside the dark lead-quality card;
+     `var(--line)` and `var(--muted)` are both tuned for cream, so on the dark
+     card it rendered as an empty ring around nothing — the customer saw a box
+     with no "i" in it. Inheriting the surrounding text colour is the only
+     thing that is correct on both grounds. */
+  border: 1px solid currentColor;
+  color: inherit;
+  opacity: 0.62;
 }
-.info-affordance:hover .info-affordance-dot, .info-affordance:focus-visible .info-affordance-dot { border-color: var(--muted); color: var(--ink); }
+.info-affordance:hover .info-affordance-dot, .info-affordance:focus-visible .info-affordance-dot { opacity: 1; }
 .info-popover {
   z-index: 200; background: var(--cream); border: 1px solid var(--line); border-radius: 14px;
   padding: 12px 14px; box-shadow: 0 8px 24px rgba(23, 23, 23, 0.16);
+  /* AIC-199: EXPLICIT, never inherited. The popover paints its own cream
+     background but took its text colour from whatever it was nested in — so
+     inside the dark card it drew white text on cream and the tooltip appeared
+     completely empty. A surface that sets its own background must set its own
+     foreground. */
+  color: var(--ink);
 }
+.info-popover .muted { color: var(--muted); }
 
 /* form fields */
 .field { display: flex; flex-direction: column; gap: 7px; }

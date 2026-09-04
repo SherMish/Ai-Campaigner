@@ -1400,6 +1400,27 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
       // A Facebook post carries it only when we have one; an Instagram post
       // cannot get here without one (guarded above).
       ...(params.instagramUserId ? { instagram_user_id: params.instagramUserId } : {}),
+      // AIC-198 — Meta REQUIRES this on a creative bound for a
+      // multi-destination messaging ad set ("Creative should have
+      // degrees_of_freedom spec for multi-destination ads"), which is what a
+      // MESSAGING_INSTAGRAM_DIRECT_MESSENGER_WHATSAPP ad set is. Sent on every
+      // existing-post creative rather than only that case: Meta accepts it
+      // everywhere, and a field required by a condition we cannot always see
+      // from here is safer sent than guarded.
+      //
+      // The values are copied from the creative Meta ITSELF built for this
+      // exact ad set, read back off the account — not invented. standard
+      // enhancements stays OPT_IN because that is what Meta's own creative
+      // carries; the two optimizations that rewrite the customer's words and
+      // retouch their photos are OPT_OUT, because changing a customer's
+      // creative without asking is not ours to opt into.
+      degrees_of_freedom_spec: {
+        creative_features_spec: {
+          standard_enhancements: { enroll_status: "OPT_IN" },
+          text_optimizations: { enroll_status: "OPT_OUT" },
+          image_touchups: { enroll_status: "OPT_OUT" },
+        },
+      },
     };
 
     // No destination given → post as is, byte-identical to the old behaviour.

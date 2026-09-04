@@ -169,8 +169,28 @@ describe("summarizeTracking", () => {
 // the operator to guess (and rather than re-deriving a second, driftable copy
 // of impliedLeadActionType's mapping).
 describe("detectDestination", () => {
+  // AIC-197: detection now also reports WHICH messaging app, because all seven
+  // of Meta's messaging destinations used to collapse into "whatsapp" and the
+  // customer was told a channel nobody had checked.
   it("a WhatsApp (Click-to-WhatsApp) campaign is detected, no pixel involved", () => {
-    expect(detectDestination([WHATSAPP_ADSET])).toEqual({ supported: true, destinationType: "whatsapp" });
+    expect(detectDestination([WHATSAPP_ADSET])).toEqual({
+      supported: true, destinationType: "whatsapp", messagingChannel: "whatsapp",
+    });
+  });
+
+  it("a MULTI-destination messaging campaign is not called WhatsApp", () => {
+    // GelNails' own engagement campaign. Meta picks per person among
+    // Instagram Direct, Messenger and WhatsApp, so naming one is a guess we
+    // would then print beside a real number.
+    expect(detectDestination([{ ...WHATSAPP_ADSET, destinationType: "MESSAGING_INSTAGRAM_DIRECT_MESSENGER_WHATSAPP" }]))
+      .toEqual({ supported: true, destinationType: "whatsapp", messagingChannel: "multi" });
+  });
+
+  it("an Instagram-Direct campaign is reported as Instagram, never WhatsApp", () => {
+    // Messages here never reach WhatsApp. Telling the customer to check it
+    // costs them the lead.
+    expect(detectDestination([{ ...WHATSAPP_ADSET, destinationType: "INSTAGRAM_DIRECT" }]))
+      .toEqual({ supported: true, destinationType: "whatsapp", messagingChannel: "instagram" });
   });
 
   it("a Pixel campaign is detected with its pixel id and implied lead event", () => {
@@ -193,7 +213,7 @@ describe("detectDestination", () => {
 
   it("a secondary ad set that implies nothing is ignored, not disqualifying — same filtering as summarizeTracking", () => {
     const noise: AdSetTrackingConfig = { ...PIXEL_ADSET, adSetId: "noise", optimizationGoal: "REACH", customEventType: null, pixelId: null };
-    expect(detectDestination([WHATSAPP_ADSET, noise])).toEqual({ supported: true, destinationType: "whatsapp" });
+    expect(detectDestination([WHATSAPP_ADSET, noise])).toEqual({ supported: true, destinationType: "whatsapp", messagingChannel: "whatsapp" });
   });
 
   it("ad sets implying genuinely different actions are 'mixed_ad_sets'", () => {
