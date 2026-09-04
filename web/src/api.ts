@@ -980,6 +980,8 @@ export interface CampaignChoice {
   campaignId: string;
   name: string;
   destination: string;
+  /** AIC-200 — 'whatsapp' | 'instagram' | 'messenger' | 'multi' | null. */
+  messagingChannel: string | null;
   status: string;
   isDefault: boolean;
 }

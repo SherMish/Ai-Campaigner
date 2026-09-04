@@ -228,6 +228,12 @@ export interface ProvisionInput {
   // campaignName (or vice versa) and this throws — never half a campaign row.
   metaCampaignId?: string;
   campaignName?: string;
+  /**
+   * AIC-200 — which messaging app this campaign's conversations open in,
+   * as DETECTED from the ad sets. Never asked of an operator: it is a fact
+   * about Meta's configuration, and the wizard already reads it.
+   */
+  messagingChannel?: string | null;
   objective?: string;
   // AIC-106: unlike the rest of this group, this one is ALSO meaningful with
   // no campaign — see the connect-only branch below. This is the AGREED
@@ -559,7 +565,7 @@ export async function provisionConnection(
            lead_event_types = COALESCE($8::text[], lead_event_types),
            tracking_pixel_id = $9, website_url = $10,
            whatsapp_destination = COALESCE($11,''), destination = $12,
-           launch_approved_at = now()
+           messaging_channel = $13, launch_approved_at = now()
          WHERE customer_id = $1 AND meta_campaign_id IS NULL
          RETURNING id`,
         [
@@ -567,6 +573,7 @@ export async function provisionConnection(
           input.objective ?? "leads", input.agreedBudgetAgorot, input.budgetPeriod ?? "daily",
           input.leadEventTypes ?? null, input.trackingPixelId ?? null, input.websiteUrl ?? null,
           input.whatsappDestination ?? null, input.destinationType ?? "whatsapp",
+          input.messagingChannel ?? null,
         ],
       );
 
@@ -576,17 +583,18 @@ export async function provisionConnection(
         `INSERT INTO managed_campaigns
            (customer_id, ad_account_id, meta_campaign_id, name, status, objective,
             agreed_budget_agorot, budget_period, lead_event_types, tracking_pixel_id,
-            website_url, whatsapp_destination, destination, launch_approved_at)
+            website_url, whatsapp_destination, destination, messaging_channel, launch_approved_at)
          VALUES ($1,$2,$3,$4,'active',$5,$6,$7,
                  COALESCE($8::text[], ARRAY['onsite_conversion.messaging_conversation_started_7d',
                                             'onsite_conversion.messaging_conversation_started']),
-                 $9,$10,COALESCE($11,''),$12, now())
+                 $9,$10,COALESCE($11,''),$12,$13, now())
          RETURNING id`,
         [
           input.customerId, adAccountRowId, input.metaCampaignId, input.campaignName,
           input.objective ?? "leads", input.agreedBudgetAgorot, input.budgetPeriod ?? "daily",
           input.leadEventTypes ?? null, input.trackingPixelId ?? null, input.websiteUrl ?? null,
           input.whatsappDestination ?? null, input.destinationType ?? "whatsapp",
+          input.messagingChannel ?? null,
         ],
       );
       if (camp.rows.length === 0) throw new CampaignAlreadyLinkedError();

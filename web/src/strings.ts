@@ -1483,6 +1483,18 @@ export const strings = {
           // AIC-186 — the campaign switcher.
           campaignSwitchLabel: "קמפיין",
           campaignKind: { whatsapp: "וואטסאפ", website: "אתר", engagement: "מעורבות" },
+          // AIC-200 — WHICH messaging app, when Meta's configuration says so.
+          // "הודעות" for multi covers the case Meta itself will not answer:
+          // four of its seven messaging destinations route to more than one
+          // app, chosen per person, and Insights never reports which received
+          // the message. Naming one would send a customer to the wrong inbox
+          // to look for their own lead.
+          messagingChannelLabel: {
+            whatsapp: "וואטסאפ",
+            instagram: "אינסטגרם",
+            messenger: "מסנג׳ר",
+            multi: "הודעות",
+          },
           spendCol: "הוצאה",
           leadsCol: "פניות",
           cplCol: "עלות לפנייה",

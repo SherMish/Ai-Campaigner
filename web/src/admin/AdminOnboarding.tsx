@@ -83,7 +83,7 @@ interface AdAccountOption {
   usedByCustomer: { id: string; name: string } | null;
 }
 type DetectedDestination =
-  | { supported: true; destinationType: "whatsapp" }
+  | { supported: true; destinationType: "whatsapp"; messagingChannel?: "whatsapp" | "instagram" | "messenger" | "multi" }
   | { supported: true; destinationType: "website"; trackingPixelId: string; leadEventTypes: [string] }
   | { supported: true; destinationType: "engagement"; leadEventTypes: [string] }
   | { supported: false; reason: "no_ad_sets" | "unrecognized_objective" | "mixed_ad_sets" };
@@ -185,6 +185,8 @@ export function AdminOnboarding() {
     // required — asked explicitly (default "whatsapp", the P0 recommendation)
     // rather than inferred, since nothing exists yet to infer it from.
     destinationType: "whatsapp" as "whatsapp" | "website" | "engagement",
+    // AIC-200 — detected, not asked. Null when not a messaging campaign.
+    messagingChannel: null as null | "whatsapp" | "instagram" | "messenger" | "multi",
     whatsappDestination: "",
     leadEventTypes: "", trackingPixelId: "", websiteUrl: "",
   });
@@ -431,6 +433,10 @@ export function AdminOnboarding() {
       if (!f.campaignName) next.campaignName = camp.name;
       if (camp.destination.supported) {
         next.destinationType = camp.destination.destinationType;
+        // AIC-200 — carried from detection, never asked. It decides what the
+        // customer is TOLD, not how we write ad sets.
+        next.messagingChannel = camp.destination.destinationType === "whatsapp"
+          ? (camp.destination.messagingChannel ?? null) : null;
         if (camp.destination.destinationType === "website") {
           next.trackingPixelId = camp.destination.trackingPixelId;
           next.leadEventTypes = camp.destination.leadEventTypes.join(",");
@@ -608,6 +614,7 @@ export function AdminOnboarding() {
           agreedBudgetAgorot: budgetAgorot,
           destinationType: form.destinationType,
           whatsappDestination: form.whatsappDestination.trim() || null,
+          messagingChannel: form.messagingChannel,
           leadEventTypes: form.leadEventTypes.trim() ? form.leadEventTypes.split(",").map((s) => s.trim()) : null,
           trackingPixelId: form.trackingPixelId.trim() || null,
           websiteUrl: form.websiteUrl.trim() || null,

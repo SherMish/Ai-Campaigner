@@ -725,6 +725,11 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
       websiteUrl: b.websiteUrl ? String(b.websiteUrl) : null,
       destinationType,
       whatsappDestination: b.whatsappDestination ? String(b.whatsappDestination) : null,
+      // AIC-200 — which messaging app, detected by the picker and sent through
+      // rather than asked. Anything unrecognised is dropped to null: an
+      // unknown channel must never render as a confident one.
+      messagingChannel: ["whatsapp", "instagram", "messenger", "multi"].includes(String(b.messagingChannel))
+        ? String(b.messagingChannel) : null,
     }, pageVerdict, instagramVerdict);
 
     const actor = await actorFor(req as AuthedRequest);

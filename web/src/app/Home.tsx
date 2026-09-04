@@ -98,7 +98,18 @@ function CampaignSwitcher({ campaigns, selected, onSelect }: {
   if (campaigns.length < 2) return null;
   const currentId = selected ?? campaigns.find((c) => c.isDefault)?.campaignId ?? campaigns[0].campaignId;
   const current = campaigns.find((c) => c.campaignId === currentId) ?? campaigns[0];
-  const kindOf = (d: string) => D.campaignKind[d as keyof typeof D.campaignKind] ?? d;
+  // AIC-200 — the chip says WHICH messaging app when Meta's configuration
+  // says so, and falls back to the campaign type otherwise. A campaign whose
+  // ad set routes to Instagram Direct is not a WhatsApp campaign, and a
+  // multi-app one has no single true answer — "הודעות" is the honest label
+  // for the case Meta itself will not resolve.
+  const kindOf = (c: CampaignChoice) => {
+    const ch = c.messagingChannel;
+    if (ch && ch in D.messagingChannelLabel) {
+      return D.messagingChannelLabel[ch as keyof typeof D.messagingChannelLabel];
+    }
+    return D.campaignKind[c.destination as keyof typeof D.campaignKind] ?? c.destination;
+  };
 
   return (
     <div className="camp-switch" ref={boxRef}>
@@ -111,7 +122,7 @@ function CampaignSwitcher({ campaigns, selected, onSelect }: {
         onClick={() => setOpen((v) => !v)}
       >
         <span className="camp-name"><bdi>{current.name}</bdi></span>
-        <span className="camp-kind">{kindOf(current.destination)}</span>
+        <span className="camp-kind">{kindOf(current)}</span>
         <svg className="camp-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -132,7 +143,7 @@ function CampaignSwitcher({ campaigns, selected, onSelect }: {
               >
                 <span className="camp-tick" aria-hidden="true">{on ? "✓" : ""}</span>
                 <span className="camp-name"><bdi>{c.name}</bdi></span>
-                <span className="camp-kind">{kindOf(c.destination)}</span>
+                <span className="camp-kind">{kindOf(c)}</span>
               </button>
             );
           })}

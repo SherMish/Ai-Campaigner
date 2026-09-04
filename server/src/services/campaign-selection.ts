@@ -73,6 +73,12 @@ export interface CampaignChoice {
   campaignId: string;
   name: string;
   destination: string;
+  /**
+   * AIC-200 — which messaging app, when known. `destination` says how we write
+   * ad sets; this says what the customer is told. Null when undetected, and a
+   * null must render as "הודעות" rather than a guessed app.
+   */
+  messagingChannel: string | null;
   status: string;
   /** True for the one a request gets when it names none. */
   isDefault: boolean;
@@ -88,9 +94,9 @@ export interface CampaignChoice {
  */
 export async function listOwnedCampaigns(pool: pg.Pool, userId: string): Promise<CampaignChoice[]> {
   const { rows } = await pool.query<{
-    id: string; name: string; destination: string; status: string;
+    id: string; name: string; destination: string; messaging_channel: string | null; status: string;
   }>(
-    `SELECT mc.id, mc.name, mc.destination, mc.status
+    `SELECT mc.id, mc.name, mc.destination, mc.messaging_channel, mc.status
        FROM app_users u
        JOIN managed_campaigns mc ON mc.customer_id = u.customer_id
       WHERE u.id = $1
@@ -98,7 +104,8 @@ export async function listOwnedCampaigns(pool: pg.Pool, userId: string): Promise
     [userId],
   );
   return rows.map((r, i) => ({
-    campaignId: r.id, name: r.name, destination: r.destination, status: r.status,
+    campaignId: r.id, name: r.name, destination: r.destination,
+    messagingChannel: r.messaging_channel, status: r.status,
     isDefault: i === 0,
   }));
 }
