@@ -6,6 +6,18 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-04 — competitor research without pretending visibility proves performance
+
+Published a Hebrew guide for finding active competitor ads on Facebook and
+Instagram through Meta Ad Library. It turns the search into a short research
+workflow around the offer, hook, proof, format, CTA and destination, then links
+that research to the existing campaign setup guide.
+
+The guide explicitly separates what the public library exposes from what it
+does not: a visible or long-running ad is a clue, not proof of leads, profit,
+spend, exact targeting or a winning variant. It ships as crawlable static HTML
+with FAQ schema, a stable Hebrew slug and a dedicated 1200x630 title image.
+
 ### 2026-09-04 — choose campaigns by behavior, not Meta's objective label
 
 Published a Hebrew guide explaining the overlap Meta creates between

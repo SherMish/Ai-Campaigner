@@ -1,6 +1,6 @@
 # Guides (the blog) — `/guides`
 
-**Status:** live. Static HTML generated at build time from Markdown. Five guides
+**Status:** live. Static HTML generated at build time from Markdown. Six guides
 ship; adding more is a Markdown file and, when needed, a tracked public image.
 
 **Source of truth:**
@@ -78,6 +78,7 @@ Run it alone with `npm run --workspace web build:guides`.
 | `קמפיין-פעיל-אין-פניות.md` | Diagnose delivery, lead routing and measurement before changing audiences or creatives |
 | `פיקסל-פייסבוק-בדיקה.md` | Verify that the correct website conversion event fires once at the correct moment |
 | `מעורבות-או-לידים-לוואטסאפ.md` | Choose by conversion location and performance goal instead of trusting the campaign objective label |
+| `מודעות-של-מתחרים-בפייסבוק-ובאינסטגרם.md` | Research active competitor ads without treating visibility, age or repetition as proof of performance |
 
 The two troubleshooting guides form one journey and cross-link directly:
 campaign symptoms first, then the deeper Pixel/event check when the campaign
@@ -88,6 +89,12 @@ The campaign-type guide is linked contextually from the signed-in dashboard for
 messaging and post-engagement campaigns. It explains why an Engagement campaign
 can still open WhatsApp, Instagram Direct or Messenger, while keeping post
 engagement and customer conversations as separate outcomes.
+
+The competitor-research guide teaches the public Meta Ad Library workflow and
+keeps its evidence boundary explicit: visible creative, offer, CTA, platform and
+start date are observable; spend, leads, targeting, profit and the winning
+variant are not. It cross-links with the campaign setup guide so research ends
+in an original test brief rather than copied creative.
 
 ## What a guide needs — the authoring spec
 

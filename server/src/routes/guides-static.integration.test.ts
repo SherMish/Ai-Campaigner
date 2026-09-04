@@ -66,6 +66,16 @@ d("guides are served as real HTML (DB-free)", () => {
     expect(res.text).not.toContain('<div id="root"></div>');
   });
 
+  it("serves the competitor-ads guide as crawlable HTML", async () => {
+    const res = await request(app).get(
+      `/guides/${encodeURIComponent("מודעות-של-מתחרים-בפייסבוק-ובאינסטגרם")}`,
+    );
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("איך לראות את המודעות של המתחרים בפייסבוק ובאינסטגרם");
+    expect(res.text).toContain("FAQPage");
+    expect(res.text).not.toContain('<div id="root"></div>');
+  });
+
   it("serves sitemap.xml and robots.txt, and the sitemap lists the guides", async () => {
     const sitemap = await request(app).get("/sitemap.xml");
     expect(sitemap.status).toBe(200);
@@ -73,6 +83,9 @@ d("guides are served as real HTML (DB-free)", () => {
     expect(sitemap.text).toContain("/guides/קמפיין-פעיל-אין-פניות");
     expect(sitemap.text).toContain("/guides/פיקסל-פייסבוק-בדיקה");
     expect(sitemap.text).toContain("/guides/מעורבות-או-לידים-לוואטסאפ");
+    expect(sitemap.text).toContain(
+      "/guides/מודעות-של-מתחרים-בפייסבוק-ובאינסטגרם",
+    );
 
     const robots = await request(app).get("/robots.txt");
     expect(robots.status).toBe(200);

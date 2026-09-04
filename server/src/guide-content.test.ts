@@ -17,6 +17,12 @@ const pixelGuidePath = fileURLToPath(
 const campaignTypeGuidePath = fileURLToPath(
   new URL("../../content/guides/מעורבות-או-לידים-לוואטסאפ.md", import.meta.url),
 );
+const competitorAdsGuidePath = fileURLToPath(
+  new URL(
+    "../../content/guides/מודעות-של-מתחרים-בפייסבוק-ובאינסטגרם.md",
+    import.meta.url,
+  ),
+);
 const imagePath = fileURLToPath(
   new URL("../../web/public/meta-leads-setup-2026.png", import.meta.url),
 );
@@ -29,12 +35,16 @@ const pixelImagePath = fileURLToPath(
 const campaignTypeImagePath = fileURLToPath(
   new URL("../../web/public/engagement-vs-whatsapp-leads.png", import.meta.url),
 );
+const competitorAdsImagePath = fileURLToPath(
+  new URL("../../web/public/meta-ad-library-competitor-research.png", import.meta.url),
+);
 const guidesCssPath = fileURLToPath(new URL("../../scripts/guides.css", import.meta.url));
 const markdown = fs.readFileSync(guidePath, "utf8");
 const budgetMarkdown = fs.readFileSync(budgetGuidePath, "utf8");
 const noLeadsMarkdown = fs.readFileSync(noLeadsGuidePath, "utf8");
 const pixelMarkdown = fs.readFileSync(pixelGuidePath, "utf8");
 const campaignTypeMarkdown = fs.readFileSync(campaignTypeGuidePath, "utf8");
+const competitorAdsMarkdown = fs.readFileSync(competitorAdsGuidePath, "utf8");
 const guidesCss = fs.readFileSync(guidesCssPath, "utf8");
 
 function expectPngDimensions(path: string, width: number, height: number) {
@@ -169,5 +179,47 @@ describe("Engagement vs messaging-leads guide", () => {
 
   it("ships a 1200x630 PNG title image", () => {
     expectPngDimensions(campaignTypeImagePath, 1200, 630);
+  });
+});
+
+describe("competitor ads research guide", () => {
+  it("ships the exact search intent, stable slug and truthful CTA", () => {
+    expect(competitorAdsMarkdown).toContain(
+      'title: "איך לראות את המודעות של המתחרים בפייסבוק ובאינסטגרם"',
+    );
+    expect(competitorAdsMarkdown).toContain(
+      'seoTitle: "איך לראות מודעות של מתחרים בפייסבוק ובאינסטגרם"',
+    );
+    expect(competitorAdsMarkdown).toContain(
+      'slug: "מודעות-של-מתחרים-בפייסבוק-ובאינסטגרם"',
+    );
+    expect(competitorAdsMarkdown).toContain(
+      'image: "/meta-ad-library-competitor-research.png"',
+    );
+    expect(competitorAdsMarkdown).toContain(
+      "Ads Agent עוזר לעסק לחבר ולנהל קמפיינים קיימים",
+    );
+    expect(competitorAdsMarkdown).not.toContain("נבטיח");
+  });
+
+  it("states the research boundary instead of calling visible ads winners", () => {
+    expect(competitorAdsMarkdown).toContain("הוא מראה **מה פורסם**, לא **מה הצליח**");
+    expect(competitorAdsMarkdown).toContain("כמה כסף הושקע בה");
+    expect(competitorAdsMarkdown).toContain("מי הקהל המדויק שנבחר ב-Ads Manager");
+    expect(competitorAdsMarkdown).toContain(
+      "רמז לכך שהמפרסם בחר להשאיר אותה פעילה",
+    );
+    expect(competitorAdsMarkdown).not.toContain("מודעה מנצחת מוכחת");
+  });
+
+  it("uses the official library, short hyphens and a contextual setup cross-link", () => {
+    expect(competitorAdsMarkdown).toContain("https://www.facebook.com/ads/library/");
+    expect(competitorAdsMarkdown).toContain("/guides/הקמת-קמפיין-לידים-במטא");
+    expect(markdown).toContain("/guides/מודעות-של-מתחרים-בפייסבוק-ובאינסטגרם");
+    expect(competitorAdsMarkdown).not.toMatch(/[–—־]/);
+  });
+
+  it("ships a 1200x630 PNG title image", () => {
+    expectPngDimensions(competitorAdsImagePath, 1200, 630);
   });
 });
