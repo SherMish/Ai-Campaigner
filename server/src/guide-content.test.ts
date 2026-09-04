@@ -14,6 +14,9 @@ const noLeadsGuidePath = fileURLToPath(
 const pixelGuidePath = fileURLToPath(
   new URL("../../content/guides/פיקסל-פייסבוק-בדיקה.md", import.meta.url),
 );
+const campaignTypeGuidePath = fileURLToPath(
+  new URL("../../content/guides/מעורבות-או-לידים-לוואטסאפ.md", import.meta.url),
+);
 const imagePath = fileURLToPath(
   new URL("../../web/public/meta-leads-setup-2026.png", import.meta.url),
 );
@@ -23,11 +26,15 @@ const noLeadsImagePath = fileURLToPath(
 const pixelImagePath = fileURLToPath(
   new URL("../../web/public/meta-pixel-check-guide.png", import.meta.url),
 );
+const campaignTypeImagePath = fileURLToPath(
+  new URL("../../web/public/engagement-vs-whatsapp-leads.png", import.meta.url),
+);
 const guidesCssPath = fileURLToPath(new URL("../../scripts/guides.css", import.meta.url));
 const markdown = fs.readFileSync(guidePath, "utf8");
 const budgetMarkdown = fs.readFileSync(budgetGuidePath, "utf8");
 const noLeadsMarkdown = fs.readFileSync(noLeadsGuidePath, "utf8");
 const pixelMarkdown = fs.readFileSync(pixelGuidePath, "utf8");
+const campaignTypeMarkdown = fs.readFileSync(campaignTypeGuidePath, "utf8");
 const guidesCss = fs.readFileSync(guidesCssPath, "utf8");
 
 function expectPngDimensions(path: string, width: number, height: number) {
@@ -124,5 +131,43 @@ describe("no-leads and Meta Pixel guides (AIC-153)", () => {
   it("ships a 1200x630 PNG title image for each guide", () => {
     expectPngDimensions(noLeadsImagePath, 1200, 630);
     expectPngDimensions(pixelImagePath, 1200, 630);
+  });
+});
+
+describe("Engagement vs messaging-leads guide", () => {
+  it("ships distinct SEO metadata and an honest CTA", () => {
+    expect(campaignTypeMarkdown).toContain('seoTitle: "מעורבות או לידים לוואטסאפ - מה לבחור במטא"');
+    expect(campaignTypeMarkdown).toContain('slug: "מעורבות-או-לידים-לוואטסאפ"');
+    expect(campaignTypeMarkdown).toContain('image: "/engagement-vs-whatsapp-leads.png"');
+    expect(campaignTypeMarkdown).toContain('ctaTitle: "לא בטוחים מה הקמפיין שלכם באמת מודד?"');
+    expect(campaignTypeMarkdown).not.toContain("נבטיח");
+  });
+
+  it("separates objective, conversion location and performance goal", () => {
+    expect(campaignTypeMarkdown).toContain("הקומה הראשונה נותנת כיוון. הקומה השנייה קובעת את ההתנהגות בפועל");
+    expect(campaignTypeMarkdown).toContain("מעורבות בפוסט");
+    expect(campaignTypeMarkdown).toContain("אפליקציות מסרים");
+    expect(campaignTypeMarkdown).toContain("WhatsApp");
+    expect(campaignTypeMarkdown).toContain("Instagram Direct");
+    expect(campaignTypeMarkdown).toContain("Messenger");
+    expect(campaignTypeMarkdown).not.toContain("Engagement הוא תמיד");
+  });
+
+  it("labels the live-account ratio as one directional example, not a benchmark", () => {
+    expect(campaignTypeMarkdown).toContain("בדוגמה אחת מחשבון פעיל");
+    expect(campaignTypeMarkdown).toContain("לא benchmark");
+    expect(campaignTypeMarkdown).toContain("המדדים אינם זהים לחלוטין");
+    expect(campaignTypeMarkdown).not.toContain("4 מתוך 5");
+  });
+
+  it("uses normal short hyphens and cites primary guidance", () => {
+    expect(campaignTypeMarkdown).not.toMatch(/[–—־]/);
+    expect(campaignTypeMarkdown).toContain("https://whatsappbusiness.com/resources/");
+    expect(campaignTypeMarkdown).toContain("https://whatsappbusiness.com/products/");
+    expect(campaignTypeMarkdown).toContain("https://www.facebookblueprint.com/");
+  });
+
+  it("ships a 1200x630 PNG title image", () => {
+    expectPngDimensions(campaignTypeImagePath, 1200, 630);
   });
 });

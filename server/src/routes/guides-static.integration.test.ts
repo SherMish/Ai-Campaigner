@@ -56,12 +56,23 @@ d("guides are served as real HTML (DB-free)", () => {
     }
   });
 
+  it("serves the campaign-type guide as crawlable HTML", async () => {
+    const res = await request(app).get(
+      `/guides/${encodeURIComponent("מעורבות-או-לידים-לוואטסאפ")}`,
+    );
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("קמפיין מעורבות או לידים לוואטסאפ");
+    expect(res.text).toContain("FAQPage");
+    expect(res.text).not.toContain('<div id="root"></div>');
+  });
+
   it("serves sitemap.xml and robots.txt, and the sitemap lists the guides", async () => {
     const sitemap = await request(app).get("/sitemap.xml");
     expect(sitemap.status).toBe(200);
     expect(sitemap.text).toContain("/guides");
     expect(sitemap.text).toContain("/guides/קמפיין-פעיל-אין-פניות");
     expect(sitemap.text).toContain("/guides/פיקסל-פייסבוק-בדיקה");
+    expect(sitemap.text).toContain("/guides/מעורבות-או-לידים-לוואטסאפ");
 
     const robots = await request(app).get("/robots.txt");
     expect(robots.status).toBe(200);

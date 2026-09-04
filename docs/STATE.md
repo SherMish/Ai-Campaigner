@@ -6,6 +6,20 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-04 — choose campaigns by behavior, not Meta's objective label
+
+Published a Hebrew guide explaining the overlap Meta creates between
+Engagement, messaging conversations and lead optimization. The campaign name
+and top-level objective are not enough to tell a business what the campaign
+does; the conversion location, performance goal and selected messaging apps
+are the useful facts.
+
+Messaging and post-engagement campaigns now link to that guide from the
+customer dashboard. Website-only campaigns do not show the link. The guide
+uses current first-party WhatsApp/Meta instructions, keeps one live-account
+click-to-conversation ratio explicitly framed as a directional example rather
+than a benchmark, and ships with its own SEO metadata, FAQ and 1200x630 image.
+
 ### 2026-09-04 — automation-off campaigns lost their ad sets and ads (AIC-196)
 
 The same coupling as AIC-191, one layer further in.

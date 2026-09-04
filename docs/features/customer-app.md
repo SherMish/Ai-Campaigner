@@ -157,6 +157,12 @@ rail is **de-duplicated by creative name** — the same design running under two
 audiences is one "creative" to a non-technical owner, even though it's two Meta
 ad objects.
 
+The campaign summary includes a contextual guide link for messaging and
+post-engagement campaigns: `/guides/מעורבות-או-לידים-לוואטסאפ`. It is hidden
+for website-only campaigns, where the Engagement-vs-messaging distinction does
+not help the customer understand the selected campaign. The guide opens as a
+real static page rather than inside the SPA.
+
 **Opt-in audience details (AIC-37):** below the KPIs, a collapsed **"הצג פירוט"**
 expander — closed by default, never the landing view — reveals the campaign's
 **per-audience** breakdown (each ad set named by its human dimension: age, gender,

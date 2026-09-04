@@ -1,6 +1,6 @@
 # Guides (the blog) — `/guides`
 
-**Status:** live. Static HTML generated at build time from Markdown. Four guides
+**Status:** live. Static HTML generated at build time from Markdown. Five guides
 ship; adding more is a Markdown file and, when needed, a tracked public image.
 
 **Source of truth:**
@@ -77,11 +77,17 @@ Run it alone with `npm run --workspace web build:guides`.
 | `הקמת-קמפיין-לידים-במטא.md` | Set up a WhatsApp or website lead campaign without skipping destination and measurement |
 | `קמפיין-פעיל-אין-פניות.md` | Diagnose delivery, lead routing and measurement before changing audiences or creatives |
 | `פיקסל-פייסבוק-בדיקה.md` | Verify that the correct website conversion event fires once at the correct moment |
+| `מעורבות-או-לידים-לוואטסאפ.md` | Choose by conversion location and performance goal instead of trusting the campaign objective label |
 
 The two troubleshooting guides form one journey and cross-link directly:
 campaign symptoms first, then the deeper Pixel/event check when the campaign
 uses a website destination. Both point back to the setup guide rather than
 repeating the full build tutorial.
+
+The campaign-type guide is linked contextually from the signed-in dashboard for
+messaging and post-engagement campaigns. It explains why an Engagement campaign
+can still open WhatsApp, Instagram Direct or Messenger, while keeping post
+engagement and customer conversations as separate outcomes.
 
 ## What a guide needs — the authoring spec
 

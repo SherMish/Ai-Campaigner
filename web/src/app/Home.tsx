@@ -45,6 +45,7 @@ import { StatusPill } from "./components";
 import { useSharedOverview, invalidateOverview, selectCampaign, selectedCampaign } from "./overview-store";
 import { loadReceipt, clearReceipt, type AdditionReceipt } from "./addition-receipt";
 import { pauseAction, pauseNote } from "./pause-control";
+import { shouldShowCampaignTypeGuide } from "./campaign-type-guide";
 
 // AIC-175 — "it worked", for the customer who lands here right after adding.
 //
@@ -757,6 +758,15 @@ export function Home() {
                   one screen showed both answers at once. */}
               <div className="summary-row"><span className="k">{h.sLeads}</span><b>{hasLiveCampaign && hasRangeData ? leads : L.none}</b></div>
             </div>
+            {shouldShowCampaignTypeGuide(ov.campaign?.destination) && (
+              <a
+                className="link"
+                href="/guides/מעורבות-או-לידים-לוואטסאפ"
+                style={{ display: "inline-block", marginTop: 14, fontSize: "0.88rem" }}
+              >
+                {h.campaignTypeGuide}
+              </a>
+            )}
           </div>
           {r && <LeadsGraph isEngagement={isEngagementCampaign} daily={r.daily} />}
         </div>

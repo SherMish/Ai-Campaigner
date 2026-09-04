@@ -1272,6 +1272,7 @@ export const strings = {
         // empty slot the customer has to interpret.
         engagementScopeTitle: "מה נמדד בקמפיין הזה",
         engagementScopeBody: "אנחנו משווים בין המודעות לפי עלות למעורבות ומזהים איזה תוכן עובד. אין כאן שאלת איכות פניות — הקמפיין לא אוסף פניות — ולא נמליץ על הגדלת תקציב.",
+        campaignTypeGuide: "מעורבות או לידים - מה ההבדל?",
         // One explicit range switcher replaced the old "today card + 7-day
         // KPIs" split, which read as two contradictory sets of numbers. Now
         // there's one set and the customer picks the window.
