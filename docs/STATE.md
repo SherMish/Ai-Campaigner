@@ -6,6 +6,22 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-10 — the admin user list counted campaigns as users
+
+Four users rendered as twelve rows, with one email repeated nine times and a
+header reading "משתמשים (12/12)". `listAppUsers` LEFT JOINs `managed_campaigns`,
+so a user was multiplied by their campaign count — invisible until OAuth
+adoption started giving one customer nine campaigns.
+
+`DISTINCT ON (u.id)` with a deterministic order (the campaign linked to Meta,
+then the oldest), plus a `campaign_count` shown beside the status: a row
+displaying one of nine campaigns' state, with nothing saying there are nine,
+states a verdict it cannot support.
+
+Proved with a DB integration test that reproduces the fan-out — three seeded
+users came back as eleven rows before the fix.
+
+
 ### 2026-09-10 — AIC-189: an admin can view a customer's dashboard, read-only
 
 "כניסה כמשתמש" on the admin משתמשים page mints a 30-minute token for that

@@ -24,6 +24,10 @@ export interface UserListRow {
   subscriptionStatus: SubscriptionStatus | null;
   accessHealth: AccessHealth | null;
   campaignStatus: CampaignStatus | null;
+  /** How many campaigns this customer has. The row shows the state of ONE of
+   *  them (see the DISTINCT ON below), so the count is what stops that from
+   *  reading as the whole account. */
+  campaignCount: number;
   connectionReadiness: ConnectionReadinessReason | null;
   // AIC-103: see CustomerListRow's twin field (services/customers.ts) — same
   // health check, same table, surfaced here too since a user with a business
@@ -33,8 +37,23 @@ export interface UserListRow {
 }
 
 export async function listAppUsers(pool: pg.Pool): Promise<UserListRow[]> {
+  // DISTINCT ON (u.id) — one row per USER.
+  //
+  // The bug it fixes: every LEFT JOIN below can match more than once, and
+  // managed_campaigns routinely does now that a customer can adopt their whole
+  // ad account (AIC-186). A customer with nine campaigns rendered as nine
+  // "users", and the header counted twelve where there were four.
+  //
+  // The ORDER BY is what makes the surviving row deterministic rather than
+  // whichever Postgres happened to emit first: the campaign a person would
+  // consider the main one — linked to Meta, then oldest.
+  //
+  // `campaign_count` is not decoration. Showing ONE of nine campaigns' status
+  // with nothing saying there are nine states a verdict the row cannot support.
   const { rows } = await pool.query(
-    `SELECT u.id, u.email, u.name, u.created_at,
+    `SELECT DISTINCT ON (u.id)
+            u.id, u.email, u.name, u.created_at,
+            (SELECT count(*) FROM managed_campaigns mc2 WHERE mc2.customer_id = c.id) AS campaign_count,
             c.id AS customer_id, c.business_name, c.is_test,
             s.status AS subscription_status,
             conn.access_health, conn.page_id,
@@ -46,9 +65,13 @@ export async function listAppUsers(pool: pg.Pool): Promise<UserListRow[]> {
      LEFT JOIN meta_connections conn ON conn.customer_id = c.id
      LEFT JOIN ad_accounts aa     ON aa.connection_id = conn.id
      LEFT JOIN managed_campaigns mc ON mc.customer_id = c.id
-     ORDER BY u.created_at DESC`,
+     -- DISTINCT ON requires u.id to lead the ORDER BY; the list is re-sorted
+     -- into created_at order below, where it is not fighting the de-duplication.
+     ORDER BY u.id, (mc.meta_campaign_id IS NULL), mc.created_at ASC`,
   );
-  return rows.map((r) => ({
+  return rows
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .map((r) => ({
     id: r.id,
     email: r.email,
     name: r.name,
@@ -59,6 +82,7 @@ export async function listAppUsers(pool: pg.Pool): Promise<UserListRow[]> {
     subscriptionStatus: r.subscription_status ?? null,
     accessHealth: r.access_health ?? null,
     campaignStatus: r.campaign_status ?? null,
+    campaignCount: Number(r.campaign_count ?? 0),
     ...(r.customer_id
       ? (() => {
           const input = {

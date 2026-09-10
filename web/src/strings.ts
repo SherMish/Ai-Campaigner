@@ -369,6 +369,8 @@ export const strings = {
       deleteCancel: "ביטול",
       deleteRowTitle: "מחיקת נתונים",
       // AIC-189 — the admin's "view this customer's dashboard" button.
+      // A count, not a status: the row shows ONE campaign's state.
+      ofCampaigns: (n: number) => `מתוך ${n} קמפיינים`,
       impersonate: "כניסה כמשתמש",
       impersonateTitle: "צפייה בדשבורד של הלקוח (צפייה בלבד)",
       impersonateFailed: "לא הצלחנו לפתוח את הצפייה.",

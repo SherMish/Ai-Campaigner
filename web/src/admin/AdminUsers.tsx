@@ -18,6 +18,8 @@ interface UserRow {
   subscriptionStatus: string | null;
   accessHealth: string | null;
   campaignStatus: string | null;
+  /** The row shows the state of ONE campaign; this says how many there are. */
+  campaignCount: number;
   connectionReadiness: "no_campaign" | "not_launched" | "missing_page" | "connection_issue" | "incomplete_config" | null;
 }
 
@@ -167,7 +169,17 @@ export function AdminUsers() {
                       </span>
                     )}
                   </td>
-                  <td>{row.campaignStatus ?? t.none}</td>
+                  <td>
+                    {row.campaignStatus ?? t.none}
+                    {/* Only when there is more than one: a row showing one
+                        campaign's status out of nine, with nothing saying so,
+                        states a verdict it cannot support. */}
+                    {row.campaignCount > 1 && (
+                      <span className="muted" style={{ marginInlineStart: 6, fontSize: "0.78rem" }}>
+                        {u.ofCampaigns(row.campaignCount)}
+                      </span>
+                    )}
+                  </td>
                   <td>
                     {/* AIC-189 — open this customer's own dashboard, read-only.
                         The session replaces the admin's token in this tab, which
