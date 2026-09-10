@@ -3,19 +3,15 @@ import { Link, useNavigate } from "react-router-dom";
 import { strings } from "../strings";
 import { getOverview, startMetaOauth, type CustomerOverview } from "../api";
 import { Brand, Stepper, SupportCard, StatusPill, WA } from "./components";
+import { onboardingStep, STEP_INDEX, type OnboardingStep } from "./onboarding-step";
 
 const a = strings.he.app;
 const o = a.onboarding;
 
-// The onboarding_status values (DB) → which design card + stepper index to show.
-type S = "A" | "C" | "D" | "F";
-const STATUS_STATE: Record<string, S> = {
-  call_scheduled: "A",
-  meta_connection_required: "C",
-  campaign_under_review: "D",
-  ready: "F",
-};
-const STEP_INDEX: Record<S, number> = { A: 1, C: 2, D: 3, F: 4 };
+// Which card to show lives in onboarding-step.ts — a pure module, because the
+// interesting case (a just-registered user with no customer row) was wrong here
+// and no test could reach it inside a component.
+type S = OnboardingStep;
 
 export function Onboarding() {
   const nav = useNavigate();
@@ -33,7 +29,7 @@ export function Onboarding() {
       .finally(() => setLoading(false));
   }, [nav]);
 
-  const s: S = STATUS_STATE[ov?.customer?.onboardingStatus ?? ""] ?? "A";
+  const s: S = onboardingStep(ov?.customer);
   const name = ov?.account.name?.trim();
 
   return (

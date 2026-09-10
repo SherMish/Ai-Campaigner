@@ -195,6 +195,22 @@ The whole landing — connection, ad account, every campaign — is one
 transaction. A connection carrying three of a customer's five campaigns is worse
 than no connection, because the switcher would silently omit their work.
 
+### Which step a new user lands on
+
+A user who has just registered has **no customer row at all** — signup writes
+`app_users` with `customer_id = NULL`, and `/overview` returns `customer: null`.
+
+`Onboarding.tsx` used to read `customer?.onboardingStatus ?? ""` and fall back to
+step "A", so a newly registered user was shown **"מתחילים בשיחת היכרות"** — book
+an intro call — and the connect button was unreachable. That is the flow
+backwards: connecting is what *creates* the customer, so it cannot require one to
+already exist.
+
+`onboarding-step.ts` now answers this, and `null` means **connect**. An
+unrecognised *status* still falls back to "A": that is a real customer whose
+state we cannot read, and guessing "connect" for someone who may already be
+connected is a worse wrong answer than the neutral first step.
+
 ### The customer row
 
 Signup creates an `app_user` with `customer_id = NULL`; a `customers` row has

@@ -6,6 +6,21 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-10 — AIC-187: a newly registered user was shown "book a call", not "connect"
+
+Found by registering a real account against production. Signup writes
+`app_users` with `customer_id = NULL`, so `/overview` returns `customer: null`;
+`Onboarding.tsx` read `customer?.onboardingStatus ?? ""` and fell back to step
+"A", the intro-call card. The OAuth button lives on step "C", so the one thing a
+new user is supposed to do was unreachable — and connecting is precisely what
+creates the customer, so it cannot require one to exist first.
+
+The mapping moved to `web/src/app/onboarding-step.ts`, where a test can reach it
+(web tests run in `node`; no component is testable). `null` → connect. An
+unrecognised *status* still falls back to "A" — a real customer whose state we
+cannot read is a different thing from a user with no customer.
+
+
 ### 2026-09-10 — AIC-187 follow-up: two bugs found by testing the flow in a browser
 
 **The success redirect pointed at a route that does not exist.** The callback
