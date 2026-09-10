@@ -7,6 +7,7 @@ import express from "express";
 import { adminRouter } from "./routes/admin.js";
 import { adminBuilderRouter } from "./routes/admin-builder.js";
 import { appRouter } from "./routes/app.js";
+import { metaOauthRouter } from "./routes/meta-oauth.js";
 import { authRouter } from "./routes/auth.js";
 import { builderRouter } from "./routes/builder.js";
 import { additionsRouter } from "./routes/additions.js";
@@ -91,6 +92,9 @@ export function createApp() {
   });
 
   api.use("/auth", authRouter);
+  // AIC-186 — customer-facing Meta OAuth. Outside /app because the callback
+  // is reached by Meta's redirect and carries no session (see the router).
+  api.use("/meta/oauth", metaOauthRouter);
   api.use("/app", appRouter);
   api.use("/app/builder", builderRouter);
   api.use("/app/additions", additionsRouter);

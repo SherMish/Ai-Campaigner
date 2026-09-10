@@ -94,3 +94,148 @@ customer.
   token is the remaining step.
 - The scheduled health check is wired by the ingestion scheduler (AIC-6); this
   ticket provides the on-read `verify()` it calls.
+
+---
+
+## Customer-facing OAuth (AIC-186)
+
+**Status:** built, shipped behind `META_OAUTH_ENABLED`. The manual partner-share
+path above is unchanged and remains the only one that works for a customer
+without a role on our Meta app — see "What is still blocked" below.
+
+**Source of truth:**
+- Dialog + env: `server/src/meta/oauth-config.ts`
+- State: `server/src/meta/oauth-state.ts`
+- Token at rest: `server/src/meta/token-crypto.ts`
+- Meta calls: `server/src/meta/oauth-exchange.ts`
+- Persistence: `server/src/meta/oauth-store.ts`
+- Routes: `server/src/routes/meta-oauth.ts`
+- Customer copy: `web/src/strings.ts` (`onboarding.oauth*`), `web/src/app/Onboarding.tsx`
+
+**Lock-in tests:** `oauth-config.test.ts`, `oauth-state.test.ts`,
+`oauth-exchange.test.ts`, `token-crypto.test.ts`,
+`oauth-store.integration.test.ts` (DB, self-skips without `DATABASE_URL`).
+
+### The flow
+
+```
+customer (signed in)
+  → POST /api/meta/oauth/start          authed; returns a URL, does not redirect
+  → facebook.com/v21.0/dialog/oauth     config_id 2135474130384425
+  → GET  /api/meta/oauth/callback       unauthed; identity comes from `state`
+  → /app/onboarding?meta=connected
+```
+
+### Why `state` carries identity
+
+Our session is a JWT in an `Authorization` header. **A browser sends no
+`Authorization` header on a top-level navigation**, so neither the redirect out
+nor Meta's redirect back can be authenticated the usual way. The customer's
+identity therefore has to travel inside `state`, which makes that parameter
+load-bearing in a way the usual "CSRF nonce" framing does not cover. It resists
+three separate attacks, by three separate mechanisms:
+
+| attack | defence |
+| --- | --- |
+| forge a state for another user | HMAC-SHA256 over `(nonce, userId)`, domain-separated from session tokens |
+| replay a captured callback URL | the nonce is spent by a single `UPDATE … WHERE spent_at IS NULL AND expires_at > now()` |
+| redeem an abandoned consent later | 15-minute TTL, enforced in the same predicate |
+
+The spend is one statement on purpose. `SELECT`-then-`UPDATE` is the same code
+with a race in it, and the race is "two concurrent callbacks both succeed" —
+covered by a test that fires both at once and asserts exactly one wins.
+
+Missing, already-spent and expired all return the **same** message. Telling them
+apart tells an attacker which nonces are real.
+
+### Token type, and why not a user token
+
+The configuration issues a **System User access token**: it does not expire. A
+user access token lasts 60 days and dies on a password change, which for a
+product whose ingestion runs at 03:00 means every customer silently stops being
+managed twice a year.
+
+Tokens are stored **AES-256-GCM encrypted** under `META_TOKEN_ENC_KEY`
+(`token-crypto.ts`). GCM rather than CBC because it authenticates: a tampered
+ciphertext fails to decrypt instead of decrypting to garbage we would then send
+to Meta as a Bearer credential. The key is checked at `/start`, not at the
+callback — discovering we cannot store a token *after* the customer has granted
+access means throwing away a real consent.
+
+### What a grant must contain
+
+`completeOauth` verifies before persisting anything:
+
+- `debug_token` reports the token valid, and carries all six required scopes
+  (`ads_management`, `ads_read`, `business_management`, `pages_show_list`,
+  `pages_read_engagement`, `pages_manage_ads`). `instagram_basic` is **wanted,
+  never required** — many customers have no Instagram business account.
+- at least one ad account, and at least one Page.
+
+A customer can complete Meta's dialog having declined an asset, and the token
+comes back perfectly valid and unusable. Checking here means the failure is
+reported at connect time, naming what is missing, instead of surfacing as a
+permission error during a 3am tick.
+
+### Adoption: every campaign, none automated
+
+Discovery reads **every** campaign on the granted ad account into
+`managed_campaigns`, so the AIC-186 switcher shows the customer their whole
+account rather than one campaign an operator picked.
+
+Every adopted campaign is written with **`automation_enabled = false`**, and the
+column defaults to `true`, so it is set explicitly on every insert.
+
+This is the live-account safety boundary in schema form. Reading a customer's
+existing campaigns is **observation**; letting the engine change them is an
+**action they have not asked for**. The two must never be the same act. Turning
+automation on stays a deliberate, per-campaign decision.
+
+The whole landing — connection, ad account, every campaign — is one
+transaction. A connection carrying three of a customer's five campaigns is worse
+than no connection, because the switcher would silently omit their work.
+
+### The customer row
+
+Signup creates an `app_user` with `customer_id = NULL`; a `customers` row has
+always been an operator's job. Connecting is the moment the customer becomes
+real, so the callback creates one if none exists — otherwise "connect right
+after registering" has nothing to attach to. The lookup is `FOR UPDATE` so a
+double-submitted callback cannot create two customers for one user.
+
+`business_name` is `NOT NULL` and the business profile has not been collected
+yet, so the ad account's own name is used and the customer corrects it at the
+profile step.
+
+### Environment
+
+| variable | meaning |
+| --- | --- |
+| `META_OAUTH_ENABLED` | `"true"` to serve the routes at all. Anything else → 404. |
+| `META_LOGIN_CONFIG_ID` | Business Login configuration (`2135474130384425`). |
+| `META_OAUTH_REDIRECT_URI` | Must match Meta's whitelist **byte for byte** — Meta compares it as a string between the dialog and the exchange. |
+| `META_TOKEN_ENC_KEY` | 32 bytes, base64 (`openssl rand -base64 32`). |
+| `APP_BASE_URL` | Where the callback redirects the customer afterwards. |
+
+`META_APP_ID` and `META_APP_SECRET` already exist for the probe.
+
+### What is still blocked (Meta side, not code)
+
+As of 2026-09-10 the app has `business_verification_passes: false` and
+`privileges: []` — Advanced Access to nothing, never submitted for review. Until
+Business Verification and App Review clear, **this flow works only for people
+holding a role on the app** (admin/developer/tester). That is why the flag
+exists and why the manual path stays.
+
+### Known gaps
+
+- **The token is stored but not yet used.** Every adapter still reads
+  `META_SYSTEM_USER_TOKEN` from the environment. Threading a per-connection
+  token through `MetaClient` is the next unit of work; until it lands, an
+  OAuth-connected customer is discovered but operated through the shared System
+  User, which only works if the assets are also shared with our portfolio.
+- **The first ad account and Page win.** A customer who grants four ad accounts
+  gets the first one. `granted_*` records all of them so a picker can be added
+  without re-consent, but no picker exists yet.
+- **No revocation webhook.** Access loss is still discovered by
+  `ConnectionService.verify` on a tick, not pushed by Meta.

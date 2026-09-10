@@ -1162,6 +1162,21 @@ export const strings = {
         connectSub: "כדי שנוכל לעקוב ולנהל את הקמפיין, צריך לתת לנו גישה לחשבון הפרסום.",
         connectCta: "לחיבור Meta",
         connectHelp: "צריכים עזרה? נעשה את זה יחד בשיחה.",
+        // AIC-186 — the one-click path. Kept beside connectCta (the manual
+        // partner-share route) because both remain live: OAuth needs Meta's
+        // App Review, and until that clears the manual path is the only one
+        // that works for a customer without a role on our app.
+        oauthCta: "התחברות עם Facebook",
+        oauthSub: "מתחברים פעם אחת, ואנחנו רואים את כל הקמפיינים בחשבון.",
+        oauthStarting: "מעבירים אותך ל-Facebook…",
+        oauthManual: "להתחברות ידנית",
+        // The three outcomes the callback can redirect back with. Never a bare
+        // "failed" — a customer who granted access and landed on a blank screen
+        // has no way to tell whether it worked.
+        oauthDone: "החשבון חובר. אנחנו מושכים את הקמפיינים שלכם — זה לוקח רגע.",
+        oauthRefused: "החיבור לא הושלם. צריך לאשר גישה לחשבון פרסום ולעמוד אחד לפחות.",
+        oauthFailed: "משהו השתבש בחיבור. אפשר לנסות שוב, או שנעשה את זה יחד.",
+        oauthExpired: "הקישור פג. אפשר להתחיל את החיבור מחדש.",
         reviewBadge: "בתהליך",
         reviewTitle: "אנחנו עוברים על הקמפיין",
         reviewSub: "בודקים שהמבנה, התקציב והמודעות מתאימים לניהול דרך השירות.",

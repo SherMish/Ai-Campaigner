@@ -146,7 +146,11 @@ Set in Railway (and mirrored in `server/.env.example` as placeholders):
 
 ## Per-customer onboarding (the call)
 
-Manual, human-led. No customer-facing OAuth in P0.
+Manual, human-led — and still the default. AIC-186 added a customer-facing
+Facebook Login for Business flow behind `META_OAUTH_ENABLED`; it is documented
+in [features/meta-connection.md](features/meta-connection.md) and is not yet
+usable by customers who hold no role on our Meta app (App Review and Business
+Verification are both outstanding).
 
 **Before the call, have ready:** our Business Portfolio ID **`2491237118040524`**.
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { strings } from "../strings";
-import { getOverview, type CustomerOverview } from "../api";
+import { getOverview, startMetaOauth, type CustomerOverview } from "../api";
 import { Brand, Stepper, SupportCard, StatusPill, WA } from "./components";
 
 const a = strings.he.app;
@@ -75,6 +75,61 @@ export function Onboarding() {
   );
 }
 
+// AIC-186 — the connect step, now with the one-click path first.
+//
+// Both routes stay: OAuth needs Meta App Review, and until that clears it works
+// only for people holding a role on our app. The manual partner-share link
+// below it is what every other customer still uses, so it is a visible
+// alternative rather than a fallback nobody can find.
+function ConnectCard({ nav }: { nav: ReturnType<typeof useNavigate> }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  // The callback redirects back here with ?meta=…; a fresh page load is the
+  // only channel it has, so the outcome is read from the URL.
+  const outcome = new URLSearchParams(window.location.search).get("meta");
+  const reason = new URLSearchParams(window.location.search).get("reason");
+  const notice =
+    outcome === "connected" ? o.oauthDone
+    : outcome === "refused" ? o.oauthRefused
+    : outcome === "failed" ? (reason === "link_expired" ? o.oauthExpired : o.oauthFailed)
+    : null;
+
+  async function go() {
+    setBusy(true);
+    setFailed(null);
+    try {
+      // Assign rather than push: leaving our SPA for Meta is a navigation, and
+      // the customer coming Back should land on the step, not mid-redirect.
+      window.location.assign(await startMetaOauth());
+    } catch {
+      // Never leave the button spinning on a failure the customer cannot see.
+      setBusy(false);
+      setFailed(o.oauthFailed);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h3 style={{ fontSize: "1.4rem" }}>{o.connectTitle}</h3>
+      <p className="muted" style={{ margin: "12px 0 22px" }}>{o.oauthSub}</p>
+      {notice && (
+        <p className="muted" style={{ marginBottom: 16 }} role="status">{notice}</p>
+      )}
+      {failed && (
+        <p className="muted" style={{ marginBottom: 16 }} role="alert">{failed}</p>
+      )}
+      <button className="btn btn-primary" onClick={go} disabled={busy}>
+        {busy ? o.oauthStarting : o.oauthCta}
+      </button>
+      <p className="muted" style={{ marginTop: 16, fontSize: "0.9rem" }}>
+        <button className="link" onClick={() => nav("/connect")}>{o.oauthManual}</button>
+        {" · "}{o.connectHelp}
+      </p>
+    </div>
+  );
+}
+
 function card(s: S, nav: ReturnType<typeof useNavigate>) {
   if (s === "A")
     return (
@@ -86,15 +141,7 @@ function card(s: S, nav: ReturnType<typeof useNavigate>) {
         </div>
       </div>
     );
-  if (s === "C")
-    return (
-      <div className="card">
-        <h3 style={{ fontSize: "1.4rem" }}>{o.connectTitle}</h3>
-        <p className="muted" style={{ margin: "12px 0 22px" }}>{o.connectSub}</p>
-        <button className="btn btn-primary" onClick={() => nav("/connect")}>{o.connectCta}</button>
-        <p className="muted" style={{ marginTop: 16, fontSize: "0.9rem" }}>{o.connectHelp}</p>
-      </div>
-    );
+  if (s === "C") return <ConnectCard nav={nav} />;
   if (s === "D")
     return (
       <div className="card">

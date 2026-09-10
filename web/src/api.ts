@@ -1095,3 +1095,14 @@ export function adAccountLabel(
   if (!a) return "";
   return a.name.trim() || a.metaAdAccountId;
 }
+
+// AIC-186 — start the Meta OAuth flow.
+//
+// Returns a URL rather than redirecting from the server, because the request
+// that proves who the customer is has to carry the Authorization header — and a
+// browser sends none on a top-level navigation. So the SPA asks (authenticated,
+// via fetch), then navigates to what it gets back.
+export async function startMetaOauth(): Promise<string> {
+  const { url } = await api<{ url: string }>("/meta/oauth/start", { method: "POST" });
+  return url;
+}

@@ -6,6 +6,36 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-10 — AIC-186: the customer connects Meta themselves
+
+Facebook Login for Business, shown on the existing `meta_connection_required`
+onboarding step. Meta app `1762330388097443`, configuration `2135474130384425`,
+System User token type, seven granular scopes — the same set the working
+production token already carries, minus nothing and plus nothing.
+
+Behind `META_OAUTH_ENABLED`. The manual partner-share path is untouched and is
+still the only one that works for a customer without a role on our app: the app
+has Advanced Access to nothing and has never been submitted for review, and
+Business Verification has not passed.
+
+The design turns on one constraint: our session is a JWT in an `Authorization`
+header, and a browser sends no such header on a top-level navigation. Identity
+therefore travels in `state` — HMAC-signed, single-use via a spent-nonce
+`UPDATE`, 15-minute TTL. Missing, spent and expired deliberately return the same
+message.
+
+Adoption pulls **every** campaign on the granted ad account into the switcher,
+each with `automation_enabled = false`. Discovering a customer's campaigns is
+observation; automating them is an action they did not ask for.
+
+Migration 056. Tokens are AES-256-GCM at rest. 40 new tests, including a
+concurrency test that fires two callbacks at the same nonce and asserts exactly
+one wins.
+
+Not yet done: the stored token is not used — every adapter still reads
+`META_SYSTEM_USER_TOKEN`. See docs/features/meta-connection.md.
+
+
 ### 2026-09-04 — competitor research without pretending visibility proves performance
 
 Published a Hebrew guide for finding active competitor ads on Facebook and
