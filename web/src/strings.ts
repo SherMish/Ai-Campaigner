@@ -1144,7 +1144,30 @@ export const strings = {
         eyebrow: "סטטוס ההקמה",
         greeting: "אנחנו מקימים את הניהול",
         greetingHi: "שלום",
-        steps: ["החשבון נפתח", "שיחת היכרות", "חיבור Meta", "בדיקת הקמפיין", "מוכנים לניהול"],
+        // AIC-188 — three steps. "שיחת היכרות" and "בדיקת הקמפיין" are gone:
+        // both belonged to an operator-led flow (an intro call, then a human
+        // reviewing the campaign), and neither happens for a customer who
+        // connects themselves. A step nobody advances is a wall, not a step.
+        steps: ["החשבון נפתח", "פרטים על העסק", "חיבור Meta"],
+        bizTitle: "קצת על העסק",
+        bizSub: "שני פרטים, וזהו. נשתמש בהם כדי לכתוב מודעות שנשמעות כמו העסק שלכם.",
+        bizNameLabel: "שם העסק",
+        bizNamePlaceholder: "לדוגמה: לק ג׳ל תל אביב",
+        bizSiteLabel: "אתר העסק",
+        bizSiteOptional: "לא חובה",
+        bizSitePlaceholder: "lakgel.co.il",
+        bizSave: "שמירה והמשך",
+        bizSaving: "שומרים…",
+        // One message per refusal. A form that says only "לא הצלחנו" leaves the
+        // person guessing which of two fields is wrong.
+        bizErr: {
+          name_required: "צריך למלא את שם העסק.",
+          name_too_short: "שם העסק קצר מדי.",
+          name_too_long: "שם העסק ארוך מדי.",
+          url_too_long: "כתובת האתר ארוכה מדי.",
+          url_not_http: "כתובת האתר לא נראית תקינה. אפשר גם להשאיר ריק.",
+          failed: "לא הצלחנו לשמור. אפשר לנסות שוב.",
+        },
         done: "הושלם",
         now: "עכשיו",
         later: "בהמשך",

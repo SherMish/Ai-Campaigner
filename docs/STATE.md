@@ -6,6 +6,23 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-10 — AIC-188: onboarding is three steps, and the dashboard is gated
+
+`החשבון נפתח → פרטים על העסק → חיבור Meta → dashboard`. The intro call and the
+campaign-review step are dropped: both belonged to an operator-led flow, neither
+happens for a self-serve customer, and zero customers were in either state.
+
+The new middle step creates the customer row, which is why it comes first — the
+first OAuth run produced a customer named `2181076988590009` (the ad account's
+own name), and that value feeds ad copy generation. Migration 057 adds
+`customers.website_url`.
+
+`OnboardingGate` now wraps every `/app/*` route: an unfinished account is sent
+back to onboarding instead of shown an empty dashboard. It shares one function
+with the onboarding screen, because two implementations of "is this account
+finished" drift, and the drift is a customer bounced between two screens.
+
+
 ### 2026-09-10 — AIC-187: a connected customer lands on the dashboard
 
 First real end-to-end OAuth run, on a customer created from scratch: all seven

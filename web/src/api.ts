@@ -1106,3 +1106,14 @@ export async function startMetaOauth(): Promise<string> {
   const { url } = await api<{ url: string }>("/meta/oauth/start", { method: "POST" });
   return url;
 }
+
+// AIC-188 — onboarding step 2. Creates the customer if the user has none.
+export async function saveBusinessDetails(input: {
+  businessName: string;
+  websiteUrl: string;
+}): Promise<void> {
+  await api<{ ok: true }>("/app/business-details", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}

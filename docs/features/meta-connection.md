@@ -211,6 +211,37 @@ unrecognised *status* still falls back to "A": that is a real customer whose
 state we cannot read, and guessing "connect" for someone who may already be
 connected is a worse wrong answer than the neutral first step.
 
+### Onboarding is three steps (AIC-188)
+
+```
+1  החשבון נפתח        signup
+2  פרטים על העסק      business name (required) + website (optional)  ← creates the customer
+3  חיבור Meta         OAuth                                          → dashboard
+```
+
+`שיחת היכרות` and `בדיקת הקמפיין` are gone. Both belonged to an operator-led
+flow — an intro call, then a human reviewing the campaign — and neither happens
+for a customer who connects themselves. A step nobody advances is a wall.
+
+**Step 2 has to come first**, because the customer row is created there. The
+first real OAuth run produced a customer named `2181076988590009` — the ad
+account's own name — and that value feeds ad copy generation. Asking before the
+connection also removes the chicken-and-egg: OAuth now attaches to a customer
+that already exists and already has a real name.
+
+`onboarding-step.ts` decides the step from `(customer, connection)`, and a
+**healthy connection** is the signal — not `onboarding_status`. The status is a
+claim written once; health is re-verified every tick, and when they disagree
+(access revoked in Meta after the fact) the connect step is the only screen
+where the customer can act.
+
+`dashboardIsOpen` is the same function read from the other side, and
+`OnboardingGate` applies it to every `/app/*` route: an account that still owes
+details or a connection is sent back to `/onboarding` rather than shown an empty
+dashboard that reads as "your account is broken". A **failed** overview read
+leaves the dashboard open — "I could not ask" is not "the answer is no", the
+same rule the connection health check learned the hard way.
+
 ### Where a connected customer lands
 
 **The dashboard, not the review step.** Adoption runs before the redirect, so by

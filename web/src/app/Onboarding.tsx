@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { strings } from "../strings";
-import { getOverview, startMetaOauth, type CustomerOverview } from "../api";
+import { getOverview, startMetaOauth, saveBusinessDetails, ApiError, type CustomerOverview } from "../api";
 import { Brand, Stepper, SupportCard, StatusPill, WA } from "./components";
 import { onboardingStep, STEP_INDEX, type OnboardingStep } from "./onboarding-step";
 
@@ -18,18 +18,24 @@ export function Onboarding() {
   const [ov, setOv] = useState<CustomerOverview | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [tick, setTick] = useState(0);
+
   useEffect(() => {
     getOverview()
-      .then((o) => {
-        // A customer who has finished onboarding has no reason to sit here.
-        if (o.customer?.onboardingStatus === "ready") { nav("/app", { replace: true }); return; }
-        setOv(o);
+      .then((data) => {
+        // Finished onboarding? Nothing to do here. The same rule the app shell
+        // applies from the other side (see AuthGate), from one function.
+        if (onboardingStep({ customer: data.customer, connection: data.connection }) === "F") {
+          nav("/app", { replace: true });
+          return;
+        }
+        setOv(data);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [nav]);
+  }, [nav, tick]);
 
-  const s: S = onboardingStep(ov?.customer);
+  const s: S = onboardingStep({ customer: ov?.customer, connection: ov?.connection });
   const name = ov?.account.name?.trim();
 
   return (
@@ -61,12 +67,74 @@ export function Onboarding() {
               <Stepper steps={o.steps} currentIndex={STEP_INDEX[s]} />
             </div>
             <div className="grid-2">
-              <div>{card(s, nav)}</div>
+              <div>{card(s, () => setTick((n) => n + 1))}</div>
               <SupportCard />
             </div>
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// AIC-188 — step 2. This is the step that CREATES the customer row.
+//
+// It exists because the first real OAuth run produced a customer named
+// "2181076988590009" — the ad account's own name. That value feeds ad copy
+// generation, so asking here is not a formality: it is the difference between a
+// campaign written for a business and one written for a number.
+function BusinessCard({ done }: { done: () => void }) {
+  const [businessName, setName] = useState("");
+  const [websiteUrl, setSite] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      await saveBusinessDetails({ businessName, websiteUrl });
+      done();
+    } catch (ex) {
+      // The server names WHICH field is wrong; showing "failed" instead would
+      // leave the person guessing between two inputs.
+      const reason = ex instanceof ApiError
+        ? (ex.body as { reason?: string } | undefined)?.reason
+        : undefined;
+      setErr((reason && o.bizErr[reason as keyof typeof o.bizErr]) || o.bizErr.failed);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h3 style={{ fontSize: "1.4rem" }}>{o.bizTitle}</h3>
+      <p className="muted" style={{ margin: "12px 0 22px" }}>{o.bizSub}</p>
+      <form onSubmit={submit}>
+        {/* `.field` styles a <label> child, not an arbitrary span — matching the
+            shape every other form in the app uses (see Settings.tsx). */}
+        <div className="field">
+          <label htmlFor="biz-name">{o.bizNameLabel}</label>
+          <input
+            id="biz-name" value={businessName} onChange={(e) => setName(e.target.value)}
+            placeholder={o.bizNamePlaceholder} autoFocus maxLength={80} required
+          />
+        </div>
+        <div className="field" style={{ marginTop: 16 }}>
+          <label htmlFor="biz-site">
+            {o.bizSiteLabel} <span className="muted">· {o.bizSiteOptional}</span>
+          </label>
+          <input
+            id="biz-site" value={websiteUrl} onChange={(e) => setSite(e.target.value)}
+            placeholder={o.bizSitePlaceholder} inputMode="url" maxLength={300}
+          />
+        </div>
+        {err && <p className="muted" style={{ marginTop: 14 }} role="alert">{err}</p>}
+        <button className="btn btn-primary" style={{ marginTop: 22 }} disabled={busy} type="submit">
+          {busy ? o.bizSaving : o.bizSave}
+        </button>
+      </form>
     </div>
   );
 }
@@ -129,35 +197,7 @@ function ConnectCard() {
   );
 }
 
-function card(s: S, nav: ReturnType<typeof useNavigate>) {
-  if (s === "A")
-    return (
-      <div className="card">
-        <h3 style={{ fontSize: "1.4rem" }}>{o.callTitle}</h3>
-        <p className="muted" style={{ margin: "12px 0 22px" }}>{o.callSub}</p>
-        <div className="row gap12" style={{ flexWrap: "wrap" }}>
-          <a className="btn btn-wa" href={WA}>{a.talkWa}</a>
-        </div>
-      </div>
-    );
-  if (s === "C") return <ConnectCard />;
-  if (s === "D")
-    return (
-      <div className="card">
-        <StatusPill variant="info">{o.reviewBadge}</StatusPill>
-        <h3 style={{ fontSize: "1.4rem", margin: "14px 0 12px" }}>{o.reviewTitle}</h3>
-        <p className="muted" style={{ marginBottom: 20 }}>{o.reviewSub}</p>
-        <div className="summary-row"><span>✓ {o.metaConnected}</span></div>
-        <div className="summary-row"><span>✓ {o.campaignFound}</span><StatusPill variant="neutral">{o.inReview}</StatusPill></div>
-        <p className="muted" style={{ marginTop: 16 }}>{o.nothingToDo}</p>
-      </div>
-    );
-  return (
-    <div className="card">
-      <StatusPill variant="ok">✓</StatusPill>
-      <h3 style={{ fontSize: "1.4rem", margin: "14px 0 12px" }}>{o.readyTitle}</h3>
-      <p className="muted" style={{ marginBottom: 20 }}>{o.readySub}</p>
-      <button className="btn btn-primary" onClick={() => nav("/app")}>{o.goToAccount}</button>
-    </div>
-  );
+function card(s: S, done: () => void) {
+  if (s === "B") return <BusinessCard done={done} />;
+  return <ConnectCard />;
 }

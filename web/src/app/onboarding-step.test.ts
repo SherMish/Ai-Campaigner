@@ -1,34 +1,63 @@
 import { describe, it, expect } from "vitest";
-import { onboardingStep, STEP_INDEX } from "./onboarding-step";
+import { onboardingStep, dashboardIsOpen, STEP_INDEX } from "./onboarding-step";
+
+const conn = { accessHealth: "ok" };
+const ready = { onboardingStatus: "ready" };
 
 describe("onboardingStep", () => {
-  it("sends a JUST-REGISTERED user (no customer yet) to the connect step", () => {
-    // The bug: signup writes app_users with customer_id = NULL, so /overview
-    // returns customer: null. The old `?? "A"` fallback showed "book an intro
-    // call" and made the connect button unreachable — while connecting is the
-    // very thing that CREATES the customer.
-    expect(onboardingStep(null)).toBe("C");
-    expect(onboardingStep(undefined)).toBe("C");
+  it("starts a JUST-REGISTERED user on business details", () => {
+    // Signup writes app_users with customer_id = NULL, so /overview returns
+    // customer: null. That step is what CREATES the customer.
+    expect(onboardingStep({ customer: null, connection: null })).toBe("B");
+    expect(onboardingStep({ customer: undefined, connection: undefined })).toBe("B");
   });
 
-  it("maps each real status to its card", () => {
-    expect(onboardingStep({ onboardingStatus: "call_scheduled" })).toBe("A");
-    expect(onboardingStep({ onboardingStatus: "meta_connection_required" })).toBe("C");
-    expect(onboardingStep({ onboardingStatus: "campaign_under_review" })).toBe("D");
-    expect(onboardingStep({ onboardingStatus: "ready" })).toBe("F");
+  it("moves to connect once the business exists but Meta does not", () => {
+    expect(onboardingStep({ customer: { onboardingStatus: "meta_connection_required" }, connection: null })).toBe("C");
   });
 
-  it("keeps an UNRECOGNISED status on 'A', not on connect", () => {
-    // A real customer whose state we cannot read is different from a user with
-    // no customer. Guessing "connect" for someone who may already be connected
-    // would be a worse wrong answer than the neutral first step.
-    expect(onboardingStep({ onboardingStatus: "something_new" })).toBe("A");
-    expect(onboardingStep({ onboardingStatus: "" })).toBe("A");
+  it("is done when the customer is ready AND connected", () => {
+    expect(onboardingStep({ customer: ready, connection: conn })).toBe("F");
+  });
+
+  it("keeps a 'ready' customer who lost their connection on the connect step", () => {
+    // Status alone is not enough: access can be revoked in Meta after the fact,
+    // and the connect step is the only screen where they can do anything about it.
+    expect(onboardingStep({ customer: ready, connection: null })).toBe("C");
+    expect(onboardingStep({ customer: ready, connection: { accessHealth: "revoked" } })).toBe("C");
+  });
+
+  it("treats a connected-but-unready customer as connected", () => {
+    // The legacy statuses are gone; a healthy connection is the real signal.
+    expect(onboardingStep({ customer: { onboardingStatus: "campaign_under_review" }, connection: conn })).toBe("F");
+  });
+});
+
+describe("dashboardIsOpen", () => {
+  it("is closed for anyone who has not finished business details or connect", () => {
+    // An unfinished account reaching /app sees an empty dashboard, which reads
+    // as "your account is broken" rather than "one thing left to do".
+    expect(dashboardIsOpen({ customer: null, connection: null })).toBe(false);
+    expect(dashboardIsOpen({ customer: { onboardingStatus: "meta_connection_required" }, connection: null })).toBe(false);
+    expect(dashboardIsOpen({ customer: ready, connection: { accessHealth: "needs_reconnect" } })).toBe(false);
+  });
+
+  it("is open once connected", () => {
+    expect(dashboardIsOpen({ customer: ready, connection: conn })).toBe(true);
+  });
+
+  it("agrees with onboardingStep on every input", () => {
+    // The two must never disagree — that is a customer bounced between screens.
+    const customers = [null, ready, { onboardingStatus: "meta_connection_required" }];
+    const connections = [null, conn, { accessHealth: "revoked" }];
+    for (const customer of customers) {
+      for (const connection of connections) {
+        expect(dashboardIsOpen({ customer, connection })).toBe(onboardingStep({ customer, connection }) === "F");
+      }
+    }
   });
 
   it("gives every step a stepper position", () => {
-    for (const s of ["A", "C", "D", "F"] as const) {
-      expect(STEP_INDEX[s]).toBeGreaterThan(0);
-    }
+    for (const s of ["B", "C", "F"] as const) expect(STEP_INDEX[s]).toBeGreaterThan(0);
   });
 });

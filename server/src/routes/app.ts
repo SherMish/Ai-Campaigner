@@ -4,6 +4,7 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { getCustomerProfile, saveCustomerProfile } from "../services/customer-profile.js";
 import { listOwnedCampaigns, campaignIdParam, campaignIdFromRequest } from "../services/campaign-selection.js";
 import { buildCustomerOverview } from "../services/customer-overview.js";
+import { validateBusinessDetails, saveBusinessDetails, type DetailsRefusal } from "../services/business-details.js";
 import { recordLeadQualityReview, LeadQualityValidationError } from "../services/lead-quality-review.js";
 import {
   listCustomerRecommendations,
@@ -64,6 +65,37 @@ appRouter.get("/overview", requireAuth, async (req, res) => {
 // count is read from the caller's OWN watermark (buildCustomerOverview),
 // never supplied by the client, so re-rating already-reviewed leads (the old
 // double-counting bug) is structurally impossible.
+// AIC-188 — step 2 of onboarding, and the step that CREATES the customer.
+//
+// Every refusal carries its own reason. A form that rejects the input and says
+// only "failed" leaves the person guessing which of two fields is wrong.
+const DETAILS_STATUS: Record<DetailsRefusal, number> = {
+  name_required: 400,
+  name_too_short: 400,
+  name_too_long: 400,
+  url_too_long: 400,
+  url_not_http: 400,
+};
+
+appRouter.post("/business-details", requireAuth, async (req, res) => {
+  try {
+    const checked = validateBusinessDetails(req.body ?? {});
+    if (!checked.ok) {
+      res.status(DETAILS_STATUS[checked.reason]).json({ error: "invalid", reason: checked.reason });
+      return;
+    }
+    const { customerId, created } = await saveBusinessDetails(
+      pool,
+      (req as AuthedRequest).userId!,
+      checked.value,
+    );
+    res.json({ ok: true, customerId, created });
+  } catch (e) {
+    console.error("[app] business details failed", e);
+    res.status(500).json({ error: "could not save the business details" });
+  }
+});
+
 appRouter.post("/lead-quality", requireAuth, async (req, res) => {
   try {
     // AIC-186 — which campaign. An id that is not this caller's simply finds

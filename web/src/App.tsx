@@ -23,6 +23,7 @@ import { Recommendations, RecommendationDetail } from "./app/Recommendations";
 import { Settings } from "./app/Settings";
 import { Builder } from "./app/Builder";
 import { AddContent } from "./app/AddContent";
+import { OnboardingGate } from "./app/OnboardingGate";
 import { AuthGate } from "./app/AuthGate";
 
 // An already-signed-in visitor has no business on the entry screens (login /
@@ -51,7 +52,10 @@ export function App() {
         <Route path="/review" element={<AuthGate><Review /></AuthGate>} />
 
         {/* the app (signed-in) — one shell (right-side sidebar) wraps every screen */}
-        <Route element={<AuthGate><AppShell /></AuthGate>}>
+        {/* AIC-188: signed in is not the same as finished. OnboardingGate sends an
+            account that still owes business details or a Meta connection back to
+            /onboarding, instead of showing it an empty dashboard. */}
+        <Route element={<AuthGate><OnboardingGate><AppShell /></OnboardingGate></AuthGate>}>
           <Route path="/app" element={<Home />} />
           <Route path="/app/builder" element={<Builder />} />
           <Route path="/app/add-content" element={<AddContent />} />
