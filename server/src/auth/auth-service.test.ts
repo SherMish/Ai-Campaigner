@@ -18,7 +18,10 @@ describe("AuthService", () => {
     expect(user.email).toBe("lilach@studio.co.il"); // normalized
     expect(user.name).toBe("לילך");
     expect((user as { passwordHash?: string }).passwordHash).toBeUndefined();
-    expect(verifyAuthToken(token)).toEqual({ userId: user.id });
+    // AIC-189 added `impersonatedBy`, which is null for a real signup — the
+    // assertion is on the whole shape on purpose, so a token that quietly
+    // arrived as an impersonation would fail here.
+    expect(verifyAuthToken(token)).toEqual({ userId: user.id, impersonatedBy: null });
   });
 
   it("rejects a duplicate email (case-insensitive)", async () => {

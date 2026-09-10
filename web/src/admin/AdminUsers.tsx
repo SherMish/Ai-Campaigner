@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, deleteUserRecords, type DeleteUserMode } from "../api";
+import { api, deleteUserRecords, impersonateUser, setAuthToken, type DeleteUserMode } from "../api";
 import { strings } from "../strings";
 import { offersOnboarding } from "./user-row-status";
 
@@ -41,6 +41,9 @@ export function AdminUsers() {
   const [deleteText, setDeleteText] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // AIC-189 — the row currently opening a viewing session, and any failure.
+  const [impersonating, setImpersonating] = useState<string | null>(null);
+  const [impError, setImpError] = useState<string | null>(null);
 
   const load = () =>
     api<{ users: UserRow[] }>("/admin/users")
@@ -135,6 +138,7 @@ export function AdminUsers() {
                 <th>{u.colSubscription}</th>
                 <th>{u.colConnection}</th>
                 <th>{u.colCampaign}</th>
+                <th aria-label={u.impersonateTitle}></th>
                 <th aria-label={u.deleteRowTitle}></th>
               </tr>
             </thead>
@@ -165,6 +169,34 @@ export function AdminUsers() {
                   </td>
                   <td>{row.campaignStatus ?? t.none}</td>
                   <td>
+                    {/* AIC-189 — open this customer's own dashboard, read-only.
+                        The session replaces the admin's token in this tab, which
+                        is why exiting the bar reloads: the two must never be
+                        live at once. */}
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ padding: "4px 12px", fontSize: "0.8rem", whiteSpace: "nowrap" }}
+                      title={u.impersonateTitle}
+                      disabled={impersonating === row.id}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setImpError(null);
+                        setImpersonating(row.id);
+                        try {
+                          const { token } = await impersonateUser(row.id);
+                          setAuthToken(token);
+                          window.location.assign("/app");
+                        } catch {
+                          setImpersonating(null);
+                          setImpError(u.impersonateFailed);
+                        }
+                      }}
+                    >
+                      {u.impersonate}
+                    </button>
+                  </td>
+                  <td>
                     <button
                       type="button"
                       className="op-bin"
@@ -185,6 +217,7 @@ export function AdminUsers() {
             </tbody>
           </table>
         )}
+        {impError && <p className="muted" role="alert" style={{ marginTop: 12 }}>{impError}</p>}
       </div>
 
       {/* AIC-127: the reset/delete modal. Red-bordered and red-headed because

@@ -368,6 +368,10 @@ export const strings = {
       deleteBusy: "מוחק…",
       deleteCancel: "ביטול",
       deleteRowTitle: "מחיקת נתונים",
+      // AIC-189 — the admin's "view this customer's dashboard" button.
+      impersonate: "כניסה כמשתמש",
+      impersonateTitle: "צפייה בדשבורד של הלקוח (צפייה בלבד)",
+      impersonateFailed: "לא הצלחנו לפתוח את הצפייה.",
       startOnboarding: "התחלת קליטה ←",
       // Shown instead of "start onboarding" once the connection is already
       // fully working — re-running the wizard would only create a duplicate
@@ -1139,6 +1143,16 @@ export const strings = {
         proceed: "המשך לתשלום",
         cancelNote: "אפשר לבטל את השירות בהתאם לתנאי השירות.",
         payQuestion: "שאלה על התשלום?",
+      },
+      // AIC-189 — the admin-viewing-a-customer bar. Deliberately blunt: the
+      // failure it prevents is an admin reading a real customer's numbers and
+      // believing they are looking at test data, or at their own account.
+      impersonation: {
+        badge: "צפייה בלבד",
+        title: "זהו חשבון של לקוח אמיתי",
+        body: "אתם צופים בחשבון של",
+        readOnly: "כל פעולה שמשנה משהו חסומה בשרת.",
+        exit: "יציאה מהצפייה",
       },
       onboarding: {
         eyebrow: "סטטוס ההקמה",

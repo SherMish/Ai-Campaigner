@@ -752,3 +752,35 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 
 /* Title + switcher share one side; the range switcher keeps the other. */
 .dash-headline { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; }
+
+/* AIC-189 — the admin-viewing-a-customer bar.
+   Sticky rather than fixed: it stays visible while scrolling without needing a
+   body offset that every screen would have to know about. Red is doing real
+   work here — this is the one place in the product where the person reading is
+   not the person the data belongs to. */
+.imp-bar {
+  position: sticky; top: 0; z-index: 1000;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 18px;
+  background: #b3261e; color: #fff;
+  font-size: 0.92rem; line-height: 1.4;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+  direction: rtl;
+}
+.imp-bar strong { font-weight: 700; }
+.imp-badge {
+  flex: none;
+  padding: 3px 10px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.02em;
+}
+.imp-text { flex: 1 1 auto; min-width: 0; }
+.imp-exit {
+  flex: none;
+  padding: 6px 14px; border-radius: 999px;
+  background: #fff; color: #b3261e;
+  border: none; font: inherit; font-weight: 700; cursor: pointer;
+}
+.imp-exit:hover { background: #ffe9e7; }
+.imp-exit:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }

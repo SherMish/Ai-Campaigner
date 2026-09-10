@@ -25,6 +25,19 @@ export function buildRequireAdmin(deps: {
 
     // 1) User-based: an admin app_user's session token.
     const auth = token ? verifyAuthToken(token) : null;
+
+    // AIC-189 — an impersonation token is NEVER an admin token.
+    //
+    // Without this, an admin who views another ADMIN's dashboard would be handed
+    // the admin API under that person's identity: every ops action, every
+    // provisioning write, attributed to the wrong human. The check is on the
+    // TOKEN's shape, not on who is impersonating whom, because the safe rule is
+    // "a session that claims to be someone else never holds their privileges".
+    if (auth?.impersonatedBy) {
+      res.status(403).json({ error: "forbidden", reason: "impersonation" });
+      return;
+    }
+
     if (auth) {
       try {
         if (await deps.isAdminUser(auth.userId)) {

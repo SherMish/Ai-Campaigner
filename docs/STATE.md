@@ -6,6 +6,21 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-10 — AIC-189: an admin can view a customer's dashboard, read-only
+
+"כניסה כמשתמש" on the admin משתמשים page mints a 30-minute token for that
+customer and opens their own dashboard behind a red, non-dismissable bar.
+
+Two rules, both server-side. An impersonated session cannot write — every
+non-GET carrying `imp` is a 403 in `requireAuth`, because a write made this way
+would spend a real customer's budget and be recorded as their own action. And an
+impersonation token is never an admin token, even when the impersonated user is
+an admin, or viewing one admin's account would hand over the admin API under
+their name.
+
+Full doc: docs/features/admin-impersonation.md.
+
+
 ### 2026-09-10 — AIC-188: onboarding is three steps, and the dashboard is gated
 
 `החשבון נפתח → פרטים על העסק → חיבור Meta → dashboard`. The intro call and the

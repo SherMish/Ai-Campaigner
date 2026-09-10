@@ -12,6 +12,7 @@ See also: [STATE.md](STATE.md) (dated changelog) · [POSTMORTEM-2026-08-19.md](P
 | DB schema — the 10 P0 entities, migrations, enums, seed | [DATA_MODEL.md](DATA_MODEL.md) |
 | Meta-side setup — Business/app/System User, token, asset assignment | [META_SETUP.md](META_SETUP.md) |
 | Meta connection, access-health, execution-halt safety rule | [features/meta-connection.md](features/meta-connection.md) |
+| Admin viewing a customer's dashboard (read-only impersonation) | [features/admin-impersonation.md](features/admin-impersonation.md) |
 | Insights ingestion → insight_snapshot, scheduler | [features/insights-ingestion.md](features/insights-ingestion.md) |
 | Ad-set delivery health — not-delivering/disapproved detection, needs-attention | [features/delivery-health.md](features/delivery-health.md) |
 | Lead-tracking health — declared lead definition vs Meta's ad-set config, needs-attention | [features/tracking-health.md](features/tracking-health.md) |

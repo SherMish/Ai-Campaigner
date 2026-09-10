@@ -1117,3 +1117,12 @@ export async function saveBusinessDetails(input: {
     body: JSON.stringify(input),
   });
 }
+
+// AIC-189 — a short-lived, read-only session for viewing a customer's dashboard.
+// Read-only is enforced on the server: every non-GET carrying this token is a
+// 403, whatever the route.
+export async function impersonateUser(
+  userId: string,
+): Promise<{ token: string; user: { id: string; email: string; name: string | null } }> {
+  return api(`/admin/users/${userId}/impersonate`, { method: "POST" });
+}

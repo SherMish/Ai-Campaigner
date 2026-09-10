@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { pool } from "../db/pool.js";
+import { signImpersonationToken } from "../auth/tokens.js";
 import { setObjectStatus, assertOwnedByCampaign } from "../controls/manual-controls.js";
 import type { ControlObjectKind, ControlWriter } from "../controls/types.js";
 import type { DeliveryReader } from "../meta/delivery-health.js";
@@ -269,6 +270,34 @@ adminRouter.post("/users/:id/customer", async (req, res) => {
 // DELETE with a body: the confirmation text has to travel with the request and
 // must not end up in a URL or an access log. Same shape as
 // DELETE /customers/:id above.
+// AIC-189 — mint a short-lived, read-only session for viewing a customer's own
+// dashboard. Read-only is enforced by requireAuth (every non-GET is refused for
+// a token carrying `imp`), not by this route and not by the UI.
+adminRouter.post("/users/:id/impersonate", async (req, res) => {
+  try {
+    const { rows } = await pool.query<{ id: string; email: string; name: string | null }>(
+      `SELECT id, email, name FROM app_users WHERE id = $1`,
+      [req.params.id],
+    );
+    if (!rows.length) {
+      res.status(404).json({ error: "user not found" });
+      return;
+    }
+    const adminId = (req as AuthedRequest).userId ?? "admin-token";
+    // Logged, always. Viewing a real customer's account is an action worth a
+    // record even though it changes nothing — "who looked at this" is the
+    // question an incident asks first.
+    console.log(`[admin] impersonation: admin=${adminId} → user=${rows[0].id} (${rows[0].email})`);
+    res.json({
+      token: signImpersonationToken(rows[0].id, adminId),
+      user: { id: rows[0].id, email: rows[0].email, name: rows[0].name },
+    });
+  } catch (e) {
+    console.error("[admin] impersonate failed", e);
+    res.status(500).json({ error: "could not start the viewing session" });
+  }
+});
+
 adminRouter.delete("/users/:id", async (req, res) => {
   const actor = await actorFor(req as AuthedRequest);
   const mode = req.body?.mode === "all" ? "all" : "business";
