@@ -6,6 +6,27 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-10 — AIC-187 follow-up: two bugs found by testing the flow in a browser
+
+**The success redirect pointed at a route that does not exist.** The callback
+sent the customer to `/app/onboarding`; the SPA registers `/onboarding`
+(App.tsx). Completing consent therefore landed inside the app shell with no
+confirmation that anything had happened — precisely the outcome the `?meta=`
+parameter exists to prevent. The redirect target moved into `oauth-config.ts` so
+a unit test can reach it; the test was confirmed to fail against the old path.
+
+**The manual-connection link rendered as a grey box.** `.link` styles anchors
+(`color`, `font-weight`, `cursor`) and resets nothing, so `<button class="link">`
+drew the browser's default `2px outset` chrome mid-sentence. It is navigation to
+a route, so it is now a `<Link>`.
+
+Verified live against production: the dialog URL is accepted by Meta (it
+redirects to login carrying our `config_id` and builds a `cancel_url` back to
+our callback, which proves the redirect URI is whitelisted); replaying a spent
+state returns `link_expired`; a forged user id is refused **and leaves the real
+nonce unspent**, so an attacker cannot burn someone's pending consent.
+
+
 ### 2026-09-10 — AIC-187: each customer is operated through their own credential
 
 The other half of AIC-186. Every Graph call now resolves its token through

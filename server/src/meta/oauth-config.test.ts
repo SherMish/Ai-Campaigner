@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readOauthConfig, buildDialogUrl, oauthEnabled, OauthNotConfiguredError } from "./oauth-config.js";
+import { readOauthConfig, buildDialogUrl, oauthEnabled, oauthReturnUrl, OauthNotConfiguredError } from "./oauth-config.js";
 
 const FULL = {
   META_APP_ID: "1762330388097443",
@@ -47,5 +47,27 @@ describe("oauth-config", () => {
     expect(oauthEnabled({} as NodeJS.ProcessEnv)).toBe(false);
     expect(oauthEnabled({ META_OAUTH_ENABLED: "1" } as NodeJS.ProcessEnv)).toBe(false);
     expect(oauthEnabled({ META_OAUTH_ENABLED: "true" } as NodeJS.ProcessEnv)).toBe(true);
+  });
+
+  describe("oauthReturnUrl", () => {
+    const ENV = { APP_BASE_URL: "https://ads-agent.co.il" } as NodeJS.ProcessEnv;
+
+    it("points at a route the SPA actually registers", () => {
+      // The bug: this said /app/onboarding, which App.tsx does not register —
+      // the SPA route is /onboarding. A customer who completed consent landed
+      // in the app shell with no confirmation that anything had happened.
+      expect(oauthReturnUrl("connected", undefined, ENV))
+        .toBe("https://ads-agent.co.il/onboarding?meta=connected");
+    });
+
+    it("carries the reason when there is one", () => {
+      expect(oauthReturnUrl("refused", "access_denied", ENV))
+        .toBe("https://ads-agent.co.il/onboarding?meta=refused&reason=access_denied");
+    });
+
+    it("tolerates a trailing slash on the base url", () => {
+      expect(oauthReturnUrl("failed", undefined, { APP_BASE_URL: "https://ads-agent.co.il/" } as NodeJS.ProcessEnv))
+        .toBe("https://ads-agent.co.il/onboarding?meta=failed");
+    });
   });
 });

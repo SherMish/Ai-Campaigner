@@ -4,7 +4,7 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { rateLimit } from "../middleware/security.js";
 import { mintState, parseState, StateError } from "../meta/oauth-state.js";
 import { rememberState, spendState, saveOauthConnection, NonceError, type AdoptedCampaign } from "../meta/oauth-store.js";
-import { readOauthConfig, buildDialogUrl, oauthEnabled, OauthNotConfiguredError } from "../meta/oauth-config.js";
+import { readOauthConfig, buildDialogUrl, oauthEnabled, oauthReturnUrl, OauthNotConfiguredError } from "../meta/oauth-config.js";
 import { completeOauth, OauthRefusedError, OauthFaultError, type FetchLike } from "../meta/oauth-exchange.js";
 import { tokenCryptoReady } from "../meta/token-crypto.js";
 import { GRAPH_VERSION } from "../meta/oauth-config.js";
@@ -24,16 +24,6 @@ export const metaOauthRouter = Router();
 // a write transaction). Rate limited on that basis alone.
 const startLimit = rateLimit({ name: "oauth-start", limit: 10, windowMs: 15 * 60_000 });
 const callbackLimit = rateLimit({ name: "oauth-callback", limit: 20, windowMs: 15 * 60_000 });
-
-// Where the customer lands afterwards. A query flag rather than a flash message
-// because the SPA is reached by a fresh page load: there is no in-memory state
-// to carry anything across the redirect.
-function appRedirect(outcome: "connected" | "refused" | "failed", detail?: string): string {
-  const base = process.env.APP_BASE_URL?.replace(/\/$/, "") ?? "";
-  const params = new URLSearchParams({ meta: outcome });
-  if (detail) params.set("reason", detail);
-  return `${base}/app/onboarding?${params.toString()}`;
-}
 
 metaOauthRouter.post("/start", startLimit, requireAuth, async (req, res) => {
   const userId = (req as AuthedRequest).userId!;
@@ -75,11 +65,11 @@ metaOauthRouter.get("/callback", callbackLimit, async (req, res) => {
   // not something to log as one — but they must land somewhere that says so.
   if (error) {
     console.warn("[meta-oauth] customer did not complete consent:", error, error_description ?? "");
-    res.redirect(appRedirect("refused", error));
+    res.redirect(oauthReturnUrl("refused", error));
     return;
   }
   if (typeof code !== "string" || typeof state !== "string") {
-    res.redirect(appRedirect("failed", "missing_code"));
+    res.redirect(oauthReturnUrl("failed", "missing_code"));
     return;
   }
 
@@ -110,21 +100,21 @@ metaOauthRouter.get("/callback", callbackLimit, async (req, res) => {
     });
 
     console.log(`[meta-oauth] connected user=${userId} account=${adAccountId} campaigns=${adopted}`);
-    res.redirect(appRedirect("connected"));
+    res.redirect(oauthReturnUrl("connected"));
   } catch (e) {
     if (e instanceof StateError || e instanceof NonceError) {
       // Includes the replay case. One message, no detail — see spendState.
       console.warn("[meta-oauth] state rejected:", (e as Error).message);
-      res.redirect(appRedirect("failed", "link_expired"));
+      res.redirect(oauthReturnUrl("failed", "link_expired"));
       return;
     }
     if (e instanceof OauthRefusedError) {
       console.warn("[meta-oauth] incomplete grant:", e.message);
-      res.redirect(appRedirect("refused", e.message));
+      res.redirect(oauthReturnUrl("refused", e.message));
       return;
     }
     console.error("[meta-oauth] callback failed", e);
-    res.redirect(appRedirect("failed", e instanceof OauthFaultError ? "meta_error" : "server_error"));
+    res.redirect(oauthReturnUrl("failed", e instanceof OauthFaultError ? "meta_error" : "server_error"));
   }
 });
 

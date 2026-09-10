@@ -81,7 +81,7 @@ export function Onboarding() {
 // only for people holding a role on our app. The manual partner-share link
 // below it is what every other customer still uses, so it is a visible
 // alternative rather than a fallback nobody can find.
-function ConnectCard({ nav }: { nav: ReturnType<typeof useNavigate> }) {
+function ConnectCard() {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
 
@@ -123,7 +123,10 @@ function ConnectCard({ nav }: { nav: ReturnType<typeof useNavigate> }) {
         {busy ? o.oauthStarting : o.oauthCta}
       </button>
       <p className="muted" style={{ marginTop: 16, fontSize: "0.9rem" }}>
-        <button className="link" onClick={() => nav("/connect")}>{o.oauthManual}</button>
+        {/* A Link, not a button: `.link` styles anchors, so a <button className="link">
+            renders with the browser's default 2px outset chrome — a grey box in the
+            middle of a sentence. Caught in browser testing. */}
+        <Link className="link" to="/connect">{o.oauthManual}</Link>
         {" · "}{o.connectHelp}
       </p>
     </div>
@@ -141,7 +144,7 @@ function card(s: S, nav: ReturnType<typeof useNavigate>) {
         </div>
       </div>
     );
-  if (s === "C") return <ConnectCard nav={nav} />;
+  if (s === "C") return <ConnectCard />;
   if (s === "D")
     return (
       <div className="card">

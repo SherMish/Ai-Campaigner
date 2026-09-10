@@ -90,3 +90,26 @@ export function buildDialogUrl(config: OauthConfig, state: string): string {
   });
   return `${DIALOG_BASE}?${params.toString()}`;
 }
+
+export type OauthOutcome = "connected" | "refused" | "failed";
+
+// Where the customer lands after the callback.
+//
+// A query flag rather than a flash message because the SPA is reached by a
+// fresh page load — there is no in-memory state to carry across the redirect.
+//
+// AIC-187 (found in browser testing): this pointed at `/app/onboarding`, which
+// is NOT a route — the SPA registers `/onboarding` (App.tsx). A customer who
+// completed consent therefore landed inside the app shell with no confirmation
+// that anything had happened, which is the exact failure the outcome parameter
+// exists to prevent.
+export function oauthReturnUrl(
+  outcome: OauthOutcome,
+  detail?: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const base = env.APP_BASE_URL?.replace(/\/$/, "") ?? "";
+  const params = new URLSearchParams({ meta: outcome });
+  if (detail) params.set("reason", detail);
+  return `${base}/onboarding?${params.toString()}`;
+}
