@@ -103,12 +103,22 @@ export type OauthOutcome = "connected" | "refused" | "failed";
 // completed consent therefore landed inside the app shell with no confirmation
 // that anything had happened, which is the exact failure the outcome parameter
 // exists to prevent.
+//
+// Success goes to the DASHBOARD, not back to onboarding. Adoption has already
+// run by the time we redirect — the customer's campaigns are in the database —
+// so returning them to a status page that says "we are reviewing your campaign,
+// there is nothing to do" is a wall in front of data they can already see. The
+// dashboard showing their own campaigns is the confirmation.
+//
+// The two failure outcomes still return to onboarding, because that is where
+// the connect button is and trying again is the whole point.
 export function oauthReturnUrl(
   outcome: OauthOutcome,
   detail?: string,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
   const base = env.APP_BASE_URL?.replace(/\/$/, "") ?? "";
+  if (outcome === "connected") return `${base}/app`;
   const params = new URLSearchParams({ meta: outcome });
   if (detail) params.set("reason", detail);
   return `${base}/onboarding?${params.toString()}`;

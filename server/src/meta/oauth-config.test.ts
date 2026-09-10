@@ -52,12 +52,18 @@ describe("oauth-config", () => {
   describe("oauthReturnUrl", () => {
     const ENV = { APP_BASE_URL: "https://ads-agent.co.il" } as NodeJS.ProcessEnv;
 
-    it("points at a route the SPA actually registers", () => {
-      // The bug: this said /app/onboarding, which App.tsx does not register —
-      // the SPA route is /onboarding. A customer who completed consent landed
-      // in the app shell with no confirmation that anything had happened.
-      expect(oauthReturnUrl("connected", undefined, ENV))
-        .toBe("https://ads-agent.co.il/onboarding?meta=connected");
+    it("sends a CONNECTED customer to the dashboard, not back to onboarding", () => {
+      // Adoption has already run — their campaigns are in the database. Parking
+      // them on "we are reviewing your campaign, nothing to do" is a wall in
+      // front of data they can already see.
+      expect(oauthReturnUrl("connected", undefined, ENV)).toBe("https://ads-agent.co.il/app");
+    });
+
+    it("returns a FAILED or REFUSED customer to onboarding, where the button is", () => {
+      // Not /app/onboarding: App.tsx registers /onboarding, and the earlier bug
+      // here left a customer in the app shell with no explanation at all.
+      expect(oauthReturnUrl("failed", "meta_error", ENV))
+        .toBe("https://ads-agent.co.il/onboarding?meta=failed&reason=meta_error");
     });
 
     it("carries the reason when there is one", () => {

@@ -106,8 +106,13 @@ export async function saveOauthConnection(
         // business_name is NOT NULL and the profile is not collected yet.
         // The Page name is the best truth we have at this instant, and the
         // customer corrects it in the business profile step.
+        // 'ready', not 'campaign_under_review'. The review step exists for the
+        // operator-provisioned flow, where a human really does inspect the
+        // campaign before the customer is let in. Nobody reviews a self-serve
+        // OAuth connection, so leaving the customer there parks them behind a
+        // gate that will never open — see oauthReturnUrl.
         `INSERT INTO customers (business_name, contact_name, contact_email, onboarding_status)
-         VALUES ($1, $2, $3, 'campaign_under_review') RETURNING id`,
+         VALUES ($1, $2, $3, 'ready') RETURNING id`,
         [args.accountName || userRows[0].name || userRows[0].email, userRows[0].name ?? "", userRows[0].email],
       );
       customerId = made[0].id;

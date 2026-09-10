@@ -6,6 +6,19 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-10 — AIC-187: a connected customer lands on the dashboard
+
+First real end-to-end OAuth run, on a customer created from scratch: all seven
+scopes granted, Page and Instagram discovered, token stored encrypted, and all
+**9** campaigns on the ad account adopted with `automation_enabled = false`.
+
+It then parked the customer on `campaign_under_review` — "we are going over the
+campaign, there is nothing to do" — in front of nine campaigns already sitting in
+their account. That review step is for the operator-provisioned flow, where a
+human really does inspect first. Nobody reviews a self-serve connection, so the
+gate never opens. OAuth now writes `ready` and redirects to `/app`.
+
+
 ### 2026-09-10 — AIC-187: a newly registered user was shown "book a call", not "connect"
 
 Found by registering a real account against production. Signup writes

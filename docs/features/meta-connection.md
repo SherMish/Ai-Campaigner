@@ -211,6 +211,19 @@ unrecognised *status* still falls back to "A": that is a real customer whose
 state we cannot read, and guessing "connect" for someone who may already be
 connected is a worse wrong answer than the neutral first step.
 
+### Where a connected customer lands
+
+**The dashboard, not the review step.** Adoption runs before the redirect, so by
+the time the customer comes back their campaigns are already in the database.
+`campaign_under_review` exists for the operator-provisioned flow, where a human
+genuinely inspects the campaign first; nobody reviews a self-serve OAuth
+connection, so leaving them there parks them behind a gate that never opens,
+reading "there is nothing to do" in front of data they can already see.
+
+So `saveOauthConnection` writes `onboarding_status = 'ready'` and
+`oauthReturnUrl("connected")` returns `/app`. The two failure outcomes still go
+to `/onboarding`, because that is where the connect button is.
+
 ### The customer row
 
 Signup creates an `app_user` with `customer_id = NULL`; a `customers` row has
