@@ -1,6 +1,7 @@
 import "../load-env.js";
 import { pool } from "../db/pool.js";
 import { GraphCampaignAdapter } from "./campaign-adapter.js";
+import { tokenForAdAccount } from "./token-resolver.js";
 import { buildReaperTick } from "../services/creative-reaper.js";
 import { consoleLogger } from "../services/logger.js";
 
@@ -9,13 +10,16 @@ import { consoleLogger } from "../services/logger.js";
 async function main() {
   const tick = await buildReaperTick(
     pool,
-    () => {
-      const token = process.env.META_SYSTEM_USER_TOKEN;
-      return token ? new GraphCampaignAdapter(token) : null;
+    // AIC-187: the same resolver the scheduled tick uses, so this one-off
+    // stays "identical code path, only WHEN differs" — including whose
+    // credential each account is reaped with.
+    async (adAccountId) => {
+      const resolved = await tokenForAdAccount(pool, adAccountId);
+      return resolved ? new GraphCampaignAdapter(resolved.token) : null;
     },
     consoleLogger,
   );
-  if (!tick) throw new Error("META_SYSTEM_USER_TOKEN is required");
+  if (!tick) throw new Error("could not build a reaper tick");
   const r = await tick();
   console.log(`considered ${r.considered} | deleted ${r.deleted.length} | in use ${r.reattached.length} | failed ${r.failed.length}`);
   for (const f of r.failed) console.log(`  FAILED ${f.creativeId}: ${f.error}`);

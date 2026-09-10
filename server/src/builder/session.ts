@@ -1,4 +1,6 @@
 import type pg from "pg";
+import { pool } from "../db/pool.js";
+import { tokenForCustomer } from "../meta/token-resolver.js";
 import { GraphCampaignAdapter } from "../meta/campaign-adapter.js";
 import type { BuilderWriter } from "./types.js";
 import type { CreativeWriter } from "./creative-types.js";
@@ -131,9 +133,15 @@ export async function ownsLocalCampaign(pool: pg.Pool, customerId: string, local
 // Same token-gated factory pattern as buildCustomerExecutor
 // (customer-recommendations.ts): no META_SYSTEM_USER_TOKEN → null, so the
 // route can report an honest "temporarily unavailable" instead of pretending.
-export function buildBuilderWriter(): (BuilderWriter & CreativeWriter) | null {
-  const token = process.env.META_SYSTEM_USER_TOKEN;
-  if (!token) return null;
+// AIC-187: the credential is resolved per CUSTOMER, not read from the
+// environment. A manual connection still resolves to the shared System User
+// token; an OAuth connection resolves to that customer's own. Passing the
+// customer id is what makes the difference impossible to forget — the previous
+// signature took no arguments and could not have been wrong at a call site.
+export async function buildBuilderWriter(customerId: string): Promise<(BuilderWriter & CreativeWriter) | null> {
+  const resolved = await tokenForCustomer(pool, customerId);
+  if (!resolved) return null;
   const ver = process.env.META_GRAPH_VERSION || "v21.0";
-  return new GraphCampaignAdapter(token, ver);
+  return new GraphCampaignAdapter(resolved.token, ver);
 }
+

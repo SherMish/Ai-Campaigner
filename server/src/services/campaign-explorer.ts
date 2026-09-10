@@ -1,4 +1,5 @@
 import type pg from "pg";
+import { tokenForCampaign } from "../meta/token-resolver.js";
 import { rollingPeriods } from "../meta/scheduled-ingestion.js";
 import { GraphExplorerReader, type ExplorerCampaign, type ExplorerReader } from "../meta/explorer.js";
 
@@ -41,8 +42,10 @@ export async function buildCampaignExplorer(
   };
   if (!camp.meta_campaign_id) return { ...base, unavailableReason: "no_meta_campaign" };
 
-  const token = process.env.META_SYSTEM_USER_TOKEN;
-  const reader = opts.reader ?? (token ? new GraphExplorerReader(token) : null);
+  // AIC-187: the operator explorer must read through the SAME credential the
+  // customer view uses, or the two can disagree about a customer's own account.
+  const resolved = await tokenForCampaign(pool, campaignId);
+  const reader = opts.reader ?? (resolved ? new GraphExplorerReader(resolved.token) : null);
   if (!reader) return { ...base, unavailableReason: "no_token" };
 
   const { current } = rollingPeriods(opts.ref ?? new Date());

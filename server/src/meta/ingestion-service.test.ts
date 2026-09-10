@@ -146,7 +146,7 @@ describe("runIngestionTick (reliability)", () => {
 
     const summary = await runIngestionTick({
       campaigns,
-      ingestion: throwing,
+      ingestionFor: async () => throwing,
       period: PERIOD,
       logger,
     });
@@ -178,7 +178,7 @@ describe("runIngestionTick (reliability)", () => {
       { id: "camp-pixel", metaCampaignId: "meta_pixel_1", connectionId: null, leadEventTypes: ["offsite_conversion.fb_pixel_complete_registration"] },
     ];
 
-    await runIngestionTick({ campaigns, ingestion, period: PERIOD, logger });
+    await runIngestionTick({ campaigns, ingestionFor: async () => ingestion, period: PERIOD, logger });
     const snap = [...store.rows.values()][0];
     expect(snap.leads).toBe(26);
   });
@@ -189,7 +189,7 @@ describe("runIngestionTick (reliability)", () => {
     const logger = new CollectingLogger();
     const summary = await runIngestionTick({
       campaigns: [{ id: "unlinked", metaCampaignId: null, connectionId: null }],
-      ingestion,
+      ingestionFor: async () => ingestion,
       period: PERIOD,
       logger,
     });
@@ -216,7 +216,7 @@ describe("runIngestionTick (reliability)", () => {
 
     const summary = await runIngestionTick({
       campaigns: [{ id: "c1", metaCampaignId: "meta_ok", connectionId: null }],
-      ingestion: recording,
+      ingestionFor: async () => recording,
       period: PERIOD,
       extraPeriods: [{ start: "2026-08-12", end: "2026-08-12" }],
       logger,
@@ -244,7 +244,7 @@ describe("runIngestionTick (reliability)", () => {
 
     const summary = await runIngestionTick({
       campaigns: [{ id: "c1", metaCampaignId: "meta_ok", connectionId: null }],
-      ingestion: flaky,
+      ingestionFor: async () => flaky,
       period: PERIOD,
       extraPeriods: [{ start: "2026-08-12", end: "2026-08-12" }],
       logger,
@@ -267,5 +267,51 @@ describe("todayPeriod vs rollingPeriods — the engine never sees a partial day"
     expect(current.end).toBe("2026-08-11"); // yesterday, not today
     expect(current.end < todayPeriod(REF).start).toBe(true);
     expect(previous.end < current.start).toBe(true); // and the two windows are disjoint
+  });
+});
+
+// AIC-187 — the credential is per campaign, and the tick must not paper over a
+// campaign it has no credential for.
+describe("runIngestionTick (per-customer credentials)", () => {
+  const PERIOD = { start: "2026-08-05", end: "2026-08-11" };
+  const logger = { info: () => {}, error: () => {} };
+  const working = () =>
+    ({ ingestCampaign: async () => 1, ingestDaily: async () => 0 }) as unknown as IngestionService;
+
+  it("asks for a client per campaign, not once for the tick", async () => {
+    // Resolving once and reusing would operate every customer through whichever
+    // token came first — correct for the first, silently wrong for the rest.
+    const asked: string[] = [];
+    const ingestion = working();
+
+    await runIngestionTick({
+      campaigns: [
+        { id: "c1", metaCampaignId: "m1", connectionId: null },
+        { id: "c2", metaCampaignId: "m2", connectionId: null },
+      ],
+      ingestionFor: async (c) => { asked.push(c.id); return ingestion; },
+      period: PERIOD,
+      logger,
+    });
+
+    expect(asked).toEqual(["c1", "c2"]);
+  });
+
+  it("skips and counts a campaign with no usable credential, without failing the rest", async () => {
+    const ingestion = working();
+    const summary = await runIngestionTick({
+      campaigns: [
+        { id: "nocred", metaCampaignId: "m1", connectionId: null },
+        { id: "fine", metaCampaignId: "m2", connectionId: null },
+      ],
+      // The real case: a stored OAuth token we cannot decrypt. Never a fallback
+      // to a token belonging to somebody else.
+      ingestionFor: async (c) => (c.id === "nocred" ? null : ingestion),
+      period: PERIOD,
+      logger,
+    });
+
+    expect(summary.failed).toBe(1);
+    expect(summary.ok).toBe(1);
   });
 });

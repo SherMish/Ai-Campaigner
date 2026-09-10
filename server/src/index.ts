@@ -8,6 +8,7 @@ import { buildReaperTick } from "./services/creative-reaper.js";
 import { runProfileQualityTick } from "./services/profile-monitor.js";
 import { OpsQueue } from "./services/ops-queue.js";
 import { GraphCampaignAdapter } from "./meta/campaign-adapter.js";
+import { tokenForAdAccount } from "./meta/token-resolver.js";
 import { startScheduler } from "./services/scheduler.js";
 import { consoleLogger } from "./services/logger.js";
 import { buildNotificationRelay } from "./notify/relay.js";
@@ -131,9 +132,9 @@ if (ingestTick || generationTick) {
       try {
         const reaperTick = await buildReaperTick(
           pool,
-          () => {
-            const token = process.env.META_SYSTEM_USER_TOKEN;
-            return token ? new GraphCampaignAdapter(token) : null;
+          async (adAccountId) => {
+            const resolved = await tokenForAdAccount(pool, adAccountId);
+            return resolved ? new GraphCampaignAdapter(resolved.token) : null;
           },
           consoleLogger,
         );

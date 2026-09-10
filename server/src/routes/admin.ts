@@ -4,6 +4,7 @@ import { setObjectStatus, assertOwnedByCampaign } from "../controls/manual-contr
 import type { ControlObjectKind, ControlWriter } from "../controls/types.js";
 import type { DeliveryReader } from "../meta/delivery-health.js";
 import { buildAdditionWriter } from "../additions/session.js";
+import { sharedToken, tokenForCustomer } from "../meta/token-resolver.js";
 import { requireAdmin, requireFullAdmin } from "../middleware/admin.js";
 import type { AuthedRequest } from "../middleware/auth.js";
 import {
@@ -151,7 +152,7 @@ adminRouter.post("/campaigns/:id/objects/:action", async (req, res) => {
     return;
   }
 
-  const writer = buildAdditionWriter() as (ControlWriter & DeliveryReader) | null;
+  const writer = (await buildAdditionWriter(campaign.customer_id)) as (ControlWriter & DeliveryReader) | null;
   if (!writer) {
     res.status(503).json({ error: "Meta not configured" });
     return;
@@ -534,8 +535,14 @@ adminRouter.get("/audit", async (req, res) => {
 // customer never sees this — they're on the phone looking at their own Meta
 // settings while the operator reads the script.
 
+// AIC-187: deliberately NOT per-customer. The access probe asks about OUR
+// business portfolio and OUR System User (the three-layer model in
+// META_SETUP.md) — questions that only have an answer for a manual,
+// partner-shared connection. For an OAuth customer there is no portfolio
+// membership to probe, which is a gap in the wizard rather than a token to
+// swap: see docs/features/meta-connection.md.
 function probeOrNull(): AccessProbe | null {
-  const token = process.env.META_SYSTEM_USER_TOKEN;
+  const token = sharedToken();
   if (!token) return null;
   return new AccessProbe({ token, businessPortfolioId: OUR_BUSINESS_PORTFOLIO_ID, systemUserId: OUR_SYSTEM_USER_ID });
 }
@@ -582,7 +589,7 @@ adminRouter.post("/customers/:id/onboarding/check", async (req, res) => {
   if (!probe) {
     // No token configured is an OPERATOR-side problem, not a customer one —
     // never let it render as "the customer didn't share the asset".
-    res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
+    res.status(503).json({ error: "no usable Meta credential for this customer" });
     return;
   }
 
@@ -606,7 +613,7 @@ adminRouter.post("/customers/:id/onboarding/check", async (req, res) => {
 adminRouter.post("/customers/:id/onboarding/token-check", async (req, res) => {
   const probe = probeOrNull();
   if (!probe) {
-    res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
+    res.status(503).json({ error: "no usable Meta credential for this customer" });
     return;
   }
   const scopes = await probe.tokenScopes();
@@ -697,7 +704,7 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
   if (pageId || instagramId) {
     const probe = probeOrNull();
     if (!probe) {
-      res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
+      res.status(503).json({ error: "no usable Meta credential for this customer" });
       return;
     }
     if (pageId) pageVerdict = (await probe.probeAsset("page", pageId)).verdict;
@@ -786,9 +793,9 @@ adminRouter.post("/customers/:id/onboarding/provision", async (req, res) => {
 // (e.g. two of our own test rows share one), so this must not read as "you
 // can't pick this", only "heads up, it's shared".
 adminRouter.get("/customers/:id/onboarding/ad-accounts", async (req, res) => {
-  const reader = buildCampaignDiscoveryReader();
+  const reader = await buildCampaignDiscoveryReader(req.params.id);
   if (!reader) {
-    res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
+    res.status(503).json({ error: "no usable Meta credential for this customer" });
     return;
   }
   try {
@@ -830,9 +837,9 @@ adminRouter.get("/customers/:id/onboarding/pages", async (req, res) => {
     res.status(400).json({ error: "metaAdAccountId is required" });
     return;
   }
-  const reader = buildCampaignDiscoveryReader();
+  const reader = await buildCampaignDiscoveryReader(req.params.id);
   if (!reader) {
-    res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
+    res.status(503).json({ error: "no usable Meta credential for this customer" });
     return;
   }
   try {
@@ -883,9 +890,9 @@ adminRouter.get("/customers/:id/onboarding/instagram-accounts", async (req, res)
     res.status(400).json({ error: "metaAdAccountId is required" });
     return;
   }
-  const reader = buildCampaignDiscoveryReader();
+  const reader = await buildCampaignDiscoveryReader(req.params.id);
   if (!reader) {
-    res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
+    res.status(503).json({ error: "no usable Meta credential for this customer" });
     return;
   }
   try {
@@ -909,9 +916,9 @@ adminRouter.get("/customers/:id/onboarding/campaigns", async (req, res) => {
     res.status(400).json({ error: "metaAdAccountId is required" });
     return;
   }
-  const reader = buildCampaignDiscoveryReader();
+  const reader = await buildCampaignDiscoveryReader(req.params.id);
   if (!reader) {
-    res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
+    res.status(503).json({ error: "no usable Meta credential for this customer" });
     return;
   }
   try {
@@ -947,13 +954,16 @@ adminRouter.post("/customers/:id/onboarding/finalize", async (req, res) => {
     res.status(409).json({ error: "no connection to verify — provision first" });
     return;
   }
-  const token = process.env.META_SYSTEM_USER_TOKEN;
-  if (!token) {
-    res.status(503).json({ error: "META_SYSTEM_USER_TOKEN is not configured" });
+  // AIC-187: verifying an OAuth customer's access with OUR token would report
+  // assets we simply cannot see as revoked — a false access-loss alarm that
+  // halts execution on a connection that is fine.
+  const resolved = await tokenForCustomer(pool, req.params.id);
+  if (!resolved) {
+    res.status(503).json({ error: "no usable Meta credential for this customer" });
     return;
   }
 
-  const service = new ConnectionService(new PgConnectionStore(pool), new GraphMetaClient(token));
+  const service = new ConnectionService(new PgConnectionStore(pool), new GraphMetaClient(resolved.token));
   const health = await service.verify(rows[0].id);
 
   await getOrCreateOnboarding(pool, req.params.id);

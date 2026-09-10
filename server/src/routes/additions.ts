@@ -157,7 +157,7 @@ additionsRouter.get("/creative-context", requireAuth, async (req, res) => {
       res.status(409).json({ error: "no managed campaign" });
       return;
     }
-    const reader = buildAdditionWriter() as AdDetailReader | null;
+    const reader = (await buildAdditionWriter(ctx.customerId)) as AdDetailReader | null;
     const context = await buildCreativeContext(pool, reader, ctx.customerId, ctx.localCampaignId);
     res.json(context);
 
@@ -211,7 +211,7 @@ additionsRouter.get("/ad-sets", requireAuth, async (req, res) => {
   try {
     const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) return notReady(res);
-    const writer = buildAdditionWriter();
+    const writer = await buildAdditionWriter(ctx.customerId);
     if (!writer) return unavailable(res);
     // AIC-65: never offer a DELETED or ARCHIVED ad set as a place to add an ad
     // — an ad added there would never deliver.
@@ -263,7 +263,7 @@ additionsRouter.get("/page", requireAuth, async (req, res) => {
       res.json({ name: null, pictureUrl: null });
       return;
     }
-    const reader = buildAdditionWriter() as { getPageIdentity?: (id: string) => Promise<{ name: string | null; pictureUrl: string | null }> } | null;
+    const reader = (await buildAdditionWriter(ctx.customerId)) as { getPageIdentity?: (id: string) => Promise<{ name: string | null; pictureUrl: string | null }> } | null;
     if (!reader?.getPageIdentity) {
       res.json({ name: null, pictureUrl: null });
       return;
@@ -282,7 +282,7 @@ additionsRouter.post("/upload", requireAuth, upload.single("file"), async (req, 
     if (!ctx) return notReady(res);
     const file = req.file;
     if (!file) { res.status(400).json({ error: "no file" }); return; }
-    const writer = buildAdditionWriter();
+    const writer = await buildAdditionWriter(ctx.customerId);
     if (!writer) return unavailable(res);
     const media = await uploadCreativeMedia(writer, ctx.metaAdAccountId, {
       buffer: file.buffer,
@@ -304,7 +304,7 @@ additionsRouter.get("/posts", requireAuth, async (req, res) => {
   try {
     const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) return notReady(res);
-    const writer = buildAdditionWriter();
+    const writer = await buildAdditionWriter(ctx.customerId);
     if (!writer) return unavailable(res);
     const posts = await listPromotableContent(writer, ctx.pageId, ctx.instagramId);
     res.json({ posts });
@@ -336,7 +336,7 @@ additionsRouter.post("/creative", requireAuth, async (req, res) => {
     const body = req.body as CreativeBody;
     if (!body.clientKey || !body.name) { res.status(400).json({ error: "clientKey and name are required" }); return; }
 
-    const writer = buildAdditionWriter();
+    const writer = await buildAdditionWriter(ctx.customerId);
     if (!writer) return unavailable(res);
 
     let spec: CreativeSpec;
@@ -433,7 +433,7 @@ additionsRouter.post("/ad", requireAuth, async (req, res) => {
       return;
     }
 
-    const writer = buildAdditionWriter();
+    const writer = await buildAdditionWriter(ctx.customerId);
     if (!writer) return unavailable(res);
 
     // Ownership + liveness re-check: the ad set must be the caller's AND still
@@ -556,7 +556,7 @@ additionsRouter.post("/ad-set", requireAuth, async (req, res) => {
     if (!Array.isArray(body.ads) || body.ads.length === 0) { res.status(400).json({ error: "at least one ad is required" }); return; }
     if (!body.additionKey) { res.status(400).json({ error: "additionKey is required" }); return; }
 
-    const writer = buildAdditionWriter();
+    const writer = await buildAdditionWriter(ctx.customerId);
     if (!writer) return unavailable(res);
 
     const result = await addAdSetToExistingCampaign(pool, writer, {
@@ -633,7 +633,7 @@ additionsRouter.post("/:id/approve", requireAuth, async (req, res) => {
   try {
     const ctx = await resolveAdditionContext(pool, (req as AuthedRequest).userId!, campaignIdFromRequest(req));
     if (!ctx) return notReady(res);
-    const writer = buildAdditionWriter();
+    const writer = await buildAdditionWriter(ctx.customerId);
     if (!writer) return unavailable(res);
 
     const result = await approveAddition(pool, writer, String(req.params.id), ctx.localCampaignId);

@@ -1,4 +1,6 @@
 import type pg from "pg";
+import { pool } from "../db/pool.js";
+import { tokenForCustomer } from "../meta/token-resolver.js";
 import { GraphCampaignAdapter } from "../meta/campaign-adapter.js";
 import type { BuilderWriter } from "../builder/types.js";
 import type { CreativeWriter } from "../builder/creative-types.js";
@@ -257,9 +259,16 @@ export async function resolveAdditionAvailability(
 // Also a DeliveryReader (AIC-71 follow-up): the manual-controls routes reuse
 // this same adapter instance to recompute delivery state right after a write,
 // instead of waiting for the next hourly engine tick.
-export function buildAdditionWriter(): (BuilderWriter & CreativeWriter & AdditionWriter & DeliveryReader & AdMediaReader & AdMetaReader) | null {
-  const token = process.env.META_SYSTEM_USER_TOKEN;
-  if (!token) return null;
+// AIC-187: the credential is resolved per CUSTOMER, not read from the
+// environment. A manual connection still resolves to the shared System User
+// token; an OAuth connection resolves to that customer's own. Passing the
+// customer id is what makes the difference impossible to forget — the previous
+// signature took no arguments and could not have been wrong at a call site.
+export async function buildAdditionWriter(
+  customerId: string,
+): Promise<(BuilderWriter & CreativeWriter & AdditionWriter & DeliveryReader & AdMediaReader & AdMetaReader) | null> {
+  const resolved = await tokenForCustomer(pool, customerId);
+  if (!resolved) return null;
   const ver = process.env.META_GRAPH_VERSION || "v21.0";
-  return new GraphCampaignAdapter(token, ver);
+  return new GraphCampaignAdapter(resolved.token, ver);
 }

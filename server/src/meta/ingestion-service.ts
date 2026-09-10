@@ -73,7 +73,17 @@ export interface TickSummary {
 // scheduled connection health check (AIC-5) per campaign.
 export async function runIngestionTick(deps: {
   campaigns: ManagedCampaignRef[];
-  ingestion: IngestionService;
+  // AIC-187: a FACTORY, not an instance. There is no longer one credential per
+  // tick — a manual customer is read with our shared System User token and an
+  // OAuth customer with their own, so the client has to be built per campaign,
+  // inside the loop. Resolving once and reusing would operate every customer
+  // through whichever token came first, and would mostly work: correct for the
+  // first customer, silently wrong for the rest.
+  //
+  // Returning null means "no usable credential for this campaign" — counted as
+  // a failure for that campaign and skipped, never falling back to a token that
+  // belongs to somebody else.
+  ingestionFor: (c: ManagedCampaignRef) => Promise<IngestionService | null>;
   period: InsightsPeriod;
   // Extra windows ingested alongside `period`, each stored as its own snapshot
   // row. Used for the today-only window (scheduled-ingestion.ts's
@@ -85,22 +95,36 @@ export async function runIngestionTick(deps: {
   // range switcher + the leads graph). Display-only, same as extraPeriods.
   dailyPeriod?: InsightsPeriod;
   logger: Logger;
-  connectionService?: ConnectionService;
+  // Also per campaign, and for a sharper reason than ingestion: verifying an
+  // OAuth customer's access with OUR token reports assets we cannot see as
+  // REVOKED — a false access-loss alarm that halts execution and tells the
+  // customer we lost a connection that is fine.
+  connectionServiceFor?: (c: ManagedCampaignRef) => Promise<ConnectionService | null>;
 }): Promise<TickSummary> {
-  const { campaigns, ingestion, period, logger, connectionService } = deps;
+  const { campaigns, period, logger } = deps;
   const extraPeriods = deps.extraPeriods ?? [];
   const summary: TickSummary = { ok: 0, failed: 0, snapshots: 0 };
 
   for (const c of campaigns) {
-    if (connectionService && c.connectionId) {
+    if (deps.connectionServiceFor && c.connectionId) {
       try {
-        await connectionService.verify(c.connectionId);
+        const svc = await deps.connectionServiceFor(c);
+        if (svc) await svc.verify(c.connectionId);
       } catch (err) {
         logger.error(`health check failed for campaign ${c.id}`, err);
       }
     }
 
     if (!c.metaCampaignId) continue; // not linked to a Meta campaign yet
+
+    const ingestion = await deps.ingestionFor(c);
+    if (!ingestion) {
+      // No credential we can use for this customer. Counted, logged, skipped —
+      // the alternative is reading their account with someone else's token.
+      logger.error(`no usable Meta credential for campaign ${c.id}`);
+      summary.failed++;
+      continue;
+    }
 
     // AIC-87: this campaign's own lead definition, carried on every ingest
     // call below (primary window, extras, and the daily series) — a missed

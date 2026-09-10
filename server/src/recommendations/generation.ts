@@ -5,6 +5,7 @@ import type { SnapshotStore } from "../meta/snapshot-store.js";
 import type { MetaReader } from "../execution/safe-executor.js";
 import type { RecommendationDraft } from "./types.js";
 import { GraphCampaignAdapter } from "../meta/campaign-adapter.js";
+import { tokenForCampaign } from "../meta/token-resolver.js";
 import { PgSnapshotStore } from "../meta/snapshot-store.js";
 import { PgRecommendationStore, type RecommendationStore } from "./recommendation-store.js";
 import { RecommendationService } from "./recommendation-service.js";
@@ -593,12 +594,23 @@ export async function runGenerationTick(deps: {
   return summary;
 }
 
-// Bind a generation tick to the DB + a real Meta reader. Returns null (inert)
-// when no System User token is set, mirroring the ingestion scheduler.
+// Bind a generation tick to the DB + a real Meta reader.
+//
+// AIC-187: no longer one adapter for the tick. The engine READS and WRITES a
+// customer's ad account, so the credential is theirs, and it is resolved per
+// campaign — which means the tick runs runGenerationTick once per campaign
+// rather than once over the list.
+//
+// That is safe because runGenerationTick has no cross-campaign state: it
+// derives its periods deterministically and accumulates into a summary. Passing
+// a one-element list and summing the summaries is the same computation.
+//
+// It no longer returns null for a missing env token either — an OAuth-only
+// deployment has none and still has work to do. A campaign with no usable
+// credential is counted in `skipped`, which is per-campaign truth rather than a
+// process-wide guess.
 export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSummary>) | null {
-  const token = process.env.META_SYSTEM_USER_TOKEN;
-  if (!token) return null;
-  const adapter = new GraphCampaignAdapter(token, process.env.META_GRAPH_VERSION || "v21.0");
+  const graphVersion = process.env.META_GRAPH_VERSION || "v21.0";
   const snapshotStore = new PgSnapshotStore(pool);
   const recommendationStore = new PgRecommendationStore(pool);
   const recommendationService = new RecommendationService(recommendationStore);
@@ -606,8 +618,23 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
 
   return async () => {
     const campaigns = await listEligibleForGeneration(pool);
-    return runGenerationTick({
-      campaigns,
+    const total: GenerationSummary = {
+      evaluated: 0, created: 0, expired: 0, skipped: 0, deliveryProblems: 0,
+      trackingProblems: 0, ctaProblems: 0, accountProblems: 0,
+      leadEventProblems: 0, overcountSuspected: 0,
+    };
+
+    for (const only of campaigns) {
+    const resolved = await tokenForCampaign(pool, only.id);
+    if (!resolved) {
+      // Never fall back to a token belonging to somebody else.
+      consoleLogger.error(`generation: no usable Meta credential for campaign ${only.id}`);
+      total.skipped += 1;
+      continue;
+    }
+    const adapter = new GraphCampaignAdapter(resolved.token, graphVersion);
+    const one = await runGenerationTick({
+      campaigns: [only],
       reader: adapter,
       deliveryReader: adapter,
       recordDelivery: async (campaign, del) => {
@@ -724,5 +751,9 @@ export function buildGenerationTick(pool: pg.Pool): (() => Promise<GenerationSum
       recommendationService,
       logger: consoleLogger,
     });
+    for (const k of Object.keys(total) as Array<keyof GenerationSummary>) total[k] += one[k];
+    }
+
+    return total;
   };
 }

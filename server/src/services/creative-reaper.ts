@@ -180,11 +180,12 @@ export async function markCreativesAttached(pool: pg.Pool, creativeIds: readonly
  */
 export async function buildReaperTick(
   pool: pg.Pool,
-  makeAdapter: () => (ReaperReader & ReaperWriter) | null,
+  // AIC-187: keyed on the ad account, because the reaper DELETES objects in a
+  // customer's account and must do so with the credential they granted us. This
+  // function already grouped its work by account; it simply ignored which one.
+  makeAdapter: (adAccountId: string) => Promise<(ReaperReader & ReaperWriter) | null>,
   log?: { info: (m: string) => void; error: (m: string) => void },
 ): Promise<(() => Promise<ReapResult>) | null> {
-  const probe = makeAdapter();
-  if (!probe) return null;
   return async () => {
     const total: ReapResult = { considered: 0, deleted: [], reattached: [], failed: [] };
     const candidates = await listReapCandidates(pool);
@@ -195,8 +196,11 @@ export async function buildReaperTick(
       byAccount.set(c.adAccountId, list);
     }
     for (const [adAccountId, list] of byAccount) {
-      const adapter = makeAdapter();
-      if (!adapter) continue;
+      const adapter = await makeAdapter(adAccountId);
+      if (!adapter) {
+        log?.error(`reaper: no usable Meta credential for ${adAccountId}`);
+        continue;
+      }
       const r = await reapAccount({ pool, reader: adapter, writer: adapter, adAccountId, candidates: list, log });
       total.considered += r.considered;
       total.deleted.push(...r.deleted);

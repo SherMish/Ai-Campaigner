@@ -7,6 +7,18 @@ import { validateCreativeCopy, MAX_VIDEO_BYTES, SPECIAL_AD_CATEGORY, FIXED_BID_S
 import { pool } from "../db/pool.js";
 import { requireAdmin } from "../middleware/admin.js";
 import type { AuthedRequest } from "../middleware/auth.js";
+// AIC-187: /geo is the one Meta read in the product that belongs to nobody —
+// `/search` is a global reference endpoint (see the route comment below). It
+// needs A credential, not THIS customer's, so it deliberately uses the shared
+// System User token and skips the per-customer resolve that would otherwise put
+// a database read on every keystroke of a location picker.
+function geoReader(): GraphCampaignAdapter | null {
+  const token = sharedToken();
+  return token ? new GraphCampaignAdapter(token, process.env.META_GRAPH_VERSION || "v21.0") : null;
+}
+
+import { GraphCampaignAdapter } from "../meta/campaign-adapter.js";
+import { sharedToken } from "../meta/token-resolver.js";
 import { resolveBuilderContextForCustomer, ownsLocalCampaign, buildBuilderWriter } from "../builder/session.js";
 import { startBuilderCampaign, buildCampaignOnMeta, type BuildCampaignInput } from "../builder/campaign-create.js";
 import { createCreativeIdempotent, uploadCreativeMedia, type CreativeSpec } from "../builder/creative-create.js";
@@ -90,7 +102,7 @@ adminBuilderRouter.post<{ id: string }>("/customers/:id/builder/upload", upload.
     if (!ctx) return notReady(res);
     const file = req.file;
     if (!file) { res.status(400).json({ error: "no file" }); return; }
-    const writer = buildBuilderWriter();
+    const writer = await buildBuilderWriter(ctx.customerId);
     if (!writer) return unavailable(res);
     const media = await uploadCreativeMedia(writer, ctx.metaAdAccountId, {
       buffer: file.buffer,
@@ -111,7 +123,7 @@ adminBuilderRouter.get("/customers/:id/builder/posts", async (req, res) => {
   try {
     const ctx = await resolveBuilderContextForCustomer(pool, req.params.id);
     if (!ctx) return notReady(res);
-    const writer = buildBuilderWriter();
+    const writer = await buildBuilderWriter(ctx.customerId);
     if (!writer) return unavailable(res);
     const posts = await listPromotableContent(writer, ctx.pageId, ctx.instagramId);
     res.json({ posts });
@@ -129,7 +141,7 @@ adminBuilderRouter.get("/customers/:id/builder/posts", async (req, res) => {
 adminBuilderRouter.get("/customers/:id/builder/page", async (req, res) => {
   try {
     const ctx = await resolveBuilderContextForCustomer(pool, req.params.id);
-    const writer = ctx ? buildBuilderWriter() : null;
+    const writer = ctx ? await buildBuilderWriter(ctx.customerId) : null;
     res.json(await pageIdentityOrNulls(writer, ctx?.pageId));
   } catch (e) {
     console.error("[admin-builder] page identity failed", e);
@@ -139,7 +151,7 @@ adminBuilderRouter.get("/customers/:id/builder/page", async (req, res) => {
 
 adminBuilderRouter.get("/customers/:id/builder/geo", async (req, res) => {
   try {
-    res.json({ places: await searchGeoOrEmpty(buildBuilderWriter(), String(req.query.q ?? "")) });
+    res.json({ places: await searchGeoOrEmpty(geoReader(), String(req.query.q ?? "")) });
   } catch (e) {
     // AIC-168: a throttle is temporary and fixed by waiting — never
     // this route's own generic failure.
@@ -153,7 +165,7 @@ adminBuilderRouter.get("/customers/:id/builder/pixels", async (req, res) => {
   try {
     const ctx = await resolveBuilderContextForCustomer(pool, req.params.id);
     if (!ctx) return notReady(res);
-    const writer = buildBuilderWriter();
+    const writer = await buildBuilderWriter(ctx.customerId);
     if (!writer) return unavailable(res);
     const pixels = await writer.listPixels(ctx.metaAdAccountId);
     res.json({ pixels });
@@ -180,7 +192,7 @@ adminBuilderRouter.post("/customers/:id/builder/pixel-check", async (req, res) =
       res.status(400).json({ error: "pixelId and conversionEvent are required" });
       return;
     }
-    const writer = buildBuilderWriter();
+    const writer = await buildBuilderWriter(ctx.customerId);
     if (!writer) return unavailable(res);
     const result = await writer.checkPixelEventRecency(body.pixelId, body.conversionEvent);
     res.json(result);
@@ -218,7 +230,7 @@ adminBuilderRouter.post("/customers/:id/builder/creative", async (req, res) => {
     }
     if (!body.clientKey || !body.name) { res.status(400).json({ error: "clientKey and name are required" }); return; }
 
-    const writer = buildBuilderWriter();
+    const writer = await buildBuilderWriter(ctx.customerId);
     if (!writer) return unavailable(res);
 
     let spec: CreativeSpec;
@@ -311,7 +323,7 @@ adminBuilderRouter.post("/customers/:id/builder/build", async (req, res) => {
       (c): c is SpecialAdCategory => (SPECIAL_AD_CATEGORY as readonly string[]).includes(c),
     );
 
-    const writer = buildBuilderWriter();
+    const writer = await buildBuilderWriter(ctx.customerId);
     if (!writer) return unavailable(res);
 
     const input: BuildCampaignInput = {

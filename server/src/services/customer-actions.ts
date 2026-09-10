@@ -1,4 +1,5 @@
 import type pg from "pg";
+import { tokenForUser } from "../meta/token-resolver.js";
 import type { AccessHealth } from "@aic/shared";
 import { ConnectionService } from "../meta/connection-service.js";
 import { PgConnectionStore } from "../meta/connection-store.js";
@@ -30,7 +31,9 @@ export async function recheckCustomerConnection(
   const connId = await resolveConnectionId(pool, userId);
   if (!connId) return null;
 
-  const token = process.env.META_SYSTEM_USER_TOKEN;
+  // AIC-187: this customer's credential, not the process's.
+  const resolved = await tokenForUser(pool, userId);
+  const token = resolved?.token;
   if (!token) {
     const { rows } = await pool.query<{ access_health: AccessHealth }>(
       `SELECT access_health FROM meta_connections WHERE id = $1`,

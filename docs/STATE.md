@@ -6,6 +6,27 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-10 — AIC-187: each customer is operated through their own credential
+
+The other half of AIC-186. Every Graph call now resolves its token through
+`meta/token-resolver.ts` instead of reading `META_SYSTEM_USER_TOKEN`: a manual
+connection still yields the shared System User token, an OAuth connection yields
+that customer's own, and a customer with no connection row yields the shared one
+as before. A token that fails to decrypt returns null rather than falling back —
+running someone's account on our credential either errors or, worse, succeeds
+and hides the broken key.
+
+The ticks were the substance. Both the ingestion and generation ticks built one
+client and reused it across every campaign; with per-customer tokens that is the
+worst shape available, because it mostly works. `runIngestionTick` now takes
+factories, and `buildGenerationTick` runs once per campaign.
+
+Unchanged on purpose: the operator scripts that act on our own account, and
+`/builder/geo`, which reads Meta's global city search and belongs to nobody.
+
+857 unit + 14 integration tests green.
+
+
 ### 2026-09-10 — AIC-186: the customer connects Meta themselves
 
 Facebook Login for Business, shown on the existing `meta_connection_required`

@@ -1,5 +1,6 @@
 import { resolveOwnedCampaign } from "./campaign-selection.js";
 import type pg from "pg";
+import { tokenForCustomer } from "../meta/token-resolver.js";
 import { track } from "../analytics/mixpanel.js";
 import type { RecommendationType } from "@aic/shared";
 import { PgRecommendationStore } from "../recommendations/recommendation-store.js";
@@ -141,11 +142,18 @@ export async function getCustomerRecommendation(
 }
 
 // Build the production safe-execute pipeline for a customer approval. Returns
-// null when no Meta token is configured (execution unavailable) — the caller
+// null when there is no usable credential (execution unavailable) — the caller
 // then reports an honest "temporarily unavailable" instead of pretending.
-export function buildCustomerExecutor(pool: pg.Pool): SafeExecutor | null {
-  const token = process.env.META_SYSTEM_USER_TOKEN;
-  if (!token) return null;
+//
+// AIC-187: keyed on the customer, because executing a recommendation is a WRITE
+// to their ad account and must go through the credential they granted us.
+export async function buildCustomerExecutor(
+  pool: pg.Pool,
+  customerId: string,
+): Promise<SafeExecutor | null> {
+  const resolved = await tokenForCustomer(pool, customerId);
+  if (!resolved) return null;
+  const token = resolved.token;
   const ver = process.env.META_GRAPH_VERSION || "v21.0";
 
   const store = new PgRecommendationStore(pool);
@@ -231,7 +239,7 @@ export async function approveCustomerRecommendation(
   if (!rec || rec.campaignId !== owner.campaignId) return { status: "not_found" };
   if (rec.state !== "proposed") return { status: "not_pending" };
 
-  const executor = buildCustomerExecutor(pool);
+  const executor = await buildCustomerExecutor(pool, owner.customerId);
   if (!executor) return { status: "unavailable" };
 
   // proposed → approved, then run the pipeline (approved → executing → …).

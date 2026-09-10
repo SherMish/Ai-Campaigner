@@ -261,7 +261,8 @@ appRouter.get("/launch", requireAuth, async (req, res) => {
     // The same token-gated adapter the writer uses. Null (no token) is NOT
     // treated as "fine" — getPendingLaunch reports `verification_unavailable`
     // and blocks approval, since we can't confirm what we'd be turning on.
-    const launch = await getPendingLaunch(pool, (req as AuthedRequest).userId!, buildLaunchReader());
+    const userId = (req as AuthedRequest).userId!;
+    const launch = await getPendingLaunch(pool, userId, await buildLaunchReader(userId));
     res.json({ launch });
   } catch (e) {
     console.error("[app] launch summary failed", e);
@@ -271,12 +272,13 @@ appRouter.get("/launch", requireAuth, async (req, res) => {
 
 appRouter.post("/launch/approve", requireAuth, async (req, res) => {
   try {
-    const writer = buildLaunchWriter();
+    const userId = (req as AuthedRequest).userId!;
+    const writer = await buildLaunchWriter(userId);
     if (!writer) {
       res.status(503).json({ error: "execution temporarily unavailable" });
       return;
     }
-    const result = await approveLaunch(pool, writer, (req as AuthedRequest).userId!, buildLaunchReader(), launchOps);
+    const result = await approveLaunch(pool, writer, userId, await buildLaunchReader(userId), launchOps);
     if (result.outcome === "not_found") {
       res.status(404).json({ error: "nothing pending launch" });
       return;

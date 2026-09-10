@@ -227,13 +227,52 @@ Business Verification and App Review clear, **this flow works only for people
 holding a role on the app** (admin/developer/tester). That is why the flag
 exists and why the manual path stays.
 
+### Whose credential (AIC-187)
+
+Every Graph call in the product resolves its credential through
+`server/src/meta/token-resolver.ts`, never from the environment directly:
+
+| connection | credential |
+| --- | --- |
+| `connected_via = 'manual'` | the shared System User token (`META_SYSTEM_USER_TOKEN`) |
+| `connected_via = 'oauth'` | that customer's own token, decrypted |
+| no connection row | the shared token — every customer who predates OAuth |
+
+Four entry points, by what the caller happens to hold: `tokenForCustomer`,
+`tokenForCampaign`, `tokenForUser`, `tokenForAdAccount`. Answering this in one
+place is the point — a site that forgot to ask would fall back to the shared
+token and **mostly work**, succeeding for manual customers and failing only for
+OAuth ones.
+
+**A failure to decrypt returns null, never a fallback.** Falling back would run
+an OAuth customer's account on *our* credential: either a permission error, or —
+if we happen to hold partner access as well — a success that hides a broken key.
+
+**The ticks resolve per campaign, inside the loop.** Both the ingestion tick and
+the generation tick used to build one client and reuse it for every campaign.
+With per-customer tokens that is the worst available bug, because it mostly
+works: correct for whichever customer came first, silently wrong for the rest.
+`runIngestionTick` therefore takes `ingestionFor`/`connectionServiceFor`
+factories rather than instances, and `buildGenerationTick` runs the generation
+once per campaign (safe because it holds no cross-campaign state).
+
+Verifying access is the sharpest case: checking an OAuth customer's assets with
+our token reports what we cannot see as **revoked** — a false access-loss alarm
+that halts execution on a connection that is fine.
+
+**What deliberately keeps the shared token:** the operator scripts that act on
+*our own* account (`probe.ts`, `write-test.ts`, `adset-write-test.ts`,
+`backfill-orphan-creatives.ts`, `find-campaign.ts`), and `/builder/geo` — Meta's
+`/search` is a global reference endpoint that reads nothing belonging to anyone,
+so resolving a customer would put a database read on every keystroke of a
+location picker.
+
 ### Known gaps
 
-- **The token is stored but not yet used.** Every adapter still reads
-  `META_SYSTEM_USER_TOKEN` from the environment. Threading a per-connection
-  token through `MetaClient` is the next unit of work; until it lands, an
-  OAuth-connected customer is discovered but operated through the shared System
-  User, which only works if the assets are also shared with our portfolio.
+- **The wizard's access probe has no OAuth answer.** `probeOrNull` asks about
+  membership of OUR business portfolio and OUR System User — questions that only
+  exist for a partner-shared connection. For an OAuth customer the three-layer
+  check is not wrong, it is inapplicable, and the wizard does not yet say so.
 - **The first ad account and Page win.** A customer who grants four ad accounts
   gets the first one. `granted_*` records all of them so a picker can be added
   without re-consent, but no picker exists yet.

@@ -67,7 +67,7 @@ controlsRouter.get("/state", requireAuth, async (req, res) => {
       res.status(409).json({ error: "no managed campaign", reason: availability.reason });
       return;
     }
-    const writer = buildAdditionWriter() as ControlWriter | null;
+    const writer = (await buildAdditionWriter(availability.ctx.customerId)) as ControlWriter | null;
     if (!writer) return unavailable(res);
     const state = await writer.getCampaignState(availability.ctx.metaCampaignId);
     res.json({ adStatuses: state.adStatuses, adSetStatuses: state.adSetStatuses, adSetByAd: state.adSetByAd, campaignStatus: state.campaignStatus });
@@ -92,7 +92,7 @@ controlsRouter.get("/media", requireAuth, async (req, res) => {
       res.status(409).json({ error: "no managed campaign", reason: availability.reason });
       return;
     }
-    const reader = buildAdditionWriter() as AdMediaReader | null;
+    const reader = (await buildAdditionWriter(availability.ctx.customerId)) as AdMediaReader | null;
     if (!reader) return unavailable(res);
     res.json({ ads: await reader.getAdMedia(availability.ctx.metaCampaignId) });
   } catch (e) {
@@ -118,7 +118,7 @@ for (const action of ["pause", "resume"] as const) {
         res.status(409).json({ error: "no managed campaign" });
         return;
       }
-      const writer = buildAdditionWriter() as (ControlWriter & DeliveryReader) | null;
+      const writer = (await buildAdditionWriter(ctx.customerId)) as (ControlWriter & DeliveryReader) | null;
       if (!writer) return unavailable(res);
 
       // Never trust a client-supplied Meta id: prove it lives under the
@@ -181,7 +181,7 @@ controlsRouter.patch("/ad-set/:metaAdSetId", requireAuth, async (req, res) => {
       res.status(409).json({ error: "no managed campaign" });
       return;
     }
-    const writer = buildAdditionWriter() as (ControlWriter & AdSetEditWriter) | null;
+    const writer = (await buildAdditionWriter(ctx.customerId)) as (ControlWriter & AdSetEditWriter) | null;
     if (!writer) return unavailable(res);
 
     const metaAdSetId = String(req.params.metaAdSetId);
@@ -234,7 +234,7 @@ controlsRouter.patch("/ad/:metaAdId", requireAuth, async (req, res) => {
       res.status(409).json({ error: "no managed campaign" });
       return;
     }
-    const writer = buildAdditionWriter() as (ControlWriter & AdEditWriter) | null;
+    const writer = (await buildAdditionWriter(ctx.customerId)) as (ControlWriter & AdEditWriter) | null;
     if (!writer) return unavailable(res);
 
     const metaAdId = String(req.params.metaAdId);
@@ -273,7 +273,7 @@ controlsRouter.get("/ad-set/:metaAdSetId", requireAuth, async (req, res) => {
       res.status(409).json({ error: "no managed campaign" });
       return;
     }
-    const reader = buildAdditionWriter() as (ControlWriter & AdSetDetailReader) | null;
+    const reader = (await buildAdditionWriter(ctx.customerId)) as (ControlWriter & AdSetDetailReader) | null;
     if (!reader) return unavailable(res);
 
     const metaAdSetId = String(req.params.metaAdSetId);
@@ -303,7 +303,7 @@ controlsRouter.get("/ad/:metaAdId", requireAuth, async (req, res) => {
       res.status(409).json({ error: "no managed campaign" });
       return;
     }
-    const reader = buildAdditionWriter() as (ControlWriter & AdDetailReader) | null;
+    const reader = (await buildAdditionWriter(ctx.customerId)) as (ControlWriter & AdDetailReader) | null;
     if (!reader) return unavailable(res);
 
     const metaAdId = String(req.params.metaAdId);
@@ -362,7 +362,7 @@ for (const action of ["hide", "unhide"] as const) {
         res.status(409).json({ error: "no managed campaign" });
         return;
       }
-      const writer = buildAdditionWriter() as ControlWriter | null;
+      const writer = (await buildAdditionWriter(ctx.customerId)) as ControlWriter | null;
       if (!writer) return unavailable(res);
 
       // Ownership first, same as pause/resume. Note this also means a customer

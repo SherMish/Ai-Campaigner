@@ -1,6 +1,7 @@
 import type pg from "pg";
 import type { InsightsPeriod } from "./types.js";
 import { GraphMetaClient } from "./client.js";
+import { tokenForCampaign } from "./token-resolver.js";
 import { PgSnapshotStore } from "./snapshot-store.js";
 import { PgConnectionStore } from "./connection-store.js";
 import { track } from "../analytics/mixpanel.js";
@@ -102,17 +103,25 @@ export function rollingPeriods(ref: Date = new Date()): {
 export function buildIngestionTick(
   pool: pg.Pool,
 ): (() => Promise<TickSummary>) | null {
-  const token = process.env.META_SYSTEM_USER_TOKEN;
-  if (!token) {
-    consoleLogger.info(
-      "ingestion scheduler inert: META_SYSTEM_USER_TOKEN not set",
-    );
-    return null;
-  }
-  const client = new GraphMetaClient(token);
-  const ingestion = new IngestionService(new PgSnapshotStore(pool), client);
-  const connectionService = new ConnectionService(
-    new PgConnectionStore(pool),
+  // AIC-187: no single client for the tick any more. The credential depends on
+  // the campaign's customer, so both the ingestion service and the connection
+  // service are built inside the loop, per campaign.
+  //
+  // The old inert-if-no-env-token gate is gone with it: an OAuth-only
+  // deployment legitimately has no META_SYSTEM_USER_TOKEN and still has work to
+  // do. A campaign with no usable credential is now skipped and counted by
+  // runIngestionTick, which is per-campaign truth rather than a process-wide
+  // guess.
+  const store = new PgSnapshotStore(pool);
+  const connectionStore = new PgConnectionStore(pool);
+
+  const clientFor = async (c: { id: string }): Promise<GraphMetaClient | null> => {
+    const resolved = await tokenForCampaign(pool, c.id);
+    return resolved ? new GraphMetaClient(resolved.token) : null;
+  };
+
+  const makeConnectionService = (client: GraphMetaClient) => new ConnectionService(
+    connectionStore,
     client,
     undefined,
     // AIC-28: only the SCHEDULED check reports connection transitions. The
@@ -147,18 +156,31 @@ export function buildIngestionTick(
   // Same principle as AIC-191, applied one layer further: a cache the CUSTOMER
   // reads is observation, not action, and must not depend on our permission to
   // act on their behalf.
-  const adapter = new GraphCampaignAdapter(token);
+  //
+  // AIC-187: built per campaign like everything else in the tick — the cache is
+  // read from the customer's own account, so it needs the customer's own
+  // credential.
+  const adapterFor = async (campaignId: string): Promise<GraphCampaignAdapter | null> => {
+    const resolved = await tokenForCampaign(pool, campaignId);
+    return resolved ? new GraphCampaignAdapter(resolved.token) : null;
+  };
   return async () => {
     const campaigns = await listManagedCampaigns(pool);
     const { current } = rollingPeriods();
     const summary = await runIngestionTick({
       campaigns,
-      ingestion,
+      ingestionFor: async (c) => {
+        const client = await clientFor(c);
+        return client ? new IngestionService(store, client) : null;
+      },
       period: current,
       extraPeriods: [todayPeriod()], // customer dashboard only — see todayPeriod
       dailyPeriod: dailyPeriod(), // disjoint per-day rows for the range switcher + graph
       logger: consoleLogger,
-      connectionService,
+      connectionServiceFor: async (c) => {
+        const client = await clientFor(c);
+        return client ? makeConnectionService(client) : null;
+      },
     });
 
     for (const c of campaigns) {
@@ -167,13 +189,16 @@ export function buildIngestionTick(
       // one customer's unreadable ad set must not cost everyone else theirs
       // — nor fail an ingestion tick that has already stored real data.
       try {
+        const adapter = await adapterFor(c.id);
+        if (!adapter) continue;
         const adsets = await adapter.getAdSetMeta(c.metaCampaignId);
         await upsertAdSetMeta(pool, c.id, adsets.filter((a) => a.existsOnMeta));
       } catch (e) {
         consoleLogger.error(`[ingestion] ad-set meta refresh failed for ${c.id}`, e);
       }
       try {
-        await refreshAdMetaNow(pool, adapter, c.id, c.metaCampaignId);
+        const adAdapter = await adapterFor(c.id);
+        if (adAdapter) await refreshAdMetaNow(pool, adAdapter, c.id, c.metaCampaignId);
       } catch (e) {
         consoleLogger.error(`[ingestion] ad meta refresh failed for ${c.id}`, e);
       }

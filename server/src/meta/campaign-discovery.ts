@@ -1,4 +1,6 @@
 import { GraphCampaignAdapter } from "./campaign-adapter.js";
+import { pool } from "../db/pool.js";
+import { tokenForCustomer } from "./token-resolver.js";
 import type { DetectedDestination } from "./tracking-health.js";
 
 // AIC-105 Branch B — "pick, don't type" for an operator adopting a campaign
@@ -76,12 +78,16 @@ export interface CampaignDiscoveryReader {
   listCampaigns(adAccountId: string): Promise<DiscoveredCampaign[]>;
 }
 
-// Same token-gated factory pattern as buildLaunchWriter/buildBuilderWriter:
-// no META_SYSTEM_USER_TOKEN → null, so the route reports an honest
-// "temporarily unavailable" instead of pretending the lists can load.
-export function buildCampaignDiscoveryReader(): CampaignDiscoveryReader | null {
-  const token = process.env.META_SYSTEM_USER_TOKEN;
-  if (!token) return null;
+// AIC-187: resolved per customer. A manual connection still yields the shared
+// System User token; an OAuth connection yields that customer's own. A null
+// result now covers one more case than it used to — an OAuth token we cannot
+// decrypt — and it is deliberately still a null: "temporarily unavailable" is
+// the honest answer for a credential we hold and cannot use.
+export async function buildCampaignDiscoveryReader(
+  customerId: string,
+): Promise<CampaignDiscoveryReader | null> {
+  const resolved = await tokenForCustomer(pool, customerId);
+  if (!resolved) return null;
   const ver = process.env.META_GRAPH_VERSION || "v21.0";
-  return new GraphCampaignAdapter(token, ver);
+  return new GraphCampaignAdapter(resolved.token, ver);
 }
