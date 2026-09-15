@@ -53,3 +53,26 @@ export function deliveryStatus(
   if (adSetIntent === "paused") return "blocked_by_adset";
   return "delivering";
 }
+
+// The AD SET row's badge — AIC-100's composition, applied one row up.
+//
+// Found live on a campaign paused on Meta: the ad set said מפרסם while both of
+// its ads, directly below, said "לא מתפרסם · הקמפיין מושהה". The ad badges had
+// been composed with their parents' status; the ad set badge never was, so it
+// reported its own switch as if that were delivery.
+export type AdSetBadge = "paused_by_you" | "blocked_by_campaign" | "no_live_ads" | "delivering" | "unknown";
+
+export function adSetStatus(input: {
+  ownPaused: boolean;
+  campaignPaused: boolean;
+  noLiveAds: boolean;
+  /** Live statuses were read. False → we cannot say it runs. */
+  liveKnown: boolean;
+}): AdSetBadge {
+  if (input.ownPaused) return "paused_by_you";
+  // Above "no live ads": when the campaign is paused, turning ads back on
+  // would not bring anything back, so that is not the cause to name.
+  if (input.campaignPaused) return "blocked_by_campaign";
+  if (input.noLiveAds) return "no_live_ads";
+  return input.liveKnown ? "delivering" : "unknown";
+}

@@ -59,3 +59,31 @@ describe("AD_DELIVERY_BADGE / AD_DELIVERY_TONE (AIC-98 discipline)", () => {
     }
   });
 });
+
+import { adSetStatus } from "./delivery-status";
+
+// The ad set row's badge. Found live: under a campaign PAUSED on Meta, the ad
+// set said מפרסם while both of its ads, two lines below, said
+// "לא מתפרסם · הקמפיין מושהה". AIC-100 composed parents into the AD badge and
+// never into the ad set's — the same contradiction, one row up.
+describe("adSetStatus", () => {
+  const base = { ownPaused: false, campaignPaused: false, noLiveAds: false, liveKnown: true };
+
+  it("does not claim an ad set delivers while its campaign is paused", () => {
+    expect(adSetStatus({ ...base, campaignPaused: true })).toBe("blocked_by_campaign");
+  });
+
+  it("names the customer's own pause first, same precedence as the ad rows", () => {
+    expect(adSetStatus({ ...base, ownPaused: true, campaignPaused: true })).toBe("paused_by_you");
+  });
+
+  it("a paused campaign outranks 'no live ads' — resuming ads would not bring it back", () => {
+    expect(adSetStatus({ ...base, campaignPaused: true, noLiveAds: true })).toBe("blocked_by_campaign");
+  });
+
+  it("reports no live ads, then running, then unknown when statuses could not be read", () => {
+    expect(adSetStatus({ ...base, noLiveAds: true })).toBe("no_live_ads");
+    expect(adSetStatus(base)).toBe("delivering");
+    expect(adSetStatus({ ...base, liveKnown: false })).toBe("unknown");
+  });
+});

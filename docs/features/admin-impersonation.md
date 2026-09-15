@@ -42,6 +42,30 @@ The check is on the token's shape rather than on who is impersonating whom,
 because the safe rule is "a session claiming to be someone else never carries
 their privileges".
 
+## The viewing token has its own slot
+
+The viewing token lives in **sessionStorage** under `aic_impersonation_token`,
+never in `aic_auth_token`.
+
+It used to overwrite `aic_auth_token` — the admin's own session, shared by every
+tab on the origin. So viewing a customer replaced the admin session in every
+open tab, exiting logged the admin out, and an expired viewing token left behind
+broke whichever screen read it next. The button "didn't work" for exactly that
+reason.
+
+`tokenForPath` (`web/src/api.ts`, tested in `web/src/token-for-path.test.ts`)
+decides per request: `/admin` always gets the admin session and never the
+viewing token; `/app` and `/meta` get the viewing token when this tab is viewing;
+everything else (`/auth/me`) gets the signed-in session. Customer writes made
+outside `api()` (uploads, creatives) use `customerToken()`, so a write attempted
+while viewing reaches the server as the impersonation it is and is refused —
+instead of going out under the admin's own session against the admin's own
+account.
+
+An expired viewing token is caught in `AuthGate`: the tab is sent back to
+`/admin/users` rather than silently falling back to the admin's own dashboard
+with no red bar.
+
 ## Thirty minutes
 
 A viewing session exists for the length of a look. This token grants a real

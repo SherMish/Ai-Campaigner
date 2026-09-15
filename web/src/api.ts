@@ -5,6 +5,7 @@
 // Admin routes (/admin/*) require a bearer token (server requireAdmin). The ops
 // console stores it in localStorage via the AdminGate; we attach it here.
 import type { Placement } from "@aic/shared";
+import { readImpersonation } from "./app/impersonation";
 
 const ADMIN_TOKEN_KEY = "aic_admin_token";
 const AUTH_TOKEN_KEY = "aic_auth_token";
@@ -27,6 +28,67 @@ export const clearAdminToken = () => delLs(ADMIN_TOKEN_KEY);
 export const getAuthToken = () => ls(AUTH_TOKEN_KEY);
 export const setAuthToken = (t: string) => setLs(AUTH_TOKEN_KEY, t);
 export const clearAuthToken = () => delLs(AUTH_TOKEN_KEY);
+
+// AIC-189 — an admin viewing a customer's dashboard. Its OWN slot, in
+// sessionStorage, never the admin's session.
+//
+// It used to overwrite `aic_auth_token`, which the admin console signs in with
+// and which every tab on the origin shares. So viewing a customer replaced the
+// admin's own session in every open tab, exiting logged the admin out, and an
+// expired viewing token left behind broke whichever screen read it next.
+// sessionStorage is per tab: the viewing session lives in the tab that asked
+// for it, and the admin session is never touched.
+const IMPERSONATION_KEY = "aic_impersonation_token";
+
+function ss(key: string): string {
+  try { return sessionStorage.getItem(key) ?? ""; } catch { return ""; }
+}
+
+/** The raw stored viewing token, expired or not. */
+export const storedImpersonationToken = () => ss(IMPERSONATION_KEY);
+export function setImpersonationToken(t: string): void {
+  try { sessionStorage.setItem(IMPERSONATION_KEY, t); } catch { /* ignore */ }
+}
+export function clearImpersonationToken(): void {
+  try { sessionStorage.removeItem(IMPERSONATION_KEY); } catch { /* ignore */ }
+}
+/** A viewing token that is present and not expired, else "". */
+export function getImpersonationToken(): string {
+  const t = storedImpersonationToken();
+  return t && readImpersonation(t) ? t : "";
+}
+/** A viewing token was left behind and has expired. The tab must leave the
+ *  customer's dashboard rather than silently fall back to the admin's own. */
+export function impersonationExpired(): boolean {
+  const t = storedImpersonationToken();
+  return !!t && !readImpersonation(t);
+}
+
+/**
+ * Which credential a request carries. Pure, so the rule is testable.
+ *
+ * - /admin → the admin session, NEVER a viewing token (the server refuses one
+ *   there anyway; sending it would only turn the admin console into a 403).
+ * - /app and /meta → the viewing token when this tab is viewing a customer,
+ *   otherwise the signed-in session. Every customer read and write goes through
+ *   this, so a write attempted while viewing reaches the server as the
+ *   impersonation it is and is refused — instead of going out under the
+ *   admin's OWN session and acting on the admin's own account.
+ * - anything else (/auth/me, /config) → the signed-in session.
+ */
+export function tokenForPath(
+  path: string,
+  t: { admin: string; auth: string; impersonation: string },
+): string {
+  if (path.startsWith("/admin")) return t.admin || t.auth;
+  if (path.startsWith("/app") || path.startsWith("/meta")) return t.impersonation || t.auth;
+  return t.auth;
+}
+
+/** The credential for a customer-facing request made outside api(). */
+export function customerToken(): string {
+  return getImpersonationToken() || getAuthToken();
+}
 
 // Thrown so callers can show the server's message (e.g. "email already registered").
 // `body` carries the full parsed JSON error body when there is one, so a
@@ -683,7 +745,7 @@ export type UploadedMedia =
 export async function uploadCreativeFile(file: File, customerId?: string): Promise<UploadedMedia> {
   const form = new FormData();
   form.append("file", file);
-  const token = customerId ? (getAdminToken() || getAuthToken()) : getAuthToken();
+  const token = customerId ? (getAdminToken() || getAuthToken()) : customerToken();
   const res = await fetch(`/api${builderBasePath(customerId)}/upload`, {
     method: "POST",
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -722,7 +784,7 @@ export type CreateCreativeBody =
 // Bypasses api() too: a 400 here carries {errors: code[]}, not {error: string} —
 // needs its own parsing so CreativeValidationError keeps the codes, not a flattened message.
 export async function createCreative(body: CreateCreativeBody, customerId?: string): Promise<{ creativeId: string }> {
-  const token = customerId ? (getAdminToken() || getAuthToken()) : getAuthToken();
+  const token = customerId ? (getAdminToken() || getAuthToken()) : customerToken();
   const res = await fetch(`/api${builderBasePath(customerId)}/creative`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -890,7 +952,7 @@ export const getExistingAdSets = () => api<{ adSets: ExistingAdSet[] }>("/app/ad
 export async function uploadAdditionFile(file: File): Promise<UploadedMedia> {
   const form = new FormData();
   form.append("file", file);
-  const token = getAuthToken();
+  const token = customerToken();
   const res = await fetch("/api/app/additions/upload", {
     method: "POST",
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -916,7 +978,7 @@ export type AddContentCreativeBody =
 
 // Bypasses api() too — a 400 here carries {errors: code[]}, matching createCreative.
 export async function createAdditionCreative(body: AddContentCreativeBody): Promise<{ creativeId: string }> {
-  const token = getAuthToken();
+  const token = customerToken();
   const res = await fetch("/api/app/additions/creative", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -1069,7 +1131,11 @@ export async function api<T>(rawPath: string, rawInit?: RequestInit): Promise<T>
   // Admin is a per-user role: /admin/* uses the signed-in user's JWT (an
   // optional break-glass admin token still wins if one was set). Everything
   // else uses the customer JWT.
-  const token = path.startsWith("/admin") ? (getAdminToken() || getAuthToken()) : getAuthToken();
+  const token = tokenForPath(path, {
+    admin: getAdminToken(),
+    auth: getAuthToken(),
+    impersonation: getImpersonationToken(),
+  });
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`/api${path}`, { ...init, headers });

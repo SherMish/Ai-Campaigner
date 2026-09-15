@@ -405,8 +405,10 @@ draws from those caches — told the customer their campaign "started today".
 
 **A refresh pulls,** for the one campaign on screen: insights (the rolling week,
 today, and the 45-day daily series), the ad-set and ad caches, and the lifetime
-totals behind `leads_to_date` — which only the recommendations tick used to
-write, and that tick skips automation-off campaigns.
+totals behind `leads_to_date`, and live ad-set delivery (`delivering`,
+`delivery_ok`) — both of which only the recommendations tick used to write, and
+that tick skips automation-off campaigns. A campaign paused on Meta therefore
+read "הקמפיין פעיל" indefinitely.
 
 **The rules, because a demand must not become the burst it replaced:**
 

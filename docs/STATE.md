@@ -6,6 +6,22 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-16 — "log in as the user" kept the admin signed in; paused campaigns stop reading "active"
+
+**Impersonation.** The viewing token overwrote `aic_auth_token`, the admin's own
+session shared by every tab: viewing a customer signed every admin tab in as the
+customer, exiting logged the admin out, and an expired viewing token broke the
+next screen. It now has its own per-tab sessionStorage slot; `tokenForPath`
+sends it only to `/app` and `/meta`, never to `/admin`.
+
+**A paused campaign said "active".** GelNails is paused on Meta, yet the headline
+read "הקמפיין פעיל" and the ad set read "מפרסם" above ads correctly reading
+"לא מתפרסם · הקמפיין מושהה". `delivering` was written only by the
+recommendations tick, which skips automation-off campaigns; the on-demand
+refresh now reads live delivery. The ad set badge is composed with the
+campaign's status the way AIC-100 composed the ad badge.
+
+
 ### 2026-09-15 — AIC-191: hourly Meta polling off; campaigns refresh when opened
 
 Meta rate-limited `act_2181076988590009` (code 17) on every hourly tick for five

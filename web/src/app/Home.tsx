@@ -39,7 +39,7 @@ import {
 } from "../api";
 import { assertNever } from "@aic/shared";
 import { ATTENTION_COPY, HERO_TONE, HOME_STATE_BADGE, noRecCopy, STATUS_TOOLTIP_COPY, statusTooltipKey, thresholdLine } from "./state-copy";
-import { AD_DELIVERY_BADGE, AD_DELIVERY_TONE, deliveryStatus } from "./delivery-status";
+import { AD_DELIVERY_BADGE, AD_DELIVERY_TONE, adSetStatus, deliveryStatus } from "./delivery-status";
 import { InfoTip } from "./InfoTip";
 import { StatusPill } from "./components";
 import { useSharedOverview, invalidateOverview, selectCampaign, selectedCampaign } from "./overview-store";
@@ -1320,15 +1320,23 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault, kind, refre
                             Three states, not two: running, not running, and
                             we could not read it. The last one is a real
                             answer. */}
-                        <RowStatus
-                          label={
-                            audPaused ? D.statusPausedByYou
-                              : noLiveAds ? D.statusNoLiveAds
-                                : ctl ? D.statusRunning
-                                  : D.statusUnknown
-                          }
-                          tone={audPaused || noLiveAds || !ctl ? "neutral" : "ok"}
-                        />
+                        {(() => {
+                          // Composed with the campaign's live status, like the
+                          // ad rows below — see adSetStatus.
+                          const b = adSetStatus({
+                            ownPaused: audPaused,
+                            campaignPaused: ctl?.campaignStatus === "paused",
+                            noLiveAds,
+                            liveKnown: !!ctl,
+                          });
+                          const label = b === "paused_by_you" ? D.statusPausedByYou
+                            : b === "blocked_by_campaign" ? D.statusBlockedByCampaign
+                            : b === "no_live_ads" ? D.statusNoLiveAds
+                            : b === "delivering" ? D.statusRunning
+                            : D.statusUnknown;
+                          const tone = b === "delivering" ? "ok" : b === "blocked_by_campaign" ? "warn" : "neutral";
+                          return <RowStatus label={label} tone={tone} />;
+                        })()}
                         {/* AIC-184 — the audience row was the only thing on
                             this panel a customer could not open. Same
                             affordance as the ad rows below it. */}

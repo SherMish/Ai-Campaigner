@@ -1,5 +1,5 @@
 import { strings } from "../strings";
-import { getAuthToken, clearAuthToken } from "../api";
+import { getImpersonationToken, clearImpersonationToken } from "../api";
 import { readImpersonation } from "./impersonation";
 
 const t = strings.he.app.impersonation;
@@ -12,15 +12,16 @@ const t = strings.he.app.impersonation;
 // product from one business's data — or worse, believes a real customer's spend
 // is test data. A banner that can be closed is a banner that is closed.
 export function ImpersonationBar({ name }: { name?: string | null }) {
-  const imp = readImpersonation(getAuthToken());
+  const imp = readImpersonation(getImpersonationToken());
   if (!imp) return null;
 
   function exit() {
-    // Drop the borrowed token and go back to the console. A full reload rather
-    // than a route change: every store in memory was filled with the customer's
-    // data, and carrying that into the admin screens is how the wrong numbers
-    // end up in front of the wrong person.
-    clearAuthToken();
+    // Drop the viewing token — only that. The admin's own session is in a
+    // different slot and was never touched, so the console is still signed in.
+    // A full reload rather than a route change: every store in memory holds the
+    // customer's data, and carrying that into the admin screens is how the
+    // wrong numbers end up in front of the wrong person.
+    clearImpersonationToken();
     window.location.assign("/admin/users");
   }
 

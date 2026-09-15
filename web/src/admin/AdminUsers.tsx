@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, deleteUserRecords, impersonateUser, setAuthToken, type DeleteUserMode } from "../api";
+import { api, deleteUserRecords, impersonateUser, setImpersonationToken, type DeleteUserMode } from "../api";
 import { strings } from "../strings";
 import { offersOnboarding } from "./user-row-status";
 
@@ -182,9 +182,8 @@ export function AdminUsers() {
                   </td>
                   <td>
                     {/* AIC-189 — open this customer's own dashboard, read-only.
-                        The session replaces the admin's token in this tab, which
-                        is why exiting the bar reloads: the two must never be
-                        live at once. */}
+                        The viewing token lives in this tab's sessionStorage,
+                        beside — never instead of — the admin session. */}
                     <button
                       type="button"
                       className="btn btn-ghost"
@@ -197,7 +196,8 @@ export function AdminUsers() {
                         setImpersonating(row.id);
                         try {
                           const { token } = await impersonateUser(row.id);
-                          setAuthToken(token);
+                          // Its own per-tab slot — the admin session stays intact.
+                          setImpersonationToken(token);
                           window.location.assign("/app");
                         } catch {
                           setImpersonating(null);
