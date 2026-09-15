@@ -42,6 +42,7 @@ import { ConnectionService } from "../meta/connection-service.js";
 import { PgConnectionStore } from "../meta/connection-store.js";
 import { GraphMetaClient } from "../meta/client.js";
 import { buildCampaignDiscoveryReader } from "../meta/campaign-discovery.js";
+import { planBulkAdoption, type BulkPlan } from "../services/bulk-adopt.js";
 import { GraphWriteError, META_RATE_LIMIT_CODE } from "../meta/campaign-adapter.js";
 
 // Internal admin surfaces. Reads only from our DB (insight_snapshots) — never a
@@ -939,6 +940,144 @@ adminRouter.get("/customers/:id/onboarding/instagram-accounts", async (req, res)
 // sets) is still RETURNED, not filtered out — AIC-98's "never render a blank
 // where a reason exists" applies to pickers too; the client disables it with
 // its reason rather than making the list look shorter than it is.
+// AIC-190 — import every campaign on the ad account, not one at a time.
+//
+// `dryRun: true` returns the plan and writes nothing; the wizard shows it as a
+// preview. The real call re-reads Meta and re-plans rather than accepting the
+// preview back from the browser — a campaign list trusted from the client is
+// exactly the kind of input page and Instagram are re-probed to avoid.
+//
+// Each planned campaign goes through provisionConnection, so every refusal the
+// single-campaign path makes still applies. Outcomes are per campaign, not
+// all-or-nothing: "4 imported, 1 already linked" is actionable, a rollback on
+// the first problem is not, and a re-run is safe because adopting the same Meta
+// campaign twice is already refused.
+adminRouter.post("/customers/:id/onboarding/provision-all", async (req, res) => {
+  const b = req.body ?? {};
+  const metaAdAccountId = String(b.metaAdAccountId ?? "").trim();
+  if (!metaAdAccountId) {
+    res.status(400).json({ error: "metaAdAccountId is required" });
+    return;
+  }
+  const fallbackBudgetAgorot =
+    b.fallbackBudgetAgorot === undefined || b.fallbackBudgetAgorot === null || b.fallbackBudgetAgorot === ""
+      ? null : Number(b.fallbackBudgetAgorot);
+  if (fallbackBudgetAgorot !== null && (!Number.isInteger(fallbackBudgetAgorot) || fallbackBudgetAgorot <= 0)) {
+    res.status(400).json({ error: "fallbackBudgetAgorot must be a positive integer (agorot) when provided" });
+    return;
+  }
+  const whatsappDestination = b.whatsappDestination ? String(b.whatsappDestination).trim() : null;
+
+  const reader = await buildCampaignDiscoveryReader(req.params.id);
+  if (!reader) {
+    res.status(503).json({ error: "no usable Meta credential for this customer" });
+    return;
+  }
+
+  let plan: BulkPlan;
+  try {
+    plan = planBulkAdoption(await reader.listCampaigns(metaAdAccountId), { whatsappDestination, fallbackBudgetAgorot });
+  } catch (e) {
+    if (e instanceof GraphWriteError && e.code === META_RATE_LIMIT_CODE) {
+      res.status(429).json({ error: e.userMessage ?? e.message, code: "meta_rate_limited" });
+      return;
+    }
+    console.error("[admin] provision-all: list campaigns failed", e);
+    res.status(502).json({ error: "failed to load campaigns" });
+    return;
+  }
+
+  if (b.dryRun === true) {
+    res.json({ plan });
+    return;
+  }
+  if (plan.adopt.length === 0) {
+    // Nothing importable is an answer, not an error — and not a reason to
+    // write a connection the operator did not ask for.
+    res.json({ plan, results: [] });
+    return;
+  }
+
+  // Verified once, immediately before the writes — they apply to every
+  // campaign on this account alike.
+  const pageId = b.pageId ? String(b.pageId).trim() : null;
+  const instagramId = b.instagramId ? String(b.instagramId).trim() : null;
+  let pageVerdict = null as Awaited<ReturnType<AccessProbe["probeAsset"]>>["verdict"] | null;
+  let instagramVerdict = null as Awaited<ReturnType<AccessProbe["probeAsset"]>>["verdict"] | null;
+  if (pageId || instagramId) {
+    const probe = probeOrNull();
+    if (!probe) {
+      res.status(503).json({ error: "no usable Meta credential for this customer" });
+      return;
+    }
+    if (pageId) pageVerdict = (await probe.probeAsset("page", pageId)).verdict;
+    if (instagramId) instagramVerdict = (await probe.probeAsset("instagram", instagramId)).verdict;
+  }
+
+  type Outcome = { metaCampaignId: string; campaignName: string; outcome: "imported" | "already_linked" | "failed"; detail?: string };
+  const results: Outcome[] = [];
+
+  for (const c of plan.adopt) {
+    try {
+      await provisionConnection(pool, {
+        customerId: req.params.id,
+        systemUserId: String(b.systemUserId ?? process.env.META_SYSTEM_USER_ID ?? ""),
+        businessPortfolioId: b.businessPortfolioId ? String(b.businessPortfolioId) : null,
+        metaAdAccountId,
+        adAccountName: b.adAccountName ? String(b.adAccountName) : null,
+        currency: b.currency ? String(b.currency) : null,
+        pageId,
+        instagramId,
+        metaCampaignId: c.metaCampaignId,
+        campaignName: c.campaignName,
+        objective: c.objective,
+        agreedBudgetAgorot: c.agreedBudgetAgorot,
+        budgetPeriod: "daily",
+        leadEventTypes: c.leadEventTypes,
+        trackingPixelId: c.trackingPixelId,
+        websiteUrl: null,
+        destinationType: c.destinationType,
+        whatsappDestination,
+        messagingChannel: c.messagingChannel,
+      }, pageVerdict, instagramVerdict);
+      results.push({ metaCampaignId: c.metaCampaignId, campaignName: c.campaignName, outcome: "imported" });
+    } catch (e) {
+      // Page/Instagram refusals apply to every campaign alike — stop and say
+      // so once, rather than repeating the same refusal per row.
+      if (e instanceof PageNotReadableError) {
+        res.status(409).json({ error: e.message, diagnosis: e.diagnosis, pageVerdict, results });
+        return;
+      }
+      if (e instanceof InstagramNotReadableError) {
+        res.status(409).json({ error: e.message, diagnosis: e.diagnosis, asset: "instagram", instagramVerdict, results });
+        return;
+      }
+      if (e instanceof CampaignAlreadyLinkedError) {
+        results.push({ metaCampaignId: c.metaCampaignId, campaignName: c.campaignName, outcome: "already_linked" });
+        continue;
+      }
+      const detail = e instanceof IncompleteProvisioningError
+        ? `missing: ${e.missingFields.join(", ")}`
+        : (e as Error).message;
+      console.error(`[admin] provision-all: ${c.metaCampaignId} failed`, e);
+      results.push({ metaCampaignId: c.metaCampaignId, campaignName: c.campaignName, outcome: "failed", detail });
+    }
+  }
+
+  const actor = await actorFor(req as AuthedRequest);
+  await logAdminAction(pool, {
+    actorUserId: actor.userId,
+    actorLabel: actor.label,
+    action: "customer.onboarding.provision_all",
+    entityType: "customer",
+    entityId: req.params.id,
+    entityLabel: `${metaAdAccountId} (${results.filter((r) => r.outcome === "imported").length} imported)`,
+    detail: JSON.stringify({ results, skipped: plan.skip, pageVerdict, instagramVerdict }),
+  });
+
+  res.json({ plan, results });
+});
+
 adminRouter.get("/customers/:id/onboarding/campaigns", async (req, res) => {
   const metaAdAccountId = String(req.query.metaAdAccountId ?? "").trim();
   if (!metaAdAccountId) {

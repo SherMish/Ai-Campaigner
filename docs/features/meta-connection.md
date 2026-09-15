@@ -338,3 +338,47 @@ location picker.
   without re-consent, but no picker exists yet.
 - **No revocation webhook.** Access loss is still discovered by
   `ConnectionService.verify` on a tick, not pushed by Meta.
+
+
+## Importing every campaign on an account (AIC-190)
+
+Admin wizard, step 4: **"או לייבא את כל הקמפיינים בחשבון (N)"**, offered when the
+picked ad account holds more than one campaign.
+
+**Source of truth:** planner `server/src/services/bulk-adopt.ts`
+(`planBulkAdoption`), route `POST /admin/customers/:id/onboarding/provision-all`,
+panel `web/src/admin/BulkImportPanel.tsx`. **Lock-in tests:**
+`server/src/services/bulk-adopt.test.ts`.
+
+**One planner for the preview and the import.** The panel previews with
+`dryRun: true`; the import re-reads the campaigns from Meta and re-plans on the
+server. The browser never sends a campaign list, and a preview computed by
+different code than the import could disagree with what then happens.
+
+**Skip, never guess.** Per campaign, in order:
+
+| skip reason | why |
+| --- | --- |
+| `deleted` | DELETED/ARCHIVED on Meta — can never deliver again |
+| `no_ad_sets` · `mixed_ad_sets` · `unrecognized_objective` | destination not detectable; importing it as WhatsApp by default would count the wrong action as a lead |
+| `no_budget` | no campaign-level budget on Meta and no operator ceiling |
+| `missing_whatsapp` | a WhatsApp campaign with no business number given |
+
+A PAUSED campaign is imported: paused is a state, not a reason to hide it.
+
+**Budget.** The campaign's own Meta daily budget when it has one. Boosted posts
+and ad-set budgets have none at campaign level, so one operator-entered ceiling
+applies to those, and the preview labels each budget "מ-Meta" or "התקרה שהזנתם".
+
+**WhatsApp number** is asked once — it belongs to the business, not a campaign.
+
+**Per-campaign outcomes, not all-or-nothing.** Each planned campaign goes through
+`provisionConnection`, so every refusal the single path makes still applies.
+`campaign_already_linked` is reported as "כבר מחובר — דולג", which makes a re-run
+safe. A Page or Instagram refusal applies to the whole account and stops the run
+once, rather than repeating per row.
+
+**Known gap:** the route has no HTTP-level integration test — it depends on a
+live Meta campaign read. The planner is unit-tested and was run read-only against
+a real account (6 boosted WhatsApp campaigns, 5 with campaign budgets) before
+shipping.

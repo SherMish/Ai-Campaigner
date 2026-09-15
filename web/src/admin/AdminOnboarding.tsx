@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { FIXED_DESTINATION, WEBSITE_DESTINATION, missingRequiredFields } from "@aic/shared";
 import { api, ApiError, updateCustomer, type CustomerWriteFields } from "../api";
 import { adAccountOptions, newCampaignBlocker, provisionBlocker, step4Branch } from "./onboarding-step4";
+import { BulkImportPanel } from "./BulkImportPanel";
 import { strings } from "../strings";
 import { BusinessFields } from "./BusinessFields";
 import { profileBadge, badgeLabel, fieldNames } from "./profile-badge";
@@ -195,6 +196,8 @@ export function AdminOnboarding() {
   const [loadingAdAccounts, setLoadingAdAccounts] = useState(false);
   const [adAccountsError, setAdAccountsError] = useState<string | null>(null);
   const [campaigns, setCampaigns] = useState<DiscoveredCampaign[] | null>(null);
+  // AIC-190 — the import-all panel.
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
   const [campaignsError, setCampaignsError] = useState<string | null>(null);
   // The Page-side sibling of the ad-account picker (user request): pick from
@@ -1281,6 +1284,38 @@ export function AdminOnboarding() {
                   {w.buildNewInstead}
                 </button>
               </p>
+            )}
+            {/* AIC-190 — every campaign at once. Offered whenever the account has
+                more than one; for a single campaign the picker already is "all". */}
+            {branch === "adopt_existing" && (campaigns?.length ?? 0) > 1 && (
+              <p style={{ fontSize: "0.78rem", marginTop: 4 }}>
+                <button
+                  type="button"
+                  onClick={() => setBulkOpen(true)}
+                  style={{ background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer", textDecoration: "underline", color: "inherit", fontWeight: 600 }}
+                >
+                  {w.bulk.open(campaigns?.length ?? 0)}
+                </button>
+              </p>
+            )}
+            {bulkOpen && id && (
+              <BulkImportPanel
+                customerId={id}
+                metaAdAccountId={form.metaAdAccountId.trim()}
+                adAccountName={pickedAdAccount?.name ?? null}
+                currency={pickedAdAccount?.currency ?? null}
+                pageId={form.pageIdForm.trim() || null}
+                instagramId={form.instagramId.trim() || null}
+                initialWhatsapp={form.whatsappDestination}
+                destinationLabel={(d) => d === "whatsapp" ? w.destinationWhatsapp : d === "engagement" ? w.destinationEngagement : w.destinationWebsite}
+                onClose={() => setBulkOpen(false)}
+                onImported={() => {
+                  // Reflect the new links in the wizard without a reload.
+                  api<{ state: OnboardingState; campaignLinked: boolean; businessPortfolioId: string }>(`/admin/customers/${id}/onboarding`)
+                    .then((r) => { setState(r.state); setCampaignLinked(r.campaignLinked); })
+                    .catch(() => {});
+                }}
+              />
             )}
             {branch === "new_campaign" && (campaigns?.length ?? 0) > 0 && (
               <p className="muted" style={{ fontSize: "0.78rem", marginTop: 6 }}>

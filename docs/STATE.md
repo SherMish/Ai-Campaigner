@@ -6,6 +6,17 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-15 — AIC-190: the admin wizard can import every campaign on an account
+
+Step 4 adopted one campaign at a time; a customer with five live campaigns meant
+running the step five times. "או לייבא את כל הקמפיינים" previews a per-campaign
+plan (import, or skip with a named reason) computed on the server by the same
+planner the import runs, then imports each through `provisionConnection` with
+per-campaign outcomes. Undetectable destinations and deleted campaigns are
+skipped, never guessed; campaigns with no campaign-level budget (boosts) use one
+operator ceiling. See docs/features/meta-connection.md.
+
+
 ### 2026-09-10 — the admin user list counted campaigns as users
 
 Four users rendered as twelve rows, with one email repeated nine times and a
