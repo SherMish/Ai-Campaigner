@@ -2,7 +2,8 @@ import { Router } from "express";
 import { pool } from "../db/pool.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { getCustomerProfile, saveCustomerProfile } from "../services/customer-profile.js";
-import { listOwnedCampaigns, campaignIdParam, campaignIdFromRequest } from "../services/campaign-selection.js";
+import { listOwnedCampaigns, campaignIdParam, campaignIdFromRequest, resolveOwnedCampaign } from "../services/campaign-selection.js";
+import { campaignRefresher } from "../meta/campaign-refresh.js";
 import { buildCustomerOverview } from "../services/customer-overview.js";
 import { validateBusinessDetails, saveBusinessDetails, type DetailsRefusal } from "../services/business-details.js";
 import { recordLeadQualityReview, LeadQualityValidationError } from "../services/lead-quality-review.js";
@@ -41,8 +42,27 @@ appRouter.get("/campaigns", requireAuth, async (req, res) => {
   }
 });
 
+// AIC-191 — hourly polling is off; the campaign on screen is refreshed here.
+//
+// Ownership is resolved FIRST, by the same query every read uses, so a foreign
+// campaign id can never make us spend a Meta call. Awaited, but bounded: the
+// refresher waits a few seconds and then lets the page render with what is
+// stored while it finishes.
+async function refreshCampaignOnScreen(userId: string, campaignId: string | null): Promise<string> {
+  try {
+    const owned = await resolveOwnedCampaign(pool, userId, campaignId);
+    if (!owned) return "unavailable";
+    return await campaignRefresher(pool)(owned.campaignId);
+  } catch (e) {
+    // Never fail a dashboard over a refresh. Stored data is still data.
+    console.error("[app] on-demand refresh failed", e);
+    return "unavailable";
+  }
+}
+
 appRouter.get("/overview", requireAuth, async (req, res) => {
   try {
+    const refresh = await refreshCampaignOnScreen((req as AuthedRequest).userId!, campaignIdParam(req.query.campaignId));
     // AIC-186 — which campaign. An id that is not this caller's simply finds
     // nothing and falls back to their default, rather than 404ing in a way
     // that would confirm the id exists.
@@ -53,7 +73,9 @@ appRouter.get("/overview", requireAuth, async (req, res) => {
       res.status(404).json({ error: "user not found" });
       return;
     }
-    res.json(overview);
+    // Not decoration: with polling off, how old the numbers are is part of
+    // what they mean.
+    res.json({ ...overview, dataRefresh: refresh });
   } catch (e) {
     console.error("[app] overview failed", e);
     res.status(500).json({ error: "failed to load overview" });
@@ -272,6 +294,9 @@ appRouter.get("/audiences", requireAuth, async (req, res) => {
     // 400ing — a stale client sending an old value shouldn't hard-fail.
     const rawRange = req.query.range;
     const range: RangeKey = (RANGE_KEYS as readonly string[]).includes(rawRange as string) ? (rawRange as RangeKey) : "week";
+    // AIC-191 — the breakdown draws from the ad-set/ad caches. The dashboard
+    // requests this in parallel with /overview; both join ONE in-flight refresh.
+    await refreshCampaignOnScreen((req as AuthedRequest).userId!, campaignIdFromRequest(req));
     const result = await buildCampaignAudiences(pool, (req as AuthedRequest).userId!, range, undefined, campaignIdFromRequest(req));
     if (!result) {
       res.status(404).json({ error: "no managed campaign" });

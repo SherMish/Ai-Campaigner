@@ -6,6 +6,28 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-15 — AIC-191: hourly Meta polling off; campaigns refresh when opened
+
+Meta rate-limited `act_2181076988590009` (code 17) on every hourly tick for five
+days: OAuth adoption put nine campaigns on one account and the tick read all of
+them. The ad-set/ad reads ran last and always failed, so the breakdown panel was
+empty and told the customer the campaign "started today". Lead quality said "no
+leads yet" beside nine, because `leads_to_date` was only written by the
+recommendations tick, which skips automation-off campaigns.
+
+Relief: the four campaigns on that account with no September spend were removed
+from Ads Agent (DB only, backed up) — nine to five.
+
+Polling is now behind `META_POLLING_ENABLED` (off). `/overview` and `/audiences`
+refresh the campaign on screen: fresh within 10 minutes means no calls, concurrent
+requests share one refresh, a rate limit backs the whole ad account off for 15
+minutes, and the wait is bounded at 8 seconds. Generation (including the
+not-spending watch), recommendations and outcome measurement stop with polling,
+because each reads the snapshots it writes and would otherwise act on stale data
+— the watch would page false "not spending" alerts daily. That alert and
+recommendations return with the flag. Migration 058.
+
+
 ### 2026-09-15 — AIC-190: the admin wizard can import every campaign on an account
 
 Step 4 adopted one campaign at a time; a customer with five live campaigns meant

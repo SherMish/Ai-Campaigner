@@ -382,3 +382,64 @@ once, rather than repeating per row.
 live Meta campaign read. The planner is unit-tested and was run read-only against
 a real account (6 boosted WhatsApp campaigns, 5 with campaign budgets) before
 shipping.
+
+
+## Data refresh: on demand, not hourly (AIC-191)
+
+**Status:** hourly Meta polling is **off** unless `META_POLLING_ENABLED=true`.
+A campaign's data is pulled from Meta when its dashboard is opened.
+
+**Source of truth:** rules `server/src/services/on-demand-refresh.ts`
+(`createRefresher`, `isRateLimit`); what a refresh pulls
+`server/src/meta/campaign-refresh.ts`; hooks in `server/src/routes/app.ts`
+(`/overview`, `/audiences`); the gate in `server/src/index.ts`. Migration 058
+adds `managed_campaigns.data_refreshed_at`. **Lock-in tests:**
+`server/src/services/on-demand-refresh.test.ts`.
+
+**Why.** Polling put every campaign on an ad account into one burst per hour.
+After OAuth adoption put nine campaigns on `act_2181076988590009`, Meta returned
+code 17 ("Ad Account Has Too Many API Calls") on every tick for five days. The
+ad-set and ad reads ran last, after the budget was spent, so they always failed:
+one cache row landed across nine campaigns, and the breakdown panel — which
+draws from those caches — told the customer their campaign "started today".
+
+**A refresh pulls,** for the one campaign on screen: insights (the rolling week,
+today, and the 45-day daily series), the ad-set and ad caches, and the lifetime
+totals behind `leads_to_date` — which only the recommendations tick used to
+write, and that tick skips automation-off campaigns.
+
+**The rules, because a demand must not become the burst it replaced:**
+
+| rule | behaviour |
+| --- | --- |
+| freshness | refreshed within 10 minutes → no Meta calls |
+| one at a time | concurrent requests for a campaign share one in-flight refresh (`/overview` and `/audiences` arrive together) |
+| back-off | a rate limit silences that **ad account** for 15 minutes — the old tick fired ~18 further calls into a block each one extended |
+| bounded | the request waits up to 8 s, then renders stored data; the refresh finishes in the background and marks the campaign fresh |
+| ownership first | the campaign is resolved through `resolveOwnedCampaign` before any call, so a foreign id cannot spend our Meta budget |
+
+A throttled or failed refresh is **not** marked fresh, so the next load after
+the back-off tries again. Stored data is always served; a refresh never fails a
+dashboard.
+
+**What stops with polling, and why it has to.** Three jobs read the snapshots
+polling writes:
+
+- **generation**, which also runs the not-spending / not-serving watch. With no
+  fresh snapshots, a campaign nobody opened today reads as zero impressions
+  against an active ad set, and Telegram would page "not spending" every day.
+- **the recommendation rules**, which would judge a week that is not current.
+- **outcome measurement**, which would record verdicts against stale numbers.
+
+All three are gated with ingestion. **This loses the alert that caught the
+declined card** (AIC-182), and recommendations stop being generated; both come
+back with `META_POLLING_ENABLED=true`. The profile-quality check and the
+creative reaper do not read snapshots and keep running.
+
+**Known gaps.**
+- Per-process state: the in-flight map and the back-off live in memory. One
+  Railway instance today; with several, each backs off on its own clock.
+- Connection health is no longer re-verified on a schedule — access loss is
+  discovered when a refresh or a write hits it.
+- A campaign that no one opens has no fresh data at all; the admin console reads
+  whatever was last stored.

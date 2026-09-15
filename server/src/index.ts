@@ -82,15 +82,34 @@ if (process.env.META_SEED_TEST_FREEBETA) {
 //                      means an outcome recorded now is available to the NEXT
 //                      tick's rules)
 // Interval defaults to hourly.
-const ingestTick = buildIngestionTick(pool);
-const generationTick = buildGenerationTick(pool);
+// AIC-191 — scheduled Meta reads are OFF unless META_POLLING_ENABLED=true.
+//
+// Polling put every campaign on an ad account into one burst per hour and got
+// that account rate-limited (code 17) every hour for five days. Data is now
+// refreshed when a campaign's dashboard is opened (meta/campaign-refresh.ts).
+//
+// Three jobs stop WITH ingestion, because each reads the snapshots it writes:
+//   - generation, which also runs the not-spending/not-serving watch: with no
+//     fresh snapshots a campaign nobody opened today reads as zero impressions
+//     against an active ad set, and Telegram would page "not spending" daily.
+//   - the recommendation rules, which would judge a week that is not current.
+//   - outcome measurement, which would record verdicts against stale numbers.
+// That loses the alert that caught the declined card. It returns with polling.
+const pollingEnabled = process.env.META_POLLING_ENABLED === "true";
+const ingestTick = pollingEnabled ? buildIngestionTick(pool) : null;
+const generationTick = pollingEnabled ? buildGenerationTick(pool) : null;
+consoleLogger.info(
+  pollingEnabled
+    ? "Meta polling ON — hourly ingestion, generation and outcome measurement"
+    : "Meta polling OFF — campaigns refresh when their dashboard is opened (META_POLLING_ENABLED=true to restore)",
+);
 // Needs no Meta token — it reads snapshots we already stored — so it is never
 // inert. It still only runs inside the engine loop: with no token nothing can
 // execute, so there is never anything to measure.
 // AIC-132: the profile tick raises/clears ops items like every other monitor.
 const opsQueue = new OpsQueue(pool);
 const outcomeTick = buildOutcomeTick(pool, consoleLogger);
-if (ingestTick || generationTick) {
+{
   const intervalMs = Number(process.env.INGESTION_INTERVAL_MS) || 60 * 60 * 1000;
   startScheduler({
     intervalMs,
@@ -152,16 +171,19 @@ if (ingestTick || generationTick) {
       }
 
       // Isolated: a measurement failure must never make an otherwise-successful
-      // ingest+generate tick read as crashed.
-      try {
-        const o = await outcomeTick();
-        if (o.due > 0) {
-          consoleLogger.info(
-            `outcome tick: ${o.due} due, ${o.measured} measured, ${o.failed} failed — ${JSON.stringify(o.byVerdict)}`,
-          );
+      // ingest+generate tick read as crashed. Gated on polling (AIC-191): it
+      // reads snapshots, and stale snapshots would record wrong verdicts.
+      if (pollingEnabled) {
+        try {
+          const o = await outcomeTick();
+          if (o.due > 0) {
+            consoleLogger.info(
+              `outcome tick: ${o.due} due, ${o.measured} measured, ${o.failed} failed — ${JSON.stringify(o.byVerdict)}`,
+            );
+          }
+        } catch (e) {
+          consoleLogger.error(`outcome tick crashed — ${(e as Error).message}`);
         }
-      } catch (e) {
-        consoleLogger.error(`outcome tick crashed — ${(e as Error).message}`);
       }
     },
   });
