@@ -16,10 +16,12 @@
 
 export const FRESH_FOR_MS = 10 * 60_000;
 export const THROTTLE_BACKOFF_MS = 15 * 60_000;
-// Short on purpose. A full refresh takes 15–20 s (measured live); waiting for it
-// made the first load a 12-second blank page. The dashboard renders stored data
-// after this and reloads itself when the refresh lands (overview-store.ts).
-export const WAIT_FOR_REFRESH_MS = 2_500;
+// Zero: never hold the page for Meta. A full refresh measured 15–20 s live, so
+// no reasonable wait ever caught one — an 8 s wait gave a 12 s first load, and
+// 2.5 s still gave 8 s, because the page then built its overview alongside the
+// refresh. The dashboard renders stored data and reloads when the refresh lands
+// (overview-store.ts). A fresh campaign never reaches this wait at all.
+export const WAIT_FOR_REFRESH_MS = 0;
 
 export type RefreshState =
   | "fresh"        // recent enough; nothing called

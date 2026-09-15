@@ -415,7 +415,7 @@ write, and that tick skips automation-off campaigns.
 | freshness | refreshed within 10 minutes → no Meta calls |
 | one at a time | concurrent requests for a campaign share one in-flight refresh (`/overview` and `/audiences` arrive together) |
 | back-off | a rate limit silences that **ad account** for 15 minutes — the old tick fired ~18 further calls into a block each one extended |
-| bounded | the request waits up to 2.5 s, then renders stored data; the refresh finishes in the background and marks the campaign fresh. A full refresh measured 15–20 s live, and the first version's 8 s wait made the first load a 12-second blank page |
+| bounded | the request does not wait: it renders stored data at once; the refresh finishes in the background and marks the campaign fresh. A full refresh measured 15–20 s live, an 8 s wait gave a 12 s first load and 2.5 s still gave 8 s |
 | ownership first | the campaign is resolved through `resolveOwnedCampaign` before any call, so a foreign id cannot spend our Meta budget |
 
 When `/overview` answers `dataRefresh: "refreshing"`, `overview-store.ts`
