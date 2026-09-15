@@ -91,6 +91,9 @@ export interface LeadQualityStatus {
   relevantThisWeek: number;
 }
 export interface CustomerOverview {
+  /** AIC-191 — polling is off; this is whether the numbers were just pulled from
+   *  Meta, are recent, or are still being pulled in the background. */
+  dataRefresh?: "fresh" | "refreshed" | "refreshing" | "throttled" | "unavailable";
   account: { name: string; email: string };
   customer: {
     id: string; businessName: string; onboardingStatus: string;

@@ -415,8 +415,15 @@ write, and that tick skips automation-off campaigns.
 | freshness | refreshed within 10 minutes → no Meta calls |
 | one at a time | concurrent requests for a campaign share one in-flight refresh (`/overview` and `/audiences` arrive together) |
 | back-off | a rate limit silences that **ad account** for 15 minutes — the old tick fired ~18 further calls into a block each one extended |
-| bounded | the request waits up to 8 s, then renders stored data; the refresh finishes in the background and marks the campaign fresh |
+| bounded | the request waits up to 2.5 s, then renders stored data; the refresh finishes in the background and marks the campaign fresh. A full refresh measured 15–20 s live, and the first version's 8 s wait made the first load a 12-second blank page |
 | ownership first | the campaign is resolved through `resolveOwnedCampaign` before any call, so a foreign id cannot spend our Meta budget |
+
+When `/overview` answers `dataRefresh: "refreshing"`, `overview-store.ts`
+reloads after 6 s, at most four times; the server shares the in-flight refresh,
+so those reloads cost no Meta calls. The breakdown panel refetches when the
+refresh ends, and while it runs over an empty cache it says it is fetching —
+not "the campaign started today", which is what an empty cache used to render
+about a campaign that had run for a month.
 
 A throttled or failed refresh is **not** marked fresh, so the next load after
 the back-off tries again. Stored data is always served; a refresh never fails a

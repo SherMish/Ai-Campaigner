@@ -32,6 +32,12 @@ let selectedCampaignId: string | null = null;
 // error to swallow, it is simply no longer the answer to the current question,
 // and ignoring it is the whole requirement.
 let generation = 0;
+// AIC-191 — a refresh still running when the overview answered. Reload after it
+// should have landed, a bounded number of times: the server shares the one
+// in-flight refresh, so these reloads cost no extra Meta calls.
+const REFRESH_FOLLOWUP_MS = 6_000;
+const REFRESH_FOLLOWUP_MAX = 4;
+let followups = 0;
 const subscribers = new Set<() => void>();
 
 function setState(next: Partial<State>) {
@@ -44,7 +50,16 @@ function load(): Promise<void> {
   const gen = ++generation;
   setState({ loading: true, error: false });
   inflight = getOverview(selectedCampaignId)
-    .then((data) => { if (gen === generation) setState({ data, loading: false, error: false }); })
+    .then((data) => {
+      if (gen !== generation) return;
+      setState({ data, loading: false, error: false });
+      if (data.dataRefresh === "refreshing" && followups < REFRESH_FOLLOWUP_MAX) {
+        followups++;
+        setTimeout(() => { if (gen === generation) { inflight = null; load(); } }, REFRESH_FOLLOWUP_MS);
+      } else {
+        followups = 0;
+      }
+    })
     .catch(() => { if (gen === generation) setState({ loading: false, error: true }); })
     // Only the CURRENT load may clear the slot. A stale one finishing later
     // would otherwise blank `inflight` while a newer request is still running,
@@ -67,6 +82,7 @@ export function selectCampaign(campaignId: string | null): void {
   // this the dashboard switches and add-content keeps writing to the old one.
   setApiCampaign(campaignId);
   inflight = null;
+  followups = 0;
   setState({ data: null, loading: true, error: false });
   load();
 }

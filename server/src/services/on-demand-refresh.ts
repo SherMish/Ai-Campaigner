@@ -16,7 +16,10 @@
 
 export const FRESH_FOR_MS = 10 * 60_000;
 export const THROTTLE_BACKOFF_MS = 15 * 60_000;
-export const WAIT_FOR_REFRESH_MS = 8_000;
+// Short on purpose. A full refresh takes 15–20 s (measured live); waiting for it
+// made the first load a 12-second blank page. The dashboard renders stored data
+// after this and reloads itself when the refresh lands (overview-store.ts).
+export const WAIT_FOR_REFRESH_MS = 2_500;
 
 export type RefreshState =
   | "fresh"        // recent enough; nothing called

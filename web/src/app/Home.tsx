@@ -664,6 +664,7 @@ export function Home() {
           {/* opt-in per-audience / per-creative details (AIC-37) — collapsed by default */}
           {ov.campaign && (
             <AudienceDetails
+              refreshing={ov.dataRefresh === "refreshing"}
               kind={resultKind}
               activeAds={activeAds}
               range={range}
@@ -932,7 +933,9 @@ const count = (n: number) => n.toLocaleString("he-IL");
 // applied preemptively to the ~95% who have one audience.
 const ADAPTIVE_COLLAPSE_ABOVE = 3;
 
-function AudienceDetails({ activeAds, range, onRange, openByDefault, kind }: {
+function AudienceDetails({ activeAds, range, onRange, openByDefault, kind, refreshing = false }: {
+  /** AIC-191 — the campaign's data is being pulled from Meta right now. */
+  refreshing?: boolean;
   activeAds: number;
   range: RangeKey;
   onRange: (r: RangeKey) => void;
@@ -1046,6 +1049,15 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault, kind }: {
   // while closed (AIC-37's opt-in principle: nothing about audiences is
   // fetched until the customer actually opens the panel), and skipped on the
   // very first render (that's `toggle`'s job, guarded by `!data`).
+  // AIC-191 — when the background refresh finishes, the rows it just cached
+  // are what this panel was missing. Refetch once, only if the panel is open.
+  const wasRefreshing = useRef(refreshing);
+  useEffect(() => {
+    if (wasRefreshing.current && !refreshing && open) fetchAudiences(range);
+    wasRefreshing.current = refreshing;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshing]);
+
   const isFirstRangeEffect = useRef(true);
   useEffect(() => {
     if (isFirstRangeEffect.current) { isFirstRangeEffect.current = false; return; }
@@ -1227,6 +1239,8 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault, kind }: {
           )}
           {loading ? (
             <p className="muted">{a.loading}</p>
+          ) : refreshing && (!data || data.audiences.length === 0) ? (
+            <p className="muted">{D.emptyRefreshing}</p>
           ) : !data ? (
             <p className="muted">{D.empty}</p>
           ) : data.empty?.reason === "started_today" ? (

@@ -1554,6 +1554,10 @@ export const strings = {
           // Never a bare "no data" — every empty case states why, reusing the
           // house rule this ticket is the origin of.
           emptyStartedToday: "הקמפיין התחיל לרוץ היום. נסו לבחור \"היום\" למעלה כדי לראות את הנתונים.",
+          // AIC-191 — the caches this panel draws from are being filled right
+          // now. Without this the empty cache read as "started today" about a
+          // campaign that has run for a month.
+          emptyRefreshing: "מושכים את פירוט הקהלים והמודעות מ-Meta… זה לוקח כמה שניות.",
           emptyNoDataInRange: "אין נתונים לתקופה שנבחרה. הנתונים האחרונים שיש לנו הם מ־",
           empty: "עדיין אין מספיק נתונים לפירוט לפי קהל.",
           audienceCol: "קהל",
