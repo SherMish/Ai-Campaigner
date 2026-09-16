@@ -20,6 +20,7 @@ import { createCustomer, updateCustomer, deactivateCustomer, reactivateCustomer,
 import { listAuditLog, logAdminAction, type Actor } from "../services/admin-audit.js";
 import { listOperators, addOperator, setOperatorRole, removeOperator } from "../services/operator-accounts.js";
 import { PgUserStore, type AdminRole } from "../auth/user-store.js";
+import { AuthService, WeakPasswordError, UnknownUserError } from "../auth/auth-service.js";
 import { OpsQueue } from "../services/ops-queue.js";
 import { refreshDeliveryNow } from "../services/delivery-monitor.js";
 import { consoleLogger } from "../services/logger.js";
@@ -271,6 +272,42 @@ adminRouter.post("/users/:id/customer", async (req, res) => {
 // DELETE with a body: the confirmation text has to travel with the request and
 // must not end up in a URL or an access log. Same shape as
 // DELETE /customers/:id above.
+// AIC-192 — a full admin sets a user's password.
+//
+// Full admin only: setting a password is account takeover by design, and an
+// operator allowed to archive an ad should not be able to sign in as the
+// customer. The password is never logged, never echoed, never put in the audit
+// row — the audit records who changed whose password, and when.
+adminRouter.post("/users/:id/password", requireFullAdmin, async (req, res) => {
+  const password = (req.body ?? {}).password;
+  const userId = String(req.params.id);
+  try {
+    await new AuthService(userStore).setPasswordByAdmin(userId, password);
+    const actor = await actorFor(req as AuthedRequest);
+    const { rows } = await pool.query<{ email: string }>(`SELECT email FROM app_users WHERE id = $1`, [userId]);
+    await logAdminAction(pool, {
+      actorUserId: actor.userId,
+      actorLabel: actor.label,
+      action: "user.password.set",
+      entityType: "user",
+      entityId: userId,
+      entityLabel: rows[0]?.email ?? userId,
+    });
+    res.json({ ok: true });
+  } catch (e) {
+    if (e instanceof WeakPasswordError) {
+      res.status(400).json({ error: "invalid password", reason: e.reason });
+      return;
+    }
+    if (e instanceof UnknownUserError) {
+      res.status(404).json({ error: "user not found" });
+      return;
+    }
+    console.error("[admin] set password failed");
+    res.status(500).json({ error: "could not set the password" });
+  }
+});
+
 // AIC-189 — mint a short-lived, read-only session for viewing a customer's own
 // dashboard. Read-only is enforced by requireAuth (every non-GET is refused for
 // a token carrying `imp`), not by this route and not by the UI.

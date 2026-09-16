@@ -86,3 +86,46 @@ describe("login does not leak whether an email exists", () => {
     expect(unknown).toBeGreaterThan(known / 3);
   });
 });
+
+import { WeakPasswordError, UnknownUserError } from "./auth-service.js";
+
+// AIC-192 — an admin sets a user's password.
+describe("AuthService.setPasswordByAdmin", () => {
+  async function userWith(password: string) {
+    const store = new InMemoryUserStore();
+    const service = new AuthService(store);
+    const { user } = await service.signup({ email: "moshe@example.test", password });
+    return { service, user };
+  }
+
+  it("the new password logs in and the old one no longer does", async () => {
+    const { service, user } = await userWith("original-pass-1");
+    await service.setPasswordByAdmin(user.id, "brand-new-pass-2");
+    await expect(service.login({ email: "moshe@example.test", password: "brand-new-pass-2" })).resolves.toBeTruthy();
+    await expect(service.login({ email: "moshe@example.test", password: "original-pass-1" }))
+      .rejects.toBeInstanceOf(InvalidCredentialsError);
+  });
+
+  it("needs no current password — the customer it exists for has lost theirs", async () => {
+    const { service, user } = await userWith("forgotten-pass-1");
+    await expect(service.setPasswordByAdmin(user.id, "replacement-pass")).resolves.toBeUndefined();
+  });
+
+  it("refuses a password shorter than 8", async () => {
+    const { service, user } = await userWith("original-pass-1");
+    await expect(service.setPasswordByAdmin(user.id, "short1")).rejects.toMatchObject({ reason: "too_short" });
+  });
+
+  it("refuses more than 72 BYTES, counting Hebrew as two bytes a letter", async () => {
+    // bcrypt ignores everything past 72 bytes; accepting it would let a password
+    // "work" while only its prefix is checked.
+    const { service, user } = await userWith("original-pass-1");
+    await expect(service.setPasswordByAdmin(user.id, "א".repeat(37))).rejects.toBeInstanceOf(WeakPasswordError);
+    await expect(service.setPasswordByAdmin(user.id, "א".repeat(36))).resolves.toBeUndefined();
+  });
+
+  it("refuses an unknown user", async () => {
+    const { service } = await userWith("original-pass-1");
+    await expect(service.setPasswordByAdmin("no-such-user", "valid-password")).rejects.toBeInstanceOf(UnknownUserError);
+  });
+});

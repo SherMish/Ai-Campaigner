@@ -5,6 +5,20 @@ import { DuplicateEmailError, type AppUser, type UserStore } from "./user-store.
 export class EmailTakenError extends Error {
   constructor() { super("email already registered"); this.name = "EmailTakenError"; }
 }
+// AIC-192 — a password an admin tried to set that cannot be used.
+export class WeakPasswordError extends Error {
+  constructor(public readonly reason: "too_short" | "too_long") {
+    super(reason);
+  }
+}
+export class UnknownUserError extends Error {}
+
+export const MIN_PASSWORD_LENGTH = 8;
+// bcrypt reads at most 72 BYTES of input and silently ignores the rest, so a
+// longer password would appear to work while only its prefix is ever checked.
+// Bytes, not characters: a Hebrew letter is two bytes in UTF-8.
+export const MAX_PASSWORD_BYTES = 72;
+
 export class InvalidCredentialsError extends Error {
   constructor() { super("invalid credentials"); this.name = "InvalidCredentialsError"; }
 }
@@ -44,6 +58,21 @@ export class AuthService {
     const rec = await this.store.findByIdWithHash(userId);
     if (!rec) throw new InvalidCredentialsError();
     if (!(await verifyPassword(currentPassword, rec.passwordHash))) throw new InvalidCredentialsError();
+    await this.store.updatePassword(userId, await hashPassword(newPassword));
+  }
+
+  // AIC-192 — an admin sets a user's password. No current password: the whole
+  // point is a customer who no longer has one. Authorization (full admin only,
+  // never an impersonation token) is the route's job; this validates the value.
+  async setPasswordByAdmin(userId: string, newPassword: string): Promise<void> {
+    if (typeof newPassword !== "string" || newPassword.length < MIN_PASSWORD_LENGTH) {
+      throw new WeakPasswordError("too_short");
+    }
+    if (Buffer.byteLength(newPassword, "utf8") > MAX_PASSWORD_BYTES) {
+      throw new WeakPasswordError("too_long");
+    }
+    const rec = await this.store.findByIdWithHash(userId);
+    if (!rec) throw new UnknownUserError();
     await this.store.updatePassword(userId, await hashPassword(newPassword));
   }
 

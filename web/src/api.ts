@@ -1195,3 +1195,11 @@ export async function impersonateUser(
 ): Promise<{ token: string; user: { id: string; email: string; name: string | null } }> {
   return api(`/admin/users/${userId}/impersonate`, { method: "POST" });
 }
+
+// AIC-192 — full admin sets a user's password. Nothing comes back but ok.
+export async function adminSetUserPassword(userId: string, password: string): Promise<void> {
+  await api<{ ok: true }>(`/admin/users/${userId}/password`, {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+}

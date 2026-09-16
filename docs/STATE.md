@@ -6,6 +6,18 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-16 — AIC-192: a full admin can set a user's password
+
+"שינוי סיסמה" on the admin Users page, full admin only, because setting a
+password is account takeover by design. Minimum 8 characters, maximum 72 bytes
+(bcrypt ignores the rest). The password is never logged, echoed or audited; the
+audit row records who changed whose password.
+
+Found while checking the reset path: "שכחתי סיסמה" and the reset screen are
+mockups — the forgot screen says a link was sent when nothing is. Still open.
+See docs/features/admin-user-password.md.
+
+
 ### 2026-09-16 — "log in as the user" kept the admin signed in; paused campaigns stop reading "active"
 
 **Impersonation.** The viewing token overwrote `aic_auth_token`, the admin's own

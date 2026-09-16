@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, deleteUserRecords, impersonateUser, setImpersonationToken, type DeleteUserMode } from "../api";
+import { api, ApiError, adminSetUserPassword, deleteUserRecords, impersonateUser, setImpersonationToken, type DeleteUserMode } from "../api";
 import { strings } from "../strings";
 import { offersOnboarding } from "./user-row-status";
 
@@ -46,6 +46,43 @@ export function AdminUsers() {
   // AIC-189 — the row currently opening a viewing session, and any failure.
   const [impersonating, setImpersonating] = useState<string | null>(null);
   const [impError, setImpError] = useState<string | null>(null);
+  // AIC-192 — the set-password modal. `pwRow` doubles as "is it open".
+  const [pwRow, setPwRow] = useState<UserRow | null>(null);
+  const [pw, setPw] = useState("");
+  const [pwConfirm, setPwConfirm] = useState("");
+  const [pwShow, setPwShow] = useState(false);
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwDone, setPwDone] = useState(false);
+
+  function openPassword(row: UserRow) {
+    // Fresh every time: a password typed for one user must never still be in
+    // the field when the modal opens for another.
+    setPwRow(row); setPw(""); setPwConfirm(""); setPwShow(false);
+    setPwBusy(false); setPwError(null); setPwDone(false);
+  }
+
+  async function savePassword() {
+    if (!pwRow) return;
+    if (pw !== pwConfirm) { setPwError(u.password.errMismatch); return; }
+    if (pw.length < 8) { setPwError(u.password.errTooShort); return; }
+    setPwBusy(true); setPwError(null);
+    try {
+      await adminSetUserPassword(pwRow.id, pw);
+      // Clear the secret from memory the moment it is saved.
+      setPw(""); setPwConfirm(""); setPwDone(true);
+    } catch (e) {
+      const reason = e instanceof ApiError ? (e.body as { reason?: string } | undefined)?.reason : undefined;
+      setPwError(
+        e instanceof ApiError && e.status === 403 ? u.password.errForbidden
+          : reason === "too_short" ? u.password.errTooShort
+          : reason === "too_long" ? u.password.errTooLong
+          : u.password.errFailed,
+      );
+    } finally {
+      setPwBusy(false);
+    }
+  }
 
   const load = () =>
     api<{ users: UserRow[] }>("/admin/users")
@@ -207,6 +244,14 @@ export function AdminUsers() {
                     >
                       {u.impersonate}
                     </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ padding: "4px 12px", fontSize: "0.8rem", whiteSpace: "nowrap" }}
+                      onClick={(e) => { e.stopPropagation(); openPassword(row); }}
+                    >
+                      {u.password.open}
+                    </button>
                   </td>
                   <td>
                     <button
@@ -231,6 +276,55 @@ export function AdminUsers() {
         )}
         {impError && <p className="muted" role="alert" style={{ marginTop: 12 }}>{impError}</p>}
       </div>
+
+      {/* AIC-192 — set a user's password. Full admin only (server-enforced;
+          an operator gets the 403 message). */}
+      {pwRow && (
+        <div className="op-modal-backdrop" onClick={() => !pwBusy && setPwRow(null)}>
+          <div className="op-modal" onClick={(e) => e.stopPropagation()}>
+            <b style={{ fontSize: "1.1rem" }}>{u.password.title}</b>
+            <p className="muted" style={{ margin: "6px 0 0", fontSize: "0.9rem" }}>{pwRow.email}</p>
+            {pwDone ? (
+              <>
+                <p style={{ margin: "18px 0 6px", fontWeight: 600 }} role="status">✓ {u.password.done}</p>
+                <p className="muted" style={{ fontSize: "0.8rem" }}>{u.password.sessionsNote}</p>
+                <div className="row gap12" style={{ justifyContent: "flex-end", marginTop: 16 }}>
+                  <button type="button" className="btn btn-primary" onClick={() => setPwRow(null)}>{u.password.close}</button>
+                </div>
+              </>
+            ) : (
+              <form onSubmit={(e) => { e.preventDefault(); void savePassword(); }}>
+                <p className="muted" style={{ margin: "12px 0 14px", fontSize: "0.85rem" }}>{u.password.body}</p>
+                <div className="field">
+                  <label htmlFor="admin-pw">{u.password.newLabel}</label>
+                  <input
+                    id="admin-pw" type={pwShow ? "text" : "password"} value={pw}
+                    onChange={(e) => setPw(e.target.value)} autoComplete="new-password" autoFocus
+                  />
+                </div>
+                <div className="field" style={{ marginTop: 12 }}>
+                  <label htmlFor="admin-pw2">{u.password.confirmLabel}</label>
+                  <input
+                    id="admin-pw2" type={pwShow ? "text" : "password"} value={pwConfirm}
+                    onChange={(e) => setPwConfirm(e.target.value)} autoComplete="new-password"
+                  />
+                </div>
+                <button type="button" className="link" style={{ background: "none", border: 0, padding: 0, marginTop: 8, fontSize: "0.8rem", cursor: "pointer" }}
+                  onClick={() => setPwShow((v) => !v)}>
+                  {pwShow ? u.password.hide : u.password.show}
+                </button>
+                {pwError && <p role="alert" style={{ color: "#c0362c", fontSize: "0.85rem", marginTop: 10 }}>{pwError}</p>}
+                <div className="row gap12" style={{ justifyContent: "flex-end", marginTop: 16 }}>
+                  <button type="button" className="btn btn-ghost" onClick={() => setPwRow(null)} disabled={pwBusy}>{u.password.cancel}</button>
+                  <button type="submit" className="btn btn-primary" disabled={pwBusy || !pw || !pwConfirm}>
+                    {pwBusy ? u.password.saving : u.password.save}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* AIC-127: the reset/delete modal. Red-bordered and red-headed because
           it is irreversible — but the loudest thing in it is the Meta warning,
