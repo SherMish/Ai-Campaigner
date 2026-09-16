@@ -6,6 +6,21 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-16 — AIC-194/195: an ad's image opens its popup; boosted ads show their copy
+
+The ad thumbnail in the breakdown now opens the same detail popup as the ad's
+title.
+
+That popup showed "—" for headline, text, button and destination on every one of
+M Jobs' ads — all boosted posts. Two causes. A boosted creative carries
+`effective_object_story_id`, not `object_story_id`, so the "this ad is an existing
+post" check missed it and four blanks rendered instead of the explanation. And a
+boost's copy lives on the post, which only the Page's own token can read (the
+System User token is refused with #10). The adapter now reads the post when the
+creative has no copy of its own, fills only the missing fields, and shows a
+WhatsApp destination as its number, never Meta's signed link.
+
+
 ### 2026-09-16 — AIC-193: a snackbar while a campaign's data is being fetched
 
 A first load with polling off rendered dashes in every card, "אוספים נתונים" and

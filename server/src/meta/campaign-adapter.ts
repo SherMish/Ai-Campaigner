@@ -1,7 +1,7 @@
 import type { LiveCampaignState, MetaReader, ExecWriter } from "../execution/safe-executor.js";
 import { normalizeAdSet, isProblem, type AdSetHealth, type DeliveryReader, type RawAdSetDelivery } from "./delivery-health.js";
 import { normalizeAdSetMeta, type AdSetMeta, type RawAdSetMeta } from "./audience-label.js";
-import { normalizeAdDetail, type AdDetail, type RawAdDetail } from "./ad-detail.js";
+import { normalizeAdDetail, mergePostIntoDetail, postIdOf, type AdDetail, type RawAdDetail, type RawPost } from "./ad-detail.js";
 import { normalizeAdSetDetail, type AdSetDetail, type RawAdSetDetail } from "./ad-set-detail.js";
 import type { BuilderWriter, CreateCampaignParams, CreateAdSetParams, CreateAdParams, PixelOption, PixelRecencyCheck } from "../builder/types.js";
 import type { Placement } from "@aic/shared";
@@ -1250,10 +1250,30 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
   async getAdDetail(metaAdId: string): Promise<AdDetail | null> {
     const body = await this.get(
       `${metaAdId}?fields=id,name,effective_status,` +
-        `creative{id,title,body,image_url,object_story_id,object_story_spec,call_to_action_type}`,
+        `creative{id,title,body,image_url,object_story_id,effective_object_story_id,object_type,object_story_spec,call_to_action_type}`,
     );
     if (!body?.id) return null;
-    return normalizeAdDetail(body as unknown as RawAdDetail);
+    const raw = body as unknown as RawAdDetail;
+    const detail = normalizeAdDetail(raw);
+
+    // AIC-195 — a boosted ad's copy lives on its POST. Read it only when the
+    // creative has none of its own, and never let a failed post read fail the
+    // popup: the detail is still correct, and still says it is a post.
+    const postId = postIdOf(raw);
+    if (!postId || (detail.primaryText && detail.ctaType)) return detail;
+    try {
+      return mergePostIntoDetail(detail, await this.readPost(postId));
+    } catch {
+      return detail;
+    }
+  }
+
+  // Reading a Page post needs the PAGE's token: the System User token is
+  // refused with #10 even when the page is assigned to it (verified live on
+  // M Jobs). pageAccessToken already resolves it; `get` already accepts it.
+  private async readPost(postId: string): Promise<RawPost> {
+    const pageToken = await this.pageAccessToken(postId.split("_")[0]);
+    return (await this.get(`${postId}?fields=message,call_to_action,attachments{title}`, pageToken)) as RawPost;
   }
 
   // AIC-184 — the full configuration behind one audience row, on demand.

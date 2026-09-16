@@ -46,6 +46,9 @@ export interface RawAdDetail {
     body?: string | null;
     image_url?: string | null;
     object_story_id?: string | null;
+    // AIC-195 — what a BOOSTED creative carries instead of object_story_id.
+    effective_object_story_id?: string | null;
+    object_type?: string | null;
     object_story_spec?: {
       link_data?: {
         message?: string | null;
@@ -75,8 +78,68 @@ export function normalizeAdDetail(row: RawAdDetail): AdDetail {
     ctaType: cta?.type ?? c.call_to_action_type ?? null,
     whatsappNumber: cta?.value?.whatsapp_number ?? null,
     link: cta?.value?.link ?? link?.link ?? null,
-    // object_story_id means the creative points at a real Page post rather
-    // than carrying its own link_data.
-    fromExistingPost: !!c.object_story_id,
+    // The creative points at a real Page post rather than carrying its own
+    // link_data. AIC-195: a BOOSTED creative says so with
+    // effective_object_story_id and no object_story_id, so checking only the
+    // latter missed every boost — found live on M Jobs, where all six
+    // campaigns are boosts and the popup rendered four blanks instead of
+    // explaining that the ad is a post.
+    fromExistingPost: !!c.object_story_id || (!link && !!c.effective_object_story_id),
+  };
+}
+
+/** The post a creative is built from, if any. */
+export function postIdOf(row: RawAdDetail): string | null {
+  const c = row.creative ?? {};
+  return c.object_story_id ?? c.effective_object_story_id ?? null;
+}
+
+// The fields of a Page post the popup can show. Reading a post needs the PAGE's
+// access token — the System User token is refused with #10 even when the page
+// is assigned to it (verified live).
+export interface RawPost {
+  message?: string | null;
+  call_to_action?: {
+    type?: string | null;
+    value?: { link?: string | null; link_title?: string | null } | null;
+  } | null;
+  attachments?: { data?: Array<{ title?: string | null }> | null } | null;
+}
+
+// Meta's WhatsApp links carry a signed token; the phone number is what a person
+// needs and the only part worth showing.
+function whatsappNumberFrom(link: string | null | undefined): string | null {
+  if (!link) return null;
+  try {
+    const u = new URL(link);
+    if (!/(^|\.)whatsapp\.com$|^wa\.me$/.test(u.hostname)) return null;
+    const phone = u.searchParams.get("phone") ?? u.pathname.replace(/\D/g, "");
+    return phone ? phone : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * AIC-195 — fill a boosted ad's popup from its post.
+ *
+ * Fills only what the creative did not already have: an ad we built carries its
+ * own link_data, and that is what we wrote, so it wins. `fromExistingPost` stays
+ * true, because the post is still the creative — the popup's "Meta does not let
+ * you edit this" explanation is still the truth.
+ */
+export function mergePostIntoDetail(detail: AdDetail, post: RawPost | null): AdDetail {
+  if (!post) return detail;
+  const cta = post.call_to_action ?? null;
+  const link = cta?.value?.link ?? null;
+  const wa = whatsappNumberFrom(link);
+  return {
+    ...detail,
+    primaryText: detail.primaryText ?? post.message ?? null,
+    headline: detail.headline ?? post.attachments?.data?.[0]?.title ?? cta?.value?.link_title ?? null,
+    ctaType: detail.ctaType ?? cta?.type ?? null,
+    whatsappNumber: detail.whatsappNumber ?? wa,
+    // A WhatsApp link is shown as its number, never as the signed URL.
+    link: detail.link ?? (wa ? null : link),
   };
 }

@@ -54,3 +54,77 @@ describe("normalizeAdDetail (AIC-139)", () => {
     expect(d.creativeId).toBeNull();
   });
 });
+
+import { mergePostIntoDetail, postIdOf } from "./ad-detail.js";
+
+// Found live on M Jobs: every ad is a BOOST, and the detail popup showed "—" for
+// headline, primary text, button and destination. A boosted creative carries no
+// copy of its own — only `effective_object_story_id` pointing at the post — so
+// the text lives on the post.
+describe("boosted-post ads", () => {
+  const boosted = {
+    id: "120249122012140173",
+    name: "פיקוח - עיצוב 1",
+    creative: {
+      id: "916909074822078",
+      effective_object_story_id: "1149927111545438_122124130041377275",
+      object_story_spec: { page_id: "1149927111545438", instagram_user_id: "17841411454845298" },
+      object_type: "SHARE",
+    },
+  };
+
+  it("recognises a boosted creative as an existing post", () => {
+    // It carries effective_object_story_id, NOT object_story_id — so the old
+    // check missed it and the popup rendered four blanks instead of saying so.
+    expect(normalizeAdDetail(boosted as never).fromExistingPost).toBe(true);
+    expect(postIdOf(boosted as never)).toBe("1149927111545438_122124130041377275");
+  });
+
+  it("fills the popup from the post", () => {
+    const merged = mergePostIntoDetail(normalizeAdDetail(boosted as never), {
+      message: "🚌 מחפש/ת עבודה עצמאית בשטח?",
+      call_to_action: {
+        type: "WHATSAPP_MESSAGE",
+        value: { link_title: "לשליחת מועמדות >>", link: "https://api.whatsapp.com/send?phone=972547892429&token=SIGNED" },
+      },
+      attachments: { data: [{ title: "לשליחת מועמדות >>" }] },
+    });
+    expect(merged).toMatchObject({
+      primaryText: "🚌 מחפש/ת עבודה עצמאית בשטח?",
+      headline: "לשליחת מועמדות >>",
+      ctaType: "WHATSAPP_MESSAGE",
+      whatsappNumber: "972547892429",
+      fromExistingPost: true,
+    });
+  });
+
+  it("never exposes the signed WhatsApp link — only the number", () => {
+    // Meta's link carries a signed token; the number is what a person needs.
+    const merged = mergePostIntoDetail(normalizeAdDetail(boosted as never), {
+      call_to_action: { type: "WHATSAPP_MESSAGE", value: { link: "https://api.whatsapp.com/send?phone=972547892429&token=SIGNED" } },
+    });
+    expect(merged.link).toBeNull();
+    expect(merged.whatsappNumber).toBe("972547892429");
+  });
+
+  it("keeps a real website link from a post", () => {
+    const merged = mergePostIntoDetail(normalizeAdDetail(boosted as never), {
+      call_to_action: { type: "LEARN_MORE", value: { link: "https://lakgel.co.il/book" } },
+    });
+    expect(merged).toMatchObject({ link: "https://lakgel.co.il/book", whatsappNumber: null, ctaType: "LEARN_MORE" });
+  });
+
+  it("does not overwrite copy the creative already had", () => {
+    const own = normalizeAdDetail({
+      id: "1", creative: { id: "c", effective_object_story_id: "p_1", object_story_spec: { link_data: { message: "ours", name: "our headline" } } },
+    } as never);
+    const merged = mergePostIntoDetail(own, { message: "the post's", attachments: { data: [{ title: "post title" }] } });
+    expect(merged.primaryText).toBe("ours");
+    expect(merged.headline).toBe("our headline");
+  });
+
+  it("an unreadable post leaves the detail as it was — still marked as a post", () => {
+    const d = normalizeAdDetail(boosted as never);
+    expect(mergePostIntoDetail(d, null)).toEqual(d);
+  });
+});
