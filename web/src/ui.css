@@ -837,3 +837,12 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
   .snack-spinner { animation: none; border-top-color: rgba(255, 255, 255, 0.22); }
   .snack-bar { animation: none; background-position: 50% 0; }
 }
+
+/* AIC-194 — an ad's thumbnail opens its detail popup. */
+.ad-thumb-btn {
+  padding: 0; border: 0; background: none; border-radius: 8px; cursor: pointer; line-height: 0;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.ad-thumb-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(23, 23, 23, 0.18); }
+.ad-thumb-btn:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .ad-thumb-btn { transition: none; } .ad-thumb-btn:hover { transform: none; } }

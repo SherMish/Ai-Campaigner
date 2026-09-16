@@ -1458,11 +1458,21 @@ function AudienceDetails({ activeAds, range, onRange, openByDefault, kind, refre
                                       usable image. */}
                                   {m && m.thumbnails.length > 0 ? (
                                     <div className="row gap8" style={{ flexWrap: "wrap", marginTop: 6 }}>
+                                      {/* AIC-194 — the picture is the most
+                                          prominent thing in the row and the
+                                          obvious thing to click. Same popup as
+                                          the title above: one handler, two ways in. */}
                                       {m.thumbnails.map((src, i) => (
-                                        <img
-                                          key={i} src={src} alt="" loading="lazy"
-                                          style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", background: "var(--cream-2)" }}
-                                        />
+                                        <button
+                                          key={i} type="button" className="ad-thumb-btn"
+                                          title={D.adDetailOpen} aria-label={D.adDetailOpen}
+                                          onClick={(e) => { e.stopPropagation(); openDetail(c.metaObjectId); }}
+                                        >
+                                          <img
+                                            src={src} alt="" loading="lazy"
+                                            style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", background: "var(--cream-2)", display: "block" }}
+                                          />
+                                        </button>
                                       ))}
                                     </div>
                                   ) : (
