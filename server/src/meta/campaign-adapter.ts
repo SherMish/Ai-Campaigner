@@ -1,7 +1,7 @@
 import type { LiveCampaignState, MetaReader, ExecWriter } from "../execution/safe-executor.js";
 import { normalizeAdSet, isProblem, type AdSetHealth, type DeliveryReader, type RawAdSetDelivery } from "./delivery-health.js";
 import { normalizeAdSetMeta, type AdSetMeta, type RawAdSetMeta } from "./audience-label.js";
-import { normalizeAdDetail, mergePostIntoDetail, postIdOf, type AdDetail, type RawAdDetail, type RawPost } from "./ad-detail.js";
+import { normalizeAdDetail, mergePostIntoDetail, postIdOf, fillImage, type AdDetail, type RawAdDetail, type RawPost } from "./ad-detail.js";
 import { normalizeAdSetDetail, type AdSetDetail, type RawAdSetDetail } from "./ad-set-detail.js";
 import type { BuilderWriter, CreateCampaignParams, CreateAdSetParams, CreateAdParams, PixelOption, PixelRecencyCheck } from "../builder/types.js";
 import type { Placement } from "@aic/shared";
@@ -1254,7 +1254,16 @@ export class GraphCampaignAdapter implements MetaReader, ExecWriter, DeliveryRea
     );
     if (!body?.id) return null;
     const raw = body as unknown as RawAdDetail;
-    const detail = normalizeAdDetail(raw);
+    let detail = normalizeAdDetail(raw);
+
+    // AIC-195 — no image_url (every boosted ad): ask for the creative's
+    // thumbnail at full size. Best-effort; a missing picture never fails the popup.
+    if (!detail.imageUrl && detail.creativeId) {
+      try {
+        const t = await this.get(`${detail.creativeId}?fields=thumbnail_url&thumbnail_width=1080&thumbnail_height=1080`);
+        detail = fillImage(detail, typeof t.thumbnail_url === "string" ? t.thumbnail_url : null);
+      } catch { /* the rest of the popup still stands */ }
+    }
 
     // AIC-195 — a boosted ad's copy lives on its POST. Read it only when the
     // creative has none of its own, and never let a failed post read fail the

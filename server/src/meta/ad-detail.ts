@@ -143,3 +143,15 @@ export function mergePostIntoDetail(detail: AdDetail, post: RawPost | null): AdD
     link: detail.link ?? (wa ? null : link),
   };
 }
+
+/**
+ * AIC-195 — the picture, for a creative that carries no `image_url`.
+ *
+ * A boosted ad is the main case: its picture is reachable only as the creative's
+ * thumbnail, which Meta serves at 1080×1080 when asked (verified live — the same
+ * image the row shows at 44 px). Never replaces an image the creative had.
+ */
+export function fillImage(detail: AdDetail, thumbnailUrl: string | null): AdDetail {
+  if (detail.imageUrl || !thumbnailUrl) return detail;
+  return { ...detail, imageUrl: thumbnailUrl };
+}

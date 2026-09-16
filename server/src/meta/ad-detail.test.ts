@@ -128,3 +128,24 @@ describe("boosted-post ads", () => {
     expect(mergePostIntoDetail(d, null)).toEqual(d);
   });
 });
+
+import { fillImage } from "./ad-detail.js";
+
+// A boosted ad has no image_url; its picture is only reachable as the
+// creative's thumbnail, which Meta serves at 1080×1080 when asked (verified live).
+describe("fillImage", () => {
+  const d = normalizeAdDetail({ id: "1", creative: { id: "c", effective_object_story_id: "p_1" } } as never);
+
+  it("gives a boosted ad the picture the popup was missing", () => {
+    expect(fillImage(d, "https://scontent.example/1080.jpg").imageUrl).toBe("https://scontent.example/1080.jpg");
+  });
+
+  it("never replaces an image the creative already had", () => {
+    const own = { ...d, imageUrl: "https://scontent.example/ours.jpg" };
+    expect(fillImage(own, "https://scontent.example/thumb.jpg").imageUrl).toBe("https://scontent.example/ours.jpg");
+  });
+
+  it("leaves the detail alone when no thumbnail came back", () => {
+    expect(fillImage(d, null)).toEqual(d);
+  });
+});
