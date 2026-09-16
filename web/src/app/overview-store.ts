@@ -10,9 +10,11 @@ interface State {
   data: CustomerOverview | null;
   loading: boolean;
   error: boolean;
+  /** AIC-193 — the server still says "refreshing" but the follow-ups ran out. */
+  stalled: boolean;
 }
 
-let state: State = { data: null, loading: true, error: false };
+let state: State = { data: null, loading: true, error: false, stalled: false };
 let inflight: Promise<void> | null = null;
 // AIC-186 — which campaign this shared overview is showing. The store is
 // shared with the sidebar and settings, so the selection has to live HERE:
@@ -52,8 +54,10 @@ function load(): Promise<void> {
   inflight = getOverview(selectedCampaignId)
     .then((data) => {
       if (gen !== generation) return;
-      setState({ data, loading: false, error: false });
-      if (data.dataRefresh === "refreshing" && followups < REFRESH_FOLLOWUP_MAX) {
+      const stillRefreshing = data.dataRefresh === "refreshing";
+      const canFollow = stillRefreshing && followups < REFRESH_FOLLOWUP_MAX;
+      setState({ data, loading: false, error: false, stalled: stillRefreshing && !canFollow });
+      if (canFollow) {
         followups++;
         setTimeout(() => { if (gen === generation) { inflight = null; load(); } }, REFRESH_FOLLOWUP_MS);
       } else {
@@ -83,7 +87,7 @@ export function selectCampaign(campaignId: string | null): void {
   setApiCampaign(campaignId);
   inflight = null;
   followups = 0;
-  setState({ data: null, loading: true, error: false });
+  setState({ data: null, loading: true, error: false, stalled: false });
   load();
 }
 

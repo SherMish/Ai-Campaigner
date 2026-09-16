@@ -427,6 +427,16 @@ refresh ends, and while it runs over an empty cache it says it is fetching —
 not "the campaign started today", which is what an empty cache used to render
 about a campaign that had run for a month.
 
+**The snackbar (AIC-193).** `RefreshSnackbar` (mounted in `AppShell`) reads the
+same shared overview store and tells the customer what the dashboard is doing:
+"טוענים את הקמפיין…" on a switch, "מעדכנים את הנתונים מ-Meta…" with a spinner and
+an indeterminate bar while the refresh runs, "הנתונים עודכנו" when it lands —
+only if the customer watched it run; an already-fresh load shows nothing — "Meta
+מגבילה כרגע בקשות" when throttled, and "העדכון לוקח יותר מהרגיל" once the store's
+four follow-ups run out, so no spinner turns forever. The decision is the pure
+`snackFor` in `web/src/app/refresh-snackbar.ts` (tested); the store exposes
+`stalled` for the last case.
+
 A throttled or failed refresh is **not** marked fresh, so the next load after
 the back-off tries again. Stored data is always served; a refresh never fails a
 dashboard.

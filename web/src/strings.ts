@@ -1203,6 +1203,18 @@ export const strings = {
         cancelNote: "אפשר לבטל את השירות בהתאם לתנאי השירות.",
         payQuestion: "שאלה על התשלום?",
       },
+      // AIC-193 — the data snackbar.
+      snack: {
+        loading_campaign: "טוענים את הקמפיין…",
+        refreshing: "מעדכנים את הנתונים מ-Meta…",
+        refreshingSub: "זה לוקח כמה שניות. המספרים יתעדכנו כאן לבד.",
+        refreshed: "הנתונים עודכנו",
+        throttled: "Meta מגבילה כרגע בקשות",
+        throttledSub: "מוצגים הנתונים האחרונים שנשמרו. ננסה שוב בעוד כמה דקות.",
+        stalled: "העדכון לוקח יותר מהרגיל",
+        stalledSub: "אפשר לרענן את הדף בעוד רגע.",
+        dismiss: "סגירה",
+      },
       // AIC-189 — the admin-viewing-a-customer bar. Deliberately blunt: the
       // failure it prevents is an admin reading a real customer's numbers and
       // believing they are looking at test data, or at their own account.

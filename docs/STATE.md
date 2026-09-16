@@ -6,6 +6,15 @@ owning doc under [features/](features/), not here.
 
 ## Changelog
 
+### 2026-09-16 — AIC-193: a snackbar while a campaign's data is being fetched
+
+A first load with polling off rendered dashes in every card, "אוספים נתונים" and
+"עדיין לא התקבלו פניות" for 15-20 seconds with nothing saying data was on its way
+(seen on Moshe's dashboard). A bottom snackbar now shows loading, refreshing
+(spinner + indeterminate bar), updated, rate-limited and stalled — driven by the
+shared overview store, decided by a tested pure function, never spinning forever.
+
+
 ### 2026-09-16 — AIC-192: a full admin can set a user's password
 
 "שינוי סיסמה" on the admin Users page, full admin only, because setting a

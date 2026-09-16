@@ -784,3 +784,56 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 }
 .imp-exit:hover { background: #ffe9e7; }
 .imp-exit:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* AIC-193 — the data snackbar.
+   Bottom-centre, dark ink pill: it sits over the dashboard without hiding the
+   cards it is talking about, and reads as "system", not as page content. The
+   orange is the product's accent, used only on the thing that moves. */
+.snack {
+  position: fixed; inset-inline: 0; bottom: 24px; z-index: 900;
+  margin-inline: auto; width: max-content; max-width: min(460px, calc(100vw - 32px));
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px 12px 14px; border-radius: 16px;
+  background: var(--ink); color: #fff;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28), 0 2px 6px rgba(0, 0, 0, 0.18);
+  overflow: hidden; direction: rtl;
+  animation: snack-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.snack-leave { animation: snack-out 200ms ease-in both; }
+.snack-icon {
+  flex: none; width: 28px; height: 28px; border-radius: 999px;
+  display: grid; place-items: center; font-weight: 800; font-size: 0.95rem;
+  background: rgba(255, 255, 255, 0.1);
+}
+.snack-ok .snack-icon { background: var(--green); }
+.snack-warn .snack-icon { background: var(--orange); }
+.snack-spinner {
+  width: 16px; height: 16px; border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.22); border-top-color: var(--orange);
+  animation: spin 0.8s linear infinite;
+}
+.snack-text { display: grid; gap: 2px; min-width: 0; }
+.snack-text b { font-size: 0.92rem; font-weight: 700; }
+.snack-sub { font-size: 0.78rem; color: rgba(255, 255, 255, 0.68); }
+.snack-x {
+  flex: none; margin-inline-start: 4px; width: 28px; height: 28px; border-radius: 999px;
+  background: none; border: 0; color: rgba(255, 255, 255, 0.7); font-size: 1.2rem; cursor: pointer;
+}
+.snack-x:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.snack-x:focus-visible { outline: 2px solid var(--orange); outline-offset: 1px; }
+/* Indeterminate progress along the bottom edge — movement that says "working"
+   without inventing a percentage we do not have. */
+.snack-bar {
+  position: absolute; inset-inline: 0; bottom: 0; height: 3px;
+  background: linear-gradient(90deg, transparent, var(--orange), transparent);
+  background-size: 40% 100%; background-repeat: no-repeat;
+  animation: snack-bar 1.3s ease-in-out infinite;
+}
+@keyframes snack-in { from { opacity: 0; transform: translateY(16px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes snack-out { to { opacity: 0; transform: translateY(12px); } }
+@keyframes snack-bar { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .snack, .snack-leave { animation-duration: 1ms; }
+  .snack-spinner { animation: none; border-top-color: rgba(255, 255, 255, 0.22); }
+  .snack-bar { animation: none; background-position: 50% 0; }
+}

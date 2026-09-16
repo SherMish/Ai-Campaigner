@@ -7,6 +7,7 @@ import { identifyCustomer, initAnalytics, initClickTracking, trackPage } from ".
 import { useSharedOverview } from "./overview-store";
 import { Sidebar } from "./Sidebar";
 import { ImpersonationBar } from "./ImpersonationBar";
+import { RefreshSnackbar } from "./RefreshSnackbar";
 
 // AIC-28: the route PATTERN, never the resolved path — `/app/recommendations/
 // 9f3c…` would put a customer-owned object id into an event property.
@@ -58,6 +59,8 @@ export function AppShell() {
     <>
       {/* AIC-189: first thing in the shell, above every screen. */}
       <ImpersonationBar name={overview?.account?.name} />
+      {/* AIC-193 — the data snackbar, for every /app screen. */}
+      <RefreshSnackbar />
       <div className={`ap-shell${open ? " open" : ""}`} dir="rtl">
       <Sidebar />
       <div className="ap-overlay" onClick={() => setOpen(false)} aria-hidden="true" />
